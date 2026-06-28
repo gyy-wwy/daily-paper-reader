@@ -565,6 +565,17 @@ function testSidebarStickyHierarchyCssContract() {
   assert.ok(/isolation:\s*isolate/i.test(axisRowRule));
   assert.ok(/background:\s*var\(--dpr-sidebar-sticky-mask-bg\)/i.test(axisRowRule));
 
+  const axisToggleRule = cssRule(css, '.dpr-sidebar-axis-toggle');
+  assert.ok(/display:\s*inline-flex/i.test(axisToggleRule));
+  assert.ok(/align-items:\s*center/i.test(axisToggleRule));
+  assert.ok(/justify-content:\s*center/i.test(axisToggleRule));
+  assert.ok(/box-sizing:\s*border-box/i.test(axisToggleRule));
+  assert.ok(/padding:\s*0/i.test(axisToggleRule));
+
+  const axisTabsRule = cssRule(css, '.dpr-sidebar-axis-tabs');
+  assert.ok(/padding-top:\s*2px/i.test(axisTabsRule));
+  assert.ok(/margin-top:\s*-2px/i.test(axisTabsRule));
+
   const sectionHeaderRule = cssRule(css, '.dpr-sidebar-panel.is-expanded .dpr-sidebar-axis-section-header');
   assert.ok(/position:\s*sticky/i.test(sectionHeaderRule));
   assert.ok(/top:\s*var\(--dpr-sidebar-sticky-section-top\)/i.test(sectionHeaderRule));
