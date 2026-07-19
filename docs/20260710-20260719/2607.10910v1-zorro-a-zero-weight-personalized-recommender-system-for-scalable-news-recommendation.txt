@@ -1,0 +1,288 @@
+Title: ZoRRO: A Zero-Weight Personalized Recommender System for Scalable News Recommendation
+
+URL Source: https://arxiv.org/pdf/2607.10910v1
+
+Published Time: Tue, 14 Jul 2026 02:50:41 GMT
+
+Number of Pages: 6
+
+Markdown Content:
+# ZoRRO: A Zero-Weight Personalized Recommender System for Scalable News Recommendation 
+
+# Johannes Kruse ∗
+
+jkru@dtu.dk Technical University of Denmark Kongens Lyngby, Denmark 
+
+# Ryotaro Shimizu 
+
+ryotaro.shimizu@zozo.com ZOZO Research Tokyo, Japan 
+
+# Kasper Lindskow 
+
+kasper.lindskow@jppol.dk JP/Politikens Media Group Copenhagen, Denmark 
+
+# Jon Tofteskov 
+
+jon.tofteskov@jppol.dk JP/Politikens Media Group Copenhagen, Denmark 
+
+# Michael Riis Andersen 
+
+miri@dtu.dk Technical University of Denmark Kongens Lyngby, Denmark 
+
+# Julian McAuley 
+
+jmcauley@eng.ucsd.edu University of California San Diego La Jolla, California, USA 
+
+# Jes Frellsen †
+
+jefr@dtu.dk Technical University of Denmark Kongens Lyngby, Denmark 
+
+## Abstract 
+
+In this paper, we present ZoRRO (Zero-Weight Personalized Rec-ommender System), a zero-weight and training-free framework for personalized news recommendation designed for scalable real-world deployment. We show that ZoRRO outperforms strong neural baselines in offline ranking evaluations and delivers click-through rate performance in online A/B testing that is nearly on par with a state-of-the-art deep learning model, while operating more than 
+
+600 × faster. Our experiments reveal gaps between offline and online performance, and show that models with similar click-through rate (CTR) outcomes can produce markedly different recommendation distributions, influencing the overall news flow. These findings po-sition ZoRRO as a practical and efficient solution for large-scale news recommendation and highlight the importance of evaluating recommender systems using metrics beyond accuracy alone. Our code is available at https://github.com/johanneskruse/zorro. 
+
+## CCS Concepts 
+
+• Information systems → Recommender systems .
+
+## Keywords 
+
+recommender systems, news recommendation, scalability, online A/B testing 
+
+## 1 Introduction 
+
+Unlike other domains, news platforms face unique challenges due to the constant influx of new articles and their short lifespan. This dy-namic environment demands recommendation systems that quickly adapt to fresh content and evolving user interests, making the cold-start problem especially severe for both items and users [ 5, 17 –19 , 37 ]. Despite advances in deep learning-based recommender 
+
+> ∗Also with JP/Politikens Media Group.
+> †Also with Pioneer Centre for Artificial Intelligence.
+> This work is licensed under a Creative Commons Attribution 4.0 International License.
+
+systems (DLRS), these methods often require substantial computa-tional resources, specialized expertise, and continuous maintenance [ 3, 4 , 10 , 13 , 30 ]. In practice, simpler approaches often prevail, as complex models are harder to implement and sustain, limiting adop-tion. Moreover, while DLRS offer great flexibility, their benefits and reported gains are not always justified [ 7, 21 , 22 , 27 , 29 ]. Conse-quently, there is growing interest in practical, scalable approaches that balance effectiveness with operational efficiency [ 18 ]. News rec-ommenders must efficiently handle rapid content turnover, address cold-start issues, and deliver timely, personalized recommendations without heavy computational demands [36, 37]. To meet these challenges, we propose ZoRRO (Zero-Weight Per-sonalized Recommender System), a simple yet effective framework optimized for the dynamic nature of news recommendation. ZoRRO combines article recency with representation-based similarity and can incorporate article representations generated through different methods, including one-hot category encodings and pre-trained lan-guage models [ 6 ]. By emphasizing simplicity and efficiency, ZoRRO enables seamless integration of new content and rapid adaptation to shifting user preferences without model retraining. In offline ex-periments, ZoRRO outperforms strong neural baselines on ranking metrics. In an online A/B test, it delivers CTR close to a state-of-the-art neural model while operating with substantially lower latency and implementation complexity. A beyond-accuracy analysis fur-ther shows that systems with similar headline performance can induce meaningfully different recommendation distributions in practice, emphasizing the need to assess recommendation behavior beyond traditional ranking metrics. Our contributions in this paper are: 
+
+• We introduce ZoRRO, a zero-weight, training-free recom-mendation framework for news recommendation that com-bines recency with representation-based similarity in a form that is simple to implement and efficient to serve. 
+
+• We show through large-scale offline experiments and sys-tems measurements that a well-tuned lightweight method can outperform or match strong neural baselines while being more than 600 × faster at inference. arXiv:2607.10910v1 [cs.IR] 12 Jul 2026 Johannes Kruse et al. 
+
+• We validate the approach in a live online A/B test, show-ing that strong offline ranking performance does not auto-matically translate into the best online CTR, and thereby highlighting the importance of evaluating practical recom-menders beyond offline benchmarks alone. 
+
+• We provide an offline and online beyond-accuracy analysis showing that models with similar CTR or ranking perfor-mance can lead to different topical and sentiment distri-butions, with direct implications for reliability, editorial alignment, and deployment decisions. 
+
+## 2 Related work 
+
+Most research in recommender systems has concentrated on in-creasingly complex neural architectures designed to model user behavior and item relationships in great detail [ 26 , 36 ]. Yet, several studies question whether this growing complexity translates into practical benefits. For instance, Ferrari Dacrema et al . [7] conducted a large-scale reassessment of DLRS and showed that many neural architectures fail to outperform well-tuned shallow methods such as matrix factorization or 𝑘 -nearest neighbors. In a complementary analysis, Rendle et al . [27] revisited the comparison between Neural Collaborative Filtering (NCF) and matrix factorization, emphasizing that the additional complexity of deep models rarely yields practi-cal benefits. They argue that in production environments, where latency, scalability, and retrieval efficiency are critical, simpler, well-optimized models often remain the preferred choice. Steck [29] introduced EASE, a closed-form linear autoencoder that achieves competitive top-𝑁 recommendation performance without iterative training, while Lian et al . [22] proposed LightRec, a compact recurrent model that reduces parameter counts sub-stantially without sacrificing accuracy. These studies underscore the potential of efficient, low-complexity designs for scalable rec-ommendation. Building on this line of work, we propose ZoRRO. Whereas existing lightweight models reduce complexity through compression or architectural simplification, ZoRRO is a lightweight and computationally efficient framework for personalized news rec-ommendations that models user interests with minimal overhead through a zero-weight, training-free design. 
+
+## 3 Methodology 
+
+For a candidate article 𝑐 , ZoRRO computes a relevance score 𝑟 (𝑐 ) ∈ 
+
+R quantifying the predicted user engagement, based on two com-ponents: (1) The intrinsic relevance (𝜙 ), which captures an article’s inherent importance, denoted 𝜙 c (𝑐 ) ∈ R for a candidate article 𝑐 
+
+and 𝜙 h (ℎ) ∈ R for an article ℎ in the user’s history 𝐻 = [ℎ1, . . . , ℎ 𝑀 ].The intrinsic relevance may depend on features such as recency ,
+
+popularity , or user-specific preferences . (2) The relational relevance 
+
+(𝜏 ), which measures the relationship or similarity between a can-didate article 𝑐 and a historical article ℎ ∈ 𝐻 , denoted 𝜏 (𝑐, ℎ ) ∈ R.Given a user’s history 𝐻 , the relevance score for a candidate article 
+
+𝑐 is computed as: 
+
+𝑟 (𝑐 ) = 𝜙 c (𝑐 )∑︁ 
+
+> ℎ∈𝐻
+
+𝜏 (𝑐, ℎ )𝜙 h (ℎ). (1) For a set of candidate articles 𝐶 = [𝑐 1, . . . , 𝑐 𝑁 ], the relevance scores can be expressed in vector form as: 
+
+𝒓 (𝐶 ) = 𝝓 c (𝐶 ) ⊙ ( 𝝉 (𝐶, 𝐻 )𝝓 h (𝐻 )) , (2) where ⊙ denotes the Hadamard product and 𝒓 (𝐶 )𝑖 = 𝑟 (𝑐 𝑖 ) and 
+
+𝝉 (𝐶, 𝐻 ) ∈ R𝑁 ×𝑀 .
+
+Intrinsic relevance. We model intrinsic relevance using an expo-nential decay function that assigns higher weight to recent articles: 
+
+𝜙 c (𝑥 ) = 𝑒 −𝜆 c𝑡 (𝑥 ) and 𝜙 h (𝑥 ) = 𝑒 −𝜆 h𝑡 (𝑥 ) , (3) where 𝜆 c and 𝜆 h are decay rate parameters controlling how quickly weights decrease over time, and 𝑡 (𝑥 ) denotes the time since article 𝑥 
+
+was published (in hours). This formulation balances simplicity and effectiveness, capturing the importance of timeliness while relying on only one tunable parameter, which allows easy adaptation across time scales and ensures computational efficiency. 
+
+Relational relevance. To compute the relational relevance 𝜏 (𝑐, ℎ )
+
+between a candidate article 𝑐 and a historical article ℎ, we measure the distance between their representations using cosine similarity 
+
+cos (·) . Each article is represented in two ways: (1) a document embedding 𝒆 generated from a language model (e.g., BERT [ 6]) that captures textual semantics, and (2) a one-hot encoded vector 𝒗 
+
+indicating its category. The final relational relevance is defined as the sum of content-based and category-based similarities: 
+
+𝜏 (𝑐, ℎ ) = cos (𝒆 𝑐 , 𝒆 ℎ ) + cos (𝒗 𝑐 , 𝒗 ℎ ). (4) We use cosine similarity because it provides a simple and consistent way to compare heterogeneous article representations within the same framework. Importantly, the framework is not tied to this specific choice. Both the similarity function and the article represen-tations can be replaced without changing the overall formulation. For example, the one-hot category representation could be sub-stituted with a learned category embedding, while preserving the same relational relevance framework. 
+
+## 4 Experiments 4.1 Experimental setup (offline) 
+
+4.1.1 Dataset. We use the Ekstra Bladet News Recommendation Dataset (EB-NeRD) [ 18 ]1 for offline evaluation, containing over 37 million impression logs from 1 million users and 125,000 unique articles. The dataset spans diverse topics, with entertainment (ENT), news (NWS), crime (CRM), and sports (SPT) accounting for 78% of impressions, alongside smaller categories such as personal finance (PFI), auto-generated content (AGC), and miscellaneous (MSC). 
+
+4.1.2 Evaluation protocol. We report performance on the EB-NeRD large dataset using its official evaluation framework. For experi-ments on the hidden test set, we concatenate the training and validation splits, reserving the last 24 hours of data for early stop-ping and model checkpointing of baselines. The evaluation includes standard ranking metrics, area under the ROC curve (AUC), mean reciprocal rank (MRR), and normalized discounted cumulative gain (nDCG) [ 36 , 37 ]. We also consider a preliminary beyond-accuracy framework [ 19 ], adapted to news recommendation, consisting of diversity, serendipity, coverage, and novelty, which capture how 
+
+> 1https://recsys.eb.dk ZoRRO: A Zero-Weight Personalized Recommender System for Scalable News Recommendation
+
+Table 1: Performance comparison on the hidden test set. 
+
+Method AUC ↑ MRR ↑ nDCG@5 ↑ nDCG@10 ↑
+
+ZoRRO 63.80 41.28 46.40 52.58 
+
+NRMS 62.46 40.79 45.56 52.19 LSTUR 59.81 38.27 42.76 49.91 NPA 61.57 40.46 45.05 51.79 Popular 59.70 37.74 42.36 49.65 Publish 51.68 31.61 34.84 43.19 
+
+dissimilar the recommended items are, how unexpected yet rele-vant they are, how broadly the recommendation space is utilized across users, and how strongly the system favors less exposed items, respectively [ 9, 12 , 28 ]. In addition, we report descriptive analyses of sentiment and category distributions. 
+
+4.1.3 Baselines. Following prior work [ 11 , 20 , 25 , 37 ], we bench-mark ZoRRO against widely used baselines: NRMS [ 35 ], LSTUR [ 2 ], and NPA [ 34 ], which rely on self-attention, GRU-based sequential modeling, and personalized attention, respectively. We also include two heuristic baselines: Popular, ranking articles by recent clicks, and Publish, ranking them by publication time. 
+
+4.1.4 Implementation details. We tune all models with Optuna [ 1 ]using the Tree-Structured Parzen Estimator (TPE) [ 33 ] to optimize AUC on the EB-NeRD small training and validation split. Training uses 5 epochs, batch size 32 , and a negative sampling ratio of 𝐾 =
+
+4 [ 34 ]. NRMS uses 16 attention heads (16-dimensional each), while user embeddings are 400-dimensional for LSTUR and NPA. All three models use Adam [ 14 ] with learning rate 10 −4, L2 regularization 
+
+10 −4, and 20% dropout. All experiments were conducted on Amazon EC2 instances (g3.4xlarge with NVIDIA M60 GPU and p3.2xlarge with NVIDIA Tesla V100 GPU). 
+
+## 4.2 Offline experiments 
+
+4.2.1 Ranking. Table 1 presents the hidden test set results. ZoRRO achieves the best performance across all ranking metrics, with NRMS as the strongest neural baseline. For example, ZoRRO reaches an AUC of 63.80 compared with 62.46 for NRMS, while also im-proving MRR, nDCG@5, and nDCG@10. While article recency contributes to ZoRRO’s effectiveness, the weak performance of Publish (51.68), which ranks purely by publication time, shows that naive recency-based ranking alone is insufficient. These re-sults suggest that strong ranking performance in large-scale news recommendation can be achieved without relying on a complex trained model. 
+
+4.2.2 Beyond-accuracy (offline). Table 2 shows that the models exhibit clear trade-offs beyond ranking accuracy. LSTUR achieves the highest diversity (0.74), while NPA attains the highest coverage (0.65), indicating broader use of the candidate space across users. ZoRRO achieves competitive coverage (0.55) and lower novelty than NRMS, suggesting that its recommendations are less exploratory but more concentrated on recent news content. Overall, the results show that models with comparable ranking quality can induce notably different recommendation behaviors [ 15 , 16 ]. Because this 10 0 10 1 10 2
+
+> History Size
+> 0.56
+> 0.58
+> 0.60
+> 0.62
+> 0.64
+> AUC
+> ZoRRO
+> NRMS
+> LSTUR
+> NPA
+
+Figure 1: Effect of history size on AUC performance. 
+
+offline evaluation reflects a static snapshot of the news cycle, we extend the analysis to the online setting in Section 4.3.2. 
+
+4.2.3 Inference speed and parameter efficiency. As shown in Ta-ble 3, ZoRRO achieves more than 600 × higher throughput than NRMS, LSTUR, and NPA. With a fixed history length of 20 and embedding dimension of 768 , it processes nearly 2,000 requests per second with an average latency of 0.5 ms per request. In contrast, NRMS, LSTUR, and NPA require more than 300 ms per request and substantially larger parameter counts. By relying on precomputed article representations, ZoRRO reduces online computation and keeps the parameter footprint minimal, highlighting its practical advantages in real-time, latency-sensitive settings. 
+
+4.2.4 Article embeddings. In Table 4 we compare several article embedding types, including two embeddings trained on proprietary news data, word2vec [ 24 ] and a contrastive-learning embedding [ 8 ], as well as two open-source transformer-based models, BERT [ 6]and RoBERTa [ 23 ]. The contrastive-learning embedding performs best for ZoRRO, while word2vec yields the strongest results for NRMS, LSTUR, and NPA, suggesting that different recommendation architectures benefit from different embedding properties. Overall, the results indicate that in-domain embeddings provide a stronger representation of news articles than the more general-purpose transformer embeddings considered here. 
+
+4.2.5 Influence of history size. We varied user click history length from 1 to 100 interactions to examine its effect on performance (Figure 1). LSTUR and NPA were evaluated with masked user IDs to avoid bias from user-specific identifiers. AUC increases with history length but eventually plateaus, indicating diminishing returns and highlighting the trade-off between capturing richer histories and maintaining data coverage for cold-start users. 
+
+4.2.6 Intrinsic and relational relevance. We analyze the effect of ZoRRO’s intrinsic and relational relevance components. For intrinsic relevance, modeled using an exponential decay function, a sensitiv-ity analysis over 𝜆 𝑐 and 𝜆 ℎ (Figure 2) identifies the best setting at 
+
+𝜆 𝑐 = 0.015 and 𝜆 ℎ = 0.0. This suggests that recency on the candidate side is beneficial, whereas temporal decay over the user history does not improve AUC in this setting. For relational relevance, Table 5 shows that both semantic and categorical representations Johannes Kruse et al. 
+
+Table 2: Offline beyond-accuracy results on the hidden test set. We report diversity, serendipity, coverage, novelty, sentiment distribution, and category distribution for the top-5 recommendations. Results are computed using a beyond-accuracy candidate set consisting of the 250 most recent articles published during the test period. 
+
+Beyond-accuracy Sentiment (%) Category (%) Method Diversity Serendipity Coverage Novelty NEG NEU POS CRM NWS SPT ENT PFI AGC MSC ZoRRO 0.58 0.70 0.55 5.1 69.4 23.4 7.2 18.4 46.9 22.1 10.8 1.0 0.0 0.8 NRMS 0.68 0.77 0.53 8.1 45.7 18.2 36.1 12.5 18.7 29.2 9.5 4.3 18.3 7.5 LSTUR 0.74 0.79 0.56 5.8 58.8 6.8 34.4 30.1 24.6 32.1 6.8 0.2 1.1 5.1 NPA 0.65 0.75 0.65 6.7 62.8 10.3 26.9 13.6 22.0 26.4 1.2 1.6 10.4 24.8 Popular 0.84 0.79 0.02 3.1 40.0 40.0 20.0 20.0 20.0 40.0 0.0 20.0 0.0 0.0 Random 0.76 0.81 1.00 11.1 39.6 29.2 31.2 9.6 16.0 16.8 8.4 3.6 38.0 7.2 
+
+Table 3: Throughput (requests/s), latency (ms/request), and parameter count for ZoRRO, NRMS, LSTUR, and NPA us-ing 768-dimensional embeddings and a history length of 20. Results are reported as mean ± std over 1000 calls, each con-sisting of 100 inference requests. 
+
+Method Throughput ↑ Latency ↓ Parameters ZoRRO 1953 .91 ± 5.53 0.51 ± 0.001 2
+
+NRMS 2.93 ± 0.04 341 .44 ± 4.90 323 ,152 
+
+LSTUR 2.25 ± 0.02 445 .14 ± 4.69 21 ,047 ,104 
+
+NPA 2.62 ± 0.16 384 .61 ± 39 .81 20 ,405 ,304 
+
+Table 4: Performance with different article embeddings: (1) word2vec [ 24 ], (2) contrastive learning [ 8 ], (3) BERT [ 6 ], and (4) RoBERTa [ 23 ]. Models are evaluated by AUC. Results are reported as mean ± std over three runs. 
+
+AUC ↑ ZoRRO NRMS LSTUR NPA word2vec 62 .1 ± 0.0 61 .4 ± 0.2 63 .0 ± 0.4 62 .9 ± 0.2
+
+contrastive 63 .3 ± 0.0 59 .9 ± 0.4 62 .0 ± 0.4 62 .2 ± 0.1
+
+BERT 60 .8 ± 0.0 59 .5 ± 0.3 59 .5 ± 0.7 60 .5 ± 0.8
+
+RoBERTa 60 .2 ± 0.0 61 .0 ± 0.4 60 .7 ± 0.5 62 .4 ± 0.2
+
+Table 5: ZoRRO performance under varying relational rele-vance features. 
+
+𝒆 𝒗 AUC ↑ MRR ↑ nDCG@5 ↑ nDCG@10 ↑
+
+✓ ✓ 63.30 40.49 45.41 51.74 
+
+✓ 62.39 40.45 45.08 51.53 
+
+✓ 58.91 36.52 41.09 48.17 
+
+contribute to performance. Using both the document embedding 
+
+𝒆 and the category vector 𝒗 yields the best overall results. Remov-ing the categorical component slightly reduces AUC from 63 .30 
+
+to 62 .39 , while relying on the categorical component alone low-ers AUC further to 58 .91 . This indicates that semantic similarity is the stronger signal, but that categorical information provides a complementary improvement. 0.000 0.010 0.020 0.030 0.040 
+
+> h
+> 0.001
+> 0.010
+> 0.020
+> 0.030
+> 0.040
+> c
+> 0.610
+> 0.615
+> 0.620
+> 0.625
+> 0.630
+> AUC
+
+Figure 2: ZoRRO’s AUC as a function of 𝜆 ℎ and 𝜆 𝑐 .
+
+## 4.3 Online A/B test 
+
+We conducted a six-day online A/B test from November 12 to 18, 2024, on Ekstra Bladet’s website 2, comparing ZoRRO, NRMS, and a Most Popular baseline. All models were served through a FastAPI application on AWS Fargate connected to a PostgreSQL database that continuously updated article content and embeddings. The sys-tem was deployed across two identical service instances, and users were assigned consistently across variants: 45% ZoRRO, 45% NRMS, and 10% Popular. All methods used a shared rule-based candidate set of the top 250 popular recent articles, updated throughout the test period, resulting in 108 unique candidate-lists, with articles potentially appearing in multiple updates. 
+
+4.3.1 Click-through rate. As shown in Table 7, NRMS achieved the highest observed CTR (4.33% ), followed closely by ZoRRO (4.19% ),while both outperformed the Popular baseline (2.96% ). Although ZoRRO performs best in the offline ranking evaluation (Table 1), this advantage does not fully transfer to the online setting, indicating a mismatch between offline ranking quality and online user response. 
+
+4.3.2 Beyond-accuracy (online). Table 6 shows that the models exhibit clear behavioral differences beyond CTR. NRMS achieves higher diversity (0.72 ) and coverage (0.55 ) than ZoRRO (0.54 and 
+
+0.49 ), indicating that it exposes users to a broader set of items. ZoRRO, in contrast, produces a more concentrated recommenda-tion profile. This is particularly visible in the category distribution, 
+
+> 2https://ekstrabladet.dk ZoRRO: A Zero-Weight Personalized Recommender System for Scalable News Recommendation
+
+Table 6: Online beyond-accuracy results during the A/B test period. We report diversity, serendipity, coverage, novelty, sentiment distribution, and category distribution for the top-5 recommendations. Results are computed using aggregated candidate lists consisting of the 250 most popular recently published articles during the test period. 
+
+Beyond-accuracy Sentiment (%) Category (%) Method Diversity Serendipity Coverage Novelty NEG NEU POS CRM NWS SPT ENT PFI AGC MSC ZoRRO 0.54 0.70 0.49 11.0 54.5 30.6 14.9 1.6 47.2 27.1 23.5 0.5 0.0 0.1 NRMS 0.72 0.77 0.55 10.6 52.2 25.9 21.9 8.2 21.3 41.1 19.3 5.7 0.0 4.4 Popular 0.79 0.78 0.23 8.9 68.6 30.0 1.4 6.1 47.7 12.0 22.1 0.3 0.0 11.8 Random ⋄ 0.77 0.74 1.00 11.8 49.7 29.4 20.9 7.2 23.7 44.2 15.7 5.6 0.0 3.6  
+
+> ⋄Random is computed offline by uniformly sampling from the full candidate set and is included for reference.
+
+Table 7: Estimated CTR and CTR variance ( 𝜎 2) for the three recommendation methods: NRMS, ZoRRO, and Popular. 
+
+Method CTR ↑ 𝜎 2 ↓ #Users #Impressions ZoRRO 4.19% 7.7 · 10 8 207 ,112 1,577 ,698 
+
+NRMS 4.33 % 9.1 · 10 8 208 ,998 1,586 ,784 
+
+Popular 2.96% 2.2 · 10 7 45 ,640 337 ,355 
+
+where ZoRRO allocates 47 .2% of recommendations to news, com-pared with 21 .3% for NRMS, while NRMS places a larger share on sports (41 .1% ). Sentiment distributions also differ, with ZoRRO recommending fewer positive articles (14 .9% ) than NRMS (21 .9% ).Overall, these results show that models with similar CTR can still induce meaningfully different recommendation behaviors in terms of diversity, topical concentration, and sentiment balance. 
+
+4.3.3 Discussion: offline versus online behavior. The results high-light a clear gap between offline and online evaluation. Although the EB-NeRD benchmark and the live A/B test share the same pub-lisher context, they differ in important ways: ZoRRO outperforms NRMS on the offline hidden test set (Table 1), yet NRMS achieves the highest estimated CTR online (Table 7). Several differences be-tween the two settings may contribute to this mismatch. Offline evaluation reflects a static, front-page-skewed snapshot of the news cycle [ 18 ], whereas the deployed system operates on continuously updated candidates further down the page. This may help explain why stronger recency-based behavior is more effective offline than online. Consistent with this, ZoRRO produces temporally narrower recommendation lists than NRMS. The average time difference be-tween the newest and oldest article in the top-5 list is 9h 50m for ZoRRO, compared with 20h 40m for NRMS and 1d 4h for Popular, while a random sample from the candidate set yields an average span of 1d 10h. The candidate distributions also differ across set-tings (Tables 2 and 6). ZoRRO’s online recommendation profile is more concentrated, with lower diversity (0.54 vs. 0.72), lower cov-erage (0.49 vs. 0.55), and a stronger focus on news content (47.2% vs. 21.3%). NRMS, in contrast, produces a broader recommendation distribution that more closely resembles the overall category distri-bution. These differences matter in news recommendation because recommender systems shape exposure to topics, sentiments, and editorial and normative objectives [ 31 , 32 , 38 ]. Finally, offline AUC and online CTR capture different evaluation targets, and improve-ments in offline ranking do not necessarily translate directly into higher click-through in a live setting. 
+
+## 5 Conclusion 
+
+We presented ZoRRO, a zero-weight and training-free recommenda-tion framework for news recommendation that combines recency with representation-based similarity in a form that is simple to implement, efficient to serve, and practical to deploy. In large-scale offline experiments, ZoRRO outperformed or matched strong neural baselines on standard ranking metrics, while achieving more than 
+
+600 × higher inference throughput. We further validated ZoRRO in a live online A/B test, where it achieved competitive CTR but did not outperform NRMS. Together with our offline and online beyond-accuracy analyses, this shows that strong offline ranking performance does not necessarily translate directly into superior online behavior, and that models with similar accuracy can still pro-duce meaningfully different recommendation distributions. Overall, ZoRRO provides a strong practical baseline for real-time news recommendation and highlights the importance of evaluating rec-ommender systems beyond offline accuracy metrics alone. 
+
+## Acknowledgments 
+
+This work was supported by Innovation Fund Denmark (1044-00058B) and the Platform Intelligence in News Project (0175-00014B). 
+
+## References                  
+
+> [1] Takuya Akiba, Shotaro Sano, Toshihiko Yanase, Takeru Ohta, and Masanori Koyama. 2019. Optuna: A Next-generation Hyperparameter Optimization Framework. In Proceedings of the 25th ACM SIGKDD International Confer-ence on Knowledge Discovery & Data Mining (Anchorage, AK, USA) (KDD ’19) . Association for Computing Machinery, New York, NY, USA, 2623–2631. doi:10.1145/3292500.3330701 [2] Mingxiao An, Fangzhao Wu, Chuhan Wu, Kun Zhang, Zheng Liu, and Xing Xie. 2019. Neural News Recommendation with Long- and Short-term User Representations. In Proceedings of the 57th Annual Meeting of the Association for Computational Linguistics . Association for Computational Linguistics, Florence, Italy, 336–345. doi:10.18653/v1/P19-1033 [3] Andreas Argyriou, Miguel González-Fierro, and Le Zhang. 2020. Microsoft Recommenders: Best Practices for Production-Ready Recommendation Systems. In Companion Proceedings of the Web Conference 2020 (Taipei, Taiwan) (WWW ’20) . Association for Computing Machinery, New York, NY, USA, 50–51. doi:10. 1145/3366424.3382692 [4] Keshav Balasubramanian, Abdulla Alshabanah, Joshua D Choe, and Murali Annavaram. 2021. cDLRM: Look Ahead Caching for Scalable Training of Recom-mendation Models. In Proceedings of the 15th ACM Conference on Recommender Systems (Amsterdam, Netherlands) (RecSys ’21) . Association for Computing Ma-chinery, New York, NY, USA, 263–272. doi:10.1145/3460231.3474246
+
+Johannes Kruse et al. 
+
+[5] Abhinandan S. Das, Mayur Datar, Ashutosh Garg, and Shyam Rajaram. 2007. Google News Personalization: Scalable Online Collaborative Filtering. In Pro-ceedings of the 16th International Conference on World Wide Web (Banff, Alberta, Canada) (WWW ’07) . Association for Computing Machinery, New York, NY, USA, 271–280. doi:10.1145/1242572.1242610 [6] Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova. 2019. BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding. arXiv:1810.04805 [cs.CL] [7] Maurizio Ferrari Dacrema, Paolo Cremonesi, and Dietmar Jannach. 2019. Are we really making much progress? A worrying analysis of recent neural recommen-dation approaches. In Proceedings of the 13th ACM Conference on Recommender Systems (Copenhagen, Denmark) (RecSys ’19) . Association for Computing Ma-chinery, New York, NY, USA, 101–109. doi:10.1145/3298689.3347058 [8] Tianyu Gao, Xingcheng Yao, and Danqi Chen. 2022. SimCSE: Simple Contrastive Learning of Sentence Embeddings. arXiv:2104.08821 [cs.CL] [9] Mouzhi Ge, Carla Delgado-Battenfeld, and Dietmar Jannach. 2010. Beyond Accuracy: Evaluating Recommender Systems by Coverage and Serendipity. In 
+
+Proceedings of the Fourth ACM Conference on Recommender Systems (Barcelona, Spain) (RecSys ’10) . Association for Computing Machinery, New York, NY, USA, 257–260. doi:10.1145/1864708.1864761 [10] Udit Gupta, {Carole Jean} Wu, Xiaodong Wang, Maxim Naumov, Brandon Reagen, David Brooks, Bradford Cottel, Kim Hazelwood, Mark Hempstead, Bill Jia, {Hsien Hsin S.} Lee, Andrey Malevich, Dheevatsa Mudigere, Mikhail Smelyanskiy, Liang Xiong, and Xuan Zhang. 2020. The architectural implications of facebook’s DNN-based personalized recommendation. In Proceedings - 2020 IEEE International Symposium on High Performance Computer Architecture, HPCA 2020 (Proceedings - 2020 IEEE International Symposium on High Performance Computer Architecture, HPCA 2020) . Institute of Electrical and Electronics Engineers Inc., San Diego, CA, USA, 488–501. doi:10.1109/HPCA47549.2020.00047 Publisher Copyright: ©
+
+2020 IEEE.; 26th IEEE International Symposium on High Performance Computer Architecture, HPCA 2020 ; Conference date: 22-02-2020 Through 26-02-2020. [11] Andreea Iana, Goran Glavaš, and Heiko Paulheim. 2024. Train Once, Use Flex-ibly: A Modular Framework for Multi-Aspect Neural News Recommendation. In Findings of the Association for Computational Linguistics: EMNLP 2024 , Yaser Al-Onaizan, Mohit Bansal, and Yun-Nung Chen (Eds.). Association for Com-putational Linguistics, Miami, Florida, USA, 9555–9571. doi:10.18653/v1/2024. findings-emnlp.558 [12] Marius Kaminskas and Derek Bridge. 2016. Diversity, Serendipity, Novelty, and Coverage: A Survey and Empirical Analysis of Beyond-Accuracy Objectives in Recommender Systems. ACM Trans. Interact. Intell. Syst. 7, 1, Article 2 (Dec. 2016), 42 pages. doi:10.1145/2926720 [13] Liu Ke, Udit Gupta, Mark Hempstead, Carole-Jean Wu, Hsien-Hsin S. Lee, and Xuan Zhang. 2022. Hercules: Heterogeneity-Aware Inference Serving for At-Scale Personalized Recommendation. arXiv:2203.07424 [cs.DC] https://arxiv. org/abs/2203.07424 [14] Diederik P. Kingma and Jimmy Ba. 2014. Adam: A Method for Stochastic Opti-mization. arXiv:1412.6980 [cs.LG] https://arxiv.org/abs/1412.6980 [15] Johannes Kruse, Kasper Lindskow, Michael Riis Andersen, and Jes Frellsen. 2023. Creating the next generation of news experience on ekstrabladet.dk with rec-ommender systems. In Proceedings of the 17th ACM Conference on Recommender Systems (Singapore, Singapore) (RecSys ’23) . Association for Computing Machin-ery, New York, NY, USA, 1067–1070. doi:10.1145/3604915.3610248 [16] Johannes Kruse, Kasper Lindskow, Michael Riis Andersen, and Jes Frellsen. 2025. Why Design Choices Matter in Recommender Systems. Nature Machine Intelligence 7, 6 (2025), 979–980. doi:10.1038/s42256-025-01043-5 In press. [17] Johannes Kruse, Kasper Lindskow, Michael Riis Andersen, Ryotaro Shimizu, Julian McAuley, Pierre-Alexandre Mattei, and Jes Frellsen. 2025. Normative Alignment of Recommender Systems via Internal Label Shift. In Proceedings of the Nineteenth ACM Conference on Recommender Systems (RecSys ’25) . Association for Computing Machinery, New York, NY, USA, 1240–1245. doi:10.1145/3705328. 3759309 [18] Johannes Kruse, Kasper Lindskow, Saikishore Kalloori, Marco Polignano, Clau-dio Pomo, Abhishek Srivastava, Anshuk Uppal, Michael Riis Andersen, and Jes Frellsen. 2024. EB-NeRD a large-scale dataset for news recommendation. In 
+
+Proceedings of the Recommender Systems Challenge 2024 (Bari, Italy) (RecSysChal-lenge ’24) . Association for Computing Machinery, New York, NY, USA, 1–11. doi:10.1145/3687151.3687152 [19] Johannes Kruse, Kasper Lindskow, Saikishore Kalloori, Marco Polignano, Clau-dio Pomo, Abhishek Srivastava, Anshuk Uppal, Michael Riis Andersen, and Jes Frellsen. 2024. RecSys Challenge 2024: Balancing Accuracy and Editorial Values in News Recommendations. In Proceedings of the 18th ACM Conference on Recom-mender Systems (Bari, Italy) (RecSys ’24) . Association for Computing Machinery, New York, NY, USA, 1195–1199. doi:10.1145/3640457.3687164 [20] Jian Li, Jieming Zhu, Qiwei Bi, Guohao Cai, Lifeng Shang, Zhenhua Dong, Xin Jiang, and Qun Liu. 2022. MINER: Multi-Interest Matching Network for News Recommendation. In Findings of the Association for Computational Linguistics: ACL 2022 , Smaranda Muresan, Preslav Nakov, and Aline Villavicencio (Eds.). Association for Computational Linguistics, Dublin, Ireland, 343–352. doi:10. 18653/v1/2022.findings-acl.29 [21] Shiwei Li, Huifeng Guo, Xing Tang, Ruiming Tang, Lu Hou, Ruixuan Li, and Rui Zhang. 2024. Embedding Compression in Recommender Systems: A Survey. 
+
+ACM Comput. Surv. 56, 5, Article 130 (Jan. 2024), 21 pages. doi:10.1145/3637841 [22] Defu Lian, Haoyu Wang, Zheng Liu, Jianxun Lian, Enhong Chen, and Xing Xie. 2020. LightRec: A Memory and Search-Efficient Recommender System. In 
+
+Proceedings of The Web Conference 2020 (Taipei, Taiwan) (WWW ’20) . Association for Computing Machinery, New York, NY, USA, 695–705. doi:10.1145/3366423. 3380151 [23] Yinhan Liu, Myle Ott, Naman Goyal, Jingfei Du, Mandar Joshi, Danqi Chen, Omer Levy, Mike Lewis, Luke Zettlemoyer, and Veselin Stoyanov. 2019. RoBERTa: A Robustly Optimized BERT Pretraining Approach. arXiv:1907.11692 [24] Tomas Mikolov, Kai Chen, Greg Corrado, and Jeffrey Dean. 2013. Efficient Estimation of Word Representations in Vector Space. arXiv:1301.3781 [cs.CL] https://arxiv.org/abs/1301.3781 [25] Tao Qi, Fangzhao Wu, Chuhan Wu, and Yongfeng Huang. 2022. News Rec-ommendation with Candidate-aware User Modeling. arXiv:2204.04726 [cs.IR] https://arxiv.org/abs/2204.04726 [26] S. Raza and C. Ding. 2022. News recommender system: a review of recent progress, challenges, and opportunities. Artificial Intelligence Review 55 (2022), 749–800. doi:10.1007/s10462-021-10043-x [27] Steffen Rendle, Walid Krichene, Li Zhang, and John Anderson. 2020. Neural Collaborative Filtering vs. Matrix Factorization Revisited. In Proceedings of the 14th ACM Conference on Recommender Systems (Virtual Event, Brazil) (RecSys ’20) . Association for Computing Machinery, New York, NY, USA, 240–248. doi:10. 1145/3383313.3412488 [28] Barry Smyth and Paul McClave. 2001. Similarity vs. Diversity. In Proceedings of the 4th International Conference on Case-Based Reasoning: Case-Based Reason-ing Research and Development (ICCBR ’01) . Springer-Verlag, Berlin, Heidelberg, 347–361. [29] Harald Steck. 2019. Embarrassingly Shallow Autoencoders for Sparse Data. In The World Wide Web Conference (San Francisco, CA, USA) (WWW ’19) . Association for Computing Machinery, New York, NY, USA, 3251–3257. doi:10.1145/3308558. 3313710 [30] Robin Verachtert, Olivier Jeunen, and Bart Goethals. 2023. Scheduling on a budget: Avoiding stale recommendations with timely updates. Machine Learning with Applications 11 (2023), 100455. doi:10.1016/j.mlwa.2023.100455 [31] Sanne Vrijenhoek, Lien Michiels, Johannes Kruse, Alain Starke, {Jordi Viader} Guerrero, and Nava Tintarev. 2023. Report on NORMalize: The First Workshop on the Normative Design and Evaluation of Recommender Systems. CEUR Workshop Proceedings 3639 (2023). [32] Sanne Vrijenhoek, Lien Michiels, Johannes Kruse, Alain Starke, Nava Tintarev, and Jordi Viader Guerrero. 2023. NORMalize: The First Workshop on Normative Design and Evaluation of Recommender Systems. In Proceedings of the 17th ACM Conference on Recommender Systems (Singapore, Singapore) (RecSys ’23) .Association for Computing Machinery, New York, NY, USA, 1252–1254. doi:10. 1145/3604915.3608757 [33] Shuhei Watanabe. 2023. Tree-Structured Parzen Estimator: Understanding Its Algorithm Components and Their Roles for Better Empirical Performance. arXiv:2304.11127 [cs.LG] https://arxiv.org/abs/2304.11127 [34] Chuhan Wu, Fangzhao Wu, Mingxiao An, Jianqiang Huang, Yongfeng Huang, and Xing Xie. 2019. NPA: Neural News Recommendation with Personalized Attention. In Proceedings of the 25th ACM SIGKDD International Conference on Knowledge Discovery & Data Mining (Anchorage, AK, USA) (KDD ’19) . Association for Computing Machinery, New York, NY, USA, 2576–2584. doi:10.1145/3292500. 3330665 [35] Chuhan Wu, Fangzhao Wu, Suyu Ge, Tao Qi, Yongfeng Huang, and Xing Xie. 2019. Neural News Recommendation with Multi-Head Self-Attention. In Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing and the 9th International Joint Conference on Natural Language Processing (EMNLP-IJCNLP) . Association for Computational Linguistics, Hong Kong, China, 6389– 6394. doi:10.18653/v1/D19-1671 [36] Chuhan Wu, Fangzhao Wu, Yongfeng Huang, and Xing Xie. 2023. Personalized News Recommendation: Methods and Challenges. ACM Trans. Inf. Syst. 41, 1, Article 24 (Jan. 2023), 50 pages. doi:10.1145/3530257 [37] Fangzhao Wu, Ying Qiao, Jiun-Hung Chen, Chuhan Wu, Tao Qi, Jianxun Lian, Danyang Liu, Xing Xie, Jianfeng Gao, Winnie Wu, and Ming Zhou. 2020. MIND: A Large-scale Dataset for News Recommendation. In Proceedings of the 58th Annual Meeting of the Association for Computational Linguistics , Dan Jurafsky, Joyce Chai, Natalie Schluter, and Joel Tetreault (Eds.). Association for Computational Linguistics, Online, 3597–3606. doi:10.18653/v1/2020.acl-main.331 [38] Árni Már Einarsson, Elisabetta Petrucci, Jannie Møller Hartley, Stine Lomborg, and Johannes Kruse. 2025. “I must have clicked on something” – Users ´
+
+Experiences and Evaluations of News Recommender Systems. Journalism Practice 0, 0 (2025), 1–20. arXiv:https://doi.org/10.1080/17512786.2025.2572972 doi:10.1080/17512786.2025.2572972

@@ -1,0 +1,643 @@
+Title: Stream-aware Side Adaptation for Large Pre-trained Multimodal Embedding Models in Sequential Recommendation
+
+URL Source: https://arxiv.org/pdf/2607.10909v1
+
+Published Time: Tue, 14 Jul 2026 01:24:14 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# Stream-aware Side Adaptation for Large Pre-trained Multimodal Embedding Models in Sequential Recommendation 
+
+# Junchen Fu 
+
+University of Glasgow United Kingdom j.fu.3@research.gla.ac.uk 
+
+# Kaiwen Zheng 
+
+University of Glasgow United Kingdom k.zheng.1@research.gla.ac.uk 
+
+# Ioannis Arapakis 
+
+Telefónica Scientific Research, Telefónica Innovación Digital Barcelona, Spain arapakis.ioannis@gmail.com 
+
+# Wenhao Deng 
+
+University of Glasgow United Kingdom w.deng.1@research.gla.ac.uk 
+
+# Xin Xin 
+
+Shandong University Qingdao, China xinxin@sdu.edu.cn 
+
+# Joemon M. Jose 
+
+University of Glasgow Glasgow, United Kingdom joemon.jose@glasgow.ac.uk 
+
+# Xuri Ge ∗
+
+Shandong University Jinan, China xuri.ge@sdu.edu.cn 
+
+## Abstract 
+
+Recently, large pretrained multimodal embedding models such as Qwen3-VL Embedding have shown strong promise for sequential recommendation, as they provide reusable semantic item repre-sentations across modalities and domains. However, directly using these embeddings often leads to suboptimal performance because of domain misalignment. Efficient side adaptation is therefore an attractive solution. Although adapting all backbone layers should help, existing side adapters often degrade with depth, prompting layer dropping despite the loss of useful hidden states. This is due to two major challenges: (1) the lack of modeling in selecting fused representations during residual addition, and (2) the insufficient preservation of earlier representations during progressive sigmoid fusion. This paper therefore asks a practical question: How can we design a side adaptation approach that effectively unlocks the potential of large pre-trained multimodal embedding models? 
+
+To address this question, we propose Stresa , a stream-aware side-adaptation framework for frozen large pre-trained multimodal embedding models in sequential recommendation. Stresa introduces Stream-aware Hidden-Adapter Fusion (SHAF) to preserve historical side memory during fusion and Residual Stream Adapter (ReSA) to produce selective residual updates across layers. Empirically, Stresa consistently outperforms standard side adapters and state-of-the-art baselines on public datasets across multiple backbone embedding models. These results highlight the promise of adapting large embedding models for sequential recommendation. Our code is publicly available at https://github.com/GAIR-Lab/Stresa. 
+
+## CCS Concepts 
+
+• Information systems → Recommender systems .
+
+## Keywords 
+
+Multimodal Recommendation, Sequential Recommendation, Large Embedding Models, Side Adapter 
+
+> ∗Corresponding Author.
+
+Architecture Overview    
+
+> N-th HS P
+> Streams N-th HSA
+> Streams
+
+Stresa     
+
+> Stream -aware
+> Residual ( ReSA )
+> Sigmoid
+> N-th
+> HSP N-th HSA
+> Side Adapter
+> Residual
+> Adapter Adapter
+> σSHAF
+
+Method  Residual  Fusion 
+
+> Stresa
+> Side Adapter
+> Selective residual
+> update ( ReSA )
+> Direct Addition
+> (Residual )
+> Earlier Representation
+> Preserved Fusion ( SHAF )
+> Direct Sigmoid Fusion
+> (Sigmoid )
+> Performance gap
+> when adapted layers
+> go deeper
+> +0.73
+
+Figure 1: Conventional Side Adapter vs. Stresa. Using the frozen Qwen3-VL-8B-Embedding backbone, Dropped 18 lay-ers and Full 36 layers mean that the item encoder extracts hidden states from 18 or 36 backbone layers for adapter computation. Left: HR@10 under both settings. Right: Side Adapter uses residual addition and sigmoid fusion, whereas Stresa uses selective residual update (ReSA) and earlier-representation-preserved fusion (SHAF). HSP and HSA de-note hidden states from the pretrained model and previous adapter layer, respectively. 
+
+## 1 Introduction 
+
+Large-scale pretrained multimodal embedding models are increas-ingly becoming reusable infrastructure for retrieval, ranking, and recommendation, as they project heterogeneous item content into transferable semantic spaces [ 14 , 19 , 23 , 35 , 40 ]. A recent state-of-the-art example is Qwen3-VL-Embedding, which demonstrates the power of this paradigm by mapping text, images, document images, and video into a unified representation space with strong arXiv:2607.10909v1 [cs.IR] 12 Jul 2026 Conference’17, July 2017, Washington, DC, USA Fu et al. 
+
+multimodal retrieval performance [ 24 ]. This is especially promising for multimodal sequential recommendation, where the quality of item’s modality representations directly shapes next-item predic-tion [ 18 , 26 , 41 , 42 , 53 ]. When the predictor operates on semantically rich multimodal embeddings, it can exploit content continuity, se-mantic substitutability, and cross-modal expressions of user intent in addition to collaborative signals [ 7– 9 , 33 ]. Stronger multimodal embedding backbones should therefore provide a stronger founda-tion for sequential recommendation. However, directly applying large pre-trained multimodal embed-ding models to sequential recommendation often leads to subopti-mal performance due to domain misalignment [ 7]. These pretrained embedding models are typically learned for general semantic rep-resentation rather than recommendation-specific objectives, while sequential recommendation depends on user behavior, transition patterns, and recommendation relevance that can differ substan-tially from standard semantic similarity [ 49 ]. Although end-to-end adaptation can effectively bridge this gap, it is often impractical for deployment because of its high computational and memory cost [ 25 ]. This trade-off is especially important in sequential rec-ommendation, where the same item encoder is reused over a large catalog and efficient offline embedding extraction is often crucial for deployment. This challenge remains significant not only for full fine-tuning but also for conventional parameter-efficient tuning when the backbone model is large [ 38 ]. In this setting, side adapta-tion [ 7, 9 ] is particularly appealing because it keeps the backbone frozen while learning only a lightweight side branch, enabling effi-cient training, offline caching of item representations, and practical deployment at scale, while still retaining strong recommendation performance. Motivated by this promise, recent works have begun to explore side-adapter-style designs for sequential recommenda-tion with large embedding backbones [ 7– 9 , 45 ]. In this work, we focus specifically on frozen, offline-cacheable item-side adaptation of a unified single-tower multimodal embedding backbone. The re-sulting item representations are user-independent, while the down-stream sequential model is treated as a shared component rather than part of the proposed adaptation architecture. Most prior methods [ 7– 9 ] adopt a conventional side-adapter design, in which a lightweight bottleneck adapter with a residual connection is attached to each backbone layer to adapt its hidden states. Although this paradigm is computationally efficient, we find that its performance becomes suboptimal when extended to full-depth adaptation, as shown in Figure 1. Existing studies [ 7, 8, 38 ]observe the same issue and therefore treat layer dropping as a default setting, since adapting more hidden layers can even degrade performance. We argue that this limitation stems from two key challenges: (1) the lack of modeling of how fused representations are selected during direct residual addition, and (2) the inadequate preservation of earlier representations during progressive sigmoid fusion. First ,residual connection lacks modeling of what to retain or suppress in fused representations. In side adaptation, the propagated repre-sentation at each layer is already a fused embedding of the current hidden states and the previous adapter’s output [ 7, 38 ]. For such representations, effective propagation requires deciding which com-ponents should be preserved and which should be suppressed. Plain residual addition does not model this process, which may limit the quality of the propagated embedding. Second , simple fusion [ 7, 38 ]cannot effectively preserve earlier representations during progres-sive aggregation. Since side adaptation proceeds by continuously incorporating newly emerging layer-wise information, the model should also retain useful representations accumulated from earlier layers. However, simple sigmoid-based fusion is often insufficient for this purpose, causing earlier information to be gradually over-written as depth increases. These observations motivate the central question of this paper: how can we design effective side adaptation for deep unified multimodal embedding models? 
+
+To this end, we propose Stresa , Stre am-aware Side Adaptation for large pre-trained multimodal embedding models in sequential recommendation. Stresa addresses the two challenges above by re-designing the two core components of conventional side adapters: residual connection and sigmoid fusion. To enable modeling in residual connection, inspired by the empirical success of stream-aware residual designs in large language models [ 54 ], we introduce 
+
+ReSA , a residual stream adapter tailored for side-adapter blocks. To move beyond simple sigmoid fusion toward stronger fusion and better preservation of earlier-layer representations, we further propose Stream-aware Hidden-Adapter Fusion (SHAF), which not only produces a stream-structured fused representation for ReSA, but also preserves historical side memory from earlier adapter lay-ers. Together, ReSA and SHAF enable stronger fusion, more stable memory propagation, and more effective deep side adaptation. Our contributions are summarized as follows: 
+
+• We propose Stresa , a stre am-aware side adaptation paradigm that enables deep adaptation for unified large pre-trained multimodal embedding models. 
+
+• Stresa introduces the Residual Stream Adapter (ReSA) for selec-tion modeling in residual connection via stream-aware residual adaptation, and the Stream-aware Hidden-Adapter Fusion (SHAF) for fine-grained stream-aware fusion with better preservation of earlier-layer representations. 
+
+• We provide both structural analysis and empirical evidence show-ing that Stresa better preserves earlier representations and re-mains effective under deep adaptation. Across multiple datasets and two Qwen3-VL-Embedding scales, Stresa consistently out-performs the standard Side Adapter and strong prior baselines. 
+
+## 2 Related Work 
+
+Pre-trained Multimodal Embedding Models. Pretrained en-coders first established the value of reusable contextual represen-tations for downstream matching and ranking [ 5, 29 ]. Multimodal representation learning then extended this idea to image–text and vision–language settings through models such as CLIP, ALIGN, BLIP-style architectures, and more recent general-purpose embed-ding backbones [ 14 , 19 , 23 , 24 , 35 , 40 ]. These models are increas-ingly used as reusable embedders, which makes them a natural foundation for recommendation when items contain rich text and visual content. Recently, the Qwen team proposed the Qwen3-VL-Embedding models [ 24 ], which achieve state-of-the-art results in multimodal representation learning. This trend is particularly rel-evant to sequential recommendation. Recent multimodal recom-mendation benchmarks such as MicroLens [ 33 ] highlight that user Stream-aware Side Adaptation for Large Pre-trained Multimodal Embedding Models in Sequential Recommendation Conference’17, July 2017, Washington, DC, USA Layer  n
+
+Layer  k+ 1
+
+Layer  k
+
+Layer  k-1
+
+Layer 1 
+
+Stresa  n️ 
+
+Stresa  k+ 1
+
+Stresa  k-1
+
+Stresa 1 
+
+Stresa Qwen -VL 
+
+## Stream -Aware Hidden -Adapter Fusion (SHAF) 
+
+> key
+> query
+> 1. compute
+> routing logits
+> 2. sinkhorn
+> normalization
+
+identity presevation 
+
+> 3. identity
+> preservation
+> ReSA
+> SHAF
+> route
+> transform
+
+## Residual Stream Adapter (ReSA) 
+
+> Bottleneck
+> MLP
+
+Figure 2: Overview of the proposed stream-aware fusion framework. (1) Stream-aware Hidden-Adapter Fusion (SHAF) at layer 
+
+𝑘 first reshapes the hidden representations into multiple streams and computes routing logits via query-key interactions. An identity-preservation operation is applied to preserve information from earlier layers. (2) Residual Stream Adapter (ReSA) applies stream-wise pre-, post-, and residual mappings around a bottleneck MLP. The mapped residual and nonlinear branches are combined to produce the next side state A𝑘 , which is directly propagated to the following adapted layer. 
+
+behavior often depends on content-rich items, making large pre-trained multimodal embedding models a strong starting point for item representation. Recent recommendation-oriented adaptation frameworks further show that frozen or lightly adapted multimodal backbones can materially improve recommendation [ 2 , 10 , 11 , 21 ,28 , 30 , 39 , 47 , 56 ]. These embeddings have also been adopted in the generative retrieval paradigm for recommendation [6, 37]. 
+
+Parameter-Efficient Adaptation and Side Adaptation Parameter-efficient adaptation methods such as adapters, prompt tuning, and low-rank updates reduce trainable parameter counts relative to end-to-end tuning [ 16 , 17 , 22 ]. In recommendation, however, the relevant design criterion is not only parameter count. Because the same item encoder is reused across a large catalog, adaptation meth-ods that preserve a frozen backbone are especially attractive for caching, deployment, and offline feature extraction. Side adapta-tion [ 38 , 45 ] is a natural fit for this constraint. It learns a lightweight side adapter while keeping the backbone frozen, thereby avoiding the need to store the backbone’s backward computation graph. Sub-sequent work, including Quantized Side Tuning, further explored lightweight side branches as a way to complement frozen LLMs [ 52 ]. In multimodal sequential recommendation, recent methods have shown that multimodal information can be used as cached embed-dings to improve efficiency. For example, IISAN [ 7] introduces this paradigm, IISAN-Versa [ 8] extends it by adapting larger asymmetric two-tower encoders of different scales, and CROSSAN [ 9 ] further demonstrates the effectiveness of side adaptation across four modal-ities. These studies mainly focus on efficiency and adaptation design in multi-tower architectures. However, most of them rely on Lay-erDrop [ 38 ] and do not address the stability of deep side-memory propagation in such models. Besides these, many state-of-the-art studies [ 3 , 4, 12 , 13 , 27 , 31 , 32 , 36 , 44 , 46 , 48 , 50 , 51 , 55 ] propose ar-chitectures based on multimodal large language models or related techniques to tackle multimodal recommendation tasks, but they do not investigate the side adaptation problem. To the best of our knowledge, efficient and stable deep side adaptation for large pre-trained multimodal embedding models in sequential recommendation remains largely underexplored, which motivates the present study. 
+
+## 3 Method 3.1 Problem Formulation 
+
+Let U and V denote the user and item sets. For each user 𝑢 ∈ U ,we observe a chronological interaction sequence 
+
+S𝑢 = (𝑣 𝑢  
+
+> 1
+
+, 𝑣 𝑢  
+
+> 2
+
+, . . . , 𝑣 𝑢 𝑇 𝑢 ), 𝑣 𝑢 𝑡 ∈ V . (1) Each item 𝑣 is associated with multimodal content 
+
+x𝑣 = {x(𝑚 ) 
+
+> 𝑣
+
+}𝑀 𝑚 =1, (2) Conference’17, July 2017, Washington, DC, USA Fu et al. 
+
+where 𝑀 is the number of modalities. Let B be a frozen large multimodal embedding model with 𝐿 layers. Given x𝑣 , the backbone produces hidden states 
+
+h(1) 
+
+> 𝑣
+
+, h(2) 
+
+> 𝑣
+
+, . . . , h(𝐿 ) 
+
+> 𝑣
+
+, h(ℓ ) 
+
+> 𝑣
+
+∈ R𝑑 . (3) We choose a set of adapted layers 
+
+L = {ℓ1 < ℓ2 < · · · < ℓ𝐾 } ⊆ { 1, . . . , 𝐿 }. (4) Because the backbone is frozen, the selected hidden states can be extracted and cached offline. Stresa recursively constructs a task-specific side representation from these cached representations: 
+
+a(0) 
+
+> 𝑣
+
+= 0, a(𝑘 ) 
+
+> 𝑣
+
+= Stresa 𝑘 
+
+
+
+h(ℓ𝑘 ) 
+
+> 𝑣
+
+, a(𝑘 −1)
+
+> 𝑣
+
+
+
+, 𝑘 = 1, . . . , 𝐾, (5) and produces the final adapted embedding 
+
+˜e𝑣 = e0 
+
+> 𝑣
+
++ W𝑜 a(𝐾 ) 
+
+> 𝑣
+
+, (6) where e0 
+
+> 𝑣
+
+∈ R𝑑 is the frozen backbone output used by the down-stream recommender. A sequential recommender F𝜓 maps the adapted history ( ˜e𝑣 𝑢  
+
+> 1
+
+, . . . , ˜e𝑣 𝑢 𝑡 )
+
+to a user state q𝑢,𝑡 , and the score for candidate item 𝑣 is 
+
+𝑠 (𝑢, 𝑡, 𝑣 ) = qT 
+
+> 𝑢,𝑡
+
+˜e𝑣 . (7) We optimize the standard next-item prediction loss 
+
+Lrec = −∑︁  
+
+> (𝑢,𝑡 )
+
+log exp (𝑠 (𝑢, 𝑡, 𝑣 𝑢 𝑡 +1)) 
+
+Í𝑣 ′ ∈ C 𝑢,𝑡 exp (𝑠 (𝑢, 𝑡, 𝑣 ′)) , (8) where only the Stresa parameters, the output projection W𝑜 , and the sequence model are trainable. Below, we omit the item index and write h𝑘 := h(ℓ𝑘 ) and a𝑘 −1 := a(𝑘 −1) for a single Stresa block. 
+
+## 3.2 Overview of Stresa 
+
+A standard side adapter typically fuses the current backbone state with the previous side state and then applies a lightweight trans-form. This works well for shallow adaptation, but under deeper adaptation the side branch is no longer just a temporary local fea-ture: it becomes a memory that is propagated across layers. Once this happens, two questions become central: how should histori-cal side memory arrive at the current layer, and how should the fused signal be transformed into the next side state while retaining useful historical information? Stresa addresses these two questions explicitly. At adapted layer 𝑘 , Stresa first aligns the propagated side memory with the current backbone representation through a stream-aware fusion module, and then converts the fused state into the next propagated side representation: 
+
+z𝑘 = SHAF (h𝑘 , a𝑘 −1) , a𝑘 = ReSA (z𝑘 ) . (9) Figure 2 illustrates the pipeline. SHAF transports the previous side representation to the current depth and fuses it with the current backbone state. ReSA then applies an HC-style residual composition to the fused representation and produces the next side state, which is directly propagated to the following adapted layer. In this sense, Stresa separates memory transport from state refinement : SHAF determines how the previous side state enters the current layer, while ReSA determines how the fused representation is transformed into the next propagated state. This separation is the main design principle behind Stresa. The frozen backbone state h𝑘 serves as the layer-local semantic anchor at depth 𝑘 , whereas the side branch carries task-specific information propagated from earlier adapted layers. Stresa therefore treats deep adaptation as progressive state refinement : each adapted layer first transports and aligns the previous side state with the current frozen representation, and then maps the fused signal into the next side state. 
+
+## 3.3 Stream-aware Hidden-Adapter Fusion (SHAF) 
+
+SHAF is designed to address two needs in deep side adaptation: (1) stronger fusion with the current hidden state and (2) preservation of historical memory. Plain sigmoid fusion only controls how much previous side memory enters the current layer, but does not model how it should interact with the current hidden representation in a structured way. SHAF therefore introduces stream-aware inter-action before fusion, so that the propagated memory can first be aligned with the current hidden state at the stream level before entering the final fusion. This makes the fusion more selective and informative, and also organizes the fused representation for the sub-sequent adapter. At the same time, since the side state is propagated across layers, it should remain an explicit memory path during deep adaptation. SHAF thus adopts an identity-preserving routing op-erator, which retains a direct carry-over route from the historical memory while allowing controlled cross-stream reorganization when useful. We first reshape both signals into 𝑠 streams of width 𝑑 𝑠 , where 
+
+𝑑 = 𝑠 𝑑 𝑠 :
+
+H𝑘 = reshape (h𝑘 ) ∈ R𝑠 ×𝑑 𝑠 , A𝑘 −1 = reshape (a𝑘 −1) ∈ R𝑠 ×𝑑 𝑠 .
+
+(10) This stream decomposition is a lightweight structured coordinate system rather than a semantic assumption about the hidden dimen-sion. It allows SHAF to model cross-subspace interaction through small stream-level operators, and it also gives the following ReSA block the same structured space in which to refine the fused repre-sentation. To decide how historical side memory should interact with the current layer, SHAF computes stream-level routing logits from pooled descriptors of H𝑘 and A𝑘 −1:
+
+M𝑘 (𝑖, 𝑗 ) = qT 
+
+> 𝑘,𝑖
+
+k𝑘,𝑗 
+
+√𝑑 𝑟 
+
+, (11) where q𝑘,𝑖 and k𝑘,𝑗 are learned query/key projections of the corre-sponding stream summaries. We then apply Sinkhorn normaliza-tion [1], 
+
+R𝑘 = Sinkhorn 
+
+ M𝑘 
+
+𝜏 
+
+
+
+, (12) to obtain a balanced soft routing matrix over streams. This keeps the stream redistribution structured rather than leaving it as an unconstrained dense remapping. Routing alone, however, would directly replace each stream by a mixture of other streams. For deep propagation, we instead use an identity-preserving routing operator: 
+
+𝛽 𝑘 = 𝜎 ( ˆ𝛽 𝑘 ), P𝑘 = (1 − 𝛽 𝑘 )I + 𝛽 𝑘 R𝑘 . (13) Stream-aware Side Adaptation for Large Pre-trained Multimodal Embedding Models in Sequential Recommendation Conference’17, July 2017, Washington, DC, USA 
+
+This is the central design choice of SHAF. The gate 𝛽 𝑘 controls how far the transported memory is allowed to deviate from its original stream layout: when 𝛽 𝑘 is small, the side memory is carried forward mostly along its current stream path; when 𝛽 𝑘 is larger, related streams can exchange information through R𝑘 . In other words, SHAF treats cross-stream routing as a controlled reorganization of historical memory rather than a hard replacement. Finally, SHAF routes the historical side memory and fuses it with the current backbone state: 
+
+Amix  
+
+> 𝑘
+
+= P𝑘 A𝑘 −1, (14) 
+
+𝜆 𝑘 = 𝜎 ( ˆ𝜆 𝑘 ), Z𝑘 = (1 − 𝜆 𝑘 )H𝑘 + 𝜆 𝑘 Amix  
+
+> 𝑘
+
+, (15) where 𝜆 𝑘 controls the overall contribution of historical side memory relative to the current backbone state. The two gates 𝛽 𝑘 and 𝜆 𝑘 
+
+therefore play different roles: 𝛽 𝑘 controls how historical memory is redistributed across streams , whereas 𝜆 𝑘 controls how strongly the transported memory enters the current layer . This separation makes SHAF easier to interpret and also underlies the structural observations in Sec. 3.6: SHAF can be viewed as plain sigmoid fusion together with a controlled stream-aware correction. 
+
+## 3.4 Residual Stream Adapter (ReSA) 
+
+After SHAF, the fused representation Z𝑘 already lives in stream space. ReSA is designed to refine this structured signal directly, rather than collapsing it back to a single vector and applying a standard bottleneck update. Inspired by Hyper-Connections, ReSA introduces lightweight stream interaction before, after, and along the residual branch of the bottleneck transform. The adapter first performs pre-connection mixing ,
+
+Zpre  
+
+> 𝑘
+
+= Hpre  
+
+> 𝑘
+
+Z𝑘 , (16) which lets each stream be transformed in the context of other related streams before entering the bottleneck. It then applies a shared bottleneck MLP, 
+
+Y𝑘 = 𝜙 
+
+
+
+Zpre  
+
+> 𝑘
+
+W↓
+
+
+
+W↑, (17) followed by post-connection mixing ,
+
+Ypost  
+
+> 𝑘
+
+= Hpost  
+
+> 𝑘
+
+Y𝑘 , (18) which redistributes the transformed features back across streams. Here Hpre  
+
+> 𝑘
+
+and Hpost  
+
+> 𝑘
+
+are learned stream-mixing operators internal to ReSA; they are distinct from the reshaped backbone state H𝑘 in Eq. (10). Stresa also adds adaptive residual routing :
+
+Zres  
+
+> 𝑘
+
+= Hres  
+
+> 𝑘
+
+Z𝑘 . (19) This residual route provides a direct stream-wise shortcut for the fused representation. It complements the nonlinear bottleneck path: the bottleneck increases expressive power, while the residual route preserves a simple path for information that does not need strong transformation. The final ReSA output is 
+
+A𝑘 = Zres  
+
+> 𝑘
+
++ Ypost  
+
+> 𝑘
+
+. (20) Here A𝑘 denotes the next stream-space side state produced by ReSA. It is directly propagated to the following adapted layer and serves as the historical side state in the next SHAF block. The residual operation is internal to ReSA: Zres  
+
+> 𝑘
+
+provides the mapped shortcut branch, while Ypost  
+
+> 𝑘
+
+provides the nonlinear refinement branch. Relative to a standard side adapter, ReSA provides two advan-tages. First, stream interaction occurs before, after, and along the residual branch of the bottleneck, making the refinement more structured than a single transform on an unstructured vector. Sec-ond, the fixed identity shortcut of a conventional residual adapter is replaced by a learnable stream-wise residual mapping. Overall, SHAF and ReSA play complementary roles: SHAF determines how the previous side state is transported and fused at the current depth, while ReSA maps the fused representation into the next propagated side state. These complementary roles are further clarified by the structural observations in Sec. 3.6. 
+
+## 3.5 Complexity and Deployment 
+
+Compared with a plain side adapter, Stresa introduces additional computation only through lightweight stream-level operators. In SHAF, the extra cost comes from computing stream-level routing logits, applying Sinkhorn normalization, and multiplying the routed memory by the 𝑠 × 𝑠 operator P𝑘 . In ReSA, the additional struc-ture comes from the stream-mixing operators Hpre  
+
+> 𝑘
+
+, Hpost  
+
+> 𝑘
+
+, and Hres  
+
+> 𝑘
+
+,together with the shared bottleneck MLP. Per adapted layer, the stream operators act on matrices of size 
+
+𝑠 × 𝑠 or 𝑠 × 𝑑 𝑠 , while the bottleneck operates on width 𝑑 𝑠 with rank 
+
+𝑟 . Thus, the added overhead scales with the number of streams and the stream width, rather than with a dense full-dimensional 𝑑 × 𝑑 
+
+transform. In practice, this overhead is modest because typically 
+
+𝑠 ≪ 𝑑 and 𝑟 ≪ 𝑑 𝑠 .This additional cost buys two capabilities that a plain side adapter does not model explicitly. SHAF introduces controlled transport of historical side memory before fusion, instead of injecting a𝑘 −1 as a single unstructured vector. ReSA then refines the fused representa-tion in the same stream geometry through an explicit stream-wise residual composition within each Stresa block. The gain is therefore not just extra nonlinearity, but a more structured treatment of deep side adaptation. Stresa also preserves the deployment pattern that matters in recommendation. Since the backbone is frozen, selected hidden states can be extracted and cached offline. Training backpropagates only through the lightweight side branch, the output projection W𝑜 ,and the downstream sequential model. After training, the adapted item embeddings ˜e𝑣 remain item-specific and can be refreshed offline and served in the same way as standard item embeddings. In this sense, Stresa changes the adaptation mechanism without changing the frozen-backbone workflow preferred by large-scale recommendation systems. 
+
+## 3.6 Structural Observations on SHAF and ReSA 
+
+We provide three algebraic observations that clarify the roles of SHAF and ReSA. They characterize how SHAF differs from plain sigmoid fusion and how ReSA relates to a conventional residual bot-tleneck adapter. These observations describe the forward mapping of Stresa and are not optimization or convergence guarantees. Conference’17, July 2017, Washington, DC, USA Fu et al. 
+
+Table 1: Dataset Description. 
+
+Dataset Users Items Interaction MicroLens-100K 100,000 19,738 719,405 MicroLens-50K 50,000 19,099 339,511 Scientific 12,076 20,314 81,711 
+
+Observation 1 (SHAF as a correction to plain fusion) . Let Zplain  
+
+> 𝑘
+
+=
+
+(1 − 𝜆 𝑘 )H𝑘 + 𝜆 𝑘 A𝑘 −1 denote plain sigmoid fusion. The SHAF repre-sentation can be written exactly as 
+
+Z𝑘 = Zplain  
+
+> 𝑘
+
++ C𝑘 , C𝑘 = 𝜆 𝑘 𝛽 𝑘 (R𝑘 − I)A𝑘 −1. (21) Observation 1 shows that SHAF contains plain sigmoid fusion as the special case 𝛽 𝑘 = 0 or R𝑘 = I, while otherwise adding a controlled stream-aware correction. 
+
+Observation 2 (Common-mode invariance of the SHAF correction) .
+
+Let Π = 1 
+
+> 𝑠
+
+11 T be the projector onto the common stream mode. If 
+
+R𝑘 is doubly stochastic, then 
+
+C𝑘 = 𝜆 𝑘 𝛽 𝑘 (R𝑘 − I)( I − Π)A𝑘 −1, ΠC𝑘 = 0. (22) Thus, relative to plain sigmoid fusion, the additional SHAF rout-ing correction leaves the common stream mode unchanged and acts only on variation across streams. With a finite number of Sinkhorn iterations, this statement holds approximately to the extent that R𝑘 
+
+is approximately doubly stochastic. 
+
+Observation 3 (ReSA generalizes a residual bottleneck update) . If 
+
+Hpre  
+
+> 𝑘
+
+= Hpost  
+
+> 𝑘
+
+= Hres  
+
+> 𝑘
+
+= I, then ReSA reduces to 
+
+A𝑘 = Z𝑘 + 𝜙  Z𝑘 W↓
+
+ W↑, (23) which is a residual bottleneck update in stream space. Observation 3 shows that ReSA retains the residual form while generalizing its fixed identity shortcut and unstructured feature flow with learnable stream-wise pre-, post-, and residual mappings. Together, Observations 1–3 provide algebraic interpretations of memory transport in SHAF and state refinement in ReSA without requiring additional optimization claims. 
+
+## 4 Experimental Setup 
+
+Datasets. We evaluate on three datasets as demonstrated in Table 1: MicroLens-50K, MicroLens-100K, and Scientific. MicroLens-50K and MicroLens-100K are public user-level subsets of the MicroLens benchmark for content-driven micro-video recommendation [ 33 ]. Scientific data from the Amazon dataset is included to test on other domains following [ 7 ]. For all datasets, we construct chronological user interaction sequences and pair them with the corresponding item-side multimodal content following [7]. 
+
+Implementation Details. Our frozen backbone family is Qwen3-VL-Embedding in two scales, 2B and 8B [ 24 ]. We strictly follow the experiment setup in [ 7 ]. Unless otherwise stated, the backbone is kept frozen, and only cached hidden states are used following [ 7]. Under this setting, only two key components are trained: the side adapter and the downstream sequential model. The downstream se-quential recommender follows [ 7, 15 , 49 ] and uses two Transformer blocks with two attention heads. Following [ 8 , 9], we optimize with AdamW with a weight decay of 0.1. We search the learning rate for 
+
+Table 2: Main results under frozen-backbone adaptation. Two-Stage uses only the frozen final-layer backbone em-bedding. Side Adapter denotes the conventional decoupled side-branch baseline. Stresa consistently improves both regimes across Qwen3-VL-2B and Qwen3-VL-8B backbones and MicroLens-50K/100K. Best results in each backbone block are bold, and second-best results are underlined. ∗ in-dicates that Stresa significantly outperforms the second-best method at the 0.05 level based on a t-test over five random seeds Backbone Method H@10 N@10 H@20 N@20 
+
+MicroLens-50K 
+
+Qwen3-VL-Embedding-8B Two-Stage 0.0618 0.0335 0.0897 0.0405 Side Adapter 0.0813 0.0437 0.1169 0.0527 
+
+Stresa (Ours) 0.0841 * 0.0456 * 0.1212 * 0.0549 *
+
+Qwen3-VL-Embedding-2B Two-Stage 0.0595 0.0323 0.0878 0.0394 Side Adapter 0.0728 0.0397 0.1042 0.0476 
+
+Stresa (Ours) 0.0783 * 0.0420 * 0.1145 * 0.0511 *
+
+MicroLens-100K 
+
+Qwen3-VL-Embedding-8B Two-Stage 0.0706 0.0385 0.1006 0.0461 Side Adapter 0.0977 0.0531 0.1398 0.0637 
+
+Stresa (Ours) 0.1019 * 0.0559 * 0.1442 * 0.0666 *
+
+Qwen3-VL-Embedding-2B Two-Stage 0.0665 0.0365 0.0981 0.0444 Side Adapter 0.0895 0.0489 0.1296 0.0590 
+
+Stresa (Ours) 0.0974 * 0.0541 * 0.1384 * 0.0644 *
+
+the adapters from { 1 × 10 −5, 1 × 10 −4,1 × 10 −3} and set to 1 × 10 −4,a batch size of 512. The bottleneck adapter rank was selected from {128, 256, 512, 1024}. User sequences are truncated to length 10. 
+
+Evaluation Protocol. We follow the standard leave-one-out evalu-ation protocol used in prior sequential recommendation work [ 7 , 9,20 , 33 ]. For each user, the last interaction is used for testing and the previous one for validation. We report ranking quality with HR@10, NDCG@10, HR@20, and NDCG@20 [ 33 ]. All methods share the same data splits, downstream sequential model configuration, and full-ranking evaluation over the entire item set. 
+
+## 5 Experimental results 
+
+In this section, we report our experimental results and address the following research questions: 
+
+• RQ1: Is Stresa better than a standard side adapter? 
+
+• RQ2: How does Stresa compare with state-of-the-art Side adaptation-based multimodal sequential recommendation baselines? 
+
+• RQ3: Which modules contribute to the gains? 
+
+• RQ4: What learning mechanism underlies the difference between Stresa and Side Adapter? 
+
+## 5.1 Comparison with Side Adapters (RQ1) 
+
+RQ1 asks whether Stresa is better than a standard Side Adapter. To answer this question, we compare Stresa against both a conven-tional Side Adapter [ 7– 9] and a Two-Stage baseline [ 49 ] that uses only the frozen final-layer backbone embedding. The comparison is conducted on both MicroLens-50K and MicroLens-100K, with two backbone scales, Qwen3-VL-2B and Qwen3-VL-8B, and we report the best test performance under each setting. In addition, to directly Stream-aware Side Adaptation for Large Pre-trained Multimodal Embedding Models in Sequential Recommendation Conference’17, July 2017, Washington, DC, USA 
+
+Table 3: Main results on three datasets. Best results in each dataset are bold, and second-best results are underlined. ∗ indicates that Stresa significantly outperforms the second-best method according to a 𝑡 -test ( 𝑝 < 0.05 ) over five seeds. Method MicroLens-50K MicroLens-100K Scientific H@10 N@10 H@20 N@20 H@10 N@10 H@20 N@20 H@10 N@10 H@20 N@20 
+
+IISAN [7] (SIGIR’24) 0.0771 0.0421 0.1121 0.0509 0.0960 0.0526 0.1366 0.0628 0.0683 0.0414 0.0933 0.0470 XSMoE [34] (CIKM’25) 0.0550 0.0296 0.0807 0.0361 0.0697 0.0376 0.1037 0.0461 0.0620 0.0395 0.0840 0.0450 CROSSAN [9] (arXiv’25) 0.0806 0.0431 0.1177 0.0524 0.0999 0.0553 0.1428 0.0661 0.0690 0.0422 0.0928 0.0482 IISAN-Versa [8] (TKDE’25) 0.0784 0.0421 0.1126 0.0507 0.0964 0.0533 0.1341 0.0618 0.0739 0.0447 0.1014 0.0516 
+
+Stresa (Ours) 0.0841 * 0.0456 * 0.1212 * 0.0549 * 0.1019 * 0.0559 * 0.1442 * 0.0666 * 0.0794 * 0.0483 * 0.1067 * 0.0551 *
+
+Figure 3: NDCG@10 and NDCG@20 on MicroLens-100K (Qwen3-VL-8B) vs. the number of adapted layers of hidden states, for Side Adapter and Stresa. Metrics are taken at the epoch with the best validation HR@10. 
+
+verify our motivation of adapting more of the backbone’s potential hidden representations, we further vary the number of adapted hidden-state layers and compare the resulting trends between Side Adapter and Stresa in Fig. 3. The results in Table 2 show that Stresa consistently outperforms both Two-Stage and the standard Side Adapter across all backbone and dataset settings. The gains over Two-Stage confirm the value of adaptation beyond frozen embeddings, while the gains over Side Adapter show that the improvement comes from a better adaptation design rather than simply using side information. More importantly, Fig. 3 reveals a clear difference in depth behavior. Stresa remains stable as adaptation extends to more hidden layers and achieves the best performance when adapting all layers, while its degradation is still limited even when only a small number of layers are adapted. In contrast, the standard Side Adapter reaches its best performance around 9 adapted layers, and then declines noticeably as more layers are included. This supports our claim that standard side adaptation does not fully exploit deeper hidden states, whereas Stresa can better utilize the full adaptation space while maintaining stability. 
+
+Answer to RQ1: Yes. Stresa consistently outperforms the stan-dard Side Adapter across datasets and backbone scales. Its advan-tage is particularly evident in deeper adaptation settings, where it can stably exploit more hidden states and better unlock the full potential of the backbone. 
+
+## 5.2 Comparison with SOTA baselines (RQ2) 
+
+RQ2 asks how Stresa compares with state-of-the-art side adaptation-based multimodal sequential recommendation baselines. To this end, we compare our approach with IISAN [ 7 ], XSMoE [ 34 ], IISAN-Versa [ 8 ], and CROSSAN [ 9]. 1 In these comparisons, Stresa uses 
+
+> 1We focus this comparison on the side adaptation paradigm because our goal is to study a fully ID-free setting, where recommendation is driven only by multimodal side information without introducing additional ID signals or auxiliary supervision. Many
+
+Table 4: Ablation on Qwen3-VL-8B. The progression from a standard side adapter to Stresa. 
+
+Method HR@10 NDCG@10 HR@20 NDCG@20 
+
+MicroLens-50K 
+
+Side Adapter 0.0813 0.0437 0.1169 0.0527 + ReSA 0.0829 0.0444 0.1188 0.0534 + ReSA + SHAF (Stresa) 0.0841 0.0456 0.1212 0.0549 
+
+MicroLens-100K 
+
+Side Adapter 0.0977 0.0531 0.1398 0.0637 + ReSA 0.0999 0.0545 0.1417 0.0650 + ReSA + SHAF (Stresa) 0.1019 0.0559 0.1442 0.0666 Table 5: Ablation on Identity Preservation. 
+
+Method HR@10 NDCG@10 HR@20 NDCG@20 
+
+MicroLens-50K 
+
+w/ Identity Preservation 0.0841 0.0456 0.1212 0.0549 
+
+w/o Identity Preservation 0.0807 0.0433 0.1184 0.0528 
+
+MicroLens-100K 
+
+w/ Identity Preservation 0.1019 0.0559 0.1442 0.0666 
+
+w/o Identity Preservation 0.0991 0.0545 0.1416 0.0652 Qwen3-VL-8B as the backbone. For the competing baselines, we preserve their original architectural settings and report their best results under those settings, because these methods were proposed in multi-tower side-adaptation frameworks, whereas our method is built on a single-tower Qwen3-VL-Embedding backbone. To provide a more direct reference under the same single-tower setting, we also include the Side Adapter baseline in the previous section. For IISAN-Versa, which considers the asymmetric case but still follows a two-tower design, we further evaluate a variant with Qwen3-VL-Embedding-8B on the text side to improve comparability. Table 3 shows that Stresa consistently achieves the best overall performance across all datasets. On MicroLens-50K and MicroLens-100K, it slightly but consistently surpasses the strongest baseline, CROSSAN, on all four metrics. On Scientific, Stresa improves HR@10 from 0.0739 to 0.0794 and NDCG@20 from 0.0516 to 0.0551 over the strongest prior baseline. Overall, these gains are modest but stable across datasets, showing that Stresa generalizes well across different scales and domains. 
+
+Answer to RQ2: Stresa consistently outperforms strong side adaptation-based baselines. This shows that its gains persist not  
+
+> existing multimodal sequential recommendation methods incorporate extra informa-tion beyond this setting, making direct comparison less fair. Moreover, side adaptation itself has already shown strong performance in prior work, making it a strong and meaningful basis for comparison. Therefore, for fairness and for a cleaner evaluation of the target setting, we mainly compare against representative side adaptation-based methods. Conference’17, July 2017, Washington, DC, USA Fu et al.
+
+Table 6: Ablation on stream-aware residual. 
+
+Method HR@10 NDCG@10 HR@20 NDCG@20 
+
+MicroLens-50K 
+
+w/o Manifold Constraint 0.0829 0.0444 0.1188 0.0534 w/ Manifold Constraint 0.0826 0.0456 0.1186 0.0547 
+
+MicroLens-100K 
+
+w/o Manifold Constraint 0.0999 0.0545 0.1417 0.0650 w/ Manifold Constraint 0.0996 0.0546 0.1424 0.0655 
+
+only over a standard Side Adapter, but also over stronger side-adaptation variants, supporting the effectiveness of Stresa across competitive comparison settings. 
+
+## 5.3 Ablation Study (RQ3) 
+
+RQ3 investigates whether Stresa is driven by a single dominant component or by the complementary effects of its modules. To answer this question, we perform comprehensive ablation studies in Tables 4, and 5, examining the contributions of ReSA, SHAF, and additional design choices, including the manifold-constrained residual connection [ 43 ] in ReSA and identity preservation in SHAF. The results show a clear progression. In Table 4, adding ReSA on top of the Side Adapter consistently improves performance on both datasets, and further adding SHAF (Stresa) yields the best overall results across all metrics. For example, on MicroLens-100K, HR@10/NDCG@10 improve from 0.0977/0.0531 with Side Adapter to 0.0999/0.0545 with ReSA, and further to 0.1019/0.0559 with SHAF; similar gains are observed on HR@20/NDCG@20 and on MicroLens-50K. In Table 6 further evaluates a ReSA variant with the recently proposed manifold-constrained residual connec-tion [ 43 ]. Although it brings modest gains on several NDCG metrics, the overall performance is comparable while incurring higher com-putational cost due to manifold operations. We thus do not use it as the default design. Table 5 shows that identity preservation is critical, and removing it causes substantial performance drops. 
+
+Answer to RQ3: The gains come from complementary modules: both ReSA and SHAF are important for achieving them. 
+
+## 5.4 Visualization (RQ4) 
+
+To answer this question, we analyze layer-wise representation sim-ilarity for the frozen backbone, Side Adapter, and Stresa by com-paring each layer’s cosine similarity to the first and final layers. Figure 4 shows that Stresa changes representations more smoothly across depth. Compared to Side Adapter, its similarity to the first layer decreases less abruptly, indicating better preservation of early information, while its similarity to the final layer increases more progressively, indicating stable layer-wise refinement rather than sharp late-stage shifts. 
+
+Answer to RQ4: The underlying learning mechanism is that Stresa better reconciles identity preservation with progressive adap-tation. This leads to a more stable representation trajectory across layers and, consequently, stronger adaptation performance, espe-cially for larger backbones. 0 10 20 30      
+
+> Layer k
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> cos( zk, z1)
+> Similarity to first layer
+> 010 20 30
+> Layer k
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> cos( zk, z36 )
+> Similarity to final layer
+> Frozen Backbone Side Adapter Stresa
+
+Figure 4: Layer-wise cosine similarity on MicroLens-100K for the frozen Qwen3-VL backbone, Side Adapter, and Stresa. Left: 
+
+cos (z𝑘 , z1) versus backbone layer index 𝑘 . Right: cos (z𝑘 , z36 )
+
+versus 𝑘 . Each series averages over items; layers 𝑘 = 1, . . . , 36 
+
+correspond to the 36 adapter depths. Table 7: Efficiency comparison between Stresa and Side Adapter. 
+
+Method Params Time (s/epoch) FLOPs/step ( 10 12 )Stresa 78.06M 392.41 5.311 Side Adapter 155.73M 338.20 4.395 
+
+## 6 Efficiency 
+
+Table 7 reports the efficiency comparison between Stresa and the standard Side Adapter. Stresa reduces the number of trainable pa-rameters, while introducing a modest increase in computation due to the additional stream-aware routing and mixing operations. In practice, this overhead is not significant: the increases in train-ing time per epoch and FLOPs per step remain moderate, while Stresa achieves stronger recommendation performance in the main experiments. 
+
+## 7 Conclusion and Future Work 
+
+In this paper, we study how to make side adaptation for large pre-trained multimodal embedding models more effective under deep adaptation. We propose Stresa , a stream-aware side-adaptation framework achieving selective residual update and earlier represta-tion preservation fusion. Across our experiments, Stresa consis-tently outperforms frozen two-stage adaptation, standard Side Adapter, and strong side adaptation-based baselines. The results further show that its advantage is especially clear when adapta-tion goes deeper, suggesting that stable memory preservation and stream-aware refinement are key to fully exploiting hidden states in frozen multimodal backbones. Overall, these findings indicate that stream-aware side adaptation is a promising direction for mul-timodal sequential recommendation. For future work, it would be valuable to evaluate Stresa on broader multimodal backbones, datasets, and recommendation do-mains, and to explore more adaptive strategies for selecting or scheduling adapted layers. Another important direction is to con-nect this framework with more practical deployment settings, such as online or continual adaptation. We hope this work can encour-age further research on stable and efficient adaptation for frozen multimodal foundation models in recommendation. Stream-aware Side Adaptation for Large Pre-trained Multimodal Embedding Models in Sequential Recommendation Conference’17, July 2017, Washington, DC, USA 
+
+## References 
+
+[1] Ryan Prescott Adams and Richard S Zemel. 2011. Ranking via sinkhorn propaga-tion. arXiv preprint arXiv:1106.1925 (2011). [2] Keqin Bao, Jizhi Zhang, Yang Zhang, Wenjie Wang, Fuli Feng, and Xiangnan He. 2023. Tallrec: An effective and efficient tuning framework to align large language model with recommendation. In Proceedings of the 17th ACM conference on recommender systems . 1007–1014. [3] Xiaoxi Cui, Weihai Lu, Yu Tong, Yiheng Li, and Zhejun Zhao. 2025. Multi-modal multi-behavior sequential recommendation with conditional diffusion-based feature denoising. In Proceedings of the 48th International ACM SIGIR Conference on Research and Development in Information Retrieval . 1593–1602. [4] Ji Dai, Quan Fang, Jun Hu, Desheng Cai, Yang Yang, and Can Zhao. 2026. Cross-Modal Attention Network with Dual Graph Learning in Multimodal Recom-mendation. ACM Transactions on Multimedia Computing, Communications and Applications (2026). [5] Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova. 2019. Bert: Pre-training of deep bidirectional transformers for language understanding. In 
+
+Proceedings of the 2019 conference of the North American chapter of the association for computational linguistics: human language technologies, volume 1 (long and short papers) . 4171–4186. [6] Junchen Fu, Xuri Ge, Alexandros Karatzoglou, Ioannis Arapakis, Suzan Ver-berne, Joemon M Jose, and Zhaochun Ren. 2026. Differentiable Semantic ID for Generative Recommendation. arXiv preprint arXiv:2601.19711 (2026). [7] Junchen Fu, Xuri Ge, Xin Xin, Alexandros Karatzoglou, Ioannis Arapakis, Jie Wang, and Joemon M Jose. 2024. IISAN: Efficiently adapting multimodal repre-sentation for sequential recommendation with decoupled PEFT. In Proceedings of the 47th International ACM SIGIR Conference on Research and Development in Information Retrieval . 687–697. [8] Junchen Fu, Xuri Ge, Xin Xin, Alexandros Karatzoglou, Ioannis Arapakis, Kaiwen Zheng, Yongxin Ni, and Joemon M Jose Joemon. 2025. Efficient and effective adaptation of multimodal foundation models in sequential recommendation. IEEE Transactions on Knowledge and Data Engineering (2025). [9] Junchen Fu, Yongxin Ni, Joemon M Jose, Ioannis Arapakis, Kaiwen Zheng, Youhua Li, and Xuri Ge. 2025. Crossan: Towards efficient and effective adaptation of multiple multimodal foundation models for sequential recommendation. arXiv preprint arXiv:2504.10307 (2025). [10] Junchen Fu, Fajie Yuan, Yu Song, Zheng Yuan, Mingyue Cheng, Shenghui Cheng, Jiaqi Zhang, Jie Wang, and Yunzhu Pan. 2024. Exploring adapter-based transfer learning for recommender systems: Empirical studies and practical insights. In 
+
+Proceedings of the 17th ACM international conference on web search and data mining . 208–217. [11] Shijie Geng, Juntao Tan, Shuchang Liu, Zuohui Fu, and Yongfeng Zhang. 2023. Vip5: Towards multimodal foundation models for recommendation. In Findings of the Association for Computational Linguistics: EMNLP 2023 . 9606–9620. [12] Xu Guo, Tong Zhang, Fuyun Wang, Xudong Wang, Xiaoya Zhang, Xin Liu, and Zhen Cui. 2025. Mmhcl: Multi-modal hypergraph contrastive learning for recommendation. ACM Transactions on Multimedia Computing, Communications and Applications 21, 10 (2025), 1–23. [13] Xu Guo, Tong Zhang, Yufei Xue, Chenxu Wang, Fuyun Wang, and Zhen Cui. 2025. M 3 rec: Selective state space models with mixture-of-modality experts for multi-modal sequential recommendation. In ICASSP 2025-2025 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) . IEEE, 1–5. [14] Yaoqin He, Junchen Fu, Kaiwen Zheng, Songpei Xu, Fuhai Chen, Jie Li, Joe-mon M Jose, and Xuri Ge. 2025. Double-filter: Efficient fine-tuning of pre-trained vision-language models via patch&layer filtering. In Forty-second International Conference on Machine Learning .[15] Yupeng Hou, Shanlei Mu, Wayne Xin Zhao, Yaliang Li, Bolin Ding, and Ji-Rong Wen. 2022. Towards universal sequence representation learning for recommender systems. In Proceedings of the 28th ACM SIGKDD conference on knowledge discovery and data mining . 585–593. [16] Neil Houlsby, Andrei Giurgiu, Stanislaw Jastrzebski, Bruna Morrone, Quentin De Laroussilhe, Andrea Gesmundo, Mona Attariyan, and Sylvain Gelly. 2019. Parameter-efficient transfer learning for NLP. In International conference on machine learning . PMLR, 2790–2799. [17] Edward J Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Liang Wang, Weizhu Chen, et al . 2022. Lora: Low-rank adaptation of large language models. Iclr 1, 2 (2022), 3. [18] Jiaxi Hu, Jingtong Gao, Xiangyu Zhao, Yuehong Hu, Yuxuan Liang, Yiqi Wang, Ming He, Zitao Liu, and Hongzhi Yin. 2024. BiVRec: Bidirectional view-based multimodal sequential recommendation. arXiv preprint arXiv:2402.17334 (2024). [19] Chao Jia, Yinfei Yang, Ye Xia, Yi-Ting Chen, Zarana Parekh, Hieu Pham, Quoc Le, Yun-Hsuan Sung, Zhen Li, and Tom Duerig. 2021. Scaling up visual and vision-language representation learning with noisy text supervision. In International conference on machine learning . PMLR, 4904–4916. [20] Wang-Cheng Kang and Julian McAuley. 2018. Self-attentive sequential recom-mendation. In 2018 IEEE international conference on data mining (ICDM) . IEEE, 197–206. [21] Sein Kim, Hongseok Kang, Kibum Kim, Jiwan Kim, Donghyun Kim, Minchul Yang, Kwangjin Oh, Julian McAuley, and Chanyoung Park. 2025. Lost in Sequence: Do Large Language Models Understand Sequential Recommendation?. In Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining V. 2. 1160–1171. [22] Brian Lester, Rami Al-Rfou, and Noah Constant. 2021. The power of scale for parameter-efficient prompt tuning. In Proceedings of the 2021 conference on empirical methods in natural language processing . 3045–3059. [23] Junnan Li, Dongxu Li, Silvio Savarese, and Steven Hoi. 2023. Blip-2: Bootstrapping language-image pre-training with frozen image encoders and large language models. In International conference on machine learning . PMLR, 19730–19742. [24] Mingxin Li, Yanzhao Zhang, Dingkun Long, Keqin Chen, Sibo Song, Shuai Bai, Zhibo Yang, Pengjun Xie, An Yang, Dayiheng Liu, et al . 2026. Qwen3-VL-Embedding and Qwen3-VL-Reranker: A Unified Framework for State-of-the-Art Multimodal Retrieval and Ranking. arXiv preprint arXiv:2601.04720 (2026). [25] Ruyu Li, Wenhao Deng, Yu Cheng, Zheng Yuan, Jiaqi Zhang, and Fajie Yuan. 2025. Exploring the upper limits of text-based collaborative filtering using large language models: Discoveries and insights. In Proceedings of the 34th ACM International Conference on Information and Knowledge Management . 1643–1653. [26] Zilong Li, Jia Zhu, Chenglei Huang, Zhangze Chen, Hanghui Guo, Guoqing Ma, and Jianxia Ling. 2026. Capturing Dynamic User Interests Under Modality Imbalance for Multimodal Sequential Recommendation. In Proceedings of the AAAI Conference on Artificial Intelligence , Vol. 40. 15198–15206. [27] Jiahao Liang, Xiangyu Zhao, Muyang Li, Zijian Zhang, Wanyu Wang, Haochen Liu, and Zitao Liu. 2023. Mmmlp: Multi-modal multilayer perceptron for sequen-tial recommendations. In Proceedings of the ACM Web Conference 2023 . 1109–1117. [28] Qijiong Liu, Jieming Zhu, Yanting Yang, Quanyu Dai, Zhaocheng Du, Xiao-Ming Wu, Zhou Zhao, Rui Zhang, and Zhenhua Dong. 2024. Multimodal pretraining, adaptation, and generation for recommendation: A survey. In Proceedings of the 30th ACM SIGKDD Conference on Knowledge Discovery and Data Mining .6566–6576. [29] Yinhan Liu, Myle Ott, Naman Goyal, Jingfei Du, Mandar Joshi, Danqi Chen, Omer Levy, Mike Lewis, Luke Zettlemoyer, and Veselin Stoyanov. 2019. Roberta: A robustly optimized bert pretraining approach. arXiv preprint arXiv:1907.11692 
+
+(2019). [30] Yifan Liu, Kangning Zhang, Xiangyuan Ren, Yanhua Huang, Jiarui Jin, Yingjie Qin, Ruilong Su, Ruiwen Xu, Yong Yu, and Weinan Zhang. 2024. Alignrec: Aligning and training in multimodal recommendations. In Proceedings of the 33rd ACM International Conference on Information and Knowledge Management . 1503–1512. [31] Weihai Lu and Li Yin. 2025. Dmmd4sr: Diffusion model-based multi-level multi-modal denoising for sequential recommendation. In Proceedings of the 33rd ACM International Conference on Multimedia . 6363–6372. [32] Fanshen Meng, Zhenhua Meng, Ru Jin, Yuli Chen, Rongheng Lin, and Budan Wu. 2025. TAMER: Interest Tree Augmented Modality Graph Recommender for Multimodal Recommendation. In Proceedings of the 33rd ACM International Conference on Multimedia . 5998–6006. [33] Yongxin Ni, Yu Cheng, Xiangyan Liu, Junchen Fu, Youhua Li, Xiangnan He, Yongfeng Zhang, and Fajie Yuan. 2025. A content-driven micro-video recommen-dation dataset at scale. In Proceedings of the 34th ACM International Conference on Information and Knowledge Management . 6486–6491. [34] Yunke Qu, Liang Qu, Tong Chen, Quoc Viet Hung Nguyen, and Hongzhi Yin. 2025. Efficient multimodal streaming recommendation via expandable side mixture-of-experts. In Proceedings of the 34th ACM International Conference on Information and Knowledge Management . 2460–2470. [35] Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya Ramesh, Gabriel Goh, Sandhini Agarwal, Girish Sastry, Amanda Askell, Pamela Mishkin, Jack Clark, et al . 2021. Learning transferable visual models from natural language supervision. In International conference on machine learning . PmLR, 8748–8763. [36] Te Song, Lianyong Qi, Weiming Liu, Fan Wang, Xiaolong Xu, Hongsheng Hu, Yang Cao, Xuyun Zhang, and Amin Beheshti. 2025. Boosting Guided Diffusion with Large Language Models for Multimodal Sequential Recommendation. In 
+
+Proceedings of the 33rd ACM International Conference on Multimedia . 6203–6212. [37] Weiwei Sun, Keyi Kong, Xinyu Ma, Shuaiqiang Wang, Dawei Yin, Maarten de Rijke, Zhaochun Ren, and Yiming Yang. 2026. ZeroGR: A Generalizable and Scalable Framework for Zero-Shot Generative Retrieval. In The Fourteenth Inter-national Conference on Learning Representations . https://openreview.net/forum? id=RBoAwiQl5L [38] Yi-Lin Sung, Jaemin Cho, and Mohit Bansal. 2022. Lst: Ladder side-tuning for parameter and memory efficient transfer learning. Advances in Neural Information Processing Systems 35 (2022), 12991–13005. [39] Hanbing Wang, Xiaorui Liu, Wenqi Fan, Xiangyu Zhao, Venkataramana Kini, Devendra Pratap Yadav, Fei Wang, Zhen Wen, and Hui Liu. 2025. Rethinking large language model architectures for sequential recommendations. In Proceedings of the 14th International Joint Conference on Natural Language Processing and the 4th Conference of the Asia-Pacific Chapter of the Association for Computational Linguistics . 3376–3391. [40] Liang Wang, Nan Yang, Xiaolong Huang, Binxing Jiao, Linjun Yang, Daxin Jiang, Rangan Majumder, and Furu Wei. 2022. Text embeddings by weakly-supervised Conference’17, July 2017, Washington, DC, USA Fu et al. 
+
+contrastive pre-training. arXiv preprint arXiv:2212.03533 (2022). [41] Yuhao Wang, Junwei Pan, Xinhang Li, Maolin Wang, Yuan Wang, Yue Liu, Dapeng Liu, Jie Jiang, and Xiangyu Zhao. 2025. Empowering large language model for sequential recommendation via multimodal embeddings and semantic ids. In Proceedings of the 34th ACM International Conference on Information and Knowledge Management . 3209–3219. [42] Zhaoliang Wang, Baisong Liu, Weiming Huang, Tingting Hao, Huiqian Zhou, and Yuxin Guo. 2025. Leveraging multimodal large language model for multimodal sequential recommendation. Scientific Reports 15, 1 (2025), 28960. [43] Zhenda Xie, Yixuan Wei, Huanqi Cao, Chenggang Zhao, Chengqi Deng, Jiashi Li, Damai Dai, Huazuo Gao, Jiang Chang, Kuai Yu, et al . 2025. mhc: Manifold-constrained hyper-connections. arXiv preprint arXiv:2512.24880 (2025). [44] Jinfeng Xu, Zheyu Chen, Shuo Yang, Jinze Li, Hewei Wang, and Edith CH Ngai. 2025. Mentor: multi-level self-supervised learning for multimodal recommen-dation. In Proceedings of the AAAI Conference on Artificial Intelligence , Vol. 39. 12908–12917. [45] Mengde Xu, Zheng Zhang, Fangyun Wei, Han Hu, and Xiang Bai. 2023. Side adapter network for open-vocabulary semantic segmentation. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition . 2945–2954. [46] Wei Yang, Rui Zhong, Yiqun Chen, Shixuan Li, Heng Ping, Chi Lu, and Peng Jiang. 2025. FITMM: Adaptive Frequency-Aware Multimodal Recommendation via Information-Theoretic Representation Learning. In Proceedings of the 33rd ACM International Conference on Multimedia . 6193–6202. [47] Yu Ye, Junchen Fu, Yu Song, Kaiwen Zheng, and Joemon M Jose. 2026. Are multimodal embeddings truly beneficial for recommendation? A deep dive into whole vs. individual modalities. In European Conference on Information Retrieval .Springer, 66–81. [48] Yuyang Ye, Zhi Zheng, Yishan Shen, Tianshu Wang, Hengruo Zhang, Peijun Zhu, Runlong Yu, Kai Zhang, and Hui Xiong. 2025. Harnessing multimodal large language models for multimodal sequential recommendation. In Proceedings of the AAAI Conference on Artificial Intelligence , Vol. 39. 13069–13077. [49] Zheng Yuan, Fajie Yuan, Yu Song, Youhua Li, Junchen Fu, Fei Yang, Yunzhu Pan, and Yongxin Ni. 2023. Where to go next for recommender systems? id-vs. modality-based recommender models revisited. In Proceedings of the 46th International ACM SIGIR Conference on Research and Development in Information Retrieval . 2639–2649. [50] Lingzi Zhang, Xin Zhou, Zhiwei Zeng, and Zhiqi Shen. 2024. Multimodal pre-training for sequential recommendation via contrastive learning. ACM Transac-tions on Recommender Systems 3, 1 (2024), 1–23. [51] Shengzhe Zhang, Liyi Chen, Dazhong Shen, Chao Wang, and Hui Xiong. 2025. Hierarchical time-aware mixture of experts for multi-modal sequential recom-mendation. In Proceedings of the ACM on Web Conference 2025 . 3672–3682. [52] Zhengxin Zhang, Dan Zhao, Xupeng Miao, Gabriele Oliaro, Zhihao Zhang, Qing Li, Yong Jiang, and Zhihao Jia. 2024. Quantized side tuning: Fast and memory-efficient tuning of quantized large language models. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) . 1–17. [53] Zhicheng Zhou, Xiangwu Meng, and Yujie Zhang. 2025. Rethinking Convo-lutional Neural Network in Multimodal Sequential Recommendation. ACM Transactions on Information Systems 44, 2 (2025), 1–35. [54] Defa Zhu, Hongzhi Huang, Zihao Huang, Yutao Zeng, Yunyao Mao, Banggu Wu, Qiyang Min, and Xun Zhou. 2024. Hyper-connections. arXiv preprint arXiv:2409.19606 (2024). [55] Jing Zhu, Mingxuan Ju, Yozen Liu, Danai Koutra, Neil Shah, and Tong Zhao. 2025. Beyond unimodal boundaries: Generative recommendation with multimodal semantics. arXiv preprint arXiv:2503.23333 (2025). [56] Ziyi Zhuang, Hongji Li, Junchen Fu, Jiacheng Liu, Joemon M Jose, Youhua Li, and Yongxin Ni. 2025. Frequency-Decoupled distillation for efficient multimodal recommendation. In Proceedings of the 34th ACM International Conference on Information and Knowledge Management . 4571–4581.

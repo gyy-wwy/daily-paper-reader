@@ -1,0 +1,604 @@
+Title: TMallGS: Scaling Unified Feature and Sequence Modeling for Generative E-commerce Search
+
+URL Source: https://arxiv.org/pdf/2607.13398v1
+
+Published Time: Thu, 16 Jul 2026 00:41:20 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# TMallGS: Scaling Unified Feature and Sequence Modeling for Generative E-commerce Search 
+
+# Zhentao Song 
+
+220245077@seu.edu.cn Southeast University Nanjing, China 
+
+# Yufeng Gao ∗
+
+gyf265697@taobao.com Taobao & Tmall Group of Alibaba Hangzhou, China 
+
+# Xing Fang 
+
+fangxing.fx@taobao.com Taobao & Tmall Group of Alibaba Hangzhou, China 
+
+# Jing Wang ∗
+
+jing.wangj1@taobao.com Taobao & Tmall Group of Alibaba Hangzhou, China 
+
+# Bokang Wang 
+
+wangbokang.wbk@alibaba-inc.com Taobao & Tmall Group of Alibaba Hangzhou, China 
+
+# Guangxin Song 
+
+guangxin.sgx@alibaba-inc.com Taobao & Tmall Group of Alibaba Hangzhou, China 
+
+# Yipin Dai 
+
+220245072@seu.edu.cn Southeast University Nanjing, China 
+
+# He Guo 
+
+2401210268@stu.pku.edu.cn Peking University Beijing, China 
+
+## Abstract 
+
+In large-scale industrial search and ranking systems, Click-Through Rate (CTR) prediction is undergoing a paradigm shift from tradi-tional Deep Learning Recommendation Models (DLRM) toward unified, compute-intensive Transformer architectures. The primary motivation for this transition is to leverage Model FLOPs Utilization (MFU) to achieve predictable performance gains through Scaling Laws. However, existing scaling approaches like OneTrans and Climber, often adopt an all-in-tokenization strategy when directly migrating Large Language Model (LLM) architectures, which ne-glects the unique feature heterogeneity. We propose TmallGS , a high-performance, scalable universal ranking architecture tailored for the Tmall precision ranking domain. TmallGS introduces five core innovations: (1) Hierarchical Distribution-Calibrated Tokenization: To bridge the heterogeneity gap, we propose a coarse-to-fine pipeline combining Field-wise Saliency Reweighting (FSR) and Distribution-Calibrated Projection (DCP) to project diverse features into opti-mized subspaces. (2) Field-Adaptive Gated Transformer Back-bone: We employ Per-Field QKV projections and a noise-adaptive gating mechanism to refine semantic interactions and suppress element-wise noise. (3) Decoupled FiLM Late Fusion: To preserve high-frequency explicit signals, we utilize Feature-wise Linear Mod-ulation (FiLM) to dynamically modulate backbone embeddings with explicit cross-features. (4) Context-Aware Bias Decoupling: Ad-dressing systemic biases beyond position, we incorporate a Context-Aware Bias Net that leverages deep global context to orthogonally decouple bias factors from genuine user intent. (5) Error-Aware Progressive Training: We propose a dynamically weighted loss  
+
+> ∗Yufeng Gao and Jing Wang are co-corresponding authors.
+> This work is licensed under a Creative Commons Attribution 4.0 International License.
+> KDD ’26, Jeju Island, Republic of Korea
+> ©2026 Copyright held by the owner/author(s). ACM ISBN 979-8-4007-2259-2/2026/08 https://doi.org/10.1145/3770855.3818493
+
+function based on hierarchical prediction errors, which enables adaptive hard-sample mining to improve model robustness. Extensive offline experiments and online A/B tests conducted in the Tmall 1 Search Ranking stage demonstrate that TmallGS sig-nificantly boosts training throughput while delivering substantial gains in both UCTCVR and GMV metrics. 
+
+## CCS Concepts 
+
+• Information systems → Recommender systems .
+
+## Keywords 
+
+Recommender System, E-commerce Systems, Ranking Model, Scal-ing Up 
+
+ACM Reference Format: 
+
+Zhentao Song, Yufeng Gao, Xing Fang, Jing Wang, Bokang Wang, Guangxin Song, Yipin Dai, and He Guo. 2026. TMallGS: Scaling Unified Feature and Sequence Modeling for Generative E-commerce Search. In Proceedings of the 32nd ACM SIGKDD Conference on Knowledge Discovery and Data Mining V.2 (KDD ’26), August 09–13, 2026, Jeju Island, Republic of Korea. ACM, New York, NY, USA, 10 pages. https://doi.org/10.1145/3770855.3818493 
+
+## 1 Introduction 
+
+Ranking stands as the pivotal nexus connecting explicit user intent (Query ) with massive item inventories. For the past decade, the industrial landscape has been dominated by the Deep Learning Recommendation Model (DLRM) paradigm, exemplified by DNN-based architectures like DeepFM[ 11 ] and DCNv2[ 28 ]. These models rely on a dual-track design: massive embedding tables for memo-rization and shallow MLPs for feature interaction [ 5]. While effec-tive in the early deep learning era, DLRMs have recently collided with a formidable industrial compute wall. Due to their inherently memory-bound characteristics, DLRMs suffer from inefficient mem-ory access patterns, leading to critically low Tensor Core utilization (Model FLOPs Utilization, MFU) on modern GPUs. Furthermore,  
+
+> 1Tmall is China’s largest B2C e-commerce platform. arXiv:2607.13398v1 [cs.IR] 15 Jul 2026 KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea Zhentao Song et al.
+
+they exhibit a saturation effect, where scaling parameters yields diminishing marginal returns in performance[33]. Inspired by the transformative Scaling Laws observed in Large Language Models (LLMs) [ 16 ], the industry is undergoing a fun-damental paradigm shift. Recent pioneers have begun exploring compute-intensive architectures anchored by Transformer back-bones [ 27 , 32 ]. By stacking deep Transformer layers, these models not only maximize hardware efficiency[ 7 ] but also unlock superior capabilities for modeling ultra-long user behavior sequences[ 21 , 25 ]. Despite the Transformer’s dominance in general sequence mod-eling, adapting the LLM-style "All-in-One" architecture to high-precision search ranking introduces severe theoretical and practical defects[15, 34, 35]. Unlike Recommendation Systems which tolerate fuzzy discov-ery, Search is strictly governed by Query Constraints. We identify three critical challenges that impede current scaling efforts: (1) 
+
+The Heterogeneity Gap: Search inputs vary significantly, from short queries to long-tail user behaviors[ 10 , 31 ]. Forcing a uni-fied attention mechanism across these diverse modalities triggers Gradient Conflicts. (2) Signal Dilution: Explicit cross-features (e.g., query-item matches) are decisive in search[ 1 ]. However, deep Self-Attention inherently acts as a low-pass filter, over-smoothing these high-frequency hard signals. (3) Optimization Instability: 
+
+Unlike the dense supervision in LLMs, CTR prediction relies on sparse binary feedback, leading to severe gradient vanishing in deep networks[39]. To bridge these gaps, we propose TmallGS, a highly efficient architecture tailored for search scaling. Adhering to the philosophy of "Semantic Divide-and-Conquer, Interaction Decoupling," our contributions are summarized as follows: (1) Hierarchical Distribution-Calibrated Tokenization: We propose a coarse-to-fine tokenization pipeline comprising Field-wise Saliency Reweighting (FSR) and Distribution-Calibrated Pro-jection (DCP). This design projects heterogeneous features into calibrated subspaces, effectively solving the heterogeneity gap at the input level[31]. (2) Field-Adaptive Gated Backbone: We design a specialized Transformer backbone equipped with Per-Field QKV projections and Noise-Adaptive Gating[ 22 ]. This mechanism refines seman-tic interactions by dynamically filtering noise from long behavior sequences[36]. (3) Signal-Preserving Decoupling: We introduce Decoupled FiLM Late Fusion[ 20 ] to resolve the signal dilution problem. By explicitly modeling heavy cross-features via a modulation pathway, we ensure that high-frequency matching constraints are preserved alongside deep semantic abstractions. (4) Context-Aware Bias Net: We design a Context-Aware Bias Net to address systemic biases. Unlike shallow position debiasing, this module leverages the deep global context anchor[ 6] to orthog-onally decouple complex bias factors from semantic relevance[ 30 ], optimizing GAUC directly. (5) Robust Progressive Optimization: We introduce an Error-Aware Progressive Training strategy[ 39 ] to stabilize deep training via adaptive curriculum learning. Coupled with a Two-Stage Warm-up protocol, TmallGS achieves state-of-the-art performance and stability in both offline benchmarks and online A/B testing at Tmall APP Search. 
+
+## 2 Related Work 
+
+Traditional Recommendation Paradigms. For the past decade, DLRMs paradigm has dominated industrial ranking. Pioneering works like Wide&Deep[ 5 ] and DeepFM[ 11 ] utilized shallow MLPs to capture feature interactions, while DCN-V2[ 28 ] introduced ex-plicit vector-wise cross networks. Other feature-interaction mod-els, such as xDeepFM, AutoInt, and FiBiNET, further explore ex-plicit high-order interactions, self-attentive feature interaction, and feature-importance weighting for CTR prediction [ 14 , 17 , 24 ]. To incorporate user history, DIN[ 37 ] and DIEN[ 36 ] proposed Target Attention mechanisms to weigh historical behaviors against candi-date items, while BST [ 4] and DSIN [ 9] explored Transformer and session-based modeling. However, the fundamental bottleneck of DLRM lies in its Memory-Bound nature. These models rely heavily on massive embedding tables for memorization[ 19 ], resulting in sparse, irregular memory access patterns that critically underutilize modern GPU Tensor Cores, which lead to low MFU. Furthermore, DLRMs face a Scaling Ceiling[ 33 ]: simply widening MLPs or deep-ening attention layers yields diminishing marginal returns and fails to efficiently model ultra-long sequences (e.g., lifetime history) due to memory bandwidth constraints[ 21 ]. This "Industrial Com-pute Wall" necessitates a paradigm shift toward compute-intensive architectures that can leverage Scaling Laws. 
+
+Scaling Transformers. Inspired by LLM Scaling Laws, the in-dustry has pivoted towards Unified Transformer Backbones to max-imize compute efficiency[ 32 , 38 ]. OneTrans[ 35 ] utilizes a unified tokenizer for all-layer interaction via a shared Transformer. While theoretically capturing global correlations, tokenizing strong ex-plicit signals (e.g., matching scores) risks Signal Dilution due to the low-pass filtering nature of deep Self-Attention. HyFormer[ 15 ]attempted to mitigate this via asymmetric interaction. OnePiece[ 6]introduced Reasoning Blocks to unify search contexts, but its high computational complexity poses challenges for low-latency indus-trial deployment. Nevertheless, most existing unified architectures lack Architectural Decoupling. By forcing statistical features and semantic tokens into a homogeneous attention stream, these mod-els often suffer from a lack of Inductive Bias required for precise relevance matching[ 1 ] and struggle to balance the gradient conflicts between sparse features and dense semantic representations[29]. 
+
+SID Paradigm GRs. The Generative Retrieval (or SID) paradigm, represented by TIGER[ 23 ], and recently OneRec[ 8], OneSearch[ 2 ][ 3], reframes recommendation as end-to-end ID generation. While promising for recall[ 12 , 18 ], this black-box approach faces fun-damental Controllability Challenges in industrial ranking. Specifi-cally, end-to-end generation bypasses critical Intermediate Strategic Interventions (e.g., inventory filtering, ad insertion) essential for commercial systems. Furthermore, generative models inherently rely on probabilistic sampling, making it difficult to strictly adhere to Hard Query Constraints (e.g., exact attribute matching), leading to potential hallucinations that are unacceptable in high-precision search scenarios. 
+
+## 3 Preliminaries 
+
+Problem Formulation. We formulate the CTR prediction task in industrial search ranking as learning a probability estimator 
+
+𝑓 𝜃 : X → [0, 1]. Let the training corpus be denoted as S =TMallGS: Scaling Unified Feature and Sequence Modeling for Generative E-commerce Search KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea 
+
+Figure 1: The overall architecture of TmallGS. (Left) The distinct processing flow comprising three stages: Section A uses FSR and DCP for hierarchical tokenization; Section B employs the TmallGS Block with Per-Field QKV and Noise-Adaptive Gating; Section C performs Decoupled FiLM Late Fusion to recover explicit signals. (Right) The Error-Aware Progressive Training strategy with auxiliary supervision. 
+
+{( 𝑢 𝑖 , 𝑞 𝑖 , C𝑖 , y𝑖 )} 𝑁 𝑖 =1, where 𝑢 𝑖 represents the user context, 𝑞 𝑖 is the search query, and C𝑖 = {𝑐 1, . . . , 𝑐 𝑀 } is the set of candidate items in the session. The label vector y𝑖 ∈ { 0, 1}𝑀 indicates the click status for each candidate. The heterogeneous feature space X is partitioned into three logical subspaces to support our decoupled architecture: (1) Con-text Features ( x𝑐𝑡𝑥 ) encompass request-level global priors shared across all candidates, such as query text, user profile, and pagina-tion biases; (2) Sequence Features ( x𝑠𝑒𝑞 ) consist of variable-length historical behaviors, including User Interaction History ( H𝑢 ) and Query History ( H𝑞 ), which capture long-term intent shifts; and (3) 
+
+Candidate Features ( x𝑐𝑎𝑛𝑑 ) involve item-specific attributes. Cru-cially, we bifurcate these into Light Attributes x𝑙𝑖𝑔ℎ𝑡 𝑐 (e.g., ItemID) for semantic representation learning, and Heavy Cross-Attributes 
+
+xℎ𝑒𝑎𝑣𝑦 𝑐 (e.g., Q2I matching scores) for precise calibration. 
+
+## 4 Methodology 4.1 Architecture Overview 
+
+We propose TmallGS , a scalable generative search ranking ar-chitecture designed to bridge the Heterogeneity Gap and prevent 
+
+Signal Dilution . As illustrated in Figure 1, TmallGS departs from the monolithic all-in-one tokenization used in LLMs. Instead, it adopts a semantic-interaction decoupling paradigm comprising five synergistic modules: (1) Hierarchical Distribution-Calibrated Tokenization that projects heterogeneous features into optimized subspaces; (2) Field-Adaptive Gated Transformer Backbone 
+
+which employs Per-Field QKV Projections and Noise-Adaptive Gat-ing to refine semantic interactions; (3) Decoupled FiLM Late Fusion to recover high-frequency explicit signals; (4) Context-Aware Bias Net for explicitly modeling and monitoring context biases; (5) Error-Aware Progressive Training to enforce a robust curriculum learning capability. 
+
+## 4.2 Hierarchical Distribution-Calibrated Tokenization 
+
+Tokenization serves as the foundational bridge between sparse raw features and dense semantic interactions. Given the massive scale and noise inherent in industrial feature vocabularies, a simple linear projection is insufficient[ 29 ]. Conversely, standard heavy gating (e.g., SwiGLU-FFN) incurs prohibitive computational costs[ 7 ]. To KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea Zhentao Song et al. 
+
+resolve this, we propose a Coarse-to-Fine Tokenization Pipeline 
+
+that acts as a progressive denoising filter. This pipeline consists of two coupled stages: Field-wise Saliency Reweighting for macroscopic noise suppression, followed by Distribution-Calibrated Projection 
+
+for microscopic feature adaptation. 
+
+4.2.1 Stage 1: Field-wise Saliency Reweighting (FSR) . Be-fore mapping raw features into the latent space, it is critical to calibrate the importance of different feature fields based on the global context[ 6]. We introduce a lightweight Field-wise Saliency Reweighting module to adaptively re-weight input fields. Let X = {X1, . . . , X𝐹 } denote the input feature fields, where 
+
+X𝑖 ∈ R𝐿 ×𝑑 𝑖 represents the 𝑖 -th field with sequence length 𝐿 and raw dimension 𝑑 𝑖 . First, we perform Global Context Aggregation to capture the macroscopic intensity of each field. Unlike standard SE-blocks that only pool the channel dimension, we aggregate over both the temporal ( 𝐿 ) and feature ( 𝑑 𝑖 ) dimensions to obtain a robust global descriptor 𝑧 𝑖 :
+
+𝑧 𝑖 = 1
+
+𝐿 · 𝑑 𝑖 𝐿 ∑︁ 
+
+> 𝑡 =1
+> 𝑑 𝑖
+
+∑︁ 
+
+> 𝑘 =1
+
+X𝑖,𝑡,𝑘 , z = [𝑧 1, . . . , 𝑧 𝐹 ] ∈ R𝐹 . (1) Next, a gating network models the inter-field dependencies to gen-erate saliency weights w ∈ R𝐹 :
+
+w = 𝜎 (W𝑒𝑥 · 𝛿 (W𝑠𝑞 z)) , (2) where 𝛿 is the SiLU activation, and W𝑠𝑞 , W𝑒𝑥 form a bottleneck structure to capture field correlations efficiently. The raw features are then dynamically modulated: ˜X𝑖 = 𝑤 𝑖 · X𝑖 . This step acts as a soft field selector, amplifying globally informative fields while dampening irrelevant ones prior to detailed projection. 
+
+4.2.2 Stage 2: Distribution-Calibrated Projection (DCP) . Fol-lowing the coarse-grained reweighting, we employ the Distribution-Calibrated Projection to project the modulated features into the semantic space. We introduce the Calibrated-Swish activation (𝜙 𝑐𝑎𝑙 ), which implements a self-gating mechanism driven by layer statistics[ 22 ]. For the reweighted field ˜X𝑖 , the token embedding E𝑖 
+
+is computed as: 
+
+𝜙 𝑐𝑎𝑙 (H) = H ⊙ 𝜎 (LayerNorm (H)) , (3) 
+
+E𝑖 = MLP 𝑐𝑎𝑙 ( ˜X𝑖 ) =
+
+
+
+𝜙 𝑐𝑎𝑙 ( ˜X𝑖 W1 + b1)
+
+
+
+W2. (4) Here, Layer Normalization standardizes the latent distribution, en-suring the self-gating signal is strictly centered within the gradient-sensitive region. Efficiency Analysis: This two-stage design pro-vides a favorable trade-off: FSR introduces negligible overhead (operating on pooled scalars), while DCP reduces projection FLOPs by about 33% compared to SwiGLU-FFN[ 7 ]. Together, they achieve robust non-linear modeling with high inference throughput. 
+
+## 4.3 Unified Heterogeneous Sequence Construction 
+
+To fully leverage the global receptive field of the Transformer[ 27 ,32], we propose a Request-Level Sequence Construction strat-egy. Unlike item-centric paradigms that redundantly encode context for each candidate, we align the sequence strictly with the User-Query Request, constructing a unified input E𝑖𝑛 shared across all candidates[35]. 
+
+Tokenization & Assembly . We define five core semantic com-ponents: (1) Context Bias Anchor ( e𝑏𝑖𝑎𝑠 ) tokenizes the pagina-tion index to aggregate global context[ 30 ]; (2) Context & Query (e𝑐𝑡𝑥 , e𝑞𝑟 𝑦 ) represent user profile and current intent; (3) User His-tory ( H𝑢𝑖ℎ , H𝑢𝑞ℎ ) captures interactions and explicit intent shifts[ 36 ], where query tokens aggregate linguistic features; (4) Candidate (e𝑐𝑎𝑛𝑑 ) is restricted to Light Attributes (e.g., ItemID) to align with history, bypassing heavy cross-attributes. The final sequence is positioned with the Anchor at the start to ensure global attention coverage: 
+
+E𝑖𝑛 = [e𝑏𝑖𝑎𝑠 ; e𝑐𝑡𝑥 ; e𝑞𝑟 𝑦 ; H𝑢𝑖ℎ ; H𝑢𝑞ℎ ; e𝑙𝑖𝑔ℎ𝑡 𝑐𝑎𝑛𝑑 ]. (5) This unified sequence is fed into the backbone, where field-specific QKV projections learn distinct interaction patterns[10]. 
+
+## 4.4 TmallGS Block 
+
+The core reasoning engine consists of 𝐿 stacked TmallGS Blocks. To handle the unique intra-session ranking structure and the noise inherent in behavioral data, we redesign the standard Transformer block[ 27 ] with field-specific projections, a permutation-invariant visibility mask, and a noise-adaptive gating mechanism[22]. 
+
+4.4.1 Per-Field Heterogeneous QKV Projection . Standard Trans-formers project all tokens into a shared latent space, which neglects the manifold discrepancies among search fields[ 31 ]. To resolve this, we partition the unified input sequence E𝑖𝑛 into field-specific seg-ments. We employ Per-Field Projections [ 10 ], where each field 
+
+𝜙 (e.g., Query, UIH, Candidate) utilizes a unique set of projection matrices. For the 𝑖 -th token h𝑖 belonging to field 𝜙 (𝑖 ), the query, key, and value vectors are computed as: 
+
+q𝑖 = h𝑖 W𝜙 (𝑖 ) 
+
+> 𝑄
+
+, k𝑖 = h𝑖 W𝜙 (𝑖 ) 
+
+> 𝐾
+
+, v𝑖 = h𝑖 W𝜙 (𝑖 ) 
+
+> 𝑉
+
+. (6) This design acts as a manifold alignment mechanism, mitigating gradient conflicts by allowing distinct semantic rotations for het-erogeneous modalities[29]. 
+
+4.4.2 Context-Dominant Visibility Mask . In search ranking, multiple candidate items are scored simultaneously within a single batch. To ensure efficiency and theoretical correctness, we impose a strict Attention Mask M ∈ R𝑇 ×𝑇 . Let the input sequence be divided into a Context Prefix set Ω𝑐𝑡𝑥 = {𝐴𝑛𝑐ℎ𝑜𝑟, 𝑈 𝑠𝑒𝑟, 𝑄𝑢𝑒𝑟𝑦, 𝑈 𝑄𝐻, 𝑈 𝐼𝐻 }
+
+and a Candidate set Ω𝑐𝑎𝑛𝑑 . The visibility rules are defined as: 
+
+• Context Full-Attention: Tokens within Ω𝑐𝑡𝑥 are fully visi-ble to each other to model deep global context interactions[ 6]. 
+
+• Candidate Independence: Each candidate token 𝑐 𝑖 ∈ Ω𝑐𝑎𝑛𝑑 
+
+can attend to all tokens in Ω𝑐𝑡𝑥 and itself, but is strictly in-visible to other candidates 𝑐 𝑗 ( 𝑗 ≠ 𝑖 ).Formally, the mask is defined as: 
+
+M𝑖 𝑗 =
+
+(
+
+0 if 𝑗 ∈ Ω𝑐𝑡𝑥 or 𝑖 = 𝑗 
+
+−∞ if 𝑖, 𝑗 ∈ Ω𝑐𝑎𝑛𝑑 and 𝑖 ≠ 𝑗 (7) This masking strategy prevents information leakage between can-didates (shortcut learning) and ensures that the ranking score of a candidate depends solely on its interaction with the context, not on the other items in the same page. TMallGS: Scaling Unified Feature and Sequence Modeling for Generative E-commerce Search KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea 
+
+4.4.3 Noise-Adaptive Gated Attention . User behavior sequences often contain noise (e.g., accidental clicks) irrelevant to the current query[ 37 ]. Standard Softmax normalization forces the model to allo-cate attention weights summing to 1, causing the noise propagation problem where irrelevant history tokens are assigned non-trivial weights. To address this, we introduce a gating mechanism in-serted after the attention operation but before the output projection 
+
+W𝑂 [22]. Crucially, the gate is generated from the Pre-Norm output 
+
+X𝑛𝑜𝑟𝑚 rather than the unstable attention output. Since X𝑛𝑜𝑟𝑚 re-tains the stable residual identity, it provides a robust reference for determining feature saliency. The computation flow is: 
+
+A = Attention (Q, K, V), (8) 
+
+G = 𝜎 (Xnorm Wgate + bgate ), (9) 
+
+H = (A ⊙ G)W𝑂 (10) where ⊙ denotes element-wise multiplication and A is the standard attention output. By multiplying with G ∈ ( 0, 1), we empower the attention mechanism with an un-normalized capability. When the context is irrelevant, the gate G can saturate to 0, dynamically sup-pressing the noise propagation. This effectively breaks the linear bottleneck of the standard Value-Projection path ( 𝑊 𝑉 ·𝑊 𝑂 ), enhanc-ing the model’s non-linear capacity to capture complex matching patterns[1, 29]. 
+
+## 4.5 Decoupled FiLM Late Fusion 
+
+Deep Transformer layers act as low-pass filters, which can over-smooth high-frequency signals such as exact string matches or statistical interaction rates found in xℎ𝑒𝑎𝑣𝑦 𝑐 [35 ]. To preserve these signals, we employ a Feature-wise Linear Modulation (FiLM)[ 20 ]mechanism at the final output stage. Let h𝐿 𝑐 denote the semantic output of the final Transformer block for candidate 𝑐 , and e𝑎𝑙𝑙 𝑐 denote the comprehensive embedding of the candidate (combining both light and heavy features). We first concatenate them to form a unified representation basis: 
+
+u𝑐 = [h𝐿 𝑐 ⊕ e𝑎𝑙𝑙 𝑐 ]. (11) We then employ a specific Task Tower (MLP) that takes the can-didate’s comprehensive features e𝑎𝑙𝑙 𝑐 as input to generate affine transformation coefficients: 
+
+𝜸 𝑐 , 𝜷 𝑐 = MLP 𝐹𝑖𝐿𝑀 (e𝑎𝑙𝑙 𝑐 ), where 𝜸 𝑐 , 𝜷 𝑐 ∈ R𝑑 𝑢 . (12) The final representation is obtained by dynamically scaling and shifting the unified vector: 
+
+v𝑓 𝑖𝑛𝑎𝑙 = (1 + 𝜸 𝑐 ) ⊙ u𝑐 + 𝜷 𝑐 . (13) This mechanism allows the explicit cross-features to sharply modu-late the semantic representations, recovering signal resolution lost during deep propagation. The main semantic logit is then computed as[11]: logit 𝑚𝑎𝑖𝑛 = MLP ℎ𝑒𝑎𝑑 (v𝑓 𝑖𝑛𝑎𝑙 ). (14) 
+
+## 4.6 Context-Aware Bias Net 
+
+In Tmall search, one request corresponds to one displayed page of candidate items. When the user scrolls to the next page, the sys-tem creates a new request and a new training instance. Therefore, all candidates within the same request share request-level factors such as pagination, query context, user state, and traffic conditions. We introduce a Context Anchor token to summarize these shared factors. To decouple systemic biases from semantic relevance, we propose a Context-Aware Bias Net that leverages the deep con-textual encoding of the Context Anchor token[ 30 ]. Unlike shallow bias towers, we extract the final hidden state of the Context Anchor, 
+
+h𝐿 𝑏𝑖𝑎𝑠 , which has attended to the entire request context[ 6 ]. This vector is projected into a scalar bias term and additively fused with the main semantic logit logit 𝑚𝑎𝑖𝑛 derived in Section 4.5: logit 𝑏𝑖𝑎𝑠 = SwiMLP 𝑏𝑖𝑎𝑠 (h𝐿 𝑏𝑖𝑎𝑠 ), ˆ𝑦 = 𝜎 (logit 𝑚𝑎𝑖𝑛 + logit 𝑏𝑖𝑎𝑠 ). (15) Crucially, this additive formulation enables an orthogonal opti-mization strategy. When computing the Pairwise Loss between a clicked item 𝑐 + and a non-clicked item 𝑐 − within the same request, the context-level bias term naturally cancels out: 
+
+Δlogit = (logit + 
+
+> 𝑚𝑎𝑖𝑛
+
++ logit 𝑏𝑖𝑎𝑠 ) − ( logit − 
+
+> 𝑚𝑎𝑖𝑛
+
++ logit 𝑏𝑖𝑎𝑠 )≡ logit + 
+
+> 𝑚𝑎𝑖𝑛
+
+− logit − 
+
+> 𝑚𝑎𝑖𝑛
+
+. (16) This cancellation creates a clean separation of concerns: the Bias Net absorbs global click priors to stabilize AUC, while the Pairwise Loss is relieved from modeling systemic bias and focuses purely on rela-tive relevance ( logit 𝑚𝑎𝑖𝑛 ), directly boosting GAUC. This prevents the calibration degradation typically associated with aggressive pairwise optimization[39]. 
+
+## 4.7 Error-Aware Progressive Training 
+
+To mitigate the vanishing gradient problem in deep networks and facilitate Curriculum Learning , we propose a dynamic Error-Aware Progressive Training strategy. Instead of treating all samples equally, we utilize the prediction error of the 𝑙 -th layer to supervise the 
+
+(𝑙 + 1)-th layer, forcing deeper layers to focus on hard samples misclassified by shallower layers. Specifically, at each layer 𝑙 , we attach a lightweight auxiliary head to the candidate token output h𝑙 𝑐 to generate an intermediate prediction ˆ𝑦 𝑙 . We calculate the absolute prediction error (without clipping) as the hardness metric: 
+
+𝛿 𝑙 = |𝑦 − ˆ𝑦 𝑙 |. (17) This error determines the loss weight 𝛼 𝑙 +1 for the next layer: 
+
+𝛼 𝑙 +1 = 1 + 𝜆 · StopGradient (𝛿 𝑙 ). (18) The StopGradient operator ensures that the weight 𝛼 acts purely as a scalar modulator, preventing unstable gradients from flowing back through the weighting mechanism itself. 
+
+Total Objective. Finally, to explicitly optimize the intra-session ranking order (GAUC) alongside the progressive calibration, we incorporate a pairwise constraint on the final output: 
+
+L𝑝𝑎𝑖𝑟 = − 1
+
+|P | ∑︁ (𝑐 +,𝑐 − ) ∈ P 
+
+log 𝜎   ˆ𝑦 (𝑐 +) − ˆ𝑦 (𝑐 − ) . (19) The total objective is a weighted summation: 
+
+L𝑡𝑜𝑡𝑎𝑙 =
+
+> 𝐿
+
+∑︁ 
+
+> 𝑙 =1
+
+𝛼 𝑙 L𝐵𝐶𝐸 ( ˆ𝑦 𝑙 , 𝑦 )
+
+| {z }
+
+> Progressive Pointwise
+
++ 𝛾 · L 𝑝𝑎𝑖𝑟 ( ˆ𝑦 𝐿 )
+
+| {z }
+
+> Pairwise Ranking
+
+(20) KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea Zhentao Song et al. 
+
+where P denotes the set of valid training pairs constructed within each query session[ 19 ], with 𝑐 + and 𝑐 − representing the clicked and non-clicked candidates respectively, and |P | is the total pair count. 𝛾 is a hyperparameter that balances the BCE and Pairwise objectives. This hybrid design ensures robust convergence via deep supervision[ 39 ] while directly boosting the ranking capability tai-lored for search. 
+
+## 5 Experiments 
+
+In this section, we conduct extensive experiments to answer the following research questions: 
+
+• RQ1 (Effectiveness): Does TmallGS outperform state-of-the-art industrial ranking models? 
+
+• RQ2 (Ablation): What is the contribution of each proposed component to the final performance? 
+
+• RQ3 (Scalability): Can TmallGS break the diminishing re-turns bottleneck of DLRMs and follow the scaling laws con-sistent with LLMs[16]? 
+
+• RQ4 (Efficiency): Does the proposed architecture maintain a favorable trade-off between inference latency and model capacity for online deployment? 
+
+Table 1: Statistics of the Tmall Search Dataset. Item Statistics 
+
+Time Span 31 Days Total Samples ∼ 500 Million Avg. Sequence Length 1,500 # Users 13 Million 
+
+# Items 74 Million 
+
+Training Set (Days 1-30) 484 Million 
+
+Test Set (Day 31) 16 Million 
+
+## 5.1 Experimental Setup 
+
+5.1.1 Dataset. Due to the absence of public large-scale search datasets that contain both ultra-long user behavior sequences and explicit query-item matching signals, standard benchmarks are insufficient for evaluating the long-context modeling and signal preservation capabilities of TmallGS. Consequently, we conduct experiments exclusively on a comprehensive industrial dataset col-lected from the Tmall App Search logs. As summarized in Table 1, the dataset spans a consecutive period of 31 days, comprising over 500 million samples. To fully leverage the Transformer’s[ 27 ] receptive field, we construct user behavior sequences with an average length of 1500 by truncating extended lifetime histories to the most recent interactions. This consistently long context setting covers a significantly broader history than typical industrial settings (usually under 200), posing a substantial challenge for efficient modeling[ 32 ]. Strictly following the temporal order, we utilize the data from the first 30 days for training and the data from the last day for testing. 
+
+5.1.2 Baselines . To rigorously evaluate the performance of TmallGS, we compare it against a comprehensive set of competitive meth-ods, categorized into traditional industrial paradigms and recent scalable architectures. 
+
+Group 1: Traditional Models. We compare against standard DLRM baselines: 
+
+• DNN[ 5]: Uses a standard Embedding-MLP architecture to capture implicit feature interactions. 
+
+• DIN[ 37 ]: Introduces local activation units to capture user interests; combined with RankMixer as our production base-line. 
+
+• DCNv2[ 28 ]: Utilizes low-rank cross layers to efficiently learn bounded-degree explicit feature interactions. 
+
+• APG[ 29 ]: Dynamically generates instance-specific parame-ters via a hyper-network to handle diverse data distributions. 
+
+Group 2: Scalable Architectures. These methods leverage Transformer backbones for scaling: 
+
+• HiFormer[ 10 ]: Efficiently models long user behaviors via a two-stage hierarchical aggregation mechanism. 
+
+• RankMixer[ 38 ]: Replaces self-attention with multi-head token mixing to maximize GPU Model FLOPs Utilization (MFU). 
+
+• HHFT[ 31 ]: Partitions heterogeneous features into semantic blocks with independent projections to prevent interference. 
+
+• HSTU[ 32 ]: Replaces softmax-attention with point-wise ag-gregations to enable high-efficiency large-scale scaling. 
+
+• MTGR[ 12 ]: Reframes CTR prediction as a sequence genera-tion task, though often struggling with ranking precision. 
+
+• OneTrans[ 35 ]: Serializes all context and sequence features into a single token stream for unified causal modeling. 
+
+5.1.3 Evaluation Metrics . We employ widely accepted metrics for industrial ranking evaluation to assess the performance of our proposed method: AUC and GAUC[19, 37]. The AUC metric evaluates the global ranking capability by mea-suring the probability that a randomly selected positive sample ranks higher than a randomly selected negative one. Let D+ and 
+
+D− denote the sets of positive and negative samples respectively. It is formally defined as: AUC = 1
+
+|D + ||D − |∑︁ 𝑖 ∈ D +∑︁ 𝑗 ∈ D −
+
+I( ˆ𝑦 𝑖 > ˆ𝑦 𝑗 ), (21) where I(·) is the indicator function which equals 1 if ˆ𝑦 𝑖 > ˆ𝑦 𝑗 and 0 otherwise. However, in search scenarios, the relative order of items within the same query session is more critical than global absolute scores. Therefore, we primarily rely on GAUC, which calculates the weighted average of AUC within each user-query group: GAUC =
+
+Í(𝑢,𝑞 ) 𝑤 (𝑢,𝑞 ) × AUC (𝑢,𝑞 )
+
+Í(𝑢,𝑞 ) 𝑤 (𝑢,𝑞 )
+
+, (22) where AUC (𝑢,𝑞 ) is the AUC calculated strictly within the candidate set of session (𝑢, 𝑞 ), and 𝑤 (𝑢,𝑞 ) denotes the number of impressions in that session. Note that in large-scale industrial recommendation, an absolute increase of 0.001 in GAUC is considered statistically significant. TMallGS: Scaling Unified Feature and Sequence Modeling for Generative E-commerce Search KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea 
+
+Table 2: Performance comparison on the Tmall Search Dataset. We report the relative improvement ( Δ) in percent-age over the production baseline (DIN). Bold indicates the best performance, and underline indicates the second best. Model Δ AUC (%) Δ GAUC (%) 
+
+Group 1: Traditional Models 
+
+DNN-based -0.25 -0.21 DIN (Base) 0.00 0.00 DCNv2 +0.11 +0.19 APG +0.21 +0.27 
+
+Group 2: Scalable Architectures 
+
+HiFormer +0.33 +0.59 HSTU +0.58 +0.61 MTGR +0.64 +0.69 HHFT +0.36 +0.67 OneTrans +0.82 +0.75 RankMixer (Prod. Base) +0.39 +0.77 
+
+TmallGS (Ours) +1.12 +1.26 
+
+5.1.4 Implementation Details . All models are implemented us-ing a distributed training framework[ 39 ] and trained on a cluster of 16 high-performance Nvidia GPUs. The global batch size is set to 4096. learning rate is set to 2 × 10 −4. Given the distinct convergence properties of sparse embeddings and dense Transformer parame-ters, we employ a Split-Optimizer strategy: For sparse model, we use the Adam optimizer to handle the non-stationary distribution of sparse features, ensuring adaptive learning rates for long-tail IDs; For dense model, we use the AdamW optimizer for the TmallGS backbone and MLP towers. The decoupled weight decay[ 13 ] in AdamW effectively prevents overfitting in deep compute-intensive layers. To ensure a fair comparison in our experiments, particu-larly in ablation studies, we standardize the model capacity: all DNN-based models utilize identical MLP hidden dimensions, and all Transformer-based architectures are configured with the same hidden dimension size. 
+
+## 5.2 RQ1: Overall Performance 
+
+We present the comparative results of the State-of-the-Art models on the Tmall Search Dataset in Table 2. The models are evaluated based on AUC and GAUC. The relative improvement is calculated based on AUC and GAUC against baseline DIN. And our production baseline is DNN with Rankmixer. 
+
+Analysis: TmallGS consistently outperforms all baselines, re-vealing two key insights: (1) Compute-Centric Shift: Scalable architectures (Group 2) generally surpass memory-bound DLRMs (Group 1), confirming that scaling backbone capacity and sequence length ( 𝐿 = 1500 ) is essential for capturing complex dependencies. (2) Decoupling Superiority: While OneTrans improves AUC, its GAUC lags behind RankMixer, indicating signal dilution in generic Transformers. TmallGS achieves the highest gains (+1.12% AUC, +1.26% GAUC) by utilizing Decoupled FiLM Fusion to preserve high-frequency matching signals, proving that domain-specific de-coupling is critical for adapting LLM architectures to search. 
+
+## 5.3 RQ2: Ablation Studies 
+
+To systematically verify the contribution of each proposed com-ponent, we conduct ablation studies on the Tmall Search offline dataset. We create variants by removing ("w/o") or replacing (" →") specific modules. The results are summarized in Table 3. 
+
+Table 3: Ablation studies of TmallGS. We report the relative performance drop ( Δ) in percentage. Model Variants Δ AUC (%) Δ GAUC (%) TmallGS (Full Model) - -
+
+A. Interaction Decoupling Setting: w/ Cross-Fea in Block 
+
+w/o FiLM Fusion -0.21 -0.32 FiLM → Concat -0.15 -0.24 
+
+Setting: w/o Cross-Fea in Block 
+
+w/o FiLM Fusion -0.17 -0.19 FiLM → Concat -0.10 -0.11 
+
+B. Noise Filtering 
+
+Gating → Std. Attn -0.13 -0.16 
+
+C. Tokenization 
+
+Only DCP -0.08 -0.06 Only FSR -0.13 -0.09 FSR+DCP → MLP -0.17 -0.11 FSR+DCP → SwiGLUFFN -0.05 -0.03 
+
+D. Optimizations & Training 
+
+w/o Bias Net -0.07 -0.13 w/o Prog. Train -0.11 -0.08 w/o Pairwise Loss +0.05 -0.87 w/o UQH Seq -0.65 -0.29 
+
+Impact of Structural Designs. Block A confirms the neces-sity of Interaction Decoupling. Removing FiLM Fusion causes the sharpest GAUC drop (-0.32%), validating that deep Transformers tend to dilute explicit matching signals. FiLM’s multiplicative mod-ulation proves superior to additive concatenation (-0.24%) in re-covering these signals. In Block B, Noise-Adaptive Gating outper-forms standard attention (-0.16% GAUC), effectively mitigating the attention sink problem in noisy behavior sequences. Block C demonstrates the efficiency of our Tokenization. The FSR+DCP pipeline matches the heavy SwiGLU-FFN in performance (gap <0.03%) while reducing projection FLOPs by ∼33%, achieving an optimal efficiency-accuracy trade-off. 
+
+Impact of Optimization Strategies. Training protocols are critical for search ranking. Removing the Pairwise Loss causes a catastrophic drop in GAUC (-0.87%) despite stable AUC, confirming its indispensable role in optimizing intra-session ranking order. Conversely, removing User Query History (UQH) severely impacts global AUC (-0.65%), underscoring its value for long-term intent modeling. Finally, both the Context-Aware Bias Net and Progres-sive Training contribute to stability, with their removal leading to consistent degradation. KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea Zhentao Song et al. 
+
+Table 4: Online A/B Testing Results (30 Days). All metric gains are statistically significant ( 𝑝 < 0.05 ). Metric TmallGS ( Δ)
+
+PV-AUC +0.79% 
+
+Imp-GAUC +0.34% 
+
+UCTCVR +1.38% 
+
+GMV +1.52% 
+
+Latency +6 ms 
+
+Figure 2: Scaling Laws of TmallGS over DIN baseline. Perfor-mance scales monotonically with compute (GFLOPs) across Width, Depth, and Length. 
+
+## 5.4 RQ3: Scalability Analysis 
+
+We probe the scaling properties of TmallGS against a cold-start DIN baseline along three dimensions: Width (𝐷 ∈ { 512 , 768 , 1024 }), 
+
+Depth (𝐿 ∈ { 4, 8, 10 }), and Length (𝑇 ∈ { 500 , 1000 , 1500 }). As shown in Figure 2, TmallGS adheres to scaling laws, exhibit-ing monotonic performance gains across all dimensions as compute budget increases. Notably, depth scaling yields the steepest trajec-tory, offering the highest ROI for ranking precision. Furthermore, length scaling maintains robust linear growth up to 𝑇 = 1500 
+
+without saturation, confirming that our Noise-Adaptive Gating ef-fectively prevents noise accumulation in ultra-long sequences. 
+
+## 5.5 RQ4: Deployment Strategy & Efficiency 
+
+Migrating from a legacy DLRM to a deep Transformer backbone in a mature industrial system presents unique challenges. In this section, we discuss our solutions for effective warm-up and efficient online serving. 
+
+5.5.1 Two-Stage Representation Alignment . To effectively in-herit massive legacy embeddings, we address the manifold misalign-ment issue where direct loading degrades performance. We propose 
+
+Table 5: Comparison of Warm-up Strategies. Warm-up Strategy Δ AUC (%) Δ GAUC (%) 
+
+Cold Start - -Direct Loading +0.46 +0.34 
+
+Two-Stage (Ours) +1.42 +1.09 
+
+a Two-Stage Warm-up : first freezing sparse embeddings to align the dense backbone, followed by end-to-end joint fine-tuning. As shown in Table 5, this strategy significantly outperforms direct loading, yielding gains of +1.42% AUC and +1.09% GAUC .
+
+5.5.2 Online Configuration . Considering the strict latency con-straints and the high QPS of Tmall Search, directly deploying a billion-scale LLM is infeasible. Guided by the Scaling Law analysis in RQ3, we prioritize sequence length over model depth, configuring TmallGS with Layers=4, Dimension=1024, Head=8, and a sequence length of 1500. The dense backbone contains approximately 0.05 billion parameters. This configuration strikes an optimal balance: the extended sequence length captures long-term user interests, while the shallow-but-wide structure ensures massive parallelism on GPUs, keeping the inference latency within the SLA. As shown in Table 4, TmallGS achieves remarkable improve-ments across all core business metrics. The +1.52% lift in GMV 
+
+and +1.38% lift in UCTCVR indicate higher user satisfaction and conversion efficiency. While the average latency increases slightly (+6ms) due to the dense backbone, it remains strictly within the pro-duction SLA, proving that TmallGS successfully strikes a favorable balance between high-capacity modeling and system efficiency. 
+
+## 6 Conclusion 
+
+In this work, we presented TmallGS , a scalable generative ranking architecture that successfully bridges the gap between LLM-style modeling and high-precision industrial search. By introducing a semantic-interaction decoupling paradigm—specifically through Hierarchical Distribution-Calibrated Tokenization and Decoupled FiLM Late Fusion—we effectively resolved the challenges of fea-ture heterogeneity and signal dilution that plague standard Trans-former adaptations. Extensive experiments confirm that TmallGS not only breaks the performance ceiling of traditional DLRMs but also adheres to neural scaling laws, allowing for predictable gains via increased compute. Crucially, successful online deployment in Tmall Search, yielding a +1.52% GMV lift and +1.38% UCTCVR lift , validates the commercial viability of compute-intensive back-bones under strict latency constraints. This work marks a definitive paradigm shift from memory-bound to compute-centric ranking in Tmall. For future work, we plan to explore scaling TmallGS to billion-parameter levels and integrating multi-modal generative capabilities to further evolve the next-generation search experience. 
+
+## Acknowledgments 
+
+We acknowledge the Alibaba PAI Team for releasing TorchEasyRec [ 26 ], which supported the engineering implementation and large-scale training of our experiments. TMallGS: Scaling Unified Feature and Sequence Modeling for Generative E-commerce Search KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea 
+
+## References 
+
+[1] Weijie Bian, Kailun Wu, Lejian Ren, Qi Pi, Yujing Zhang, Can Xiao, Xiang-Rong Sheng, Yong-Nan Zhu, Zhangming Chan, Na Mou, et al . 2022. CAN: feature co-action network for click-through rate prediction. In Proceedings of the fifteenth ACM international conference on web search and data mining . 57–65. [2] Ben Chen, Xian Guo, Siyuan Wang, Zihan Liang, Yue Lv, Yufei Ma, Xinlong Xiao, Bowen Xue, Xuxin Zhang, Ying Yang, et al . 2025. Onesearch: A preliminary exploration of the unified end-to-end generative framework for e-commerce search. arXiv preprint arXiv:2509.03236 (2025). [3] Ben Chen, Siyuan Wang, Yufei Ma, Zihan Liang, Xuxin Zhang, Yue Lv, Ying Yang, Huangyu Dai, Lingtao Mao, Tong Zhao, et al . 2026. OneSearch-V2: The Latent Reasoning Enhanced Self-distillation Generative Search Framework. arXiv preprint arXiv:2603.24422 (2026). [4] Qiwei Chen, Huan Zhao, Wei Li, Pipei Huang, and Wenwu Ou. 2019. Behavior sequence transformer for e-commerce recommendation in alibaba. In Proceedings of the 1st international workshop on deep learning practice for high-dimensional sparse data . 1–4. [5] Heng-Tze Cheng, Levent Koc, Jeremiah Harmsen, Tal Shaked, Tushar Chandra, Hrishi Aradhye, Glen Anderson, Greg Corrado, Wei Chai, Mustafa Ispir, et al .2016. Wide & deep learning for recommender systems. In Proceedings of the 1st workshop on deep learning for recommender systems . 7–10. [6] Sunhao Dai, Jiakai Tang, Jiahua Wu, Kun Wang, Yuxuan Zhu, Bingjun Chen, Bangyang Hong, Yu Zhao, Cong Fu, Kangle Wu, et al . 2025. Onepiece: Bringing context engineering and reasoning to industrial cascade ranking system. arXiv preprint arXiv:2509.18091 (2025). [7] Tri Dao, Dan Fu, Stefano Ermon, Atri Rudra, and Christopher Ré. 2022. Flashat-tention: Fast and memory-efficient exact attention with io-awareness. Advances in neural information processing systems 35 (2022), 16344–16359. [8] Jiaxin Deng, Shiyao Wang, Kuo Cai, Lejian Ren, Qigen Hu, Weifeng Ding, Qiang Luo, and Guorui Zhou. 2025. Onerec: Unifying retrieve and rank with generative recommender and iterative preference alignment. arXiv preprint arXiv:2502.18965 
+
+(2025). [9] Yufei Feng, Fuyu Lv, Weichen Shen, Menghan Wang, Fei Sun, Yu Zhu, and Keping Yang. 2019. Deep session interest network for click-through rate prediction. 
+
+arXiv preprint arXiv:1905.06482 (2019). [10] Huan Gui, Ruoxi Wang, Ke Yin, Long Jin, Maciej Kula, Taibai Xu, Lichan Hong, and Ed H Chi. 2023. Hiformer: Heterogeneous feature interactions learning with transformers for recommender systems. arXiv preprint arXiv:2311.05884 (2023). [11] Huifeng Guo, Ruiming Tang, Yunming Ye, Zhenguo Li, and Xiuqiang He. 2017. DeepFM: a factorization-machine based neural network for CTR prediction. arXiv preprint arXiv:1703.04247 (2017). [12] Ruidong Han, Bin Yin, Shangyu Chen, He Jiang, Fei Jiang, Xiang Li, Chi Ma, Mincong Huang, Xiaoguang Li, Chunzhen Jing, et al . 2025. Mtgr: Industrial-scale generative recommendation framework in meituan. In Proceedings of the 34th ACM International Conference on Information and Knowledge Management .5731–5738. [13] Jordan Hoffmann, Sebastian Borgeaud, Arthur Mensch, Elena Buchatskaya, Trevor Cai, Eliza Rutherford, DDL Casas, Lisa Anne Hendricks, Johannes Welbl, Aidan Clark, et al . 2022. Training compute-optimal large language models. arXiv preprint arXiv:2203.15556 10 (2022). [14] Tongwen Huang, Zhiqi Zhang, and Junlin Zhang. 2019. FiBiNET: combining fea-ture importance and bilinear feature interaction for click-through rate prediction. In Proceedings of the 13th ACM conference on recommender systems . 169–177. [15] Yunwen Huang, Shiyong Hong, Xijun Xiao, Jinqiu Jin, Xuanyuan Luo, Zhe Wang, Zheng Chai, Shikang Wu, Yuchao Zheng, and Jingjian Lin. 2026. HyFormer: Revis-iting the Roles of Sequence Modeling and Feature Interaction in CTR Prediction. 
+
+arXiv preprint arXiv:2601.12681 (2026). [16] Jared Kaplan, Sam McCandlish, Tom Henighan, Tom B Brown, Benjamin Chess, Rewon Child, Scott Gray, Alec Radford, Jeffrey Wu, and Dario Amodei. 2020. Scaling laws for neural language models. arXiv preprint arXiv:2001.08361 (2020). [17] Jianxun Lian, Xiaohuan Zhou, Fuzheng Zhang, Zhongxia Chen, Xing Xie, and Guangzhong Sun. 2018. xdeepfm: Combining explicit and implicit feature in-teractions for recommender systems. In Proceedings of the 24th ACM SIGKDD international conference on knowledge discovery & data mining . 1754–1763. [18] Zida Liang, Changfa Wu, Dunxian Huang, Weiqiang Sun, Ziyang Wang, Yuliang Yan, Jian Wu, Yuning Jiang, Bo Zheng, Ke Chen, et al . 2025. Tbgrecall: A generative retrieval model for e-commerce recommendation scenarios. In Proceedings of the 34th ACM International Conference on Information and Knowledge Management .5863–5870. [19] Xiao Ma, Liqin Zhao, Guan Huang, Zhi Wang, Zelin Hu, Xiaoqiang Zhu, and Kun Gai. 2018. Entire space multi-task model: An effective approach for estimating post-click conversion rate. In The 41st International ACM SIGIR Conference on Research & Development in Information Retrieval . 1137–1140. [20] Ethan Perez, Florian Strub, Harm De Vries, Vincent Dumoulin, and Aaron Courville. 2018. Film: Visual reasoning with a general conditioning layer. In 
+
+Proceedings of the AAAI conference on artificial intelligence , Vol. 32. [21] Qi Pi, Weijie Bian, Guorui Zhou, Xiaoqiang Zhu, and Kun Gai. 2019. Practice on long sequential user behavior modeling for click-through rate prediction. In Proceedings of the 25th ACM SIGKDD international conference on knowledge discovery & data mining . 2671–2679. [22] Zihan Qiu, Zekun Wang, Bo Zheng, Zeyu Huang, Kaiyue Wen, Songlin Yang, Rui Men, Le Yu, Fei Huang, Suozhi Huang, et al . 2026. Gated attention for large language models: Non-linearity, sparsity, and attention-sink-free. Advances in Neural Information Processing Systems 38 (2026), 100092–100118. [23] Shashank Rajput, Nikhil Mehta, Anima Singh, Raghunandan Hulikal Keshavan, Trung Vu, Lukasz Heldt, Lichan Hong, Yi Tay, Vinh Tran, Jonah Samost, et al .2023. Recommender systems with generative retrieval. Advances in Neural Information Processing Systems 36 (2023), 10299–10315. [24] Weiping Song, Chence Shi, Zhiping Xiao, Zhijian Duan, Yewen Xu, Ming Zhang, and Jian Tang. 2019. Autoint: Automatic feature interaction learning via self-attentive neural networks. In Proceedings of the 28th ACM international conference on information and knowledge management . 1161–1170. [25] Xin Song, Xiaochen Li, Jinxin Hu, Hong Wen, Zulong Chen, Yu Zhang, Xiaoyi Zeng, and Jing Zhang. 2025. Lrea: Low-rank efficient attention on modeling long-term user behaviors for ctr prediction. In Proceedings of the 48th International ACM SIGIR Conference on Research and Development in Information Retrieval .2843–2847. [26] Alibaba PAI Team. 2024. TorchEasyRec: An Easy-to-Use Framework for Recommen-dation . https://github.com/alibaba/TorchEasyRec [27] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N Gomez, Łukasz Kaiser, and Illia Polosukhin. 2017. Attention is all you need. Advances in neural information processing systems 30 (2017). [28] Ruoxi Wang, Rakesh Shivanna, Derek Cheng, Sagar Jain, Dong Lin, Lichan Hong, and Ed Chi. 2021. Dcn v2: Improved deep & cross network and practical lessons for web-scale learning to rank systems. In Proceedings of the web conference 2021 .1785–1797. [29] Bencheng Yan, Pengjie Wang, Kai Zhang, Feng Li, Hongbo Deng, Jian Xu, and Bo Zheng. 2022. Apg: Adaptive parameter generation network for click-through rate prediction. Advances in Neural Information Processing Systems 35 (2022), 24740–24752. [30] Jiahao Yu, Haozhuang Liu, Yeqiu Yang, Lu Chen, Jian Wu, Yuning Jiang, and Bo Zheng. 2026. Transun: A preemptive paradigm to eradicate retransformation bias intrinsically from regression models in recommender systems. Advances in Neural Information Processing Systems 38 (2026), 140918–140954. [31] Liren Yu, Wenming Zhang, Silu Zhou, Tao Zhang, Zhixuan Zhang, and Dan Ou. 2025. HHFT: Hierarchical Heterogeneous Feature Transformer for Recommenda-tion Systems. arXiv preprint arXiv:2511.20235 (2025). [32] Jiaqi Zhai, Lucy Liao, Xing Liu, Yueming Wang, Rui Li, Xuan Cao, Leon Gao, Zhao-jie Gong, Fangda Gu, Michael He, et al . 2024. Actions speak louder than words: Trillion-parameter sequential transducers for generative recommendations. arXiv preprint arXiv:2402.17152 (2024). [33] Buyun Zhang, Liang Luo, Yuxin Chen, Jade Nie, Xi Liu, Daifeng Guo, Yanli Zhao, Shen Li, Yuchen Hao, Yantao Yao, et al . 2024. Wukong: Towards a scaling law for large-scale recommendation. arXiv preprint arXiv:2403.02545 (2024). [34] Xuxin Zhang, Di Wang, Dehong Gao, Wen Jiang, Wei Ning, Yang Zhou, and Chen Wang. 2022. Revisiting cold-start problem in ctr prediction: Augmenting embedding via gan. In Proceedings of the 31st ACM International Conference on Information & Knowledge Management . 4702–4706. [35] Zhaoqi Zhang, Haolei Pei, Jun Guo, Tianyu Wang, Yufei Feng, Hui Sun, Shaowei Liu, and Aixin Sun. 2026. Onetrans: Unified feature interaction and sequence modeling with one transformer in industrial recommender. In Proceedings of the ACM Web Conference 2026 . 8162–8170. [36] Guorui Zhou, Na Mou, Ying Fan, Qi Pi, Weijie Bian, Chang Zhou, Xiaoqiang Zhu, and Kun Gai. 2019. Deep interest evolution network for click-through rate prediction. In Proceedings of the AAAI conference on artificial intelligence , Vol. 33. 5941–5948. [37] Guorui Zhou, Xiaoqiang Zhu, Chenru Song, Ying Fan, Han Zhu, Xiao Ma, Yanghui Yan, Junqi Jin, Han Li, and Kun Gai. 2018. Deep interest network for click-through rate prediction. In Proceedings of the 24th ACM SIGKDD international conference on knowledge discovery & data mining . 1059–1068. [38] Jie Zhu, Zhifang Fan, Xiaoxie Zhu, Yuchen Jiang, Hangyu Wang, Xintian Han, Haoran Ding, Xinmin Wang, Wenlin Zhao, Zhen Gong, et al . 2025. Rankmixer: Scaling up ranking models in industrial recommenders. In Proceedings of the 34th ACM International Conference on Information and Knowledge Management .6309–6316. [39] Hua Zong, Qingtao Zeng, Zhengxiong Zhou, Zhihua Han, Zhensong Yan, Mingjie Liu, Hechen Sun, Jiawei Liu, Yiwen Hu, Qi Wang, et al . 2025. RecIS: Sparse to Dense, A Unified Training Framework for Recommendation Models. arXiv preprint arXiv:2509.20883 (2025). KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea Zhentao Song et al. 
+
+## A Detailed Training Algorithm 
+
+Due to space constraints in the main text, we provide the com-prehensive training procedure of TmallGS in Algorithm 1. This algorithm details the end-to-end flow, including the Hierarchical Distribution-Calibrated Tokenization, the Field-Adaptive Backbone forward pass, and the Error-Aware Progressive optimization strat-egy. 
+
+Algorithm 1: Training Procedure of TmallGS (Detailed) 
+
+Input : Training dataset S, Max layers 𝐿 , Hyperparameters 𝜆, 𝛾 
+
+Output : Optimized model parameters Θ 
+
+> 1
+
+while not converged do  
+
+> 2
+
+Sample batch B = { ( 𝑢, 𝑞, C, y) } ∼ S ;
+
+/* 1. Hierarchical Dist-Calibrated Tokenization (Sec 4.2) */  
+
+> 3
+
+for each feature field 𝑖 ∈ { 1, . . . , 𝐹 } do  
+
+> 4
+
+Global Aggregation: 𝑧 𝑖 ← 1
+
+> 𝐿 ·𝑑 𝑖
+
+Í X𝑖 ; 
+
+> 5
+
+Generate Saliency Weights: w ← 𝜎 (W𝑒𝑥 · 𝛿 (W𝑠𝑞 z) ) ; 
+
+> 6
+
+for each feature field 𝑖 do  
+
+> 7
+
+Field-Wise Reweighting: ˜X𝑖 ← 𝑤 𝑖 · X𝑖 ; 
+
+> 8
+
+Dist-Calibrated Projection: E𝑖 ← MLP 𝑐𝑎𝑙 ( ˜X𝑖 );
+
+/* 2. Unified Sequence Construction (Sec 4.3) */  
+
+> 9
+
+Construct sequence with Context Anchor and Field Tokens:;  
+
+> 10
+
+E𝑖𝑛 ← [ e𝑏𝑖𝑎𝑠 ; e𝑐𝑡𝑥 ; e𝑞𝑟 𝑦 ; H𝑢𝑖ℎ ; H𝑢𝑞ℎ ; e𝑙𝑖𝑔ℎ𝑡 𝑐𝑎𝑛𝑑 ; ];
+
+/* 3. Backbone & Error-Aware Progressive Training */  
+
+> 11
+
+Initialize progressive loss L𝑝𝑟𝑜𝑔 ← 0, loss weight 𝛼 1 ← 1; 
+
+> 12
+
+H0 ← E𝑖𝑛 ; 
+
+> 13
+
+for layer 𝑙 = 1 to 𝐿 do  
+
+> 14
+
+// Per-Field QKV & Noise-Adaptive Gating ; 
+
+> 15
+
+H𝑙 ← TmallGS_Block (H𝑙 −1, M𝑚𝑎𝑠𝑘 ); 
+
+> 16
+
+Get candidate representation h𝑙 𝑐 from H𝑙 ; 
+
+> 17
+
+Auxiliary Prediction: ˆ𝑦 𝑙 ← 𝜎 (AuxHead 𝑙 (h𝑙 𝑐 ) ) ; 
+
+> 18
+
+L𝑝𝑟𝑜𝑔 ← L 𝑝𝑟𝑜𝑔 + 𝛼 𝑙 · L 𝐵𝐶𝐸 ( ˆ𝑦 𝑙 , 𝑦 ); 
+
+> 19
+
+Error Metric: 𝛿 𝑙 ← | 𝑦 − ˆ𝑦 𝑙 |; 
+
+> 20
+
+𝛼 𝑙 +1 ← 1 + 𝜆 · StopGradient (𝛿 𝑙 );
+
+/* 4. Decoupled FiLM Fusion & Bias Net (Sec 4.5 & 4.6) */  
+
+> 21
+
+Extract final states: Candidate h𝐿 𝑐 , Anchor h𝐿 𝑏𝑖𝑎𝑠 ; 
+
+> 22
+
+Bias Path: logit 𝑏𝑖𝑎𝑠 ← BiasNet (h𝐿 𝑏𝑖𝑎𝑠 ); 
+
+> 23
+
+Main Path (FiLM): Compute 𝛾 𝑐 , 𝛽 𝑐 ← FiLM (e𝑎𝑙𝑙 𝑐 ); 
+
+> 24
+
+v𝑓 𝑖𝑛𝑎𝑙 ← ( 1 + 𝛾 𝑐 ) ⊙ [ h𝐿 𝑐 ⊕ e𝑎𝑙𝑙 𝑐 ] + 𝛽 𝑐 ; 
+
+> 25
+
+logit 𝑚𝑎𝑖𝑛 ← TaskTower (v𝑓 𝑖𝑛𝑎𝑙 ); 
+
+> 26
+
+Final Prediction: ˆ𝑦 𝐿 ← 𝜎 (logit 𝑚𝑎𝑖𝑛 + logit 𝑏𝑖𝑎𝑠 );
+
+/* 5. Orthogonal Optimization */  
+
+> 27
+
+Compute Pairwise Ranking Loss L𝑝𝑎𝑖𝑟 on ˆ𝑦 𝐿 ; 
+
+> 28
+
+Total Objective: L𝑡𝑜𝑡𝑎𝑙 ← L 𝑝𝑟𝑜𝑔 + 𝛾 · L 𝑝𝑎𝑖𝑟 ; 
+
+> 29
+
+Update Θ using Split-Optimizer (Adam/AdamW);

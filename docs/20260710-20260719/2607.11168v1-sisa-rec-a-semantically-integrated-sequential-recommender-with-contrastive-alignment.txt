@@ -1,0 +1,415 @@
+Title: SISA-Rec: A Semantically Integrated Sequential Recommender with Contrastive Alignment
+
+URL Source: https://arxiv.org/pdf/2607.11168v1
+
+Published Time: Tue, 14 Jul 2026 02:34:59 GMT
+
+Number of Pages: 29
+
+Markdown Content:
+# SISA-Rec: A Semantically Integrated Sequential Recommender with Contrastive Alignment 
+
+Soohan Abbasi a, Shahid Munir Shah b, Rafia Shaikh c, Mahmoud Aljawarneh d
+
+> aDepartment of Computer Science, DHA Su ff a University, Karachi, Sindh, Pakistan
+> bDepartment of Computer Science, SZABIST, Pakistan
+> cNational University of Computer and Emerging Sciences (FAST), Karachi, Sindh, Pakistan
+> dDepartment of Computer Science, Applied Science Private University, Amman, Jordan
+
+Abstract 
+
+Recommendation systems help users recommend relevant items from a large collection of choices. Present work on transformer-based sequential recommendation learns user preferences from in-teraction logs, but it mostly focuses on item identifiers and doesn’t fully use the semantic mean-ing of items. This limitation becomes a major challenge in sparse and cold-start scenarios where historical interaction data is limited. To solve this problem, we introduce SISA-Rec (Semanti-cally Integrated Sequential Recommendation), a transformer-based framework that embeds se-mantic context directly into sequential modeling. Our approach fuses item ID embeddings with BERT-based text embeddings via a gated fusion module, injects semantic similarity into the self-attention mechanism, and leverages an attention-based aggregation module to construct com-prehensive user representations. Finally, a joint learning objective which combines Bayesian Personalized Ranking (BPR) and contrastive alignment loss, aligns the underlying behavioral and semantic spaces. Experiments were conducted on the two highly sparse Amazon Beauty and Amazon Toys & Games datasets, both having 99.93% sparsity. The results show that SISA-Rec outperforms state-of-the-art baseline models across all evaluation metrics. Compared with the BERT4Rec [1], SISA-Rec improves HR@10 by 16.6% and NDCG@10 by 10.3% on Amazon Beauty, and HR@10 by 23.1% and NDCG@10 by 17.9% on Amazon Toys & Games. Cold-start analysis further shows that the proposed model achieves the largest improvements for users with limited interaction historical records. This showcases the value of semantic information when user behavior data is scarce. Overall, the results demonstrate that integrating semantic information into the attention mechanism leads to more accurate and reliable recommendations 
+
+1. Introduction 
+
+Recommender systems have become a fundamental part of how people engage with online platforms. With the continued growth of digital content in e-commerce, streaming, and social media, the objective of these systems is to identify a manageable set of relevant items from a large pool of available options for each user. Recent advances in deep learning have significantly       
+
+> Email addresses: soohan.abbasi@dsu.edu.pk (Soohan Abbasi), dr.shahid@ghr.szabist.edu.pk (Shahid Munir Shah), ma_jawarneh@asu.edu.jo (Mahmoud Aljawarneh) arXiv:2607.11168v1 [cs.CV] 13 Jul 2026
+
+improved recommendation performance by learning richer representations from user behavior. Among these, sequential recommendation has drawn a lot of attention, since treating a user’s interaction history as an ordered sequence makes it possible to capture how preferences shift over time rather than assuming they stay fixed. Transformer-based architectures such as SASRec and BERT4Rec push this further through self-attention, which lets the model weigh relationships between items across an entire sequence and pick up the contextual dependencies that simpler models tend to miss. Alongside these developments, there has been a steady e ff ort to bring item content, or semantics, more directly into the recommendation process. AI Models like UniSRec and MoRec have shown that textual and modality-based item representations are valuable to in-clude, with modality-based encoders matching or even improving upon identity-based models in several settings. Knowledge graph approaches such as Di ff KG and Gformer take a di ff erent approach, using structured relational data to capture higher-order semantic connections between items. Overall, these studies suggest that an item’s content and semantic characteristics, rather than only its co-occurrence patterns, provide useful signals for recommendation. The di ffi culty is that these two strengths rarely come together in the same model. Sequential and transformer-based methods, for all their ability to model temporal patterns, share a common dependence on item identifier embeddings learned purely from interaction data, which leaves them with very little sense of what an item means at a content level. That dependence is not much of a problem on dense benchmarks, where co-occurrence patterns alone are rich enough to support good rec-ommendations. In realistic settings, however, catalogs are large and interaction data is extremely sparse, and cold-start users with only a handful of interactions are the norm rather than the ex-ception. Under these conditions the behavioral signal is simply too thin to carry the full load, and a model that understands nothing about item content has little to fall back on. Semantic-aware models have the opposite limitation: they capture item meaning reasonably well but tend to overlook how a user’s preferences evolve across an interaction sequence. A key observation across the literature is that semantic information, even when it is used, is almost always treated as a secondary signal. It gets processed through a separate pathway, fused with behavioral repre-sentations only after the sequential encoding is already finished, or attached as a plug-and-play module on top of an otherwise unchanged architecture. None of these designs lets semantic re-lationships influence the sequential modeling itself. In particular, there is no mechanism that fuses identity and semantic representations at the feature level inside the attention computation, which is where the actual sequence modeling takes place. The result is a persistent separation between behavioral modeling and semantic grounding, and that separation imposes a real ceiling on existing frameworks. The ceiling is most visible exactly where it matters most, in the sparse and cold-start conditions that behavioral signals alone cannot handle. This work starts from that gap. We propose SISA-Rec, a Semantically Integrated Sequential recommender designed so that semantic representations stay active at every stage of encoding instead of being added on at the end. Item identifier embeddings and frozen BERT semantic embeddings are combined through a gated fusion module at the input layer, so that semantics shapes the item representation before any sequential modeling happens. A semantic similarity matrix is then injected directly into the self-attention score at each transformer layer, which allows semantically related items to influence attention regardless of whether they have ever co-occurred in the observed history. An attention-based aggregation module builds the user representation as a weighted sum over all positions in the sequence rather than relying on the final hidden state alone, and a joint train-ing objective combining a Bayesian Personalized Ranking loss with a contrastive alignment loss keeps the behavioral and semantic user representations consistent with one another. The frame-work is evaluated on the Amazon Beauty and Amazon Toys and Games datasets, both of which 2exhibit a sparsity level of 99.93%, in order to test exactly the data-scarce regime where semantic grounding is expected to matter most. The main contributions of this work are summarized as follows: 
+
+• A gated fusion module that embeds item IDs and feeds projected BERT semantic repre-sentations into the input layer, learning per-dimension how much of each source to retain. 
+
+• A modified self-attention mechanism in which a semantic similarity matrix is fed directly into the attention score computation at each transformer layer. 
+
+• An attention-based preference aggregation module that produces a single user vector through a learned weighted sum over all positions in the sequence. 
+
+• A joint training objective combining a BPR loss with a contrastive alignment loss, so that the behavioral and semantic user representations are explicitly aligned. 
+
+• An architecture aimed at improving generalization in data-sparse and cold-start settings, where semantic signals supply relational information that does not depend on item co-occurrence frequency, validated empirically on the Amazon Beauty and Amazon Toys and Games datasets, both 99.93% sparse. The rest of the paper has been outlines as follows: Section 2 presents the review of the existing literature related to the sequential recommendation systems. 
+
+2. Literature Review 
+
+This section covers recent work on transformer-based and semantic-aware recommender sys-tems. The studies brought together here investigate di ff erent ways of combining user interaction sequences with semantic item representations to improve how well recommendations serve users. The table in the next section summarizes the key aspects of each reviewed work. Petrov and Macdonald [1] systematically reviewed the reproducibility assessement of BERT4Rec for sequential recommendation. BERT4Rec uses masked self-attention to learn bidirectional user preferences from interaction sequences and generally outperforms unidirectional models. However, the performance of the model notably depends on hyperparameter tuning and requires intensive computational resources. Petrov [2] evaluated the performance under scalability and cost limitations of transformer-based sequential recommender systems. Whereas applying NLP transformers to predict user in-teractions yields strong benchmark results, the computational expense is substantial and increases significantly with larger item inventories. For example, training BERT4Rec on the relatively small MovieLens-1M dataset takes up to 20 GPU hours. The study concludes that benchmark accuracy is of little value if models cannot scale to real-world, million-item catalogs, arguing that current training and inference strategies have hit a limit in their refinement. Zhou et al. [3] proposed FMLP-Rec, a filter-enhanced MLP-based sequential recommenda-tion model that replaces self attention by a filter that transforms input representations into the frequency domain via the Fast Fourier Transform, in order to denoise them, and transforms them back via the inverse transform. The authors tested on eight datasets, and got relatively stable results, with their all-MLP architecture and learnable filters outperforming several deep learning baselines. The downside of the model is it relies solely on item ID embeddings and does not incorporate semantic item information. 3Tikhonovich et al [4] introduced eSASRec, a new, improved transformer-based sequential recommendation (SASRec) architecture to enhance the performance of current SASRec models. The study examines a series of discrete upgrades that can be made to transformer-based recom-mendation systems by breaking down the transformer layer structure, training, loss, and negative sampling strategies. The eSASRec model brings together SASRec’s sequence training objective, LiGR transformer, and Sampled Softmax loss. Testing spanned ML-20M, Kion, and BeerAd-vocate datasets using NDCG@10, Recall@10, and coverage judge quality. The model showed up to 23% better accuracy than the state-of-the-art methods of the standard academic datasets. When the evaluation conditions were made more realistic, however, the margin over industrial models like HSTU shrank considerably, which is itself an important finding about how much the choice of evaluation protocol can quietly tilt what a study appears to demonstrate. Hou et al. [5] proposed UniSRec, a universal sequential recommendation framework that uses item textual descriptions instead of item IDs to improve cross-domain transferability and relove the problem when the item catalogues involved have no items in common. UniSRec in-cludes a lightweight architecture combining parametric whitening, a mixture-of-experts adaptor, and learnable gating for domain fusion. To build adaptable sequence representations, it relies on two contrastive pre-training tasks using multi-domain negative sampling. The results show this framework gives strong cross-platform performance on real-world datasets without requiring heavy re-training. Despite this, semantic information is processed separately from the attention mechanism, limiting its influence on sequential modeling. Yuan et al. [6] reconsidered the debate among identity-based and modality-based recommen-dation approaches using text and visual representations. The central question driving the study is whether a purely modality-based model can match or surpass a pure identity-based model when the item identifier embedding is replaced with a strong modality encoder such as BERT or Vision Transformer. Their results demonstrated that modality-based methods can match or outperform identity-based approaches, particularly when semantic features are incorporated. Despite these findings, the study does not provide a mechanism for dynamically fusing identity and semantic representations at the feature level within the attention computation itself, which is precisely the direction taken in the present work through the proposed gated fusion module. Qiu et al. [7] proposed DuoRec, a contrastive learning framework designed to tackle rep-resentation degeneration problem in sequential recommendation.The core issue is that existing sequential models produce item embeddings that form a narrow geometric cone. This causes rare items to cluster in the embedding space, making them seem more similar than they really are. DuoRec addressed this using a uniformity-based contrastive regularization objective to dis-tribute sequence representations more evenly. Rather than standard augmentations like cropping or masking, it used model-level dropout to generate semantically consistent training samples. It also provide a novel sampling strategy, treating sequences with the same target item as hard pos-itives. Five benchmark datasets were used for testing, and DuoRec came out ahead of standard sequential recommendation baselines across all of them. Nevertheless, it relies entirely on item ID embeddings and lacks semantic item representations. Zhai et al. [8] proposed a transformer-based sequential recommendation framework centered on the textual information that items carry. The model treats this as a language task, leveraging pre-trained models to pull semantics from item descriptions. These representations then feed into sequential recommendation models, giving them a better basis for understanding how items re-late to one another semantically within a user’s interaction history. Experiments were conducted on Amazon and MovieLens datasets, with NDCG and Hit Ratio used to evaluate ranking quality. The text-enriched models performed better than the traditional ID-based models in all experi-4ments. The downside to this approach is that the framework is highly reliant on descriptive text to establish a similarity score, and in environments where text-enriched information is limited or unavailable, the performance is significantly impaired. Li et al. [9] proposed E4SRec, a framework connecting large language models to conven-tional sequential recommender systems while keeping things e ffi cient and easy to extend. The problem with most existing large language model-based recommendation work is that it turns ev-erything into an open-ended generation task, which means items need rich semantic descriptions, the outputs often miss the valid candidate range, and the whole thing runs slowly. E4SRec feeds item identifier sequences directly into the model and keeps outputs anchored to valid candidate lists, generating a full ranking in a single forward pass with just a handful of pluggable parame-ters trained per dataset and the large language model left entirely frozen. Amazon Beauty, Sports, Toys, and Yelp benchmarks all pointed to the approach working well in terms of both quality and speed. What the model does not do is build an explicit bridge between semantic item representa-tions and sequential user behavior inside the attention layer, so whatever semantic understanding is present comes from what the large language model already learned during pre-training rather than from any deliberate alignment mechanism. Wang et al. [10] proposed a knowledge-aware collaborative filtering framework that brings a pre-trained language model to strengthen personalized review-based rating prediction. Re-view text and external knowledge representations both feed into the model, giving it more ma-terial to work with when mapping semantic connections between users and items. Passing re-views through a pre-trained language model produces a depth in user-item representations that interaction-only collaborative filtering approaches typically cannot reach. Results on review-based benchmark datasets showed stronger rating prediction than conventional collaborative fil-tering baselines. That said, stacking knowledge representations and a language model together across multiple stages is not simple to manage, and the added complexity does show up in the form of higher training costs and heavier computational load. Jiang et al. [11] proposed a new Di ff KG that introduces a di ff usion model to knowledge graph-based collaborative filtering. The di ff usion model is essentially taking knowledge graph relations, breaking them down gradually, and then putting them back together, and then repeating the same thing (this process gets rid of the less useful and noisy edges). The framework also includes a knowledge graph convolution module, which uses user-item interaction information combined with knowledge graph information to help better understand user preferences. The model was tested on three datasets: Last-FM, MIND, and Alibaba-iFashion using Recall@20 and NDCG@20 as the criteria. The model came out on top across all three, putting up Recall@20 of 0.0980 and NDCG@20 of 0.0911 on Last-FM, Recall@20 of 0.0615 and NDCG@20 of 0.0389 on MIND, and Recall@20 of 0.1234 and NDCG@20 of 0.0773 on Alibaba-iFashion. All in all, this shows that it’s probably worth the e ff ort to tweak knowledge graph representations to get better recommendations. Fan et al. [12] introduced a Graph Transformer recommender. The simple premise is that a combination of graph neural networks and transformer attention is used to boost the ability to work with relationships in the user-item graph. The self-attention mechanism is applied to graph data to learn representations of nodes that have semantic meaning, and higher-order user-item relationships are maintained. The reason for combining the graph message passing with transformer attention is that graph-based recommenders alone have problems with some types of relationships, and the transformer attention helps bridge that. On a couple of benchmark data sets, the model was able to better capture long-range dependencies and complex user-item relationships than typical graph neural network models, which translated to better recommen-5dations. The obvious tradeo ff is complexity. Combining graph propagation with transformer attention isn’t cheap, and it shows in that the training and inference times are higher. Xu et al. [13] developed SAGERec, a recommendation model that uses semantic informa-tion. The idea is that semantic representations of items, together with user-item interactions, should allow the model to better understand user preferences and item characteristics than just considering interactions. This was confirmed by benchmarking tests using Hit Ratio and NDCG, where SAGERec outperformed traditional collaborative filtering methods that only use interac-tion data. But the thing to note is how the semantic information is used within the model. It is a plug-and-play extension of the model, rather than being integrated directly with the sequential attention mechanism. As a result, semantic representations cannot react to a user’s changing interests over time given their interaction history, and it limits the extent to which the semantic component can a ff ect the final model. Table 1: Comparative Analysis of Sequential and Semantic-Aware Rec-ommendation Approaches 
+
+Reference Model Item Represen-tation Semantic In-tegration Sequential Model-ing Results 
+
+[1] BERT4Rec Item ID embed-dings None Bidirectional Transformer Recall@10 = 0.6975, NDCG@10 = 0.4751 [2] Effi cient Trans-former CF framework Item ID embed-dings None Transformer self-attention Numerical bench-marks not reported in extended abstract [3] FMLP-Rec Item ID embed-dings None All-MLP with frequency-domain filtering NDCG@10 =
+
+0.0561, Recall@10 
+
+= 0.0931 [4] eSASRec Item ID embed-dings None Transformer se-quential modeling NDCG@10 = 0.1563 [5] UniSRec Text em-beddings Cross-domain semantic transfer via MoE adaptor Transformer se-quential modeling NDCG@10 =
+
+0.1379, Recall@10 
+
+= 0.2316 [6] MoRec Modality-based em-beddings (BERT /ViT) End-to-end modality encoder Transformer se-quential modelingn HR@10 = 0.0623 (competitive with IDRec [7] DuoRec Item ID embed-dings None Transformer with contrastive regular-ization NDCG@10 =
+
+0.0437, Recall@10 
+
+= 0.0835 6[8] Recformer Text em-beddings Text semantic representa-tions Transformer se-quential modeling NDCG@10 =
+
+0.1027, Recall@10 
+
+= 0.1448 [9] E4SRec Item ID embed-dings +
+
+LLM Implicit via frozen LLM LLM-based se-quential generation NDCG@10 =
+
+0.0892, Recall@10 
+
+= 0.1534 [10] KCF-PLM Text +
+
+Knowl-edge Graph em-beddings Dual semantic alignment Limited sequential modeling MSE = 0.8740 [11] Di ff KG Knowledge graph em-beddings Di ff usion-based se-mantic propagation Order-invariant (no sequential modeling) Recall@20 = 0.0980, NDCG@20 = 0.0911 [12] Gformer Graph node em-beddings Graph re-lational semantics Transformer-based graph attention Recall@20 = 0.0878, NDCG@20 = 0.0442 [13] SAGERec Semantic item em-beddings Semantic representation fusion Sequential rec-ommendation modeling NDCG@10 =
+
+0.1288, Recall@10 
+
+= 0.2680 In table 1, the reviewed papers are synthesized with an emphasis on the comparative analysis of approaches based on transformers and semantics. For each paper, several aspects are ana-lyzed, namely the type of architecture used, item encoding, semantics incorporation, sequential modeling technique, and results achieved. Through the synthesis, similarities and di ff erences be-tween methods are pointed out, focusing on the way semantics were incorporated and interaction ordering was addressed. Papers come from di ff erent architecture backgrounds, namely sequen-tial transformer architectures, contrastive learning, multimodal encoder architectures, knowledge graph-based techniques, and language models. The evaluation metrics presented throughout the studies include, among others, Recall, NDCG, HR, and MSE, all established standards in the realm of recommendation studies. 
+
+2.1. Problem Identification 
+
+Recommendation systems research has moved forward quite a bit over the years, and most of that progress traces back to advances in deep learning and representation learning. The studies covered here are methodologically varied, drawing from collaborative filtering, sequential rec-ommendation, transformer-based architectures, contrastive learning, modality-based encoders, and knowledge graph-driven systems. Each has contributed something useful, either by improv-ing how systems handle user-item interactions or by getting better at pulling preference patterns out of behavioral data. Sequential models like BERT4Rec, eSASRec, and FMLP-Rec handle temporal dependencies reasonably well by treating interaction histories as ordered sequences. 7Transformer-based methods strengthen this further through self-attention mechanisms that span entire sequences and pick up contextual relationships between items. That said, all of these mod-els share a common dependency on item identifier embeddings derived from interaction data, and that leaves them with very little understanding of what items actually mean at a content level. There has also been a parallel e ff ort to bring semantic item knowledge more directly into rec-ommendation models. UniSRec and MoRec have shown that incorporating textual item repre-sentations into recommendation pipelines is worthwhile, with modality-based encoders matching or outperforming identity-based models in several settings. Di ff KG and Gformer take a di ff erent route, using structured relational data from knowledge graphs to capture higher-order semantic connections. That said, semantic information in most of these methods still ends up being treated as secondary, processed through a separate pathway, or combined with behavioral representations only after sequential encoding is already complete. DuoRec makes a fair point about representation quality, showing that regularizing embed-ding distributions produces real gains in sequential recommendation. E4SRec reflects a growing recognition that large language models can bring richer semantic understanding into recommen-dations, and the results support this. That said, neither work directly tackles the alignment prob-lem between semantic item characteristics and the sequential attention mechanism. Looking across everything, one gap remains consistently unaddressed. Sequential models handle behavioral patterns well but have no semantic grounding for the items involved. Semantic-aware models capture item meaning but largely overlook how user preferences evolve. That sep-aration creates a real ceiling for existing frameworks, and the problem is sharpest in data-sparse conditions and cold-start scenarios where behavioral signals alone cannot carry the full load. The present work starts from this gap, aiming to build a system where semantic representations are active at every stage of encoding rather than being added on at the end, with empirical validation conducted on the Amazon Beauty and Amazon Toys & Games datasets, both of which exhibit a sparsity level of 99 .93%. 
+
+2.2. Our Contributions 
+
+SISA-Rec is a new recommender system based on Top-N collaborative filtering with a se-mantically integrated self-attention network. The summary of the contribution of this work is as follows: 
+
+• A gated fusion module, which embeds item ID and feeds BERT semantic representation into the input layer. 
+
+• An attention mechanism with a modified self-attention mechanism, where a semantic sim-ilarity matrix is directly fed into the attention score calculation at each transformer layer. 
+
+• An attention-based preference aggregation module to generate a single user vector by tak-ing a weighted sum over all positions in the sequence based on a learned weight. 
+
+• A joint training objective based on both the BPR loss and a contrastive alignment loss to ensure that the behavioral and semantic user representations are aligned. 
+
+• An architectural design inspired by the need to improve generalization in data-sparse set-tings and cold-start scenarios, where relational information is provided by semantic signals that do not depend on the co-occurrence frequency of data items, and validated empirically on the Amazon Beauty and Amazon Toys and Games data sets, both 99 .93% sparse. 83. Methodology 
+
+The methodology used in this research is based on the block diagram given in Fig. 1 
+
+> Figure 1: Block diagram of the proposed methodology.
+
+As shown in Fig. 1, the proposed design adopts a dual-stage structure that combines data processing with sequential recommendation and preference learning. The input to the system consists of two Amazon product review datasets, namely Amazon Beauty and Amazon Toys & Games, each comprising raw user-item interaction records and item metadata including product titles and category labels. During the first stage, the input dataset is processed through a structured pipeline. Raw in-teraction and metadata records are first subjected to data preprocessing, which involves filtering, cleaning, and integration of the two data sources. The cleaned data is then used to construct chronologically ordered user interaction sequences. These sequences are subsequently trans-formed into fixed-length tensor representations through padding, encoding, and conversion op-erations, yielding model-ready tensors that serve as input to the second stage. During the second stage, the model-ready tensors are fed into the sequential recommendation pipeline. Each item in the user sequence is first mapped to a dense representation through an em-bedding module that learns item representations from both identifier-based and semantic sources. These embeddings are then passed into a transformer encoder that models sequential patterns and captures long-range dependencies across the user interaction history. An attention-based aggre-gation mechanism subsequently processes the encoded sequence to capture user preferences by computing a weighted combination of all encoded positions. A ranking module finally uses the resulting user preference vector to score candidate items, and the top-ranked items are returned as the final Top-N recommendations. 93.1. Dataset acquisition 
+
+The experiments in this paper are conducted on two publicly available product-review datasets drawn from the Amazon Review Data collection [14], namely Amazon Beauty (primary dataset) and Amazon Toys & Games (secondary dataset). Both datasets record explicit user–item interac-tions in the form of product ratings accompanied by timestamps, enabling chronological ordering of each user’s interaction history. In addition to interaction records, every item is associated with rich textual metadata, including product title, description, and category information, which is leveraged for semantic embedding learning in the proposed SISA-Rec framework. Both datasets exhibit high sparsity ( ≈99.93%), making them substantially more challenging than commonly used dense benchmarks such as MovieLens-1M(sparsity ≈95.53%). This prop-erty makes them well-suited for evaluating the generalization ability of sequential recommenders in realistic, data-scarce conditions, and for validating the hypothesis that semantic integration provides a meaningful compensatory signal when collaborative filtering signals are limited. Following common preprocessing practice in sequential recommendation [15], only users with at least five interactions are retained. The dataset is partitioned into training, validation, and test sets using a leave-one-out chronological strategy: the most recent interaction of each user is held out for testing, the second most recent for validation, and all remaining interactions form the training set. This ensures that every prediction is made strictly from past observations, preserving temporal causality throughout evaluation. The summary statistics for both datasets after preprocessing are presented in Table 2. 
+
+> Table 2: Dataset Statistics after Preprocessing
+
+Parameter Amazon Beauty Amazon Toys & Games 
+
+Total Users 22,363 19,412 Total Items 12,101 11,924 Total Interactions 198,502 167,597 Average Sequence Length 8.88 8.63 Dataset Sparsity 99.93% 99.93% For semantic representation learning, the textual description of each item i ∈ I is formed by concatenating its title and primary category label, following a similar methodology to [5]: 
+
+xi = title i ⊕ category i (1) where ⊕ denotes string concatenation. This produces a natural-language representation for every item that is subsequently encoded by the frozen BERT encoder to obtain semantic embeddings, as described in Section 3.5. 
+
+3.2. Data Preprocessing 
+
+The raw datasets of Amazon Beauty and Amazon Toys & Games are processed through a structured pipeline to guarantee data quality and suitability for sequential modeling. The rating file and the item metadata file are merged on the common item identifier, resulting in a unified 10 representation where each user interaction is paired with its corresponding item-level informa-tion. A minimum interaction threshold is applied to retain only users with an adequate inter-action history, following common preprocessing practices in sequential recommendation [15]. Formally, a user u ∈ U is retained if and only if: 
+
+|Ru| ≥ θ (2) where Ru is the interaction set for user u, U is the set of all users, and θ = 5. The repeated consecutive transactions are then removed to prevent redundancy, following common sequence-cleaning techniques [15]. Mathematically, for a user sequence S u = [i1, i2, . . . , in], any item it
+
+such that: 
+
+it = it−1 (3) is deleted, resulting in a deduplicated series of unique item changes. The dataset is then ordered by the reviewer’s ID and timestamp to ensure the correct chronological order of the transactions, which is critical for sequential models. The complete preprocessing pipeline is illustrated in Fig 2 
+
+3.3. Sequence Preparation 
+
+After data preprocessing, the interaction logs are ordered as chronological user sequences for modeling purposes [15]. For each user u ∈ U , interactions are collected and sorted according to time stamp, forming a chronological sequence of interaction activities: 
+
+S u = [i1, i2, i3, . . . , in] (4) where it ∈ I refers to the interaction on item t, and n refers to the total number of inter-actions carried out by the user u. item order in S u is maintained to capture the chronology in which the user performed interactions, guaranteeing that any potential dependencies on sequen-tial interactions are captured in the process. To ensure chronological consistency between train, validate, and test sets, a temporal leave-one-out split method is employed as suggested in [16]. In particular, considering a user sequence S u of size n:
+
+S train u = [i1, i2, . . . , in−2], S val u = [in−1], S test u = [in] (5) The last interaction in is used for testing, while the next-to-last interaction in−1 is used for validation, whereas the rest of the interactions form the training dataset. The above process guarantees that predictions of future interactions are made based only on past behavioral signals, thus maintaining temporal causality. For semantic representation learning purposes, the concatenation of the title and category features of each individual item i ∈ I forms a textual representation, adopting a similar method-ology of constructing item texts as in [5]. Namely, 
+
+xi = title i ⊕ category i (6) where ⊕ is the operator for string concatenation. This operation translates the structured metadata to a natural language representation, enabling the transformer-based encoder to learn not only lexical but also contextual information among item attributes. The textual representation xi is used as input for the BERT encoder in the next step of semantic embedding learning. 11 Figure 2: Data preprocessing and sequence preparation pipeline for Amazon Beauty and Amazon Toys & Games datasets. 
+
+3.4. Tensor Preparation 
+
+For processing in neural network models, the created user sequence is converted into numeric tensors with a fixed length. Each item i ∈ I is initially encoded as a unique integer index using an encoder function, as is conventional in item indexing for sequential recommendation tasks [15]. The encoding function f : I → Z+ can be expressed as: 
+
+f (i) = k, k ∈ { 1, 2, . . . , |I|} (7) where |I| indicates the total number of distinct items available in the database. Index 0 is solely allocated to pad positions in order to enable the model to di ff erentiate between actual item engagements and padded positions. In order to address the problem of varying sequence lengths, every user sequence is first turned into a fixed-length sequence by means of padding and truncation using Kang and McAuley [15]’s method of preparing user sequences. For a user sequence S u with length k, the padded sequence ˜S u is: 12 ˜S u =
+
+
+
+[0 , . . . , 0, i1, . . . , ik] if k < L
+
+[in−L+1, . . . , in] if n > L (8) for which we have assumed L = 50 as the length limit in this work. Shorter interaction sequences are filled from the left using zeros, thereby maintaining the recent interaction’s re-cency at the right end, while longer sequences are truncated, keeping the last L interactions only. This particular method of truncation follows from our observation that the prediction of future preferences becomes easier with recent interactions rather than distant past interactions. These zero-padded sequences are then encoded as PyTorch LongTensor , which will be used as input to the embedding layer of SISA-Rec. 
+
+3.5. Embedding 
+
+Embedding converts the item indices generated from the tensor construction phase to con-tinuous dense vectors compatible with neural architectures. In our SISA-Rec architecture, an embedding vector is constructed for each item i ∈ I , where there exist two types of embeddings per item – an item ID embedding for collaborative filtering and an item semantic embedding for capturing the semantics. 
+
+3.5.1. Identifier-Based Embedding 
+
+Each item identifier is associated with a dense vector representation using a learnable embed-ding matrix, consistent with the identifier-based item embedding model proposed by Kang and McAuley [15]. Mathematically, the identifier-based embedding for item i can be represented as follows: 
+
+eiid = Eid [ f (i)] (9) where Eid ∈ R|I|× d is a learnable embedding matrix, d refers to the number of dimensions for the embeddings, and f (i) refers to the integer identifier associated with the item i. The embed-dings Eid are randomly initialized and updated in the course of training using backpropagation. 
+
+3.5.2. Semantic Embedding 
+
+In order to leverage item semantic information, the textual embedding xi is computed by the BERT encoder using the item title and category information [17]. Mathematically, this can be expressed as follows: 
+
+eisem = BERT( xi) ∈ R768 (10) Weights in the BERT model encoder remain frozen during training, since the pre-trained representation has already encoded complex lexical and contextual semantic relations that can be transferred from one domain to another [17]. To match the size of semantic embeddings and the size of the identifier-based embeddings, a dimensionality alignment layer using the weight matrix Wp ∈ R768 ×d is applied [5] 
+
+eisem = Wp · BERT( xi) (11) where the dimensionally projected semantic embedding eisem ∈ Rd is the same as the identifier-based embedding eiid . Then, the two embeddings are fed to the gated fusion module to be merged. 13 3.6. Gated Fusion 
+
+The gated fusion module is the first new contribution of the SISA-Rec model. Unlike exist-ing methods that either rely only on identifier-based embeddings or use semantic and semantic information as an additional, post-encoder module, the presented gated fusion module combines identifier-based and semantic representations at the very beginning of the encoding process, be-fore applying sequential modeling. This guarantees that semantic information is involved in the construction of item representations that are subsequently encoded by the transformer encoder. Given the identifier-based and projected semantic embeddings eiid ∈ Rd and eisem ∈ Rd for each item i ∈ I , we learn a gate vector g ∈ [0 , 1] d is computed as proposed in this work: 
+
+g = σ Wg · [eiid ; eisem ] + bg
+
+ (12) with Wg ∈ Rd×2d being a learnable weight matrix, bg ∈ Rd being a bias vector, [ ·; ·] being the vector concatenation operator, and σ(·) being the sigmoid function. The gate vector g is in the range [0 , 1] d, which allows for individual control over the importance of each element of the identifier-based and semantic embeddings. Finally, the item representation vi is calculated as a weighted sum of the two embeddings, as we propose here: 
+
+vi = g ⊙ eiid + (1 − g) ⊙ eisem (13) where ⊙ is element-wise multiplication. The gate g adaptively controls the amount of identifier-based and semantic information each dimension of the fused representation contains. When 
+
+g → 1, the fused representation is close to the identifier-based embedding, and if g → 0, the fused representation is close to the semantic embedding. This adaptive mechanism enables the model to learn the degree of fusion that optimally balances the information in the identifier-based embedding with the semantic embedding based on the data, rather than relying on a hand-tuned fusion weight. The embedded representation vi ∈ Rd is then fed to the positional encoding layer. 
+
+3.7. Positional Encoding 
+
+After gated fusion, positional encoding is used to encode the order of items in the sequence item representations. The transformer model is permutation-invariant by design, and does not contain a position encoding in its standard design, so positional encoding is important to allow the model to learn the temporal order of items in the user sequence. For a fused item representation 
+
+vt ∈ Rd at a position t in the sequence, we add a learnable positional embedding pt ∈ Rd to obtain the position-aware embedding xt as in Kang and McAuley [15]: 
+
+xt = vt + pt (14) where pt ∈ Rd is a vector from a learnable matrix of positional embeddings P ∈ RL×d, and 
+
+L is the maximum sequence length. Compared to fixed sinusoidal position embeddings [18], learnable positional embeddings can adaptively learn the position-specific information for the recommendation task. The position-aware sequence X = [x1, x2, . . . , xL] ∈ RL×d is then fed into to the SISA transformer encoder. 14 Figure 3: Architecture of the proposed SISA-Rec model. 
+
+3.8. SISA Transformer Encoder 
+
+The SISA transformer encoder is the key sequence modeling block of the proposed archi-tecture. Fig. 3 shows the detailed architecture of the proposed SISA-Rec model. It takes a sequence X ∈ RL×d with positional information through N transformer layers, which include a modified self-attention mechanism, a feed-forward network, layer normalization, and residual connections. The main innovation of the SISA encoder is to extend the self-attention mecha-nism to include semantic similarity signals as part of the attention computation, so that semantic relationships among items can drive the sequential modeling. 
+
+3.8.1. Semantic Similarity Matrix 
+
+Before the attention is computed, a semantic similarity matrix S ∈ RT ×T is computed from semantic embeddings of items in the sequence, provided by BERT The cosine similarity [19] between the semantic embeddings of the items at positions i and j is represented by S [i, j], as we propose: 
+
+S [i, j] = eisem · e jsem 
+
+∥eisem ∥∥ e jsem ∥ (15) with eisem , e jsem ∈ Rd being the projected semantic embeddings of the ith and jth items in the sequence and ∥ · ∥ being the ℓ2 norm. The matrix of semantic similarities S captures semantic relatedness between all pairs of items and is used to bias the attention scores in the modified self-attention. 15 3.8.2. Modified Self-Attention 
+
+The scaled dot-product self-attention mechanism is based purely on learned query and key projections. Our proposed SISA attention mechanism adds the semantic similarity matrix S to the attention score matrix, enabling the semantic item relationships to be factored into the attention. In the input sequence X = RL×d, the query ( Q), key ( K), and value ( V) matrices are defined as in Vaswani et al. [18] as: 
+
+Q = XW Q, K = XW K , V = XW V (16) with WQ, WK , WV ∈ Rd×d being learnable projection matrices.The attention score matrix is then calculated following our proposal, which extends the original scaled bias term (see Vaswani et al. [18] for a description of the dot-product bias term: 
+
+A = softmax QK ⊤
+
+√d + α · S
+
+!
+
+· V (17) where d is the scaling factor to prevent the dot products from becoming too large, S is the semantic similarity matrix and α is a learnable scalar value controlling the weight of the semantic similarity in the attention scores. The use of α · S to the attention scores allows the model to pay more attention to semantically similar items, on top of the learned query-key interactions. The attention scores are masked to stop the model from tending to future items, maintaining the auto-regressive nature of sequential recommendations. 
+
+3.8.3. Feed-Forward Network 
+
+After the modified self-attention sub-layer, each position is fed into a position-wise feed-forward position separately, as proposed by Vaswani et al. [18]. This network is composed of two linear transformations with a GELU activation function [20]: FFN( h) = W2 · GELU( W1h + b1) + b2 (18) where W1 ∈ Rd×d f f and W2 ∈ Rd f f ×d are learnable weight matrices, b1 ∈ Rd f f and b2 ∈ Rd are bias vectors, and d f f is the hidden size of the feed-forward network (256 in this work). 
+
+3.8.4. Layer Normalization and Residual Connections 
+
+Each sub-layer of the transformer encoder is followed by a layer normalization [21] and residual connection [22]. In other words, for sub-layer function F (·), the output is: 
+
+h = LayerNorm( x + F (x)) (19) where x is the input to the sub-layer and F (x) is the output of the sub-layer. The residual connection alleviates the vanishing gradient problem during training [22], and layer normaliza-tion helps the training process by normalizing the activations across the feature dimension [21]. The final layer of the transformer produces the contextual representations H ∈ RT ×d that capture both behavioral and semantic information. 16 3.9. Attention-Based Preference Aggregation 
+
+The third novelty of the proposed SISA-Rec is the attention-based preference aggregation module. After the SISA transformer encoder, the contextual item representations H ∈ RT ×d
+
+encode the sequential behavior patterns and semantic associations for each position in the user interaction. Instead of simply taking the last sequential state as the user representation, as is com-monly done in this field [15], the proposed aggregation module assigns each position a weight and then sums over the entire sequence, enabling the model to learn the contribution of each historical user interaction to the user’s preference. This work uses a learnable attention vector w ∈ Rd to calculate a scalar attention score for each potential position t ∈ { 1, 2, . . . , T }:
+
+at = w⊤ht (20) with ht ∈ Rd being the contextual representation at time t. The attention scores are then normalized over all non-padding positions via the softmax function to yield attention weights, as introduced in this paper: 
+
+αt = exp( at)
+
+PTj=1 exp( a j) (21) with αt being the attention weight at position t, after normalisation. The user preference vector u ∈ Rd is then defined as a linear combination of all contextual representations, as is proposed in this paper: 
+
+u =
+
+> T
+
+X
+
+> t=1
+
+αt · ht (22) The user preference vector u off ers a comprehensive overview of the user’s preferences, ag-gregating the contributions of all past interactions with weights learned from their importance. This approach is theoretically justified by the fact that user preferences are influenced by multiple past interactions, and not just the most recent one [15], and that di ff erent interactions contribute di ff erently to the description of current user preferences. The user preference vector u is then fed to the scoring layer for item ranking. 
+
+3.10. Scoring and Ranking 
+
+The scoring and ranking module calculates the relevance scores between the user preference vector u and all candidate items, and returns the Top-N list of ranked items. The user preference vector u ∈ Rd from the preference aggregation module is used to compute the relevance score for a candidate item i ∈ I by taking the inner product with the fused item representation vi ∈ Rd as in conventional inner product scoring for sequential recommendation [15]: 
+
+si = u⊤vi (23) where si ∈ R is the predicted score for item i. The higher the score, the greater the predicted user-item a ffi nity. The item representation vi is used for scoring the items instead of the original item identifiers to ensure that the semantic features of items are taken into account for ranking. The Top-N recommendation list is generated by ranking all the candidate items in descending order of predicted relevance scores, and taking the top N items according to the Top-N recom-mendation evaluation protocol of He et al. [16]: 17 ˆy = Top N({si}i∈I ) (24) with ˆ y being the list of N items. In the evaluation protocol of this study, the target item is compared against 99 randomly selected negative items that the user has not interacted with, following the common sampled evaluation protocol in sequential recommendation [16]. 
+
+4. Model Training and Validation 
+
+The SISA-Rec model is trained in an end-to-end manner using a composite loss function that is a weighted sum of three terms: a Bayesian Personalized Ranking (BPR) loss, a contrastive alignment loss, and an ℓ2 regularization term. 
+
+4.1. Bayesian Personalized Ranking Loss 
+
+The main training criterion is derived from the Bayesian personalized ranking [23], which trains the model to give higher relevance scores for positive items (interacted with) than negative items (not interacted with). For every user u ∈ U , a positive item i+ ∈ I from the user’s positive interaction history and a negative item i− ∈ I from items u has not interacted with are randomly sampled. The BPR loss is defined as [23]: 
+
+LBPR = − 1
+
+|U| 
+
+X
+
+> u∈U
+
+log σ(si+ − si− ) (25) with si+ and si− being the scores for the positive and negative items respectively, and σ(·)being the sigmoid function. The goal of learning is to minimize LBPR , which will ensure the model will consistently prefer observed interactions over unobserved ones. 
+
+4.2. Contrastive Alignment Loss 
+
+The contrastive alignment loss represents the fourth main contribution of the proposed SISA-Rec. It aims to promote consistency between the behavioral user representation u ∈ Rd generated by the preference aggregation module and a semantic user representation usem ∈ Rd derived from the average pooling of the BERT embeddings of the items in the user’s interaction history, as per the semantic user representation approach of Hou et al. [5]: 
+
+usem = 1
+
+T
+
+> T
+
+X
+
+> t=1
+
+etsem (26) with etsem being the semantic projection of the item at position t in the user’s interaction history. The contrastive loss is based on the InfoNCE objective [24] that maximises the similarity between u and usem for the same user, and minimises similarity with semantic representations of other users in the batch. As proposed in this work, the InfoNCE objective is reformulated for aligning users’ behavior and semantic representation in sequential recommendation: 
+
+LCL = − log exp( u · usem /τ )
+
+P j,i exp( u · u jsem /τ ) (27) 18 with τ a temperature hyperparameter to control the softness of the contrastive distribution, and u jsem the semantic user representation of a di ff erent user j in the batch. This loss function 
+
+LCL aims to align the behavioral interactions with the semantic meaning, so that the learned user representations become more semantically grounded. 
+
+4.3. Regularization 
+
+The loss function used when training the model is augmented with an ℓ2 regularization term to prevent overfitting by discouraging large parameter values, like typically in deep learning [15]: 
+
+Lreg = ∥Θ∥2 (28) where Θ represents the model’s parameters. 
+
+4.4. Total Training Objective 
+
+Following the proposed approach, the total loss (during the training) is defined as a weighted sum of the three loss components: 
+
+L = LBPR + λ1LCL + λ2∥Θ∥2 (29) Here, λ1 and λ2 are hyperparameters that weight the loss functions and regularization term in the loss. In this study, λ1 = 0.1 and λ2 = 1 × 10 −4.
+
+4.5. Optimization and Validation 
+
+The Adam optimizer is used to train the model with an initial learning rate of 1 × 10 −3 and a batch size of 256. A learning rate scheduler with a factor of 0.5 and patience of 2 epochs is used for reducing the learning rate if the validation performance stagnates. The model is trained for up to 30 epochs with early stopping based on the validation NDCG@10 metric, with a patience of 5 epochs. The best-performing model checkpoint, in terms of the highest validation NDCG@10, is used for testing. The hyperparameter settings used in this study are listed in Table 3. 
+
+4.6. Evaluation Metrics 
+
+We assess the performance of our proposed SISA-Rec model using two common ranking metrics for sequential recommendation: Hit Ratio (HR@ K) and Normalized Discounted Cumu-lative Gain (NDCG@ K) with K ∈ { 5, 10 }. These metrics are calculated on the Top-N list of items recommended by the model and on the test set using the sampled evaluation protocol outlined in 3.10. 
+
+4.6.1. Hit Ratio 
+
+Hit Ratio at K (HR@ K) is defined as the fraction of test cases where the ground truth target item appears in the Top K items, as presented in He et al. [16]. Formally: HR@ K = 1
+
+|U| 
+
+X
+
+> u∈U
+
+⊮[rank u ≤ K] (30) with rank u being the rank of the ground truth item of user u among the candidates and ⊮[·]being the indicator function that returns 1 if the condition is true and 0 otherwise. HR@ K is a binary metric, which does not consider the rank of the ground truth item in the Top-K list, and is evaluated as the binary accuracy. 19 Table 3: Hyperparameter Configuration 
+
+Parameter Value 
+
+Hidden dimensionality d 128 Number of transformer layers N 2Number of attention heads 2Feed-forward dimensionality d f f 256 Maximum sequence length L 50 Dropout rate 0.2 Learning rate 1 × 10 −3
+
+Batch size 256 Temperature τ 0.1 
+
+λ1 0.1 
+
+λ2 1 × 10 −4
+
+Maximum epochs 30 Early stopping patience 5
+
+4.6.2. Normalized Discounted Cumulative Gain 
+
+Normalized Discounted Cumulative Gain at cuto ff K, or NDCG@ K for short, is an extension of HR@ K that takes into account the rank of the target item in the list of recommendations and assigns higher values when the target item is ranked higher. The Discounted Cumulative Gain (DCG@ K) for individual user u is defined as in Järvelin and Kekäläinen [25] as: DCG@ K =
+
+> K
+
+X
+
+> t=1
+
+rel t
+
+log 2(t + 1) (31) where the relevance rel t of the item at rank t is 1 if the target item (the ground truth) is at rank t and 0 otherwise. The discounting factor log 2(t + 1) down-weights the relevance of items that appear further down in the recommendation list, which reflects that users are more likely to view items ranked higher in the list. As there is only one relevant item in each test case, the Ideal DCG (IDCG@ K) is [25]: IDCG@ K = 1log 2(2) = 1 (32) The NDCG@ K for a user u is then defined as [25]: NDCG@ K = DCG@ K
+
+IDCG@ K = 1log 2(rank u + 1) · ⊮[rank u ≤ K] (33) The overall average NDCG@ K is given as [25]: NDCG@ K = 1
+
+|U| 
+
+X
+
+> u∈U
+
+NDCG@ Ku (34) 20 NDCG@ K off ers a more detailed assessment of recommendation quality than HR@ K since it takes into account not only whether the target item is present in the Top-K list, but also its position within the list. We report both of these metrics at K = 5 and K = 10 to give a well-rounded evaluation of recommendation quality across di ff erent list lengths. 
+
+5. Results and Discussion 
+
+5.1. Experimental Setup 
+
+The experiments were conducted on two Amazon product review datasets, Amazon Beauty and Amazon Toys & Games, using a leave-one-out evaluation scheme, where the most recent interaction of every user was reserved for test and the second most recent for validation. During inference, the system was presented with the ground truth target item, along with 99 negative items, randomly sampled from the set of items with which the user has no interaction history. We measured the quality of recommender systems using the Hit Ratio (HR@ K) and Normalized Discounted Cumulative Gain (NDCG@ K) at K ∈ { 5, 10 }. Models were trained using the Adam optimiser with a fixed learning rate of 1 × 10 −3 and a batch size of 256. Early stopping was used with a patience of five epochs to avoid overfitting, based on the NDCG@10 on a validation set. We included four baselines to compare the performance of our model. PopRec is a non-personalised heuristic that sorts items based on the aggregate count of interactions in the training set, and provides a lower bound to the performance that quantifies the level of popularity bias in-herent in the recommendation quality of the dataset. DuoRec [7] is a contrastive learning-based sequential recommender that addresses representation degeneration through dropout-based aug-mentation and a uniformity regularization objective. SASRec [15] is a transformer-based se-quential recommender that captures temporal patterns in interactions using causal self-attention applied only to item identifier embeddings, without access to item content or semantic informa-tion. BERT4Rec [26] is a bidirectional transformer-based sequential recommender that employs a masked item prediction objective to learn contextual user preference representations. 
+
+5.2. Performance Comparison 
+
+The test-set results for all models on Amazon Beauty and Amazon Toys & Games are pre-sented in Table 4 and Fig. 4. Across both datasets and all four metrics, SISA-Rec achieves the best performance, reaching an HR@10 of 0.4867 and NDCG@10 of 0.3087 on Amazon Beauty, and an HR@10 of 0.5097 and NDCG@10 of 0.3260 on Amazon Toys & Games, while all trained baselines remain well above the PopRec popularity floor. All models were tested on the cut-o ff lengths K ∈ { 1, 5, 10 , 15 , 20 } to further analyse the performance of the proposed model for varying lengths of the recommendation list. Fig. 5 and Fig. 6 show the results. For both datasets, SISA-Rec shows a consistent improvement over all of the baselines, maintaining a clear margin across all cut-o ff lengths. 
+
+5.3. Training Behaviour 
+
+The training behaviour of SISA-Rec on the Amazon Beauty and Amazon Toys & Games is depicted in Fig. 7 and Fig. 8 respectively. In the first few epochs, the total loss drops rapidly for both datasets, then stabilizes in a smooth way over the course of one full training session (30 epochs) and is never observed to fluctuate or become unstable during training. The BPR loss is consistently decreasing over all the epochs, meaning that the model is getting better at learning to rank observed interactions higher than unobserved ones. The contrastive alignment loss is 21 Table 4: Performance comparison on Amazon Beauty and Amazon Toys & Games test sets. Best results are in bold .
+
+Dataset Model HR@5 HR@10 NDCG@5 NDCG@10 
+
+Amazon Beauty PopRec 0.1765 0.2913 0.1141 0.1509 DuoRec 0.3147 0.4024 0.2430 0.2712 SASRec 0.2779 0.3654 0.2014 0.2296 BERT4Rec 0.3278 0.4174 0.2510 0.2799 SISA-Rec 0.3783 0.4867 0.2737 0.3087 
+
+Amazon Toys & Games PopRec 0.1557 0.2472 0.1022 0.1315 DuoRec 0.3067 0.3924 0.2365 0.2641 SASRec 0.2162 0.3231 0.1447 0.1791 BERT4Rec 0.3210 0.4139 0.2464 0.2764 SISA-Rec 0.3962 0.5097 0.2893 0.3260 
+
+consistently low and does not increase with training, indicating that the behavioral and semantic user representations align early, stay consistent throughout training, and do not interfere with the main ranking objective. The objective of the joint training then yields stable and well-behaved optimization dynamics on both sparse Amazon datasets. 
+
+5.4. Discussion 
+
+SISA-Rec outperforms all baseline models across every evaluation metric on both Amazon Beauty and Amazon Toys & Games. The results show that models which explicitly incorporate semantic item representations gain a measurable advantage over those relying on behavioural co-occurrence alone, particularly on sparse datasets where user preferences cannot be captured by interaction patterns by themselves. The gated fusion module allows the model to learn the relative contribution of identifier-based and semantic information per dimension, rather than fixing it in advance. By injecting pairwise semantic similarity into the attention computation, the model attends more strongly to semantically related items when encoding a sequence, regardless of whether they co-occur in the observed history. The attention-based preference aggregation produces a more comprehensive user representation by drawing on all positions in the sequence rather than the final hidden state alone, which is especially valuable for the short interaction histories common in both datasets. Relative to the strongest baseline, SISA-Rec improves HR@10 by 16.6% and NDCG@10 by 10.3% on Amazon Beauty, and by 23.1% and 17.9% respectively on Amazon Toys & Games. The larger margin on Toys & Games is consistent with its shorter average sequence length (8.63 interactions per user), which places greater demand on item-content signals when behavioural evidence is limited. The identity-only SASRec is the weakest of the trained models on both datasets, underlining the di ffi culty faced by purely identifier-based sequential models under high sparsity, where co-occurrence signal alone is insu ffi cient. 
+
+5.5. Cold-Start Analysis 
+
+The users were categorized into three groups on the basis of the number of sequence in-teractions: cold (5 to 7 interactions), medium (8 to 15 interactions), and warm (more than 15 22 Figure 4: Performance comparison of all models on Amazon Beauty and Amazon Toys & Games test sets across HR@5, HR@10, NDCG@5, and NDCG@10 metrics. 
+
+interactions). Each group was calculated individually, and the results are shown in Table 5 and graphically in Fig. 9 and Fig. 10 for SISA-Rec, BERT4Rec, and SASRec, respectively. The two datasets reveal a very clear and consistent pattern: the benefit of semantic integration is greatest when the behavioural signal is least. On Amazon Toys & Games, SISA-Rec achieves an NDCG@10 of 0 .3200 in the cold group, well ahead of BERT4Rec (0 .2642) and SASRec (0 .1676). The lead also remains in the medium group (0 .3213 compared to the models based on identity or content, which are 0 .2769 and 0 .1820 respectively); in the warm group, the gap becomes smaller because the longer history helps the models based on identity /content to close the performance gap. Likewise, in the compressed version on Amazon Beauty. SISA-Rec leads clearly in the cold group (NDCG@10 of 0 .2905 versus 0 .2571 for BERT4Rec and 0 .1987 for SASRec) and in the medium group (0 .3195 versus 0 .2913 and 0 .2494). The models, however, merge in the warm group, with BERT4Rec slightly outperforming SISA-Rec (0 .4230 vs 0 .4003), as longer inter-action history is su ffi cient enough to provide enough behavioural signal for the identity-based models to become competitive with the semantically grounded ones. These results illustrate that the semantic integration is most important for the interaction histories which are short and that SISA-Rec outperforms purely behavioural baselines most in cold start conditions and that the benefit of the semantic integration compared to the purely behavioural baselines is reduced as more interaction data is used. 23 Figure 5: Performance comparison of SISA-Rec, SASRec, and BERT4Rec at di ff erent cuto ff values K ∈ { 1, 5, 10 , 15 , 20 }
+
+on Amazon Beauty. 
+
+Figure 6: Performance comparison of SISA-Rec, SASRec, and BERT4Rec at di ff erent cuto ff values K ∈ { 1, 5, 10 , 15 , 20 }
+
+on Amazon Toys & Games. 
+
+Figure 7: Training curve of SISA-Rec on Amazon Beauty: Total Loss, BPR Loss, and contrastive alignment loss per epoch. 
+
+24 Figure 8: Loss, BPR loss, and contrastive alignment loss on SISA-Rec training curve on Amazon Toys & Games. Table 5: Cold-start analysis on Amazon Beauty and Amazon Toys & Games. NDCG@10 is reported for SISA-Rec, BERT4Rec, and SASRec across three user interaction-density groups. 
+
+Dataset User Group SISA-Rec BERT4Rec SASRec 
+
+Amazon Beauty Cold (5–7) 0.2905 0.2571 0.1987 Medium (8–15) 0.3195 0.2913 0.2494 Warm (15 +) 0.4003 0.4230 0.3797 Amazon Toys & Games Cold (5–7) 0.3200 0.2642 0.1676 Medium (8–15) 0.3213 0.2769 0.1820 Warm (15 +) 0.3762 0.3743 0.2638 
+
+Figure 9: Cold-start analysis on Amazon Beauty: NDCG@10 for SISA-Rec, BERT4Rec, and SASRec across cold, medium, and warm user groups. 
+
+25 Figure 10: Cold-start analysis on Amazon Toys & Games: NDCG@10 for SISA-Rec, BERT4Rec, and SASRec across cold, medium, and warm user groups. 
+
+26 6. Conclusion 
+
+We present SISA-Rec, a semantically integrated sequential recommendation framework de-signed to address the limitations of transformer-based architectures in sparse and cold-start en-vironments. Previous models that rely primarily on item ID embeddings, our approach merge textual context directly into the sequential architecture via a gated fusion module, semantic-aware self-attention, attention-based preference aggregation, and a joint optimization objective that aligns behavioral and semantic representations. Evaluation metrics results on the two highly sparse Amazon Beauty and Amazon Toys & Games datasets shows that SISA-Rec outperforms strong baselines across all metrics. Compared to the top-performing baseline, the model im-proved by 16.6% in HR@10 and 10.3% in NDCG@10 on Amazon Beauty, whereas, on Amazon Toys & Games dataset it improved 23.1% in HR@10 and 17.9% in NDCG@10. These results evident that the proposed framework better captures item relationships when behavioral records are limited. Future work will explore multimodal representations including images and user re-views, scaling the framework to larger datasets, and developing adaptive integration techniques to further optimize performance across various domains. 
+
+References 
+
+[1] A. Petrov, C. Macdonald, A systematic review and replicability study of bert4rec for se-quential recommendation, in: Proceedings of the 16th ACM Conference on Recommender Systems, 2022, pp. 436–447. [2] A. V. Petrov, E ff ective and e ffi cient transformer models for sequential recommendation, in: Proceedings of the 17th ACM International Conference on Web Search and Data Mining, 2024, pp. 1150–1151. [3] K. Zhou, H. Yu, W. X. Zhao, J.-R. Wen, Filter-enhanced mlp is all you need for se-quential recommendation, in: Proceedings of the ACM Web Conference 2022, WWW ’22, Association for Computing Machinery, New York, NY, USA, 2022, p. 2388–2399. 
+
+doi:10.1145/3485447.3512111 .URL https://doi.org/10.1145/3485447.3512111 
+
+[4] D. Tikhonovich, N. Zelinskiy, A. V. Petrov, M. Spirina, A. Semenov, A. V. Savchenko, S. Kuliev, esasrec: Enhancing transformer-based recommendations in a modular fashion, in: Proceedings of the Nineteenth ACM Conference on Recommender Systems, 2025, pp. 1175–1180. [5] Y. Hou, S. Mu, W. X. Zhao, Y. Li, B. Ding, J.-R. Wen, Towards universal sequence repre-sentation learning for recommender systems, in: Proceedings of the 28th ACM SIGKDD Conference on Knowledge Discovery and Data Mining, KDD ’22, Association for Com-puting Machinery, New York, NY, USA, 2022, p. 585–593. doi:10.1145/3534678. 3539381 .URL https://doi.org/10.1145/3534678.3539381 
+
+[6] Z. Yuan, F. Yuan, Y. Song, Y. Li, J. Fu, F. Yang, Y. Pan, Y. Ni, Where to go next for recom-mender systems? id- vs. modality-based recommender models revisited, in: Proceedings of the 46th International ACM SIGIR Conference on Research and Development in Infor-mation Retrieval, SIGIR ’23, Association for Computing Machinery, New York, NY, USA, 27 2023, pp. 2639–2649. doi:10.1145/3539618.3591932 .URL https://doi.org/10.1145/3539618.3591932 
+
+[7] R. Qiu, Z. Huang, H. Yin, Z. Wang, Contrastive learning for representation degeneration problem in sequential recommendation, in: Proceedings of the Fifteenth ACM International Conference on Web Search and Data Mining, WSDM ’22, Association for Computing Ma-chinery, New York, NY, USA, 2022, p. 813–823. doi:10.1145/3488560.3498433 .URL https://doi.org/10.1145/3488560.3498433 
+
+[8] J. Li, M. Wang, J. Li, J. Fu, X. Shen, J. Shang, J. McAuley, Text is all you need: Learning language representations for sequential recommendation, in: Proceedings of the 29th ACM SIGKDD Conference on Knowledge Discovery and Data Mining, 2023, pp. 1258–1267. [9] X. Li, C. Chen, X. Zhao, Y. Zhang, C. Xing, E4srec: An elegant e ff ective e ffi cient ex-tensible solution of large language models for sequential recommendation, arXiv preprint arXiv:2312.02443 (2023). [10] Q. Wang, X. Cao, J. Wang, W. Zhang, Knowledge-aware collaborative filtering with pre-trained language model for personalized review-based rating prediction, IEEE Transactions on Knowledge and Data Engineering 36 (3) (2023) 1170–1182. [11] Y. Jiang, Y. Yang, L. Xia, C. Huang, Di ff kg: Knowledge graph di ff usion model for recom-mendation, in: Proceedings of the 17th ACM international conference on web search and data mining, 2024, pp. 313–321. [12] C. Li, L. Xia, X. Ren, Y. Ye, Y. Xu, C. Huang, Graph transformer for recommendation, in: Proceedings of the 46th international ACM SIGIR conference on research and development in information retrieval, 2023, pp. 1680–1689. [13] W. Cui, H.-K. Lam, Sagerec: Semantic-aware global graph-enhanced representation learn-ing for sequential recommendation, Electronics 14 (24) (2025) 4844. [14] J. McAuley, C. Targett, Q. Shi, A. Van Den Hengel, Image-based recommendations on styles and substitutes, in: Proceedings of the 38th international ACM SIGIR conference on research and development in information retrieval, 2015, pp. 43–52. [15] W.-C. Kang, J. McAuley, Self-attentive sequential recommendation, in: 2018 IEEE inter-national conference on data mining (ICDM), IEEE, 2018, pp. 197–206. [16] X. He, L. Liao, H. Zhang, L. Nie, X. Hu, T.-S. Chua, Neural collaborative filtering, in: Proceedings of the 26th international conference on world wide web, 2017, pp. 173–182. [17] J. Devlin, M.-W. Chang, K. Lee, K. Toutanova, Bert: Pre-training of deep bidirectional transformers for language understanding, in: Proceedings of the 2019 conference of the North American chapter of the association for computational linguistics: human language technologies, volume 1 (long and short papers), 2019, pp. 4171–4186. [18] V. Ashish, Attention is all you need, Advances in neural information processing systems 30 (2017) I. [19] C. D. Manning, Introduction to information retrieval, Syngress Publishing„ 2008. 28 [20] D. Hendrycks, K. Gimpel, Gaussian error linear units (gelus), arXiv preprint arXiv:1606.08415 (2016). [21] J. L. Ba, J. R. Kiros, G. E. Hinton, Layer normalization, arXiv preprint arXiv:1607.06450 (2016). [22] K. He, X. Zhang, S. Ren, J. Sun, Deep residual learning for image recognition, in: Pro-ceedings of the IEEE conference on computer vision and pattern recognition, 2016, pp. 770–778. [23] S. Rendle, C. Freudenthaler, Z. Gantner, L. Schmidt-Thieme, Bpr: Bayesian personalized ranking from implicit feedback, arXiv preprint arXiv:1205.2618 (2012). [24] A. v. d. Oord, Y. Li, O. Vinyals, Representation learning with contrastive predictive coding, arXiv preprint arXiv:1807.03748 (2018). [25] K. Järvelin, J. Kekäläinen, Cumulated gain-based evaluation of ir techniques, ACM Trans-actions on Information Systems (TOIS) 20 (4) (2002) 422–446. [26] F. Sun, J. Liu, J. Wu, C. Pei, X. Lin, W. Ou, P. Jiang, Bert4rec: Sequential recommen-dation with bidirectional encoder representations from transformer, in: Proceedings of the 28th ACM international conference on information and knowledge management, 2019, pp. 1441–1450. 29

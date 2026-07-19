@@ -1,0 +1,1465 @@
+Title: Embark Now: User Demand Oriented Framework for Multi-day Urban Travel Itinerary Planning
+
+URL Source: https://arxiv.org/pdf/2607.10651v1
+
+Published Time: Tue, 14 Jul 2026 02:33:14 GMT
+
+Number of Pages: 37
+
+Markdown Content:
+# Embark Now: User Demand Oriented Framework for Multi-day Urban Travel Itinerary Planning 
+
+Rongbo Qi 1, Yaqi Zhang 1, Shijun Yan 2, Xuemeng Liu 3,Xiangrui Cai 1, Chunyao Song 1* 
+
+> 1*
+
+College of Computer Science, Nankai University, Tianjin, 300350, Tianjin, China. 
+
+> 2
+
+Jiangxi Normal University, Nanchang, 330022, Jiangxi, China. 
+
+> 3
+
+College of Software, Nankai University, Tianjin, 300350, Tianjin, China. *Corresponding author(s). E-mail(s): chunyao.song@nankai.edu.cn; Contributing authors: rongbo.qi@mail.nankai.edu.cn; yaqi.zhang@mail.nankai.edu.cn; shijunyan@jxnu.edu.cn; xuemeng.liu@mail.nankai.edu.cn; caixr@nankai.edu.cn; 
+
+Abstract 
+
+In large urban areas, planning multi-day travel itineraries is challenging due to the abundance of Points of Interest (POIs), diverse user preferences, and constraints such as opening hours. Effective solutions must dynamically accom-modate diverse traveler requirements while optimizing for satisfaction and feasibility within limited computation time. This paper addresses these challenges through introducing an innovative framework that integrates Large Language Models (LLMs) to dynamically capture user requirements with precision and flexibility, and an enhanced Greedy Randomized Adaptive Search Procedure (GRASP) algorithm as a well-suited preference-aware planner to generate feasible multi-day itineraries. The effectiveness of our integrated approach is demon-strated through extensive experiments on two real-world urban datasets from Beijing and Tianjin. Our framework significantly outperforms state-of-the-art (SOTA) methods, improving the average total itinerary score by at least 4.52% and 11.09% across 5,040 user cases with diverse preferences in the two datasets. Furthermore, through end-to-end algorithmic enhancements, it achieves notable average improvements of 17.95% and 26.07% in the computed metrics, while also delivering substantial gains in time efficiency – realizing average performance increases of 4.64% and 25.55% within shorter computation times compared to 
+
+1arXiv:2607.10651v1 [cs.AI] 12 Jul 2026 suboptimal methods that require multiple iterations. These outcomes under-score our method’s superiority in delivering both enhanced itinerary quality and computational efficiency over existing methodologies.  
+
+> Keywords: travel itinerary planning, personalized travel plans, multi-day urban travel plans, heuristic planning algorithms
+
+## 1 Introduction 
+
+With advancements in transportation and tourism, many travelers are inclined to explore unfamiliar cities (Halder et al., 2024). Despite the abundance of detailed POI (Points of Interest) data offered by various travel assistant apps, including attractions, dining options, and accommodations, as well as the curated travel itineraries provided by professional travel agencies, users still confront significant challenges when it comes to swiftly crafting a comprehensive and personalized multi-day travel plan in a large city for themselves or their families in an unfamiliar city (Orabi et al., 2025; Yhee et al., 2023). These challenges stem not only from the large solution space, but also from diverse user preferences (e.g., fast-paced vs. slow-paced), and from spatiotempo-ral constraints (e.g., opening hours, travel times, and daily time budgets). We refer to this setting as the Multi-day Urban Travel Itinerary Planning (MUTIP) problem. Hence, the development of automated algorithms that are capable of accurately dis-cerning diverse and user-specific preferences becomes imperative for crafting tailored itineraries that cater to individual needs. Conventionally, this obstacle is studied under the Tourist Trip Design Problem (TTDP) (Liao & Zheng, 2018; Vansteenwegen et al., 2011), a complex issue that is often decomposed into two distinct yet interconnected components: the Orienteering Problem (OP) (Urrutia-Zambrana et al., 2021; Verbeeck et al., 2016) and the Team Orienteering Problem (TOP) (Bianchessi et al., 2018; Hu et al., 2018). Both of these problems have garnered significant attention and have been the subject of exhaustive research endeavors over the past decade (Gavalas et al., 2014; Kolaee et al., 2024; Paulavicius et al., 2023). These algorithms generally involve designing optimization objectives that cater to user or system requirements and seek locally optimal solutions using integer programming or metaheuristic approaches (Expósito et al., 2019; Tlili & Krichen, 2021). However, their application in user-centric intelligent systems remains scarce, primarily hindered by two notable constraints. Firstly, their iterative essence, while aimed at identifying locally optimal solutions, can significantly prolong the process, ultimately detracting from the overall user experience due to excessive wait times. Secondly, the prerequisite of manually defining a myriad of constraints neces-sitates extensive learning and setup, placing undue temporal and cognitive strains on users, thereby limiting their practical adoption. In recent years, large language models (LLMs), such as GPT-5 (OpenAI, 2025) and DeepSeek-R1 (DeepSeek-AI et al., 2025), have made significant strides, showing great promise in understanding user needs and reasoning. Consequently, many recent efforts have focused on employing LLMs for planning tasks (Gundawar et al., 2024; Hao et 2al., 2025; Kambhampati et al., 2024). However, LLM-only planning often struggles to consistently satisfy concrete spatiotemporal constraints and to avoid hallucinated or infeasible POIs, especially in multi-day settings (Valmeekam et al., 2024). I'd like to plan a 6-day itinerary for acomprehensive and classic tour of Beijing ,with key stops at places like Tiananmen Square, Nanluoguxiang, and Shichahai .     
+
+> For dining, I prefer something standard. I plan to start each day at around 9 am and travel for no more than 12 hours daily, maintaining a normal schedule.
+> A precise and well-structured travel schedule.
+> Q1: Which city do you want to visit?
+> Q2: Are you familiar with this city?
+> Q3: What attractions would you like to visit?
+> Q4: What time do you plan to leave each day?
+> Q5: ……
+> 9:00:00/21:00:00 9:25:00-11:25:00
+> 25min
+> …
+> …
+> 9:00:00 11:00:00 12:00:00 14:00:00 16:00:00
+> ？min
+> ？
+> no specific restaurant
+> ？
+> no specific Hotel
+> ？
+> not open yet
+> ？
+> no traffic hours
+> ？
+> no specific restaurant
+> ？
+> time require-ments are not met
+> ？
+> It just seems so complic-ated
+
+Fig. 1 : Challenges and Solutions: Hybrid Travel Itinerary Planning To further clarify the preceding problems, Fig. 1 illustrates the challenges faced when relying solely on traditional methods or LLMs in isolation. Traditional optimiza-tion methods can produce controllable solutions under explicit constraints, but the interaction required to specify preferences and parameters is often cumbersome for users. In contrast, LLMs enable natural-language interaction, but their outputs may miss essential constraints and feasibility checks. This has led to hybrid approaches that combine LLM-based preference understanding with constraint-aware planners (de la Rosa et al., 2024; Tang et al., 2024). As such, hybrid approaches emerge as the promising direction striking a balance between the two extremes. Such methodologies leverage the strengths of both traditional methods and LLMs, addressing the limi-tations of each individual approach while enhancing the overall user experience and satisfaction. These hybrid methods (de la Rosa et al., 2024; Tang et al., 2024) ini-tially tap into the capabilities of LLMs to profoundly understand user preferences, subsequently employing traditional planning algorithms to generate outcomes that are not only precise but also align more closely with users’ expectations. While recent hybrid approaches integrate LLMs with solvers (e.g., SMT (Hao et al., 2025)), they often struggle with the trade-off between computational efficiency and itinerary rationality in multi-day scenarios . General-purpose solvers can become computa-tionally prohibitive when handling intricate spatiotemporal constraints over multiple days. Moreover, existing methods often overlook the necessity of the importance of understanding and satisfying users’ routine requirements, such as prioritizing points 3of interest, adhering to time preferences, and catering to dining habits. Consequently, the itinerary planning framework calls for an efficient planner that is inherently aware of both user preferences and real-world feasibility constraints. To address these issues, this study develops a framework that integrates LLMs and preference-aware heuristic algorithms for MUTIP. Specifically, we design a dual-step LLM-based preference analysis pipeline that translates a user’s natural-language request into structured algorithm inputs and personalized preference signals. These signals are then injected into a GRASP-based planning procedure (Expósito et al., 2019), enhanced with a “Clustering and Substitution” strategy to improve route ratio-nality and efficiency under multi-day constraints. This integration yields itineraries that are both controllable (constraint-feasible) and aligned with user demand. In summary, the key contributions of this paper are as follows: • We have devised an end-to-end framework that seamlessly integrates LLM-based preference extraction with preference-aware itinerary planning algorithm to address MUTIP, enabling controllable multi-day itineraries from a single natural-language interaction. • We develop a dual-step LLM-based preference analysis pipeline and enhance a GRASP-based planner with a “Clustering and Substitution” strategy to improve itinerary alignment, rationality, and efficiency under multi-day constraints. • We proposed metrics to evaluate the quality and rationality of travel itineraries, and validated our framework using two real-world datasets. Our framework sig-nificantly outperforms representative LLM-based methods, improving the average total itinerary score by at least 4.52% and 11.09% across 5,040 user cases with diverse preferences in the two datasets. Furthermore, through end-to-end algorith-mic enhancements, it achieves notable average improvements of 17.95% and 26.07% in the computed metrics, while also delivering substantial gains in time efficiency, realizing average performance increases of 4.64% and 25.55% within shorter com-putation times compared to suboptimal methods that require multiple iterations. These results demonstrate the superior quality, controllability, and computational efficiency of our approach. 
+
+## 2 Related Work 
+
+Given the relevance to the study presented in this work and the evolution of technol-ogy, we delve into a discussion on both traditional itinerary planning techniques and itinerary planning based on LLMs, respectively. 
+
+2.1 Traditional Travel Itinerary Planning 
+
+Traditional research (Hu et al., 2018; Urrutia-Zambrana et al., 2021) on travel itinerary planning often leverages concepts such as the OP and the TOP, employing various heuristic algorithms (Lin & Yu, 2017; Rezki & Aghezzaf, 2018) to tackle dif-ferent variants of these problems. For instance, Expósito et al. (2019) utilized the GRASP algorithm to optimize the overall scores of personalized itineraries, taking into consideration the diverse categories of tourist attractions. Similarly, Tlili and 4Krichen (2021) developed the KSA algorithm, which integrates k-means clustering with simulated annealing (Bertsimas & Tsitsiklis, 1993) to generate multi-day travel itineraries, incorporating it into a Travel Recommendation System (TRS) named Stay-Plan. Derya et al. (2024) addressed itinerary planning involving clustered attractions and demonstrated the effectiveness of their algorithms for this specific variant of the itinerary planning problem. As research progresses, some studies have broadened the scope of optimization by incorporating multi-objective optimization techniques into the problem (Piya et al., 2023; Ruiz-Meza et al., 2021). For example, Filho and Morabito (2024) focused on minimizing travel distance while maximizing service levels through multi-objective optimization utilizing the Chebyshev Distance. Kolaee et al. (2024) and Pitakaso et al. (2024) introduced sustainability considerations into their models, incorporating environmental and social factors. Despite these advancements, much of the existing research prioritizes algorithmic efficiency and optimality, frequently overlooking the intuitive user experience and practical usability of the developed systems. To enhance the user experience, several studies have sought to incorporate user preferences into their models. Brilhante et al. (2015) treated photos as traces of tourist behavior and extracted spatio-temporal information from them to analyze sightseeing itineraries. Paulavicius et al. (2023) incorporated hierarchical constraints and personalized ratings of POIs into the TTDP, developing a TRS that enables users to set preferences through predefined options and calculates personalized scores for POIs based on their characteristics. Zhou et al. (2023) integrated user interest-driven POI recommendations into itinerary planning by combining traditional machine learning algorithms, such as Naive Bayes and decision forests. Orabi et al. (2025) integrated both static and dynamic sources of POI lists to address transient and upcoming attractions. However, these algorithms rely significantly on predefined user options or intrin-sic attributes of POIs, which constrains their adaptability to diverse user needs and complicates their application in complex settings. 
+
+2.2 LLMs-based Travel Itinerary Planning 
+
+Due to the limitations inherent in traditional itinerary planning algorithms, several studies have explored integrating LLMs, which are proficient in language compre-hension and generation, into this task. Xie et al. (2024) introduced a benchmark dataset named TravelPlanner, which integrates flight data, driving distances and times, restaurant information, tourist attractions, and accommodation details. This dataset is designed to test the practical application capabilities of language models in addressing cross-city itinerary planning problems. For this benchmark, Hao et al. (2025) proposed a framework that formulates the travel planning problem as a Sat-isfiability Modulo Theories (SMT) problem, solved by integrating LLMs with SMT solver, effectively leveraging the natural language parsing capabilities of LLMs and the multi-constraint problem-solving abilities of SMT solvers. Similarly, Gundawar et al. (2024) introduced the LLM-Modulo framework, combining LLMs with external validators through an iterative process to improve LLM performance on the Trav-elPlanner task. Moreover, JU et al. (2024) employed a fine-tuned Llama model to 5convert natural language inputs into JSON format, followed by solving the planning problem through mixed-integer linear programming. Shao et al. (2025) introduced RealTravel, an augmented version of the TravelPlanner, and proposed an integrated system that combines LLMs with numerical solvers to generate travel plans. Unlike the cross-city itinerary planning problem, for single-city planning, de la Rosa et al. (2024) employed LLMs to acquire and translate travel information, then utilized automated planners to generate travel plans. These plans ensure constraint satisfaction and optimize objectives by combining the strengths of both technologies to produce effective single-day travel itineraries. Tang et al. (2024) utilized a combination of LLMs and traditional spatial optimization models to address the open-domain urban itinerary planning (OUIP) task. This task facilitates single-day, city-walk type itinerary planning based on natural language descriptions of users. 
+
+Table 1 : Systematic comparison of the proposed methods and baselines. The com-parison is presented in two vertically aligned sections to maintain readability while covering all critical requirements.                                                                                                                                                                    
+
+> Method Base Route Constraints Personalization
+> Dur. Win. Man. Mul. Bud. Num. Obj. Prof. Scor. GlobeTrott (2023) ✓—✓————✓✓
+> StayPlan (2021) ✓——✓—————FuzzyGRASP (2019) ✓✓✓✓—✓✓——TravelPlanner (2025) ✓——✓✓————ITINERA (2024) ✓—✓——✓——✓
+> PTS (2025) ✓——✓✓✓✓—✓
+> DeepTravel (2025) ——✓✓✓————
+> UDOIP (Ours) ✓✓✓✓✓✓✓✓✓
+> Method Logistics & Logic Data Util. Algorithm Scope
+> Cls. P.S. In-Ex-Din. Hot. GlobeTrott (2023) ✓—✓———Quest. Genetic Single StayPlan (2021) ✓✓✓—✓✓UI Select K-means+SA Single FuzzyGRASP (2019) ✓✓✓—✓✓Predefined Fuzzy GRASP Single TravelPlanner (2025) ✓—✓✓✓✓Query Ext. LLM+SMT Cross ITINERA (2024) ✓—————Query Ana. LLM+CSO Single PTS (2025) ✓✓—✓✓✓Reviews LLM+SASRec Cross DeepTravel (2025) ——✓✓—✓Query Ext. Agentic RL Cross
+> UDOIP (Ours) ✓✓✓—✓✓Implicit LLM+GRASP Single
+
+Note: Dur. : Tour Duration; Win. : Time Window; Man. : Mandatory POIs; Mul. :Multi-day; Bud. : Budget; Num. : POI Count; Obj. : Multi-objective; Prof. : User Profile (e.g. slow pace); Scor. : Profile-dependent Scores; Cls. : POI Classification; P.S. : POI Scores; In-/Ex-: Intra/Inter-city Transport; Din. : Dining; Hot. : Hotel; Data Util. : Data Utilization Methods; Algorithm : Solution Algorithm; Scope : Single-city or Cross-city(a one-way flight from origin city A to destination city B, with tourism activities confined exclusively to city B). 
+
+While the aforementioned studies have made significant progress in leveraging LLMs for both cross-city and single-city itinerary planning, they primarily focus on 6single-day or constraint-specific tasks, leaving a gap in addressing the more com-plex challenges of multi-day urban travel itinerary planning which requires a nuanced understanding of evolving user preferences. Only by bridging this gap can the resulting itineraries achieve practical usability and be genuinely adopted by users in real-world travel scenarios.To more clearly illustrate the distinctions between our work and oth-ers, as well as highlight our advantages, we have conducted a systematic comparison. As shown in Table 1, our approach explicitly considers and addresses multiple critical requirements of real-world travel that prior methods have failed to handle – this is also reflected in the experimental section. In this work,we concentrate on the diverse demands of users and develop a more flexible framework for the MUTIP problem. Our proposed method allows users to quickly obtain a personalized, high-quality itinerary that is both humanized and highly specific through a convenient natural language description. This method enhances the controllability and usability of existing approaches, more accurately aligning with user preferences and system constraints. 
+
+## 3 Preliminary 
+
+In this section, we define the Multi-day Urban Travel Itinerary Planning (MUTIP) problem and introduce the GRASP algorithm along with the LLM technique that underpins our framework. 
+
+3.1 Multi-day Urban Travel Itinerary Planning (Research Objective) 
+
+Given that urban travel often involves numerous complex POIs and should extend beyond a single day, we define the MUTIP problem. The objective is to select priori-tized POIs and generate multiple routes over several days based on the user’s demand description. Users express their travel planning demands Su through natural language, which may include specifying a target destination city Cu, requirements for POIs Pu,time constraints Tu, dining preferences Du, and other considerations. To accommodate these demands, a POI database for each city is constructed by integrating informa-tion from tourism platforms and relevant map service APIs, such as TripAdvisor 1 and Google Maps 2. Each POI p contains essential data, including its name np, type cp,description dp, geographical coordinates (latitude glat p and longitude glong p ), suggested visiting duration tvisit p , operating time window twindow open  
+
+> p
+
+, rating rp, and the number of ratings nrp. The travel time between two POIs ttraf f ic  
+
+> (p1,p 2)
+
+is also obtained through map services. The notations used in this paper, along with their corresponding descrip-tions, are summarized in Table 2 for clarity. Note that the user requirements we have listed are not mandatory; instead, the system default settings can be utilized in their absence. However, this paper focuses on addressing the critical issue of how to better accommodate users’ personalized needs once they are presented. 
+
+> 1https://www.tripadvisor.com/
+> 2https://developers.google.cn/maps
+
+7Table 2 : Summary of Notations 
+
+Symbol Description 
+
+Su User’s travel planning demands 
+
+Cu User-specified target destination city 
+
+Pu User’s requirements for Points of Interest (POIs) 
+
+Tu User’s time constraints for the itinerary 
+
+Du User’s dining preferences during the itinerary 
+
+k Total number of days of the itinerary specified by the user 
+
+p A point of interest (POI) 
+
+np Name of the POI pcp Category of the POI pdp Description of the POI pglat p , g long p Geographical coordinates (latitude and longitude) of the POI ptvisit p Suggested visiting duration for the POI ptwindow open  
+
+> p
+
+Operating time window of the POI prp Rating of the POI pnrp Number of ratings for the POI pttraf f ic    
+
+> (p1,p 2)
+
+Travel time between two POIs p1 and p2
+
+LPu Set of required (prioritized) POIs for the user 
+
+tstart u User’s desired or specified start time each day 
+
+tplan u Maximum planned travel time per day 
+
+tvisit  
+
+> (p,u )
+
+Recommended visiting time for each POI for a particular user uncu Total number of dining-related POIs per day 
+
+s(p,u ) Score of the POI p for a particular user u used for itinerary optimization 
+
+wu Visit duration compactness parameter for a particular user uRCL Restricted Candidate List used in GRASP for initial solution construction 
+
+RCL ∗ Refined Restricted Candidate List after applying fuzzy rule 
+
+Our goal is to develop a method that generates a specific multi-day travel itinerary, including a complete sequence of POIs for each day, with suggested arrival time and visiting duration. This itinerary must adhere to system constraints, such as POI Open-ing hours, while also satisfying user demands Su, such as preferences for specific types of attractions, personalized time management, and dietary needs, which are further classified into POI demands Pu, time constraints Tu, and dining demands Du. For POI demands Pu, we consider the required POIs LPu = {p1
+
+> u
+
+, p 2
+
+> u
+
+, ..., p lu} and the score of the n POIs in the database {s(p1,u ), s (p2,u ), ..., s (pn,u )} computed from rp, nrp and 
+
+LPu , which is detailed in Section 4.2.1 and formalized in Formula (4). For time con-straints Tu, we focus on the total number of days k specified, the user’s desired or specified start time each day tstart u , the maximum planned travel time per day tplan u ,and the recommended visiting time tvisit  
+
+> (p,u )
+
+for each POI p and a particular user u. For dining demands Du, we consider the total number of dining-related POIs per day ncu.
+
+3.2 Greedy Randomized Adaptive Search Procedure 
+
+The Greedy Randomized Adaptive Search Procedure (GRASP) (Silva & Sakallah, 1999) is an iterative heuristic algorithm that combines greedy strategies with random-ization techniques to find near-optimal solutions. The core concept of GRASP involves 8constructing an initial solution during each iteration, followed by improvement through local search. The algorithm consists of two main steps: 1. Solution Construction: In each iteration, the algorithm greedily selects an element from the candidate set to add to the current solution. This selection process employs a Restricted Candidate List (RCL) strategy, which considers only the top subset of candidates. The selection is repeated until a complete solution is achieved. In itinerary planning algorithms, a greedy strategy is typically employed to prioritize the insertion of POIs that result in the shortest increase in overall travel time. 2. Local Search: After constructing the initial solution, local search is employed to refine it, typically involving neighborhood operations such as swaps. Traditional GRASP typically optimizes a single metric, such as minimizing time. Recognizing the consistency between minimizing time and maximizing the total POI score objective, Expósito et al. (2019) introduced the Fuzzy-GRASP algorithm for itinerary planning. This algorithm employs a greedy time function to determine opti-mal solutions for each POI during the construction of RCL. Before randomly selecting an element from the RCL, the list is sorted by the POI scores sp and truncated to create a refined list RCL*. This fuzzy strategy prioritizes POIs with higher scores. Overall, the Fuzzy-GRASP process begins by generating an initial solution using a greedy heuristic strategy, followed by a local search to further optimize the solu-tion. In each iteration, a RCL is constructed, and a fuzzy rule is applied to filter it, yielding a refined list RCL*. From this refined list, a solution is randomly selected and subsequently optimized through neighborhood search techniques. By explicitly accounting for multiple essential real-world constraints inherent to itinerary planning (such as time windows) – this approach establishes a robust foundation that motivates our work. Our work draws inspiration from this approach and introduces enhance-ments aimed at improving itinerary optimization, increasing adaptability to diverse user preferences, and improving the efficiency of the algorithm. Specifically, in our enhanced based planning algorithm, we executed the Solution Construction and Local Search phases in an alternating manner several times: each time the solution construction is completed, the algorithm immediately proceeds to the local search phase to optimize the current solution. During local search, a more time-efficient sequence of solutions is identified, allowing the subsequent construc-tion phase to build upon the existing solution rather than restarting from scratch. This iterative process continues until a stopping criterion, such as a predefined num-ber of iterations or the attainment of a specific solution quality, is satisfied, thereby progressively converging toward a globally optimal solution. 
+
+## 4 Methodology 
+
+Fig. 2 illustrates the overall framework of our proposed method, named the User Demand-Oriented Itinerary Planner (UDOIP). This framework primarily comprises four key components: user requirements gathering, multi-source data integration, solu-tion architecture design, and final results delivery. To solve the MUTIP problem, our 9framework captures user preferences across three basic categories: POIs, time, and dining, and employs a dual-step LLM-based process for understanding personalized preferences. This process begins with LLMs interpreting user demands, followed by the application of a GRASP-based heuristic planner enhanced with constraint- and preference-aware strategies to generate practical and optimized multi-day travel plans that satisfy user-specific constraints within these categories. In this section, we introduce the two crucial modules of the framework: the LLM-based algorithm input generator and the GRASP-based planner for itinerary planning. Additionally, in the final subsection, we summarize all the methodological components and present the overall process of our framework. I'd like to plan a 6-day itinerary for acomprehensive and classic tour of Beijing ,with key stops at places like Tiananmen Square, Nanluoguxiang, and Shichahai .
+
+For dining, I prefer something standard. I plan to start each day at around 9 am and travel for no more than 12 hours daily, maintaining a normal schedule. 
+
+POI 
+
+Time 
+
+Dining 
+
+Natural Language Description of User Demands 
+
+LLMs 
+
+Optimized Fuzzy GRASP Algorithm JSON Function Parameters 
+
+POI Embedding Representation   
+
+> You are a trip time preference classifier that categorizes users' travel time preferences into one of six categories based on their itinerary planning needs: fast-paced, normal-paced, slow-paced, leisurely, high-intensity, and ultra-high-intensity style.
+> {{format_instructions}}
+
+POI Features Database  Generated Itinerary Result 
+
+Classification Fine-Tuning Layer (Second Layer) 
+
+Dual-Layer LLM-Based Algorithm Input Generator 
+
+Databases 
+
+Maps API  POI information platform 
+
+City POI 
+
+City 
+
+The number of days 
+
+The start and end times of a day 
+
+The number of meals to be eaten in a day 
+
+Time compactness 
+
+POIs which user want to visit 
+
+Overall Assignment Layer (First Layer)     
+
+> You are a dining preference classifier that categorizes users' dining preferences into one of two categories based on their itinerary planning needs: regular (e.g., two or three meals a day, home-style dishes) and gourmet (e.g., food exploration, specialty cuisine).
+> {{format_instructions}}
+> You serve as a translator between human language and itinerary planning algorithms , capable of accurately interpreting and extracting users' travel preferences to correspond with algorithm input parameters. Your job is to understand user requirements in a single step based on your existing knowledge (without seeking additional information) and provide appropriate function input parameters based on a single interaction. The user's destination is {{city name}} , and all Points of Interest (POIs) must be listed with complete and precise information in Chinese, without abbreviations. The output should not include any comments.
+> {{format_instructions}}
+
+Embedding Models 
+
+Databases  Candidate POIs 
+
+User preferences 
+
+POIs Score 
+
+Constraints of users  System constraints 
+
+Fuzzy GRASP algorithms 
+
+> several iterations
+
+POI sequence 
+
+Suggest arriving time series 
+
+Suggested visit time sequence 
+
+Fig. 2 : Framework of User Demand Oriented Itinerary Planner (UDOIP) 
+
+4.1 LLMs-based algorithms inputs generator 
+
+Before executing the planning algorithm, personalized input settings for each user are necessary. However, users often find complex function input configurations difficult to understand and tedious to set up individually. They prefer to describe their require-ments directly rather than adjust parameters one by one. Therefore, implementing a system that supports natural language input is crucial. One approach is to guide the LLM by defining the meaning and configuration rules for each input parameter, enabling it to generate algorithm inputs directly and integrate seamlessly with the system. However, when dealing with numerous input parameters, the LLM may struggle to accurately interpret specific parameters, even occasionally leading to misunder-standings. To address this challenge, we propose a dual-layer LLM framework, as shown in the upper right part of Fig. 2. The first layer, the overall assignment layer, generates values for all input parameters based on the user’s descriptions, covering both enumerated parameters (e.g., prioritized lists of POI) and fixed parameters (e.g., visit duration compactness parameter). The second layer, known as the classification 10 fine-tuning layer, provides macro-level oversight of the outputs from the first layer, categorizing user preferences in areas such as time and dining, and adjusting values that significantly deviate from expected ranges. This dual-layer approach preserves the fine-grained understanding of user preferences while reducing inaccuracies in param-eter comprehension, ultimately enhancing the model’s ability to accurately capture and respond to user demands. To furnish the itinerary planning algorithm with necessary input parameters, which will be elaborated on in Section 4.2, we leveraged the capabilities of LLM to identify requisite input parameters from the user’s natural language description. The detailed descriptions and types of the 7 main parameters relevant to user demands are summarized in Table 3. 
+
+Table 3 : Main algorithm input parameters                     
+
+> Preference Parameter Description Type
+> POI LPuSet of required (prioritized) POIs for the user enum
+> time
+> kTotal number of days of the itinerary specified by the user integer
+> wuVisit duration compactness parameter for a particular user u
+> decimal
+> tstart
+> uUser’s desired or specified start time each day datetime
+> tplan
+> uMaximum planned travel time per day (in hours) decimal dining min ncuMinimum number of dining-related POIs per day integer max ncuMaximum number of dining-related POIs per day integer
+
+Taking POI preferences as an example, the corresponding parameter is LPu , which could be empty as well. Since this parameter is of an enumerated type, it can be fully processed by the first layer of the LLM, without the need for further fine-tuning. For time preferences, the relevant parameters include tstart u , tplan u , and wu, whose usage is detailed in the next subsection. These parameters can be directly assigned val-ues by the first layer of the LLM according to each user query. In the second layer, user demands are classified into categories such as “fast-paced”, “normal-paced”, “slow-paced”, “leisure time”, “high-intensity time” and “ultra-high-intensity style”. For each category, normal ranges for the related parameters are predefined manually. If any parameter values generated by the first layer fall outside the typical range for the assigned category in the second layer, they are adjusted to align closer to the stan-dard range. For dining-related user preferences, a similar approach is applied. When users express a preference for exploring gourmet experiences, LLMs assist in adjusting min ncu and max ncu. Otherwise, the subsequent process follows the standard choices preferred by the majority of users. Detailed prompts are provided in Appendix B, and the complete process is outlined in Algorithm A.1 in Appendix A. As demonstrated in the experiments detailed in Section 5.2, integrating the second-layer LLM classifier significantly enhances the LLM’s capacity to accurately capture user preferences. 11 4.2 GRASP-based Planning Algorithms Candidate POIs          
+
+> Day 2
+> Day 1
+> Day 3
+> Geographic
+> clustering
+> +1h +1.5h +2.5h +4h
+> Formula
+> (1 - 4)
+> RCL
+> RCL*
+> ▲
+> Itinerary Construct Phase
+> 4.2 3.8 3.0
+> Time greedy
+> ▲
+> Local Search Phase
+> Formula
+> (6)
+> ……
+> Exchange optimization
+> Substitution strategies
+> Second iteration
+> Third
+> iteration
+> POI Time Dining City
+> POI embedding representation
+> User preferences
+
+1 2
+
+> First iteration
+
+3
+
+45
+
+> Optimal Result Choose
+
+Fig. 3 : Framework of GRASP-based Planning Algorithms Through the precise understanding of user preferences enabled by the aforemen-tioned LLMs, we obtained various variables that effectively represent user demands. However, directly outputting these results as itinerary planning outcomes poses sev-eral critical issues. The generated itineraries may violate system constraints, require substantial post-processing before they can be practically used by travelers, or even contain hallucinated entities that do not exist in the underlying database. This last issue is empirically demonstrated in Section 5.2. Therefore, in this section, we propose an enhanced approach to fulfilling the personalized needs of each user by extending the fundamental principles of the GRASP algorithm introduced in Section 3.2. By incor-porating user constraints into the framework, we have developed several extensions of GRASP that operates collaboratively to address diverse individual requirements. The detailed interplay and operation of the two main phases, along with the tailored enhancement strategies supplementing them, are meticulously described as follows to illustrate how they work together to ensure that user-specific constraints are seamlessly integrated into the design and implementation process. 
+
+4.2.1 Itinerary Construct Phase: 
+
+As shown in Fig. 3, in the MUTIP problem, the initial itinerary typically consists of k
+
+arrays, each representing the itinerary for a particular day. These arrays incorporate either a central hotel location or a user-specified hotel as the starting and ending 12 points. According to the GRASP algorithm, each iteration evaluates potential POIs using a greedy time-based approach to identify the optimal insertion point within the current itinerary, i.e., a position where inserting the POI causes the smallest increase in travel duration compared to other feasible positions. Each POI, paired with its best insertion position, is added to the RCL. Subsequently, the RCL is sorted based on the increasing time associated with each tuple, retaining only the RCL _SIZE 
+
+tuples. A tuple is then randomly selected from this sorted list, and the POI, along with its optimal insertion position, is inserted into the current itinerary. Following each insertion, previous position calculations may no longer be accurate, necessitating a reconstruction of the RCL and a continuation of the random selection process to fill the itinerary. This process repeats until no further POIs can be included—either because the maximum allowable playtime is reached or all POIs have been integrated. It is evident that tuples within the RCL have a high likelihood of being incorporated into the itinerary. Conversely, tuples with low user preference priorities, or those failing to meet user or system constraints, should be excluded from the RCL. Thus, constructing an effective RCL is essential to the algorithm’s success. In the Fuzzy GRASP algorithm, a key enhancement lies in constructing the RCL* by incorporating POI scores as an additional consideration, rather than relying solely on the minimal increase in travel time. One method involves directly employing average ratings sourced from online data as POI scores. However, this method may overlook popularity metrics and lack statistical significance when the number of rat-ings is low or limited. In addition, conventional scoring methods also fail to consider user preferences, resulting in suboptimal selections of POIs that do not align with user interests. Therefore, to comprehensively evaluate POI scores while incorporating user preferences, we propose the Personalized LLM-enhanced POI Scoring (PE-PS) method, which employs the following formulas: 
+
+emb p = LLM embedding (np + dp) (1) 
+
+emb u = Average ([ emb p1 
+
+> u
+
+, emb p2 
+
+> u
+
+, . . . , emb plu ]) (2) 
+
+sim (p,u ) = emb p · emb u
+
+∥emb p∥ · ∥ emb u∥ (3) 
+
+s(p,u ) = rp · log 2(nrp + 1) · sim (p,u ) (4) In this context, Formula (1) employs Large Language Models to embed perti-nent POI information, encompassing the POI name and description, into a high-dimensional representation. Next, Formula (2) computes each user’s representation by averaging the representations of POIs preferred by the user. Formula (3) calculates the cosine similarity between each user-POI pair, utilizing their corresponding repre-sentations. Finally, Formula (4) integrates the rating, the number of ratings, and the similarity score to ascertain the comprehensive score of each POI for any given user. This method allows the framework to more accurately rank POIs by not only consid-ering their popularity and ratings but also aligning with user preferences, thus solving the problem of selecting POIs that better match the user’s interests while accounting for varying levels of statistical significance in the ratings data. In this scenario, a spe-cific POI can exhibit diverse scores to various users. In our experiments in Section 5.4, we validated the effectiveness of PE-PS. 13 However, unconditionally placing all (POI, optimal insertion position) pairs with short additional travel time and high scores into the RCL* presents certain issues. For instance, prioritizing the insertion of sightseeing POIs may occupy most of the available restaurant hours, thereby failing to meet the user’s dining demands. Simi-larly, inserting POIs not explicitly mentioned by the user early in the process may result in insufficient time for more preferred POIs. Therefore, it is necessary to per-form an initial screening of candidate POIs before constructing the RCL*, based on the following conditions: 1. Priority should be given to satisfying the user’s minimum dining needs min ncu and preferred POIs LPu . When these two categories of demands are not satisfied at the initial stage, other unrelated POIs should not be inserted. 2. Evaluate whether the insertion of a POI exceeds the maximum daily travel time 
+
+tplan u . If it does not, assess whether the insertion fits within an available time window. If multiple windows are available, select the one with the shortest waiting time. 3. When the RCL* becomes empty, indicating that no additional POIs can be inserted into the current itinerary, the local search phase is immediately executed to assess whether the itinerary duration can be further minimized. This is followed by a new round of RCL* construction to verify if the RCL* remains empty. 4. If the RCL* is empty for two consecutive alternating loops, it is determined that user demands cannot be fully met. At this point, priority constraints are relaxed, allowing all POIs to be considered for insertion rather than only those in the initial priority list. Naturally, care must be taken to ensure that the number of restaurant-type POIs does not exceed the user’s expected maximum dining limit max ncu,along with other similar maximum-type constraints. Additionally, to better accommodate various real-world scheduling demands, we introduced a visit duration compactness parameter, wu, which correlates with the user’s preferences and is initialized by LLMs and dynamically adjusted throughout the GRASP process. When the total available time is evidently insufficient to satisfy the user’s desire to visit a larger number of POIs, this parameter is gradually reduced within a certain range to enable the user to visit more of their desired POIs. The relationship governing this adjustment is defined by Formula (5): 
+
+tvisit  
+
+> (p,u )
+
+= wu · tvisit p (5) We describe the detailed steps of this phase in Algorithm A.2 in Appendix A. These steps ensure that the POI selection process optimizes the overall travel experience by aligning with user preferences while ensuring practical constraints, such as maximum travel time of one day and open time windows of POIs. Consequently, the algorithm is capable of generating itineraries that are both feasible and aligned with the user’s priorities, minimizing the risk of time conflicts or unmet demands. 
+
+4.2.2 Local Search Phase: 
+
+During each iteration of the local search phase, the algorithm seeks to identify a locally optimal solution for the given itinerary plan. General algorithms predominantly relied 14 on a single greedy time-based strategy, neglecting the impact of the itinerary on the user’s experience during the actual travel process. Hence, to quantify the quality of a generated itinerary and improve user satisfaction, we introduce an optimization objective function that incorporates three critical factors: waiting time, optimal time window, and travel time. The optimization objective function is expressed as follows: 
+
+Flocal = (1 + ωstd + Nmis /N opt ) · (β · Wtotal + Ttotal ) , β ∈ [0 , 1] (6) Here, ωstd denotes the normalized standard deviation of waiting times, used to penalize variations in waiting time across POIs. Wtotal is the total waiting time, defined as the time the user must wait for a POI to open. This typically occurs when the user arrives before the POI’s opening hours. Reducing waiting time or averaging it are keys to minimizing idle periods in the itinerary. The travel time Ttotal refers to the total time spent traveling between POIs. Minimizing travel time is essential to improving the overall efficiency of the itinerary, as it reduces unnecessary commuting and allows users to spend more time at destinations. In this function, β is a hyperparameter that adjusts the relative importance of waiting time Wtotal in comparison to travel time 
+
+Ttotal , with values ranging between 0 and 1. The term Nmis represents the number of POIs where the visit does not align with the optimal time window, while Nopt denotes the total number of POIs that can be visited during their optimal windows. The optimal time window refers to the ideal time to visit a POI based on contextual factors, such as specific viewing times (e.g., sunrise/sunset point of time) or mealtimes for dining-related POIs. Aligning visits with these optimal windows ensures a higher-quality user experience by enhancing the enjoyment of POIs. The overall objective of the optimization function is to balance these three factors—waiting time, optimal time window alignment, and travel time—in order to generate a well-optimized itinerary that satisfies user demands while enhancing their actual travel experience. The complete algorithmic process for this phase can be found in Algorithm A.3 in Appendix A. It is worth noting that, as introduced in Section 3.2, this phase alternates a few times with the itinerary construction phase in our algorithm, which differs slightly in its formulation from the traditional GRASP algorithm. 
+
+4.2.3 Clustering and Substitution Strategies 
+
+Parts 2-3 of Fig. 3 presents the two phases described above. However, the current algorithm tends to generate homogeneous daily itineraries. To address this issue, we introduced a geographic clustering strategy before Parts 2-3 that groups POIs into 
+
+k clusters based on their locations, with each cluster assigned to different days. Part 1 of Fig. 3 illustrates this step, which ensures greater geographical diversity in the daily itineraries. However, this strategy poses challenges, such as when a large number of prioritized POIs are concentrated within a single cluster. This issue can make it challenging to visit all desired attractions in a single day, particularly if the itinerary strictly adheres to the clustering results. Such adherence could lead to potentially neglecting these attractions on subsequent days, despite the user having reserved additional time. 15 To mitigate this issue, we introduced priority and substitution strategies. The algorithm initially plans routes within clusters but allows for cross-cluster adjustments if the user’s prioritized POIs cannot be included in the itinerary due to clustering constraints. As shown in Part 4 of Fig. 3, when no further improvements can be made by adding new POIs, the algorithm attempts to replace non-essential POIs in the current route with unplanned POIs from other clusters. These replacements must involve POIs of the same type, meet system constraints and user constraints, and either be user-specified priority POIs or result in time savings exceeding a threshold 
+
+γ. By incorporating clustering and substitution strategies, the algorithm can achieve superior results in a shorter time, optimizing both the rationality of routes and the overall score objective. Algorithm A.4 in Appendix A illustrates this process. It is important to note that this strategy is not executed sequentially; rather, it is applied across various parts of the entire algorithmic process. 
+
+4.3 Overall Process of UDOIP 
+
+In previous sections, we explained the main components of the UDOIP framework. In this section, we summarize the overall workflow and improvements of our framework using pseudocode. We present the complete workflow of the framework in Algorithm 1, and the implementation details of specific steps are provided from Algorithms A.1 to A.4, which are not reiterated here. The only part of the algorithm not previously mentioned is the repeated iteration of the above process to find the optimal solution, as shown in Part 5 of Fig. 3. However, our method focuses on achieving better results with fewer iterations to ensure a seamless user experience in real-time software. Thus, this aspect is not a primary focus of our discussion, which is consistent with the experimental results presented in Section 5.3. We validate this algorithmic pipeline using two real world datasets, with a detailed description of the dataset provided in Section 5.1.1. 
+
+Algorithm 1 Algorithm of User Demand Oriented Itinerary Planner 
+
+Input: User natural language description, POI set retrieved from the database, time constraints, clustering threshold k, time threshold γ, max iterations max_iter, fixed iterations fixed_iter, RCL_SIZE, RCL*_SIZE 
+
+Output: Optimized itinerary based on user preferences and constraints  
+
+> 1:
+
+Step: Generate input parameters using LLMs  
+
+> 2:
+
+Call LLMs-based-Input Parameters-Generation(user_description) 
+
+(Algorithm A.1) to generate and fine-tune input parameters  
+
+> 3:
+
+Step: Clustering  
+
+> 4:
+
+Using Kmeans to group POIs based on geographic location  
+
+> 5:
+
+for iter ← 1 to max_iter do  
+
+> 6:
+
+Initialize current_itinerary as empty  
+
+> 7:
+
+for f _iter ← 1 to fixed_iter do  
+
+> 8:
+
+for each POI clustering set for each day do  
+
+> 9:
+
+Step: Itinerary Construction 
+
+16 10: Call Itinerary-Construct(POI_clustering_set, user_preferences, available_time, RCL_SIZE, RCL*_SIZE, cur-rent_itinerary) (Algorithm A.2) to update current_itinerary  
+
+> 11:
+
+Step: Substitution  
+
+> 12:
+
+if current_itinerary does not meet all user preferences then  
+
+> 13:
+
+Using Substitution Strategy (Algorithm A.4 Lines 3-8) to replace non-essential POIs from other clusters  
+
+> 14:
+
+end if  
+
+> 15:
+
+end for  
+
+> 16:
+
+Step: Perform Local Search to Improve Solution  
+
+> 17:
+
+Call Local-Search(current_itinerary) (Algorithm A.3) to itera-tively improve the solution  
+
+> 18:
+
+end for  
+
+> 19:
+
+if If the ∑
+
+> k∈K
+
+∑ 
+
+> i∈I
+
+s(p,u )i Y ki of the current_itinerary exceeds that of the previously best_itinerary then 
+
+(Here, Y ki is a binary decision variable indicating whether a POI is included in the itinerary. K represents the set of paths of all days, and I represents the set of all POIs in every path.)  
+
+> 20:
+
+Update best_itinerary by current_itinerary  
+
+> 21:
+
+end if  
+
+> 22:
+
+end for  
+
+> 23:
+
+Return the final best_itinerary generated from the above phases 
+
+## 5 Experiment 
+
+To validate the effectiveness of our proposed approach, we focus on addressing the following research questions: 
+
+RQ1 : Does our approach provide greater controllability and a deeper understand-ing of user preferences compared to representative LLM-based baseline? 
+
+RQ2 : With the addition of a dual-layer LLM architecture in UDOIP, can the method more distinctly differentiate the variations in user preferences compared to a single-layer approach? 
+
+RQ3 : Do the additional “clustering and substitution” strategy integrated into our method improve the coherence and humanization of the planning results? 
+
+RQ4 : Can embedding POIs using the LLM’s embedding model and calculating POI scores for specific users better align with user preferences? 
+
+RQ5 : Does our approach demonstrate clear and significant advantages over the recent leading reasoning model, DeepSeek-R1, when applied to real-world scenarios? Our experiments are designed in three main stages to address these questions. The experimental setup and results will be detailed in this section. 17 5.1 Experimental Setup 
+
+5.1.1 Foundation LLM and Datasets 
+
+To control for variability, we use a consistent LLM service (GLM-4-Air 3) for all LLM components in UDOIP and for the GLM-based LLM-only baseline. To reflect the current capability frontier of LLM-only planning, we additionally include strong state-of-the-art LLM-only baselines (DeepSeek-V3 and DeepSeek-R1) in RQ1–RQ2. RQ5 further provides a case study with DeepSeek-R1. The test datasets are derived from two major Chinese cities, Beijing and Tianjin, both of which are large cities but exhibit significant differences in cultural styles and POI distributions. Additionally, simulated real user demand data constructed based on defined rules by LLMs, which spans all preference categories considered by the algorithm, enabling comparative analysis of itinerary outcomes across different user preferences. The statistical details of the datasets are presented in Table 4 and Table 5, and specific data samples are provided in Appendix C 4.
+
+Table 4 : Numbers of POI Types in Beijing and Tianjin             
+
+> City Attr. Din. Acc. Total Beijing 104 390 200 694 Tianjin 68 390 200 658
+> Note: Attr. = Attraction, Din. = Dining, Acc. = Accommodation
+
+Table 5 : User Preference Data in Beijing and Tianjin City CTT DT PT Total Beijing 6 2 220 2640 Tianjin 6 2 200 2400 
+
+> Note: CTT =The number of covered time preference types , DT = The number of covered dining preference types, PT = The number of covered POI preference types, Total =The number of all user demands data
+
+5.1.2 Baselines and metrics 
+
+To align with the research objectives outlined from RQ1 to RQ4, we selected different baselines and evaluation metrics, which are introduced in detail below. To answer RQ1, we conducted a comparative study against representative SOTA baselines for MUTIP, selected based on the systematic comparison in Table 1. Specif-ically, we include (i) LLM baselines that directly generate multi-day itineraries from prompts, and (ii) an adapted solver-assisted baseline, PTS (Shao et al., 2025). For the LLM baselines, we keep the prompts consistent with our LLM-based preference 
+
+> 3https://zhipuai.cn/devday
+> 4Originally presented in Chinese but translated into English.
+
+18 extraction and only changing the output format. Detailed prompts are provided in Appendix D 5. For PTS, since our test dataset and application scenarios lack his-torical user review data and rely solely on natural language requirements, we adapt the framework to our setting. Specifically, we replace its review-history-dependent re-ranking component with LLM-extracted POI preference keywords matched against our POI database, while keeping the rest of the pipeline unchanged. Similarly, for RQ2, we use a structure that removes only the second LLM layer as an additional baseline, referred to in the subsequent results as UDOIP (LLM-single-layer). Three primary evaluation metrics were considered to assess the superior control-lability and preference understanding of our method: • Travel Days Satisfaction Failure Rate (Rdays ): This metric represents the pro-portion of itinerary plans that do not meet the user-specified number of travel days. • Average Total Itinerary Score (Savg ): The total score for a multi-day itinerary is calculated as the sum of the scores of all included Points of Interest (POIs): 
+
+Savg = 1
+
+N
+
+> N
+
+∑
+
+> i=1
+
+
+
+> Mi
+
+∑
+
+> j=1
+
+s(ij,u )
+
+ (7) where N is the number of itineraries, Mi is the number of POIs in the i-th itinerary, and s(ij,u ) is the score of the j-th POI in the i-th itinerary with respect to the user u associated with that itinerary. • Preference Variability Test Feature Value( H, Z, and p-value) : We employed the Kruskal-Wallis test (McKight & Najab, 2010) and Dunn’s test (Dinno, 2015) to evaluate the variability in results based on different categories of time and dining preferences, demonstrating the algorithm’s capability to capture user preferences. The Kruskal-Wallis test statistic is denoted as H with p-value p-value KW , and Dunn’s test statistic is denoted as Z with p-value p-value Dunn . A larger H and smaller p-value Dunn indicate our method produces more distinct outputs across preference categories than baselines, as quantified in Section 5.2. In order to enhance the algorithm’s ability to generate more rational paths within a shorter time frame, or even within a single iteration, we introduced a “clustering and substitution” strategy into the planning algorithm. The effectiveness of these strategies was evaluated using the metrics we developed below to validate RQ3: • Total Trip Distance (Dtotal ): This metric measures the total length of the planned route, calculated by summing the straight-line distances between consecutive points in the trip: 
+
+Dtotal =
+
+> n−1
+
+∑
+
+> i=1
+
+√(xi+1 − xi)2 + ( yi+1 − yi)2 (8) where (xi, y i) and (xi+1 , y i+1 ) are the coordinates of consecutive points. 
+
+> 5Originally presented in Chinese but translated into English.
+
+19 • Repeated Trip Distance (Drepeated ): This metric quantifies the length of routes traversed multiple times, often due to loops or overlapping paths: 
+
+Drepeated = ∑ min( di, d opposite ) (9) where di is the distance in one direction, and dopposite is the distance in the reverse direction. • Route Turns (θturns ): This metric assesses the number and magnitude of turns in the path, reflecting the route’s complexity and navigability: 
+
+θturns = ∑ |θi+1 − θi| (10) where θi and θi+1 are the angles of consecutive path segments. • Multi-day Trip Overlapping Area (Aoverlap ): This metric calculates the over-lapping geographical area across multiple trip days, indicating the geographical diversity of the routes: 
+
+Aoverlap = ∑ Ai − Aunion (11) where Ai is the area of a single trip region, and Aunion is the union area of all trip regions. • Time for N Iterations (Titer ): This metric represents the total time required (in seconds) for N iterations of itinerary planning, reflecting the algorithm’s computational efficiency: 
+
+Titer = tN (12) where tN is the total time needed for N iterations. Additionally, to better address RQ3, we compared our complete UDOIP framework with several variations below: 1. LLM-FGRASP, 1 Iteration 2. LLM-FGRASP, 2 Iterations 3. LLM-FGRASP with Clustering, 1 Iteration 4. LLM-FGRASP with Clustering, 2 Iterations 5. LLM-FGRASP with Clustering and Substitution, 1 Iteration (UDOIP) In the following subsections, we will sequentially present and analyze our experi-mental results. 
+
+5.2 Comparison Experiment (RQ1 RQ2) 
+
+As outlined in Section 5.1, we first compared our approach with representative LLM-based baselines. The experimental results, presented in Table 6, reveal that the LLM baselines frequently failed to meet user-specified travel days, indicating limited con-trollability. Additionally, its average total itinerary score was lower, primarily due to its insufficient capability in accurately filling schedules with appropriate POIs when users did not specify them. The values in parentheses in the Savg column repre-sent the estimated theoretical maximums. These are computed by filling in all POIs 20 Table 6 : Performance comparison between our UDOIP and representative SOTA baselines on Beijing and Tianjin datasets 
+
+Beijing 
+
+Savg ↑ Rdays ↓ H1 ↑ H2 ↑ H3 ↑ H4 ↑ H5 ↑
+
+LLM-only (GLM-4-Air) 83.63 (170.58) 0.064 83.05 109.92 1627.59 69.60 110.37 LLM-only (DeepSeek-V3) 102.84 (177.63) 0.042803 366.13 326.55 2411.46 438.98 337.91 LLM-only (DeepSeek-R1) 106.98 (201.06) 0.032197 267.93 232.91 2225.82 102.72 359.34 PTS (gpt-4o) 149.33 (-) 0 0.00 15.11 0.00 0.00 0.00 UDOIP (LLM-single-Layer) 194.91 (-) 0.0015 1083.03 320.00 2457.60 195.20 653.32 UDOIP (ours) 210.15 (-) 0.0015 1393.58 757.95 2419.93 401.87 841.86 Tianjin 
+
+Savg ↑ Rdays ↓ H1 ↑ H2 ↑ H3 ↑ H4 ↑ H5 ↑
+
+LLM-only (GLM-4-Air) 87.12 (150.62) 0.135 60.30 69.95 1185.83 28.61 49.93 LLM-only (DeepSeek-V3) 76.41 (167.04) 0.012083 138.58 150.45 2121.42 79.37 25.60 LLM-only (DeepSeek-R1) 97.37 (208.47) 0.027917 390.88 320.54 2083.71 74.98 77.49 PTS (gpt-4o) 129.17 (-) 0.04125 0.00 1.79 0.00 0.00 0.46 UDOIP (LLM-single-Layer) 208.15 (-) 0.0117 1345.42 333.36 2075.67 50.25 648.27 UDOIP (ours) 231.58 (-) 0.0117 1455.93 949.10 2060.75 596.35 698.10 
+
+Note: H1 - H under the average daily usage time, H2 - H under the average total daily tvisit p , H3
+
+- H under the average daily tstart u , H4 - H under tvisit p /t visit 
+
+> (p,u )
+
+, H5 - H under the number of dining type POIs. The numbers in parentheses within Savg denote the theoretical maximum values.                                  
+
+> !#   
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> ! "   ! 
+>    
+>       
+>          
+>  
+
+(a) Beijing                         
+
+> !#   
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> ! "   ! 
+>      
+>        
+>          
+>  
+
+(b) Tianjin 
+
+Fig. 4 : Ratio of Real-World POIs in DeepSeek-R1 Generated Results on Beijing and Tianjin Datasets under Varying Similarity Thresholds that could not be successfully matched with the database using the average value of those that could be matched. This estimation method can be validated through LLM hallucination experiments, as shown in Fig. 4. When evaluating DeepSeek-R1 – the best-performing model among LLM-only approaches – its outputs exhibit a validation success rate of less than 70%, even under a relatively low similarity threshold, indicat-ing a significant number of hallucinated POIs. Under reasonable similarity thresholds, the success rate drops below 50%. In contrast, UDOIP guarantees that 100% of the generated POIs correspond to real-world locations, which further highlights its advan-tages in terms of controllability and feasibility. Moreover, the PTS method, which uses a traditional solver and focuses on POI types and quantity constraints, success-fully eliminated or reduced day-count errors ( Rdays ) and achieved a higher Savg than 21 LLM baselines. However, its performance on preference alignment metrics ( H1 to H5)is near zero. This indicates that while PTS can fill a schedule with the required num-ber of POIs, it fails to optimize for route sequence, temporal habits, and nuanced user preferences. LLM-only (GLM-4-Air) (Beijing) 
+
+> UDOIP (LLM-single-layer) (Beijing)
+> UDOIP (ours) (Beijing)
+> LLM-only (GLM-4-Air) (Tianjin)
+> UDOIP (LLM-single-layer)
+> (Tianjin)
+> UDOIP (ours) (Tianjin)
+> 1:fast-paced · 2:normal-paced · 3:slow-paced · 4:leisure-time · 5:high-intensity-time · 6:ultra-high-intensity-style
+
+Fig. 5 : Heatmaps of P-values ( p-value Dunn under tvisit p /t visit p,u ) for Beijing and Tianjin Datasets (All Comparisons Are Conducted Using the GLM-4-Air Model) Regarding preference extraction, our proposed LLM-based approach demonstrated higher test feature values in the preference variability test, which are presented in Table 6. While our method achieved the best performance across most dimen-sions, discerning performance distinctions becomes challenging when multiple methods maintain consistently high values. To address this, we further analyzed inter-category preference differences using Dunn’s test, as illustrated in Fig. 5 and Fig. 6 6. This indi-cates that UDOIP more effectively highlights the variability in results across different preference categories. Both tests were employed to assess the statistical significance of differences among these categories, and the higher values observed in our approach confirm its ability to capture and differentiate between distinct preference patterns with greater clarity. Moreover, as shown in Fig. 6, even advanced LLMs can only dis-tinguish between trip categories with obvious semantic features, while ignoring many potential or less apparent feature requirements in user expressions. This is not what users expect to see. 
+
+> 6
+
+More relevant results can be found in Appendix E. 
+
+22 LLM-only (DeepSeek-V3) (Beijing) 
+
+> UDOIP (ours) (Beijing)
+> LLM-only (DeepSeek-V3) (Tianjin)
+> 1:fast-paced · 2:normal-paced · 3:slow-paced · 4:leisure-time · 5:high-intensity-time · 6:ultra-high-intensity-style
+> LLM-only (DeepSeek-R1) (Beijing)
+> LLM-only (DeepSeek-R1) (Tianjin)
+> UDOIP (ours) (Tianjin)
+
+Fig. 6 : Heatmaps of P-values ( p-value Dunn under tvisit p /t visit p,u ) for Beijing and Tianjin Datasets (Comparing with DeepSeek Models) Additionally, we incorporated a second LLM classification layer to fine-tune incor-rect inputs in our proposed method. When this second layer was removed, the result is shown in Table 6. For instance, regarding time compactness, as shown in Fig. 5, the single-layer method struggled to distinguish between slow-paced and highly time-intensive preferences, which should have shown clear differences actually. Although the complete UDOIP method cannot fully distinguish between similar concept pairs such as “3: slow-pace” and “4: leisure-time”, it outperforms the other two methods entirely when applied to type groups with significant differences. 
+
+5.3 Ablation Experiment (RQ3) 
+
+The results of ablation study in Table 7 compare the performance metrics of vari-ous LLM-FGRASP model variants, including the basic LLM-FGR with one and two iterations, LLM-FGR+C (clustering addition) with one and two iterations, and LLM-FGR+CS, which incorporates both clustering and substitution, also referred to as the complete UDOIP framework. Each variant introduces specific modifications aimed at improving the planning efficiency within a short time frame, reducing overlapping areas in multi-day itineraries, and minimizing detours in single-day itineraries. In particular, the clustering strategy (denoted as “C” in LLM-FGR+C) shows notable improvements in Aoverlap by grouping POIs that are spatially or tempo-rally closer, which minimizes redundant travel. However, in the case of Tianjin, the improvement on Savg remains minimal, and some scores even decline, suggesting that clustering alone may not fully optimize the routing in this specific context. The 23 Table 7 : Performance Metrics Comparison for LLM-FGRASP Variants in Beijing and Tianjin 
+
+Beijing 
+
+Savg ↑ Dtotal ↓ Drepeated ↓ θturns ↓ Aoverlap ↓ Titer (s) ↓• LLM-FGR, 1Iter 194.59 0.3 0.0488 1.91 0.002254 1.11 LLM-FGR, 2Iter 197.51 0.3 0.0492 1.91 0.002241 2.15 LLM-FGR+C, 1Iter 202.59 0.28 0.048 1.95 0.001044 1.30 
+
+▲ LLM-FGR+C, 2Iter 206.76 0.28 0.0493 1.94 0.000996 1.53 LLM-FGR+CS (ours), 1Iter 210.15 0.25 0.0452 1.86 0.001012 1.05 
+
+• Improvement-original 8.00% 16.67% 7.38% 2.62% 55.12% 5.41% 
+
+▲ Improvement-suboptimal 1.64% 10.71% 8.32% 4.12% -1.58% 31.37% 
+
+Tianjin 
+
+Savg ↑ Dtotal ↓ Drepeated ↓ θturns ↓ Aoverlap ↓ Titer (s) ↓• LLM-FGR, 1Iter 230.06 0.64 0.2196 1.86 0.002178 1.03 
+
+▲ LLM-FGR, 2Iter 233.70 0.63 0.217 1.86 0.002257 1.87 LLM-FGR+C, 1Iter 226.26 0.56 0.1628 1.9 0.000792 1.28 LLM-FGR+C, 2Iter 229.96 0.56 0.1621 1.9 0.000879 1.52 LLM-FGR+CS (ours), 1Iter 231.58 0.52 0.1344 1.84 0.000631 1.02 
+
+• Improvement-original 0.66% 18.75% 38.80% 1.08% 71.05% 0.97% 
+
+▲ Improvement-suboptimal -0.91% 17.46% 38.06% 1.08% 72.06% 45.45%   
+
+> Note: LLM-FGR refers to the LLM-based FGRASP method; “+C” denotes the addition of clustering; “+CS” signifies the inclusion of both clustering and substitution; “Iter” stands for iterations; “Improvement” indicates improvement over the original method or the suboptimal approach measuring by Savg .
+
+inclusion of substitution (denoted as “CS” in LLM-FGR+CS) further enhances perfor-mance by allowing the replacement of less relevant POIs with alternatives that better satisfy user constraints. Notably, the complete UDOIP framework (LLM-FGR+CS) achieves the highest computational efficiency, yielding the shortest Titer while pro-viding comprehensive metric improvements within a single iteration, outperforming multi-iteration baselines. To interpret the performance gains, we provide two types of comparisons: one with the original results and another with suboptimal results. The improvement over the original results is assessed relative to the initial configuration without clustering and substitution. For the suboptimal comparison, we measure against the highest 
+
+Savg score across all other models, rather than selecting the second-best values for each individual metric. This approach ensures consistency by comparing with a single suboptimal baseline rather than varying targets across metrics. As indicated in Table 7, the LLM-FGR+CS (UDOIP) model achieves the most significant improvements across nearly all metrics in Beijing. In Tianjin, while its Savg 
+
+is second to the 2-iteration basic variant, it reaches the best values in all spatial con-straints ( Dtotal , Aoverlap , etc.) with the lowest computational cost. This demonstrates the model’s effectiveness in balancing computational efficiency and solution feasibility, thereby yielding routes that are not only efficient but also practically implementable. 24 5.4 Case Study (RQ4 RQ5) 
+
+We have introduced PE-PS in section 4.2 to integrate personalized user preferences into traditional planning algorithms. To test the effectiveness of using this method to align with user preferences, we compared the results of the complete model with those of a model excluding PE-PS to address the differences under two distinct user requirements, as shown in Fig. 7. UDOIP (ours )
+
+UDOIP without PE -PS 
+
+Differences 
+
+The Zhang Xueliang Former Residence offers a diverse 
+
+cultural experience by combining a Baroque -style historic 
+
+mansion with a massive immersive miniature district 
+
+recreating 1920 s Tianjin . It perfectly suits a relaxed itinerary ,
+
+allowing visitors to explore authentic century -old artifacts ,
+
+learn about Chinese history , and enjoy traditional folk arts 
+
+like cross -talk and magic shows in one central location .
+
+Zhang 
+
+Xueliang 's
+
+Former 
+
+Residence 
+
+The Haihe Cultural Square embodies a simple and profound 
+
+beauty , and is based on the ancient cultural street ,
+
+combined with modern architectural art style , and fully utilizes 
+
+the lighting landscape effect ,achieving the promotion and 
+
+innovation of historical culture .
+
+Haihe Cultural 
+
+Square 
+
+Differences 
+
+The area of Jing Yuan is approximately 3,016 square meters ,
+
+and its construction area is 1,900 square meters . There is a 
+
+brick and wood structure building in the garden , which is of 
+
+Spanish architectural style , with elements of Japanese 
+
+wooden architecture incorporated .
+
+Jing Yuan 
+
+Jinwan Square is located in the center of Tianjin , opposite the 
+
+railway station , right at a river bend on the riverbank . It is also 
+
+one of the bustling areas in the Tianjin urban area , so Jinwan 
+
+Square has become a great place to enjoy the cityscape of 
+
+Tianjin .
+
+Jinwan Square 
+
+During the three -day journey , I hope to experience the diversity of 
+
+humanistic , historical and cultural elements , taste regular delicacies ,
+
+and have a moderately relaxed itinerary . The schedule starts at 9 a.m.
+
+each day and lasts for about 12 hours .
+
+I plan a 4-day slow -paced trip , aiming to experience family -friendly 
+
+activities , diverse cultures and a comprehensive vacation atmosphere .
+
+The specific itinerary includes visiting the Fifth Avenue , Tianjin Polar 
+
+Ocean Park , Tianjin Eye Ferris Wheel and Nanjing Street Food Market ,
+
+while enjoying regular meals .
+
+UDOIP (ours )
+
+UDOIP without PE -PS 
+
+1 2
+
+Differences 
+
+The Haihe River flows through the urban area of Tianjin and is 
+
+the mother river of the city . On both sides are the bustling 
+
+districts of Tianjin , where many elegant historical buildings are 
+
+concentrated . Western and Chinese styles , classic and 
+
+prosperous elements blend together , creating a romantic 
+
+landscape . Strolling , sightseeing or taking a boat ride here 
+
+is all very enjoyable .
+
+Haihe River 
+
+Xiaobailou Music Square is composed of an above -ground 
+
+concert hall , a French -style garden square and three 
+
+underground floors . The area of the square 's ground surface is 
+
+9,000 square meters . It is equipped with facilities such as 
+
+lounge seats , landscape lights and fountains .
+
+Xiaobailou 
+
+Music Square 
+
+Differences 
+
+The former site of Qingguan Mansion was built in 1922 and 
+
+was originally a private residence designed and constructed 
+
+by the eunuch Xiao Dizhang during the late Qing Dynasty . In 
+
+1926 , Prince Qing Zhen , the eldest son of the Qing Dynasty ,
+
+purchased it and renamed it Qingguan Mansion .
+
+Qingguan 
+
+Mansion 
+
+Built in 1927 , the Liberation Bridge is a landmark all -steel 
+
+opening bridge across the Haihe River . It connects Century 
+
+Clock Square to Liberation North Road , serving as a vital 
+
+historic link in the city 's architecture .
+
+Jiefang Bridge 
+
+Fig. 7 : Comparison of Two Users’ Itinerary Planning: UDOIP Versus UDOIP without PE-PS For the user requirements on the left, the complete UDOIP’s recommendations of Zhang Xueliang’s Former Residence and Haihe Cultural Square better align with the user’s interests in humanistic and historical diversity. Zhang Xueliang’s Former Resi-dence offers a profound exploration of 1920s Tianjin and Chinese history through its artifacts and traditional folk arts, which is more suited to the user’s request for cul-tural depth compared to Jing Yuan, which focuses more on architectural descriptions. Similarly, Haihe Cultural Square emphasizes the heritage of ancient cultural streets and historical innovation, providing a stronger sense of cultural immersion than the more visually-oriented Jinwan Square. The user preferences illustrated on the right emphasize family-friendly activities and a comprehensive vacation atmosphere. In the complete UDOIP model, Haihe River and Xiaobailou Music Square are selected as representative POIs. The Haihe River offers sightseeing boat rides and strolling experiences that are ideal for family-friendly vacations, while Xiaobailou Music Square provides a relaxed atmosphere with its fountains, landscape lights, and lounge seats. In contrast, after removing the PE-PS module, these were replaced by Qingguan Mansion, which focuses on private residence 25 history, and Jiefang Bridge, a landmark architectural link, both of which align less closely with the user’s desire for a family-oriented vacation vibe. This demonstrates that using PE-PS allows for a more effective alignment with user preferences, addressing the limitations of relying solely on fixed scores to retrieve POIs. In addition, to demonstrate the clear advantages of our approach, we conducted comparative experiments using real-world user requirements as inputs for both our method and DeepSeek-R1, which demonstrated the best performance in prior exper-iments. The outputs of both models were visualized on Google Maps 7 to mark the POIs and routes, providing a direct comparison of the results, as shown in Fig. 8. During the three -day journey , I hope to experience the diversity of humanistic , historical and cultural elements , taste regular delicacies , and have a 
+
+moderately relaxed itinerary . The schedule starts at 9 a.m. each day and lasts for about 12 hours .Results 
+
+Corresponding Route Planning Design User Preferences 
+
+1. Xiabu Xiabu (Tianjin New World Store )
+
+2. Maison FLO French Restaurant (Guangfudao Pedestrian Street Branch )
+
+3. Must -try Seafood · Braised Mackerel Dumplings (Binjiang Road Store )
+
+4. Kangle Recreation Center 5. La Sancheng Hot Pot (Tianjin Headquarters )…
+
+Regular Delicacies 
+
+1. Haihe River 
+
+2. People 's Park 
+
+3. Five Great Avenues 
+
+Humanistic 
+
+Preference 
+
+1. Ancient Culture Street 
+
+2. Drum Tower 
+
+3. Former Residence of Zhang Xueliang 
+
+4. Liberation Bridge 
+
+Historical 
+
+Preference 
+
+1. Italian -style Tourism Area 
+
+2. Tianjin Museum 
+
+3. Haihe Cultural Square 
+
+4. Porcelain House 
+
+Cultural 
+
+Preference 
+
+JI Hotel (Tianjin Binjiang Road Geely Building Branch )
+
+Day 1: 20 :32 Day 2: 20 :28 Day 3: 19 :50 
+
+Accommodation 
+
+Schedule 
+
+Corresponding Route Planning Design User Preferences 
+
+1. Tianjin Wei Old -Style Restaurant 
+
+2. Tianjin Seafood Grand Restaurant 3. Tianjin Old -Style Fried Cake Shop 
+
+4. Goubuli Baozi (Shandong Road Headquarter )
+
+5. Erduoyan Fried Cake (Headquarter ) 6. Tianjin Roast Duck Restaurant 
+
+Regular Delicacies 
+
+1. Haihe River Scenic Belt 
+
+2. Nankai University 
+
+Humanistic 
+
+Preference 
+
+1. Tianjin Ancient Culture Street 
+
+2.Ancient Culture Street 
+
+3. Drum Tower 
+
+Historical 
+
+Preference 
+
+1. Italian -style Tourism Area 
+
+2. Five Great Avenues Tourist Area 
+
+3. Tianjin Museum 
+
+Cultura 
+
+Preference 
+
+Tianjin Astor Hotel 
+
+Day 1: 20 :50 Day 2: 21 :00 Day 3: 21 :00 
+
+Accommodation 
+
+Schedule 
+
+DeepSeek -R1UDOIP (ours )
+
+Fig. 8 : Comparison of Three-Day Itinerary Planning: UDOIP Versus Deepseek-R1 Results As illustrated in Fig. 8, we compare the planning results of UDOIP and DeepSeek-R1 for a three-day itinerary. In terms of spatial organization, UDOIP exhibits superior geographical awareness; its multi-day routes show distinct regional clusters (First Day in blue, Second Day in yellow, and Third Day in purple), with minimal overlapping or backtracking within each single-day itinerary. In contrast, DeepSeek-R1 demonstrates limited spatial awareness, resulting in overlapping geographic areas across different days and significant detours, which increases unnecessary travel time for users. 
+
+7http://www.google.com/maps/ 
+
+26 Regarding generation accuracy, UDOIP ensures 100% POI feasibility by retriev-ing data from a validated real-world database. However, DeepSeek-R1 suffers from significant ”hallucinations.” As indicated by the underlined entries in the compari-son table, it generated three fabricated – spurious entries that render the generated itinerary unusable in practice. Furthermore, in terms of scheduling, UDOIP provides much higher precision, accu-rately calculates travel times between POIs and provides specific accommodation arrival times (e.g., 20:32, 20:28). Conversely, DeepSeek-R1 provides vague text-based outputs based solely on user descriptions, failing to account for actual traffic con-ditions or venue opening hours, resulting in a less realistic schedule (e.g., simplified 21:00 deadlines). Lastly, in terms of computational efficiency, DeepSeek-R1 required an average of 44.92 seconds over ten runs to generate results, whereas UDOIP completed the task in just 3.63 seconds on average across the same ten executions, demonstrating significantly faster performance. At the same time, our framework only relies on a small set of parameters from the LLM to achieve highly controllable results, making it more cost-effective while ensuring greater reliability, which makes it well-suited for commercial use. 
+
+## 6 Conclusion 
+
+This paper studies multi-day urban travel itinerary planning (MUTIP) in real-world settings, where solutions must jointly satisfy spatiotemporal constraints and diverse user preferences, while remaining practical for interactive use. We present UDOIP, a hybrid framework that uses a dual-layer LLM pipeline to translate natural-language requests into structured algorithm inputs, and a preference-aware heuristic planner to produce feasible multi-day itineraries. Experiments on two real-world city datasets and a case study with DeepSeek-R1 show that UDOIP improves controllability, preference alignment, and planning efficiency compared with representative LLM-based baselines. In future work, we plan to extend the framework to broader domains and incorporate more flexible preference sources and open-domain data. 
+
+## References 
+
+Bertsimas, D., & Tsitsiklis, J. (1993). Simulated annealing. Statistical science , 8(1), 10–15. https://doi.org/10.1214/ss/1177011077 Bianchessi, N., Mansini, R., & Speranza, M. G. (2018). A branch-and-cut algorithm for the team orienteering problem. Int. Trans. Oper. Res. , 25 (2), 627–635. https://doi.org/10.1111/ITOR.12422 Brilhante, I. R., de Macêdo, J. A. F., Nardini, F. M., Perego, R., & Renso, C. (2015). On planning sightseeing tours with tripbuilder. Inf. Process. Manag. , 51 (2), 1–15. https://doi.org/10.1016/J.IPM.2014.10.003 de la Rosa, T., Gopalakrishnan, S., Pozanco, A., Zeng, Z., & Borrajo, D. (2024). TRIP-PAL: travel planning with guarantees by combining large language models and automated planners. CoRR , abs/2406.10196 . https://doi.org/10.48550/ ARXIV.2406.10196 27 DeepSeek-AI, Guo, D., Yang, D., Zhang, H., Song, J., Zhang, R., Xu, R., Zhu, Q., Ma, S., Wang, P., Bi, X., Zhang, X., Yu, X., Wu, Y., Wu, Z. F., Gou, Z., Shao, Z., Li, Z., Gao, Z., … Zhang, Z. (2025). Deepseek-r1: Incentivizing reasoning capability in llms via reinforcement learning. CoRR , abs/2501.12948 . https: //doi.org/10.48550/ARXIV.2501.12948 Derya, T., Atalay, K. D., Dinler, E., & Keçeci, B. (2024). Selective clustered tourist trip design problem with time windows under intuitionistic fuzzy score and exponential travel times. Expert Syst. Appl. , 255 , 124792. https://doi.org/10. 1016/J.ESWA.2024.124792 Dinno, A. (2015). Nonparametric pairwise multiple comparisons in independent groups using dunn’s test. The Stata Journal , 15 (1), 292–300. Expósito, A., Mancini, S., Brito, J., & Moreno, J. A. (2019). A fuzzy GRASP for the tourist trip design with clustered pois. Expert Syst. Appl. , 127 , 210–227. https://doi.org/10.1016/J.ESWA.2019.03.004 Filho, A. A., & Morabito, R. (2024). An effective approach for bi-objective multi-period touristic itinerary planning. Expert Syst. Appl. , 240 , 122437. https : //doi.org/10.1016/J.ESWA.2023.122437 Gavalas, D., Konstantopoulos, C., Mastakas, K., & Pantziou, G. E. (2014). A sur-vey on algorithmic approaches for solving tourist trip design problems. J. Heuristics , 20 (3), 291–328. https://doi.org/10.1007/S10732-014-9242-5 Gundawar, A., Verma, M., Guan, L., Valmeekam, K., Bhambri, S., & Kambhampati, S. (2024). Robust planning with llm-modulo framework: Case study in travel planning. CoRR , abs/2405.20625 . https://doi.org/10.48550/ARXIV.2405. 20625 Halder, S., Lim, K. H., Chan, J., & Zhang, X. (2024). A survey on personalized itinerary recommendation: From optimisation to deep learning. Appl. Soft Comput. , 152 , 111200. https://doi.org/10.1016/J.ASOC.2023.111200 Hao, Y., Chen, Y., Zhang, Y., & Fan, C. (2025). Large language models can solve real-world planning rigorously with formal verification tools. Proceedings of the 2025 Conference of the Nations of the Americas Chapter of the Association for Computational Linguistics: Human Language Technologies, NAACL 2025 - Volume 1: Long Papers, Albuquerque, New Mexico, USA, April 29 - May 4, 2025 , 3434–3483. https://doi.org/10.18653/V1/2025.NAACL-LONG.176 Hu, W., Fathi, M., & Pardalos, P. M. (2018). A multi-objective evolutionary algorithm based on decomposition and constraint programming for the multi-objective team orienteering problem with time windows. Appl. Soft Comput. , 73 , 383– 393. https://doi.org/10.1016/J.ASOC.2018.08.026 JU, D., Jiang, S., Cohen, A., Foss, A., Mitts, S., Zharmagambetov, A., Amos, B., Li, X., Kao, J. T., Fazel-Zarandi, M., & Tian, Y. (2024). To the globe (TTG): towards language-driven guaranteed travel planning. CoRR , abs/2410.16456 .https://doi.org/10.48550/ARXIV.2410.16456 Kambhampati, S., Valmeekam, K., Guan, L., Verma, M., Stechly, K., Bhambri, S., Saldyt, L., & Murthy, A. (2024). Position: Llms can’t plan, but can help planning in llm-modulo frameworks. Forty-first International Conference on Machine Learning, ICML 2024, Vienna, Austria, July 21-27, 2024 .28 Kolaee, M. H., Jabbarzadeh, A., & Al-e-hashem, S. M. J. M. (2024). Sustainable group tourist trip planning: An adaptive large neighborhood search algorithm. 
+
+Expert Syst. Appl. , 237 (Part B), 121375. https://doi.org/10.1016/J.ESWA. 2023.121375 Liao, Z., & Zheng, W. (2018). Using a heuristic algorithm to design a personalized day tour route in a time-dependent stochastic environment. Tourism Man-agement , 68 , 284–300. https : / / doi . org / 10 . 1016 / J . TOURMAN . 2018 . 03 . 012 Lin, S., & Yu, V. F. (2017). Solving the team orienteering problem with time windows and mandatory visits by multi-start simulated annealing. Comput. Ind. Eng. ,
+
+114 , 195–205. https://doi.org/10.1016/J.CIE.2017.10.020 McKight, P. E., & Najab, J. (2010). Kruskal-wallis test. The corsini encyclopedia of psychology , 1–1. https://doi.org/10.1002/9780470479216.corpsy0491 Ning, Y., Liu, R., Wang, J., Chen, K., Li, W., Fang, J., Zheng, K., Tan, N., & Liu, H. (2025). Deeptravel: An end-to-end agentic reinforcement learning framework for autonomous travel planning agents. CoRR , abs/2509.21842 . https://doi. org/10.48550/ARXIV.2509.21842 OpenAI. (2025). Introducing gpt-5. https://openai.com/index/introducing- gpt- 5/ [Accessed 11 February 2026]. Orabi, M., Afyouni, I., & Aghbari, Z. A. (2025). Tourpie: Empowering tourists with multi-criteria event-driven personalized travel sequences. Inf. Process. Manag. , 62 (3), 103970. https://doi.org/10.1016/J.IPM.2024.103970 Paulavicius, R., Stripinis, L., Sutaviciute, S., Kocegarov, D., & Filatovas, E. (2023). A novel greedy genetic algorithm-based personalized travel recommendation system. Expert Syst. Appl. , 230 , 120580. https://doi.org/10.1016/J.ESWA. 2023.120580 Pitakaso, R., Srichok, T., Khonjun, S., Gonwirat, S., Nanthasamroeng, N., &Boonmee, C. (2024). Multi-objective sustainability tourist trip design: An innovative approach for balancing tourists’ preferences with key sustainabil-ity considerations. Journal of Cleaner Production , 449 , 141486. https://doi. org/10.1016/j.jclepro.2024.141486 Piya, S., Triki, C., Maimani, A. A., & Mokhtarzadeh, M. (2023). Optimization model for designing personalized tourism packages. Comput. Ind. Eng. , 175 , 108839. https://doi.org/10.1016/J.CIE.2022.108839 Rezki, H., & Aghezzaf, B. (2018). λ-grasp with bi-directional path relinking for the bi-objective orienteering problem. International Journal of Logistics Systems and Management , 29 (4), 455–475. https://doi.org/10.1504/IJLSM.2018.090473 Ruiz-Meza, J., Brito, J., & Montoya-Torres, J. R. (2021). Multi-objective fuzzy tourist trip design problem with heterogeneous preferences and sustainable itineraries. Sustainability , 13 (17), 9771. https://doi.org/10.3390/su13179771 Shao, Z., Wu, J., Chen, W., & Wang, X. (2025). Personal travel solver: A preference-driven llm-solver system for travel planning. Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers), ACL 2025, Vienna, Austria, July 27 - August 1, 2025 , 27622–27642. 29 Silva, J. P. M., & Sakallah, K. A. (1999). GRASP: A search algorithm for propositional satisfiability. IEEE Trans. Computers , 48 (5), 506–521. https://doi.org/10. 1109/12.769433 Tang, Y., Wang, Z., Qu, A., Yan, Y., Wu, Z., Zhuang, D., Kai, J., Hou, K., Guo, X., Zhao, J., Zhao, Z., & Ma, W. (2024). Itinera: Integrating spatial optimization with large language models for open-domain urban itinerary planning. Pro-ceedings of the 2024 Conference on Empirical Methods in Natural Language Processing: EMNLP 2024 - Industry Track, Miami, Florida, USA, Novem-ber 12-16, 2024 , 1413–1432. https://doi.org/10.18653/V1/2024.EMNLP-INDUSTRY.104 Tlili, T., & Krichen, S. (2021). A simulated annealing-based recommender system for solving the tourist trip design problem. Expert Syst. Appl. , 186 , 115723. https://doi.org/10.1016/J.ESWA.2021.115723 Urrutia-Zambrana, A., Tirado, G., & Mateos, A. (2021). Variable neighborhood search to solve the generalized orienteering problem. Int. Trans. Oper. Res. , 28 (1), 142–167. https://doi.org/10.1111/ITOR.12800 Valmeekam, K., Stechly, K., & Kambhampati, S. (2024). Llms still can’t plan; can lrms? A preliminary evaluation of openai’s o1 on planbench. CoRR ,
+
+abs/2409.13373 . https://doi.org/10.48550/ARXIV.2409.13373 Vansteenwegen, P., Souffriau, W., & Oudheusden, D. V. (2011). The orienteering problem: A survey. Eur. J. Oper. Res. , 209 (1), 1–10. https://doi.org/10. 1016/J.EJOR.2010.03.045 Verbeeck, C., Vansteenwegen, P., & Aghezzaf, E. (2016). Solving the stochastic time-dependent orienteering problem with time windows. Eur. J. Oper. Res. ,
+
+255 (3), 699–718. https://doi.org/10.1016/J.EJOR.2016.05.031 Xie, J., Zhang, K., Chen, J., Zhu, T., Lou, R., Tian, Y., Xiao, Y., & Su, Y. (2024). Travelplanner: A benchmark for real-world planning with language agents. Forty-first International Conference on Machine Learning, ICML 2024, Vienna, Austria, July 21-27, 2024 .Yhee, Y., Shin, S., Lee, E., & Kim, J. (2023). Examining the importance of spatial aspects of travel routes: A multi-method approach. Inf. Process. Manag. ,
+
+60 (3), 103281. https://doi.org/10.1016/J.IPM.2023.103281 Zhou, X., Peng, J., Wen, B., & Su, M. (2023). Tour route recommendation model by the improved symmetry-based naive bayes mining and spatial decision forest search. Symmetry , 15 (12), 2168. https://doi.org/10.3390/SYM15122168 30 A Algorithms 
+
+In this section, we provide the complete pseudocode for the method described in Sections 4.1-4.2. 
+
+Algorithm A.1 LLMs-based Input Parameters Generation Framework 
+
+Input: User natural language description 
+
+Output: input parameters relevant to user preferences  
+
+> 1:
+
+Layer 1: Overall Assignment Layer  
+
+> 2:
+
+Generate initial input parameters from user description using Layer 1 LLM 
+
+(e.g., prioritized POI list, dining preferences, time settings)  
+
+> 3:
+
+Layer 2: Classification Fine-tuning Layer  
+
+> 4:
+
+Classify user preferences into categories that exhibit distinct preferences. 
+
+(e.g., “fast-paced”, “normal-paced”, “slow-paced”)  
+
+> 5:
+
+Retrieve predefined acceptable ranges for each category  
+
+> 6:
+
+if any parameter values are outside the typical range then  
+
+> 7:
+
+Adjust parameters to fall within the acceptable range  
+
+> 8:
+
+end if  
+
+> 9:
+
+Return the final input parameters 
+
+Algorithm A.2 Itinerary Construct Phase 
+
+Input: POI set retrieved from the database, user preferences, available time, size of RCL RCL _SIZE , size of RCL* RCL ∗_SIZE , current itinerary I
+
+Output: Updated itinerary I 
+
+> 1:
+
+if I is empty then  
+
+> 2:
+
+Initialize I by appending a hotel-type POI twice per day as both the starting and ending point of the itinerary.  
+
+> 3:
+
+end if  
+
+> 4:
+
+Initialize LOCK = True  
+
+> 5:
+
+Compute embeddings of POIs using Formula (1)  
+
+> 6:
+
+Compute embedding of user using Formula (2)  
+
+> 7:
+
+while The POI set is not empty, and there is sufficient remaining time to continue adding POIs to I do  
+
+> 8:
+
+Initialize RCL and RCL* as empty lists  
+
+> 9:
+
+for each POI p in the POI set do  
+
+> 10:
+
+if LOCK and POI does not cater to dining needs or preferred POIs then  
+
+> 11:
+
+continue  
+
+> 12:
+
+end if  
+
+> 13:
+
+Choose the optimal insertion position using a greedy time-based strategy, where the corresponding increase in travel time is calculated as ttraf f ic  
+
+> (p,p +1 )
+
++ttraf f ic  
+
+> (p−1,p )
+
+−
+
+ttraf f ic  
+
+> (p−1,p +1 )
+
++ tvisit 
+
+> (p,u )
+
+, where p−1 and p+1 are the POIs immediately before and after the simulated insertion position within the current itinerary I 
+
+> 14:
+
+if travel time meets tplan u and within time window then 
+
+31 15: Add (p, optimal insertion position for p) to RCL  
+
+> 16:
+
+end if  
+
+> 17:
+
+end for  
+
+> 18:
+
+if RCL is empty for two consecutive iterations then  
+
+> 19:
+
+Set LOCK = False and jump to Line 7  
+
+> 20:
+
+end if  
+
+> 21:
+
+Sort the RCL in ascending order based on the increase in travel time, then select the top RCL _SIZE size of RCL elements.  
+
+> 22:
+
+Calculate similarity sim (p,u ) using Formula (3) for all POI in RCL  
+
+> 23:
+
+Compute score s(p,u ) using Formula (4) for all POI in RCL  
+
+> 24:
+
+Construct the RCL* by sorting the POIs according to their scores and selecting the top RCL ∗_SIZE elements.  
+
+> 25:
+
+Randomly select a tuple (p, optimal insertion position for p) from the RCL* and insert the POI p into I at the corresponding optimal insertion position.  
+
+> 26:
+
+end while  
+
+> 27:
+
+Return I
+
+Algorithm A.3 Local Search Phase 
+
+Input: Current best, POI time window constraints 
+
+Output: Improved itinerary with waiting time, optimal time window, and travel time  
+
+> 1:
+
+Evaluate current best itinerary using Formula (6) as current best result of opti-mization function  
+
+> 2:
+
+Initialize F LAG improvement = True  
+
+> 3:
+
+while F LAG improvement is True do  
+
+> 4:
+
+Set F LAG improvement = False  
+
+> 5:
+
+for each day k in the itinerary do  
+
+> 6:
+
+for each sub-sequence i, j where 1 ≤ i < j < len (I[k]) − 1 do  
+
+> 7:
+
+Create new itinerary by reversing the sub-sequence from i to j 
+
+> 8:
+
+if new itinerary meets twindow open  
+
+> p
+
+of all POIs then  
+
+> 9:
+
+Evaluate new itinerary using Formula (6)  
+
+> 10:
+
+if new itinerary has smaller result of optimization objective function 
+
+then  
+
+> 11:
+
+Update current best itinerary and best result of optimization function  
+
+> 12:
+
+Set F LAG improvement = True  
+
+> 13:
+
+end if  
+
+> 14:
+
+end if  
+
+> 15:
+
+end for  
+
+> 16:
+
+end for  
+
+> 17:
+
+end while  
+
+> 18:
+
+Return local best itinerary solution 
+
+Algorithm A.4 Clustering and Substitution 32 Input: POI set retrieved from the database, user preferences, total number of days 
+
+k, time threshold γ
+
+Output: Optimized itinerary with clusters  
+
+> 1:
+
+Cluster POIs into k groups based on geographic locations  
+
+> 2:
+
+for each cluster day do 
+
+(Plan route within the cluster by Algorithm A.2 and A.3)  
+
+> 3:
+
+if POIs in the cluster do not meet all user preferences then  
+
+> 4:
+
+Check cross-cluster POIs for substitutions  
+
+> 5:
+
+if substitution meets user constraints or exceeds time saving threshold γ
+
+then  
+
+> 6:
+
+Replace current POI with substitute POI from another cluster  
+
+> 7:
+
+end if  
+
+> 8:
+
+end if  
+
+> 9:
+
+end for  
+
+> 10:
+
+Return the itinerary optimized by clustering and substitution 
+
+## B Prompts in UDOIP 
+
+In this section, we present the key prompts used in our proposed methodology. The prompts are intended to clearly outline the controlled variables of the UDOIP, ensuring reproducibility of our results. 
+
+B.1 Overall Assignment Layer 
+
+Overall Assignment Layer 
+
+You serve as a translator between human language and itinerary planning algorithms, capable of accurately interpreting and extracting users’ travel preferences to correspond with algorithm input parameters. Your job is to understand user requirements in a single step based on your existing knowledge (without seeking additional information) and provide appropriate function input parameters based on a single interaction. The user’s destination is {city name} , and all Points of Interest (POIs) must be listed with complete and precise information in Chinese, without abbreviations. The output should not include any comments. 
+
+{format_instructions} 
+
+33 B.2 Classification Fine-Tuning Layer 
+
+B.2.1 Time Preference 
+
+Time Preference Classifier 
+
+You are a trip time preference classifier that categorizes users’ travel time preferences into one of six categories based on their itinerary planning needs: fast-paced, normal-paced, slow-paced, leisure-time, high-intensity-time, and ultra-high-intensity-style. 
+
+{format_instructions} 
+
+B.2.2 Dining Preference 
+
+Dining Preference Classifier 
+
+You are a dining preference classifier that categorizes users’ dining preferences into one of two categories based on their itinerary planning needs: regular (e.g., two or three meals a day, home-style dishes) and gourmet (e.g., food exploration, specialty cuisine). 
+
+{format_instructions} 
+
+## C Datasets 
+
+In this section, we provide two types of datasets: POI data and simulated user demands data, intended for practical scenario analysis. The datasets are presented below in a card-like format. POI Dataset 
+
+id: 1
+
+name: The Palace Museum 
+
+city: Beijing 
+
+rating: 5.0 
+
+rating number: 15xxxx 
+
+latitude: 39.xxxxxx 
+
+longitude: 116.xxxxxx 
+
+category: scenic spot 
+
+suggested visiting duration: 8h 
+
+address: 4 Jingshanqian Street, Dongcheng District, Beijing 
+
+description: The Palace Museum, also known as the Forbidden City, was the imperial palace of the Ming and Qing dynasties. 34 Simulated User Demand Dataset 
+
+id: 1
+
+simulated user demand: I’d like to plan a 6-day classic and well-rounded trip. I want to visit the Badaling Great Wall and the Water Cube. For food, I’d prefer something simple and typical. I want a relaxed pace, starting each day around 9 AM, with no more than 12 hours of activities per day. 
+
+prioritized POIs: Badaling Great Wall, The Water Cube 
+
+time preference: normal-paced 
+
+dining preference: regular 
+
+## D Prompt in Experiments 
+
+In the experimental section, we compared the UDOIP method with approaches that rely solely on LLMs. To ensure the validity and clarity of the comparison, we main-tained consistency in the prompts as much as possible. The prompt for the LLM-only method is as follows. 
+
+D.1 Prompt of LLM-only Method 
+
+LLM-only Method 
+
+You serve as an itinerary planning assistant, capable of accurately interpreting and extracting users’ travel preferences to provide specific planning results. Your job is to understand user requirements in a single step and give a reason-able daily travel plan based on their requirements. Each day must start from the hotel and end at the hotel, ensuring a sufficient number of restaurants and attractions that match the user’s dining needs and time rhythm. The time, whether early or late, and the pace, whether fast or slow, must also meet the user’s preferences. The distance between POIs and the reasonableness of the route should also be considered. The user’s destination is {city name} , and all Points of Interest (POIs) must be listed with complete and precise infor-mation in Chinese, without abbreviations. The output should not include any comments. 
+
+{format_instructions} 
+
+## E Full results of Dunn’s test 
+
+In Section 5.2, we presented a typical Result of Dunn’s test to demonstrate the method’s ability to capture preferences across different times of day. To illustrate the ability to capture more diverse preferences, we applied the same analysis to the aver-age daily travel time, the average original recommendation duration, the average daily start time, and the total number of dining experiences for two different cities. The 35 results are presented in Fig. 9, Fig. 10, Fig. 11, and Fig. 12, respectively. The corre-sponding comparison experiments with the DeepSeek models are presented in Fig. 13, Fig. 14, Fig. 15, and Fig. 16. It is evident that for the binary preference of dining, all methods accurately capture it. However, for complex time preferences, our method exhibits stronger discriminative power. 1:fast-paced · 2:normal-paced · 3:slow-paced · 4:leisure-time · 5:high-intensity-time · 6:ultra-high-intensity-style 
+
+UDOIP(LLM-single-layer) (Beijing) 
+
+UDOIP(ours) (Beijing) 
+
+UDOIP(LLM-single-layer) 
+
+(Tianjin) 
+
+UDOIP (ours) (Tianjin) 
+
+LLM-only (GLM-4-Air) (Beijing) 
+
+LLM-only (GLM-4-Air) (Tianjin) 
+
+Fig. 9 : Average Daily Travel Time for Two Cities 1:fast-paced · 2:normal-paced · 3:slow-paced · 4:leisure-time · 5:high-intensity-time · 6:ultra-high-intensity-style 
+
+UDOIP(LLM-single-layer) (Beijing) 
+
+UDOIP(ours) (Beijing) 
+
+UDOIP(LLM-single-layer) 
+
+(Tianjin) 
+
+UDOIP (ours) (Tianjin) 
+
+LLM-only (GLM-4-Air) (Beijing) 
+
+LLM-only (GLM-4-Air) (Tianjin) 
+
+Fig. 10 : Average Original Recommen-dation Duration for Two Cities 1:fast-paced · 2:normal-paced · 3:slow-paced · 4:leisure-time · 5:high-intensity-time · 6:ultra-high-intensity-style 
+
+UDOIP(LLM-single-layer) (Beijing) 
+
+UDOIP(ours) (Beijing) 
+
+UDOIP(LLM-single-layer) 
+
+(Tianjin) 
+
+UDOIP (ours) (Tianjin) 
+
+LLM-only (GLM-4-Air) (Beijing) 
+
+LLM-only (GLM-4-Air) (Tianjin) 
+
+Fig. 11 : Average Daily Start Time for Two Cities 1:regular · 2:gourmet 
+
+UDOIP(LLM-single-layer) (Beijing) 
+
+UDOIP(ours) (Beijing) 
+
+UDOIP(LLM-single-layer) 
+
+(Tianjin) 
+
+UDOIP (ours) (Tianjin) 
+
+LLM-only (GLM-4-Air) (Beijing) 
+
+LLM-only (GLM-4-Air) (Tianjin) 
+
+Fig. 12 : Total Number of Dining Experiences for Two Cities 36 1:fast-paced · 2:normal-paced · 3:slow-paced · 4:leisure-time · 5:high-intensity-time · 6:ultra-high-intensity-style 
+
+UDOIP(ours) (Beijing) 
+
+LLM-only (DeepSeek-V3) (Beijing) 
+
+LLM-only (DeepSeek-V3) (Tianjin) 
+
+LLM-only (DeepSeek-R1) (Beijing) 
+
+LLM-only (DeepSeek-R1) (Tianjin) 
+
+UDOIP (ours) (Tianjin) Fig. 13 : Average Daily Travel Time for Two Cities Compared with DeepSeek Model 1:fast-paced · 2:normal-paced · 3:slow-paced · 4:leisure-time · 5:high-intensity-time · 6:ultra-high-intensity-style 
+
+UDOIP(ours) (Beijing) 
+
+UDOIP (ours) (Tianjin) 
+
+LLM-only (DeepSeek-V3) (Beijing) 
+
+LLM-only (DeepSeek-V3) (Tianjin) 
+
+LLM-only (DeepSeek-R1) (Beijing) 
+
+LLM-only (DeepSeek-R1) (Tianjin) 
+
+Fig. 14 : Average Original Recommen-dation Duration for Two Cities Com-pared with DeepSeek Model 1:fast-paced · 2:normal-paced · 3:slow-paced · 4:leisure-time · 5:high-intensity-time · 6:ultra-high-intensity-style 
+
+UDOIP(ours) (Beijing) 
+
+UDOIP (ours) (Tianjin) 
+
+LLM-only (DeepSeek-V3) (Beijing) 
+
+LLM-only (DeepSeek-V3) (Tianjin) 
+
+LLM-only (DeepSeek-R1) (Beijing) 
+
+LLM-only (DeepSeek-R1) (Tianjin) 
+
+Fig. 15 : Average Daily Start Time for Two Cities Compared with DeepSeek Model 1:regular · 2:gourmet 
+
+UDOIP(ours) (Beijing) 
+
+UDOIP (ours) (Tianjin) 
+
+LLM-only (DeepSeek-V3) (Beijing) 
+
+LLM-only (DeepSeek-V3) (Tianjin) 
+
+LLM-only (DeepSeek-R1) (Beijing) 
+
+LLM-only (DeepSeek-R1) (Tianjin) 
+
+Fig. 16 : Total Number of Dining Experiences for Two Cities Compared with DeepSeek Model 37

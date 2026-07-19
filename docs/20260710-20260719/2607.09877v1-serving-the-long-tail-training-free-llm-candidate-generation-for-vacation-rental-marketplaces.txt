@@ -1,0 +1,364 @@
+Title: Serving the Long Tail: Training-Free LLM Candidate Generation for Vacation Rental Marketplaces
+
+URL Source: https://arxiv.org/pdf/2607.09877v1
+
+Published Time: Tue, 14 Jul 2026 00:08:03 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# Serving the Long Tail: Training-Free LLM Candidate Generation for Vacation Rental Marketplaces 
+
+# Syed Mohammed Arshad Zaidi 
+
+syzaidi@expediagroup.com Expedia Group Austin, Texas, USA 
+
+# Eric Rincon 
+
+erincon@expediagroup.com Expedia Group Austin, Texas, USA 
+
+# Shayan Hassantabar 
+
+shassantabar@expediagroup.com Expedia Group Austin, Texas, USA 
+
+## Abstract 
+
+Vacation rental marketplaces face a structural imbalance on the sup-ply side: a small fraction of properties receive most user interactions, while the long tail of new, niche, and seasonal listings generates too little behavioral signal for collaborative filtering to serve effectively. At Vrbo, item-based k-nearest neighbors (IBKNN) is a core candi-date generation channel, but leaves tens of thousands of properties with no candidates and produces weak neighborhoods for sparsely interacted ones. We present a training-free, LLM-based candidate generation pipeline that complements IBKNN using static property metadata alone. An off-the-shelf LLM synthesizes diverse seman-tic queries per property, a pre-trained text encoder embeds them, and an approximate nearest-neighbor index retrieves candidates from an 11.7M-property catalog. A Union fusion strategy merges these with IBKNN while preserving the behavioral channel’s or-dering, guaranteeing no degradation on well-served properties, and a downstream learning-to-rank model re-scores the fused pool. Evaluated on 1.6M focal properties, the system extends candidate coverage to tens of thousands of properties IBKNN cannot reach, delivers its largest gains on the long-tail segment where behavioral methods are weakest, and matches or beats IBKNN at every 𝐾 on shared properties. A downstream learning-to-rank stage further lifts the fused pool, yielding a complete candidate generation and re-ranking stack that serves the long tail without regressing well-served properties. We additionally show that Union fusion collapses the recall gap between a 3B open-weights LLM and frontier API-based models from 27–46% to under 1%, supporting self-hosted small-model deployment at marketplace catalog scale. 
+
+## CCS Concepts 
+
+• Information systems → Recommender systems ; • Comput-ing methodologies → Learning to rank ; Natural language genera-tion .
+
+## Keywords 
+
+candidate generation, large language models, dense retrieval, cold-start, long-tail recommendation, two-sided marketplaces, vacation rentals, learning to rank  
+
+> Permission to make digital or hard copies of all or part of this work for personal or classroom use is granted without fee provided that copies are not made or distributed for profit or commercial advantage and that copies bear this notice and the full citation on the first page. Copyrights for components of this work owned by others than the author(s) must be honored. Abstracting with credit is permitted. To copy otherwise, or republish, to post on servers or to redistribute to lists, requires prior specific permission and/or a fee. Request permissions from permissions@acm.org.
+> Conference acronym ’XX, Woodstock, NY
+> ©2018 Copyright held by the owner/author(s). Publication rights licensed to ACM. ACM ISBN 978-1-4503-XXXX-X/2018/06 https://doi.org/XXXXXXX.XXXXXXX
+
+ACM Reference Format: 
+
+Syed Mohammed Arshad Zaidi, Eric Rincon, and Shayan Hassantabar. 2018. Serving the Long Tail: Training-Free LLM Candidate Generation for Vaca-tion Rental Marketplaces. In Proceedings of Make sure to enter the correct conference title from your rights confirmation email (Conference acronym ’XX). 
+
+ACM, New York, NY, USA, 9 pages. https://doi.org/XXXXXXX.XXXXXXX 
+
+## 1 Introduction 
+
+Vacation rental marketplaces like Vrbo connect travelers searching for accommodations with hosts who list their properties on the platform. Every interaction implicates both sides: travelers expect recommendations that help them discover relevant listings beyond what direct search surfaces, and hosts expect their properties to receive fair exposure regardless of listing age, seasonality, or niche appeal. Reconciling these two expectations is the defining challenge of marketplace recommendation, and it is resolved – or not – at the candidate generation (CG) layer, the upstream component that decides which subset of the catalog is even eligible to be ranked and shown to any given user. On Vrbo, item-to-item recommendations power surfaces such as the “similar properties” carousel shown alongside a focal listing. The existing CG stack for this task combines multiple complemen-tary channels, with item-based k-nearest neighbors (IBKNN) as a core channel. IBKNN scores pairs of properties by their behavioral co-occurrence in user clickstreams, boosted by amenity overlap. On properties with rich interaction history, it produces strong, tightly geo-localized neighborhoods at low computational cost. However, IBKNN inherits the fundamental limitation of collaborative-filtering: new listings and properties in emerging markets have no co-occurrence data and cannot be served at all. Long-tail properties with only a handful of interactions yield noisy, unreliable neighborhoods; in our catalog, roughly 22% of properties receive five or fewer interac-tions per month, yet collectively account for less than 1% of total interactions. Finally, properties that are semantically similar but lack direct co-view history remain invisible to co-occurrence, even when they would be excellent substitutes from a user’s perspective. These are not merely recall gaps for the CG layer; they translate directly into an exposure imbalance on the supply side, where the same popular properties keep being recommended while the long tail is starved of the visibility needed to bootstrap into popularity. To address the aforementioned problem, our approach is to com-plement IBKNN with a second channel that does not depend on behavioral signal at all. We treat a large language model (LLM) as a 
+
+query generator : given only a property’s static metadata, the LLM synthesizes a small set of diverse natural-language search queries that describe what the property offers from different perspectives. These queries are encoded by a pre-trained dense text encoder and dispatched against an approximate nearest-neighbor index of the arXiv:2607.09877v1 [cs.LG] 10 Jul 2026 Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Zaidi et al. 
+
+full property catalog; results are aggregated and geographically re-ranked. The resulting candidates are merged with IBKNN through a union fusion strategy that preserves the behavioral channel’s ranking by construction and fills remaining slots with semantically-retrieved alternatives. A downstream learning-to-rank model then re-scores the fused pool. 
+
+Contributions. This paper makes the following contributions, aimed at practitioners building CG systems for two-sided market-places: 
+
+• We describe a training-free, metadata-driven LLM candidate generation pipeline , paired with a downstream learning-to-rank stage, evaluated at scale (1.6M focal properties over an 11.7M-property catalog). The pipeline is stateless and applicable to any property with parseable metadata – including brand-new listings with zero interaction history – and requires no labeled data, no fine-tuning, and no user histories. 
+
+• We introduce union fusion , a channel-combination strategy with a formal recall-preservation guarantee: union recall ≥ IBKNN recall for every focal property (the listing for which candidates are being generated) at every 𝐾 . This makes union strictly prefer-able to Reciprocal Rank Fusion when shipping a new channel alongside a mature behavioral baseline, and we show empirically why. 
+
+• We report a per-segment analysis showing that the LLM chan-nel’s lift concentrates exactly where IBKNN is weakest, and ex-tends coverage to tens of thousands of cold-start properties that the behavioral channel cannot serve. 
+
+• We show that union fusion makes the choice of query-generator LLM robust : the 27–46% standalone recall gap be-tween a 3B open-weights model and frontier API-based models collapses to under 1% once candidates are fused with IBKNN under Union. This makes self-hosted small-model deployment a defensible full-scale choice, avoiding the operational ceiling imposed by frontier API rate limits. 
+
+## 2 Related Work 
+
+Item-based collaborative filtering has been a staple of large-scale recommender systems since its introduction by Sarwar et al. [ 9]and its early deployment at scale by Linden et al. [ 6 ] at Amazon. The approach remains competitive for candidate generation in modern stacks because it is cheap to compute, interpretable, and produces tight neighborhoods on well-interacted items. A long line of work has extended co-occurrence-based CG with neural repre-sentations: Item2Vec [ 2 ] adapted the skip-gram framework to learn dense item embeddings from co-occurrence data; the sampling-bias-corrected two-tower retrieval model of Yi et al. [ 11 ] established the dual-encoder paradigm for large-corpus item recommendation; and PinSage [ 12 ] demonstrated graph convolutional networks at web scale for item-to-item retrieval at Pinterest. Despite their method-ological diversity, these approaches share a common dependency on user-item interaction signal, and all degrade – to varying degrees – on long-tail and cold-start items. Large language models have more recently been applied to rec-ommendation along several axes. TALLRec [ 1 ] proposed an effi-cient LoRA-based framework to align pre-trained LLMs with the recommendation task, demonstrating that lightweight tuning can produce competitive sequential recommenders. A parallel line of work pursued generative retrieval: TIGER [ 7 ] replaced the stan-dard embed-then-nearest-neighbor pipeline with an autoregressive transformer that decodes semantic identifiers directly. Both direc-tions, however, require model training – either parameter-efficient fine-tuning or full encoder-decoder pre-training – and do not na-tively integrate with existing dense-retrieval infrastructure. A third, more recent direction sidesteps both costs by using LLMs purely as 
+
+query generators . Kim et al. [ 5 ] proposed QueRec, which prompts an LLM to generate personalized search queries from a user’s inter-action history and retrieves items through dense search over the query embeddings, with no LLM fine-tuning required. Cold-start mitigation through content and side information has been studied extensively in the lodging domain in particular. Ho-tel2vec [ 8 ] is the closest prior work in spirit to ours: it fuses click-based hotel embeddings with structured attribute encoders (loca-tion, amenities, star rating) to improve recommendation quality, with explicit gains on cold-start hotels that lack click history. The broader pattern is consistent: content-based and hybrid approaches help where behavioral signal is sparse, but typically require training a dedicated encoder on paired interaction-attribute data. Our work differs from each thread in a specific way: unlike behavioral CG channels, we require no interaction data; unlike TALLRec [ 1] and TIGER [ 7], we have no trainable components in the CG stage; we share the query-then-retrieve paradigm with QueRec [ 5] but target item-to-item CG from static metadata rather than user-history-conditioned sequential recommendation; and un-like Hotel2vec [ 8], we let a general-purpose LLM verbalize metadata into queries rather than training a dedicated encoder. 
+
+## 3 Methodology 3.1 Pipeline Overview 
+
+The LLM-based candidate generation pipeline operates entirely on static property metadata and produces a ranked list of candidate properties for any focal property in the catalog. It consists of four stages (Figure 1), applied per focal property: (1) Query generation. An off-the-shelf instruction-tuned LLM is prompted with the focal property’s metadata and produces a small set of diverse natural-language search queries describing what the property offers from different angles (§3.2). Instruction tuning is needed so the model reliably follows the prompt’s length and format rules. (2) Query encoding. Each generated query is encoded into a dense vector by a pre-trained text encoder. The catalog of 11.7M prop-erties has been pre-encoded once, offline, into the same embed-ding space. (3) Approximate nearest-neighbor retrieval. Each query em-bedding is dispatched against a FAISS index over the property catalog, returning the top-𝑁 nearest properties per query. (4) Aggregation and location re-ranking. Per-query result lists are aggregated via Reciprocal Rank Fusion [ 3] to produce a single ranked list of LLM-channel candidates, which is then re-ranked by a weighted combination of semantic similarity and geographic distance from the focal property. The output of the pipeline is the LLM channel’s ranked candidate list, 𝐶 LLM , for each focal property. This list is then combined with the Serving the Long Tail: Training-Free LLM Candidate Generation for Vacation Rental Marketplaces Conference acronym ’XX, June 03–05, 2018, Woodstock, NY     
+
+> Property metadata
+> LLM channel (training-free)
+> Behavioral channel (IBKNN)
+> Fusion & Re-ranking
+> Title
+> Description
+> City, State
+> Capacity
+> Amenities
+> User clickstream (co-occurrences)
+> LLM query gen.
+> “Austin lakefront cabin with hot tub”
+> . . . 𝑄 =12 queries
+> “Austin lakefront cabin with hot tub”
+> “Austin family cabin near lake”
+> . . . 𝑄 =12 queries
+> E5 encoder
+> FAISS 11.7M
+> RRF + geo re-rank 𝐶 LLM
+> IBKNN co-occurrence 𝐶 IB
+> Union fusion
+> Top-1000 pool
+> LightGBM ranker
+> Top-𝐾
+> results
+
+Figure 1: End-to-end candidate generation and re-ranking pipeline. The LLM channel (top) converts static property metadata into 𝑄 =12 natural-language queries via an instruction-tuned LLM, encodes them with E5, and retrieves candidates from the 11.7M-property FAISS index with RRF + geographic re-ranking. The behavioral channel (bottom) produces 𝐶 IB from IBKNN on user clickstreams. Union fusion (§3.3) merges the two lists while preserving IBKNN’s ordering, and a downstream LightGBM ranker re-scores the fused top-1000 pool. 
+
+IBKNN channel’s list 𝐶 IB via the Union fusion strategy formalized in §3.3, and the fused pool is re-scored by a downstream learning-to-rank model (§3.4). Because the pipeline depends only on metadata, it is stateless, parallel across focal properties, and applicable to any property in the catalog including those with zero interaction history (§3.5). 
+
+## 3.2 Query Generation from Property Metadata 
+
+For each focal property, we prompt an off-the-shelf instruction-following LLM with a compact serialization of the property’s struc-tured metadata and ask it to produce 𝑄 diverse natural-language search queries. We perform no fine-tuning of our own; the pipeline relies only on the instruction-following capability the model al-ready has from its provider’s training. The LLM is treated as an interchangeable component of the pipeline: any model capable of following the prompt’s length and format constraints can serve this role, and we evaluate several choices in §5.4 to quantify how much the specific model matters. 
+
+Metadata serialization. Each property is rendered as a short, line-separated text block containing, in order: the listing title, the description (HTML-stripped and truncated to 300 characters), the structure type and administrative location (city, state, country), the market or destination area, the property’s capacity (bedrooms, bathrooms, sleeps), up to 15 amenities as a comma-separated list, and the average rating with review count. Fields that are missing or empty are omitted rather than padded, so properties with sparse metadata still produce well-formed prompts. The same serializa-tion is used by the property-catalog encoder (§3.1, Stage 2), which ensures that the text seen by the LLM at query time is structurally aligned with the text used to build the FAISS index. 
+
+Prompt design. The prompt (Fig. 2) instructs the LLM to gen-erate 𝑄 search queries that a traveler might plausibly use to find the focal property or nearby alternatives , with three explicit con-straints: (i) every query must include the city or region name, which anchors dense retrieval geographically – without this constraint, queries drift toward catalog-wide descriptive matches and lose geographic relevance; (ii) each query should highlight a different facet of the property, spanning location-plus-type, location-plus-amenity, and location-plus-experience variants; and (iii) queries must be natural-language search phrases between five and twelve words, without prices (e.g., “under $200/night”), numbering (e.g., “1.”, “2.”, . . . ), or meta-commentary (e.g., “Here are some queries:”). At runtime, {num_queries} is replaced with 𝑄 = 12 , {focal_text} 
+
+with the serialized metadata, and {history_section} is empty in our item-to-item setting. 
+
+> Generate {num_queries} search queries that a traveler would use to find this vacation rental or similar alternatives. Property: {focal_text} {history_section}Rules: - EVERY query MUST include the city or region name - Write natural search phrases (e.g., "Austin lakefront cabin with hot tub") - Each query should highlight a different feature: location + property type, location + amenities, location + experience - Keep each query between 5-12 words - Do NOT include prices or dollar amounts - Do NOT number the queries Output ONLY {num_queries} queries, one per line.
+
+Figure 2: Prompt template used to generate 𝑄 = 12 diverse search queries from focal property metadata. {num_queries} ,
+
+{focal_text} , and {history_section} are substituted at run-time. 
+
+Why multiple queries rather than a single embedding. Generating 
+
+𝑄 queries per property rather than embedding metadata into a single dense vector is deliberate: a single embedding collapses all facets into one point, while multi-query generation forces the LLM to surface different facets as separate queries, each retrieving a different slice of the catalog. The diversity enters at the query level, and the downstream aggregation step (§3.1, Stage 4) combines per-query results via Reciprocal Rank Fusion. Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Zaidi et al. 
+
+Algorithm 1: Union fusion of IBKNN and LLM-channel candidates. 
+
+Input: ordered lists 𝐶 IB , 𝐶 LLM ; target output size 𝐾 
+
+Output: fused top-𝐾 candidate list  
+
+> 1
+
+result ← 𝐶 IB // copy IBKNN, preserve order  
+
+> 2
+
+seen ← set of property ids in 𝐶 IB  
+
+> 3
+
+foreach 𝑐 ∈ 𝐶 LLM do  
+
+> 4
+
+if |result | ≥ 𝐾 then break  
+
+> 5
+
+if 𝑐. id ∉ seen then  
+
+> 6
+
+append 𝑐 to result  
+
+> 7
+
+add 𝑐. id to seen  
+
+> 8
+
+end  
+
+> 9
+
+end  
+
+> 10
+
+return result [: 𝐾 ]
+
+Output parsing and validation. Each candidate query passes through a lightweight validation filter that strips enumeration artifacts, re-jects queries outside the 10–200 character range, removes queries containing price patterns or AI-refusal phrases, and de-duplicates near-identical variants. When the validated set contains fewer than 
+
+𝑄 queries – typically because the LLM produced malformed output or the property’s metadata was extremely sparse – the pipeline pads the remainder with a deterministic fallback queries assem-bled directly from the property’s metadata fields, each combining the location with a structural attribute (e.g., “Austin cabin rental”, “Austin cabin with hot tub”). 
+
+## 3.3 Union Fusion with IBKNN 
+
+Let 𝐶 IB = (𝑖 1, 𝑖 2, . . . , 𝑖 |𝐶 IB | ) denote the ordered list of candidates returned by IBKNN for a given focal property, and let 𝐶 LLM =
+
+( 𝑗 1, 𝑗 2, . . . , 𝑗 |𝐶 LLM | ) denote the ordered list returned by the LLM channel after Stage 4 of the pipeline. We define the Union fusion of these two lists at cutoff 𝐾 procedurally as shown in Alg. 1. The Union output begins with IBKNN’s list exactly as produced and then extends it by walking through the LLM channel’s list in order, appending only items not already present in the IBKNN list, stopping once the total length reaches 𝐾 . Three properties follow directly from the algorithm and are central to what comes next: (i) IBKNN’s ordering is preserved exactly – no item is ever reordered, replaced, or removed; (ii) when an LLM candidate duplicates an IBKNN candidate, the IBKNN copy is the one retained; and (iii) the LLM channel only fills slots that IBKNN did not reach. 
+
+Theorem (Recall preservation). For every focal property 𝑓 and every 𝐾 ≥ 1,
+
+Recall@ 𝐾  Union 𝐾 (𝐶 (𝑓 ) 
+
+> IB
+
+, 𝐶 (𝑓 )
+
+> LLM
+
+) ≥ Recall@ 𝐾  𝐶 (𝑓 )
+
+> IB
+
+,
+
+with equality when |𝐶 (𝑓 ) 
+
+> IB
+
+| ≥ 𝐾 .
+
+Proof. Let 𝑚 = min (𝐾, |𝐶 (𝑓 ) 
+
+> IB
+
+|) . By construction, the fused list begins with the first 𝑚 items of 𝐶 (𝑓 ) 
+
+> IB
+
+in their original order. There-fore, every relevant item that IBKNN places in its top-𝐾 also appears in the fused top-𝐾 , which gives the inequality. When |𝐶 (𝑓 ) 
+
+> IB
+
+| ≥ 𝐾 ,the algorithm’s early stop on line 4 fires before any LLM candidate is appended, so the fused list equals the first 𝐾 items of 𝐶 (𝑓 ) 
+
+> IB
+
+exactly, and equality holds. □
+
+A stronger position preservation property follows from the same construction: since Alg. 1 only appends to result and never reorders, any IBKNN item at rank 𝑟 ≤ 𝐾 occupies position 𝑟 in the Union output as well. This makes the theorem tight – Union matches rather than strictly improves on IBKNN’s Recall @𝐾 only when IBKNN already fills all 𝐾 slots; otherwise, every relevant LLM-contributed item in a previously-empty slot improves recall. One scope note is worth making explicit: the guarantee is on the fused candidate set, not on the final ranked output. The downstream learning-to-rank model (§3.4) is free to reorder anything in the fused pool, and its precision behavior is evaluated separately from the candidate-set guarantees stated here. 
+
+## 3.4 LightGBM Re-ranker 
+
+A downstream LightGBM ranker re-scores the Union-fused top-1000 pool to produce the final ranked output. The ranker uses features spanning rank and score priors from each upstream chan-nel, geographic distance, per-channel similarity signals (IBKNN co-occurrence strength and cosine similarity in the dense text-embedding space described in §3.1, Stage 2), property-level demand profiles, user-segment preferences, and focal-aware pairwise in-teractions. The goal of the ranker is to add incremental value on top of the fused candidate pool by exploiting features the upstream channels do not directly model. Detailed feature design and training choices are not the focus of this paper. Each (focal, candidate) training pair is assigned a graded rele-vance label for the LambdaRank objective: 4 if the two properties were booked in the same session, 1 if co-viewed, and 0 otherwise. Negatives are sampled uniformly at 5:1 against positives, capped at 5M pairs. Property-level features (review counts, ADR, booking volumes) use rolling 7–90-day windows snapshotted to the training cutoff to avoid future-information leakage. The training window is disjoint from evaluation. We train a LightGBM LambdaRank model grouped by focal property with NDCG@{5, 10, 50} as the training metric. §5.5 covers the evaluation results. 
+
+## 3.5 Cold-Start Coverage by Construction 
+
+A structural property of the LLM channel is that its eligibility crite-rion for serving a focal property is fundamentally different from IBKNN’s. IBKNN requires that the focal property has appeared in user clickstreams alongside other properties; without co-occurrence data, IBKNN returns an empty list and the property receives no candidates. The LLM channel, by contrast, requires only that the focal property has parseable metadata: a location, a structure type, and enough descriptive text for the LLM to generate queries from. Whether any user has ever interacted with the property is irrelevant to whether candidates can be generated for it. This shifts cold-start coverage from a remediation problem to a structural one. Any property the catalog admits is eligible for the LLM channel by construction, including brand-new listings created hours before the channel runs, properties in emerging markets that have not yet accumulated traffic, and seasonal inventory dormant during the IBKNN aggregation window. The LLM channel does not need to “learn” how to handle these properties; it handles them by Serving the Long Tail: Training-Free LLM Candidate Generation for Vacation Rental Marketplaces Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+virtue of how the eligibility is defined. We quantify the resulting coverage gain in §5. 
+
+## 3.6 Implementation Details 
+
+We report the specific models, infrastructure, and parameters used in the experiments reported in this work. 
+
+Query generator. The full-scale pipeline uses LLaMA-3.2-3B-Instruct [4 ] as the query-generation LLM, served via vLLM behind an OpenAI-compatible HTTP endpoint on a single-node GPU cluster. Gener-ation runs with temperature 𝑇 = 0.4, 𝑄 = 12 queries per focal property, and a per-request max_tokens cap of 300. The prompt (Fig. 2) and the parser and validation filter described in §3.2 are applied uniformly to the LLM’s raw output. For the LLM-choice ablation in §5.4, we additionally compare against GPT-4o and GPT-5.2 accessed through an Azure OpenAI proxy, using the identical prompt template, sampling parameters, parser, and validation filter; only the underlying model identity changes across the comparison. The self-hosted model generates queries for a 10K focal-property batch in roughly five minutes on a single GPU node and scales to the full 1.6M focal set on the same hardware. The frontier API endpoints, capped at 50 requests per minute, could not be run at full catalog scale within a practical time budget, which is why the LLM-choice ablation (§5.4) is restricted to a 10K subset. 
+
+Text encoder and FAISS index. Property metadata and generated queries are encoded with E5-large-v2 [ 10 ], a 1024-dimensional sen-tence encoder. E5 is trained for asymmetric retrieval and expects each input to be tagged by role: we prepend the passage: prefix to catalog entries (the documents being searched) and the query: 
+
+prefix to LLM-generated queries, as the model requires. The full 11.7M-property catalog is encoded once offline with batch size 64 and L2-normalized, then indexed with FAISS using an exact inner-product index ( IndexFlatIP ). We use a flat index rather than an approximate one because the catalog is small enough to fit in GPU memory and the exact index removes approximation error as a confounding factor in the cross-method recall comparisons. Query retrieval fetches the top-50 candidates per query; per-query result lists are aggregated via Reciprocal Rank Fusion with 𝑘 = 60 (§3.1, Stage 4) and then geographically re-ranked with a 0.7 :0.3 weighting of semantic similarity and normalized haversine distance from the focal property. 
+
+## 4 Experimental Setup 
+
+Dataset and catalog. We evaluate on a Vrbo property catalog of approximately 11.7M listings. The evaluation set consists of 1.6M focal properties drawn from this catalog, spanning the full range of interaction volumes from cold-start listings with zero interac-tions to heavily-trafficked properties with hundreds of clickstream events per month. The focal set was selected by filtering to proper-ties with parseable metadata (a required prerequisite for the LLM channel) and restricting to Vrbo brand inventory; no other filters were applied. 
+
+Evaluation protocol. Ground-truth relevance for each focal prop-erty is derived from the held-out clickstream window 2025-09-09 to 2025-10-08 , using a co-occurrence definition: for a focal prop-erty 𝑓 , any property 𝑝 that appears in the same user session as 𝑓 
+
+during the held-out window is treated as a relevant candidate for 
+
+𝑓 . The training window used by the behavioral baseline (IBKNN) is 2025-06-08 to 2025-09-08 , strictly disjoint from the evaluation window. We report Recall @𝐾 as the primary metric, averaged uni-formly across all focal properties in the evaluation set, at 𝐾 ∈{5, 10 , 50 , 100 , 200 , 300 , 500 , 1000 }, with 𝐾 = 1000 as the primary operating point. As a secondary metric, we report the mean haver-sine distance from the focal property to its returned candidates, averaged at 𝐾 = 5 and 𝐾 = 10 , to capture geographic precision – a property that matters in marketplace lodging where travelers typically care about location as much as attributes. 
+
+Baselines. Our primary baseline is IBKNN (behavioral co-occurrence with amenity boost and 30 km geo-prefilter), a core component of Vrbo’s CG stack. The proposed method is Union fusion of the LLM channel with IBKNN (Alg. 1). For the LLM-choice ablation in §5.4, we additionally compare against two non-Union fusion strategies: LLM-only (no fusion) and Reciprocal Rank Fusion 
+
+(RRF), a rank-blending strategy that combines both channels into every output position. 
+
+Evaluation variants. For the per-segment comparisons in §5.2, we use a shared-population protocol that restricts evaluation to the 1.5M properties where both IBKNN and Union have candidates, providing a fair comparison that isolates retrieval quality from coverage differences. Cold-start properties where only the LLM channel has candidates are reported separately in §5.3. 
+
+LLM-ablation subset. The LLM-choice ablation in §5.4 is run on a 10K focal-property subset drawn uniformly at random (with fixed seed) from the intersection of the 1.6M focal set and properties appearing in the held-out clickstream window. This smaller scale is forced by the rate-limit constraints of frontier API-based LLMs, described in §3.6. LLaMA-3.2-3B’s numbers on this subset are ex-tracted by filtering the full 1.6M run to the 10K focal IDs, so LLaMA at 10K is the same model output as LLaMA at 1.6M, restricted to an overlapping focal set. We confirm the subset is representative of the full 1.6M by verifying that LLaMA’s recall on the 10K subset matches its aggregate recall on the full focal set within 1.7pp, and report GPT-4o and GPT-5.2 comparisons only on the 10K subset. 
+
+## 5 Results 
+
+We evaluate the pipeline along three dimensions: aggregate recall on the full focal set (§5.1), per-segment recall stratified by focal-property interaction volume (§5.2), and coverage of cold-start prop-erties that IBKNN cannot serve (§5.3). We then examine how robust the pipeline is to the choice of query-generator LLM (§5.4) and the incremental lift from the downstream LightGBM re-ranker (§5.5). Throughout, IBKNN is the behavioral baseline and Union is the proposed fusion strategy (Algorithm 1); per-segment and ranker comparisons use the shared-property protocol from §4. 
+
+## 5.1 Overall Performance 
+
+Table 1 reports Recall @𝐾 for the three pipeline components – IBKNN alone, the LLM channel alone, and Union fusion – across the full 1.6M focal-property evaluation set. Union matches or beats IBKNN at every 𝐾 , consistent with the recall-preservation guar-antee. The standalone LLM channel underperforms IBKNN by a Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Zaidi et al. 
+
+Table 1: Overall performance on the full 1.6M focal set. Union 
+
+≥ IBKNN at every 𝐾 by construction. The LLM channel alone underperforms IBKNN but contributes non-overlapping can-didates that lift Union above IBKNN at every operating point. 
+
+R = Recall, H = mean haversine distance to retrieved candi-dates. ∗The LLM channel produces ∼500 unique candidates per focal ( 𝑄 =12 queries × top-50 retrievals, after deduplica-tion), so its R@1000 equals R@500.                        
+
+> IBKNN LLM-only ∗Union Δ
+> R@100 32.02% 6.99% 32.26% +0.24pp R@300 45.13% 12.02% 45.84% +0.71pp R@1000 55.08% 13.50% 56.48% +1.40pp H@5 (km) 5.3 7.68 5.6 +0.3 H@10 (km) 5.7 8.99 6.1 +0.4
+
+wide margin, as expected for a channel with no access to behav-ioral signal, but the fused Union output recovers the full behavioral baseline and adds incremental recall from the LLM channel’s non-overlapping candidates. Union’s recall lift over IBKNN grows monotonically with 𝐾 : from 
+
++0.24 percentage points at R@100 to +1.40 percentage points at 
+
+R@1000 . This pattern is a direct consequence of Union’s append-only design (Alg. 1): at shallow 𝐾 , IBKNN’s candidates fill most or all of the available slots and the LLM channel has little room to con-tribute; at larger 𝐾 , IBKNN’s list is exhausted and LLM-contributed candidates begin occupying tail positions, each one an additional chance to recover a relevant item. The two channels’ candidate pools are highly complementary, with only 4% mean overlap per focal property, confirming that the LLM channel surfaces genuinely different candidates rather than duplicating IBKNN’s behavioral neighbors. The standalone LLM channel’s recall – roughly one-fifth of IBKNN’s – underscores its role as a complement, not a replacement. Its candidate pool is bounded at ∼500 unique candidates per focal (𝑄 =12 × top-50, after dedup), so recall plateaus beyond 𝐾 = 500 .Union does not share this ceiling because IBKNN contributes addi-tional candidates in deeper positions. Union’s haversine is modestly higher than IBKNN’s ( +0.3 km at H@5), reflecting the LLM chan-nel’s broader geographic distribution. 
+
+## 5.2 Per-Segment Analysis 
+
+We stratify focal properties into four interaction-volume buckets by the number of clickstream events each property received during the training window: very low (1–5 interactions), low (6–20), medium 
+
+(21–100), and high (101+). Cold-start properties (zero interactions) are handled as a separate coverage category rather than a fifth bucket (§5.3), because IBKNN returns an empty candidate list for these properties by construction and per-property recall is not the right lens for measuring the improvement. Bucket populations in our focal set are: very_low 22%, low 26%, medium 34%, high 18%, with an additional 3.2% cold-start properties. The aggregate numbers in §5.1 obscure a structural property of the improvement: Union’s lift is not distributed evenly across focal properties but concentrates on the long tail, precisely where IBKNN 
+
+Table 2: Per-segment Recall @𝐾 on the shared-property set (ap-proximately 1.5M focal properties), stratified by interaction volume. Union’s lift is inversely proportional to interaction count: largest on the sparsest bucket and negligible on the densest. R = Recall.                                         
+
+> Bucket Method R@100 R@300 R@1000 very_low (1–5) IBKNN 31.48% 40.66% 44.55% Union 33.10% 45.00% 50.80%
+> Δ+1.62pp +4.34pp +6.25pp low (6–20) IBKNN 32.94% 44.39% 50.28% Union 33.49% 46.40% 53.89%
+> Δ+0.55pp +2.01pp +3.61pp medium (21–100) IBKNN 35.06% 48.52% 57.51% Union 35.19% 49.15% 59.13%
+> Δ+0.13pp +0.63pp +1.62pp high (101+) IBKNN 32.69% 46.97% 58.93% Union 32.72% 47.11% 59.44%
+> Δ+0.03pp +0.14pp +0.51pp
+
+is weakest. Table 2 reports Recall @𝐾 broken out by interaction-volume bucket on the shared-property set (approximately 1.5M properties where both IBKNN and Union have candidates), provid-ing an apples-to-apples comparison that isolates retrieval quality from coverage differences. The very_low bucket is the headline finding: Union delivers a 
+
++4.34 percentage point lift in R@300 over IBKNN on properties with 1–5 interactions, growing to +6.25 pp at R@1000 . This is the segment where a marketplace operator most needs help: these properties generate too little behavioral signal for IBKNN to build reliable neighborhoods, yet they are established enough that they should not be treated as new listings. The low bucket (6–20 interac-tions) shows a similar pattern at reduced magnitude ( +2.01 pp at 
+
+R@300 ), confirming that the LLM channel’s value extends beyond the extreme tail. At the other end of the spectrum, the high bucket (101+ inter-actions) shows Union’s lift shrinking to +0.14 pp at R@300 and 
+
++0.51 pp at R@1000 . This is exactly the behavior predicted by Union’s design: on well-interacted properties, IBKNN already fills 
+
+𝐾 slots with strong behavioral candidates, leaving the LLM chan-nel little room to contribute. Early recall ( R@5 , R@10 ; not shown) is identical between IBKNN and Union across all four buckets on shared properties, empirically confirming the position-preservation property (§3.3). The monotonic relationship between interaction volume and Union’s lift is not a lucky outcome of tuning. It is a direct structural consequence of Union fusion’s append-only design: the LLM chan-nel fills only the slots that IBKNN leaves empty, and IBKNN leaves more slots empty on sparse properties than on dense ones. The theorems in §3.3 predict exactly this asymmetric lift profile, and the per-segment numbers confirm it empirically. Union additionally serves cold-start properties that IBKNN cannot cover at all; their recall is reported separately in §5.3. Serving the Long Tail: Training-Free LLM Candidate Generation for Vacation Rental Marketplaces Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+## 5.3 Cold-Start Coverage 
+
+The per-segment recall analysis in §5.2 deliberately excludes prop-erties that IBKNN cannot serve at all. This subsection quantifies that excluded population: its size, its distribution across interaction-volume buckets, and why it matters for the marketplace-level inter-pretation of our results. On the full 1.6M focal set, IBKNN returns an empty candidate list for roughly 3.2% of the focal population – properties with zero behavioral co-occurrences during the train-ing window, typically new listings, dormant seasonal inventory, or properties in emerging markets. Union fusion serves candidates for every one of these properties, because the LLM channel’s eligibility criterion depends only on metadata parseability, not on interaction history (§3.5). These cold-start properties are not concentrated in 
+
+Table 3: Cold-start properties served by the LLM channel that IBKNN cannot cover, broken out by interaction-volume bucket.             
+
+> Bucket Cold-start properties % of bucket very_low (1–5) ∼19 K5.3% low (6–20) ∼15 K3.6% medium (21–100) ∼13 K2.3% high (101+) ∼4K1.3% Total ∼51 K3.2%
+
+the lowest interaction bucket. As Table 3 shows, cold-start prop-erties appear across all four segments, including roughly 1.3% of the high bucket. This occurs because the buckets are defined by 
+
+test-period interaction counts (Sep 9 – Oct 8), while IBKNN’s candi-date generation uses training-period co-occurrences (Jun 8 – Sep 8). A property can receive interactions during the test window – and thus land in a non-zero bucket – while having zero co-occurrences during the training window that IBKNN relies on. The LLM chan-nel covers these properties preemptively, regardless of when their behavioral signal materializes. For these cold-start properties, Union’s candidates come entirely from the LLM channel. Note that the aggregate gains in §5.1 and per-segment gains in §5.2 are computed on the shared-property set and exclude these cold-start properties – the true marketplace-level improvement is larger than those tables suggest. 
+
+## 5.4 LLM Choice Robustness Under Union Fusion 
+
+The LLM channel is an interchangeable pipeline component (§3.2), so a natural question for a deployment-conscious reader is how much the choice of query-generator LLM matters to downstream recall. At marketplace catalog scale, this is not a purely academic question: the rate-limit and cost constraints of frontier API-based models make a full catalog daily refresh impractical, whereas a self-hosted open-weights model runs the same workload on a sin-gle GPU node (§3.6). We compare three instruction-tuned LLMs as drop-in query generators, holding the prompt template, sam-pling parameters, parser, validation filter, and evaluation protocol constant across all three. The only variable is the model identity. 
+
+Table 4: LLM choice comparison on the 10K focal subset across three fusion strategies. The standalone LLM-quality gap collapses under Union fusion, while geographic precision shows a fusion-strategy trade-off: the LLM channel alone is geographically tightest but has the lowest recall; Union maximizes recall at the cost of a modest haversine increase. All rows computed on the filtered 10K test denominator for direct comparability across fusion blocks. R = Recall, H =mean haversine distance to retrieved candidates.                                                  
+
+> Fusion Metric LLaMA-3B GPT-4o GPT-5.2 Standalone R@100 7.28% 9.74% 9.42% R@300 12.42% 16.00% 16.52% R@1000 13.95% 17.65% 18.82% H@5 (km) 3.65 2.19 2.27 H@10 (km) 4.83 2.66 4.22 RRF R@100 22.42% 23.47% 23.34% R@300 34.83% 36.05% 36.04% R@1000 40.68% 41.90% 42.06% H@5 (km) 3.80 3.17 3.12 H@10 (km) 4.22 3.52 3.42 Union R@100 33.58% 33.66% 33.64% R@300 47.50% 47.72% 47.74% R@1000 58.57% 58.95% 59.04% H@5 (km) 5.35 5.24 5.24 H@10 (km) 5.79 5.68 5.69
+
+Table 4 reports the comparison across three fusion strategies: the LLM channel alone (no fusion with IBKNN), Reciprocal Rank Fusion, and Union fusion. The pattern is striking. Used standalone, the LLM channel shows a wide quality gap: GPT-4o outperforms LLaMA-3.2-3B by 27–46% in Recall @𝐾 and GPT-5.2 by 25–35%; haversine distance improves by 40–45% for GPT-4o. Under RRF the gap partially closes but frontier models retain a 3–10% edge. Under Union it collapses: all three models land within 0.4pp at every 𝐾 from 100 to 1000 (a 38 × reduction in the quality gap versus standalone), with haversine tightening to within ∼2%. The haversine rows also show a fusion-strategy trade-off: the LLM channel alone is geographically tightest (H@5: 2.2–3.7 km), RRF intermediate, Union widest (5.2–5.4 km) because IBKNN dominates the head positions. This collapse is exactly what the position-preservation property (§3.3) predicts: IBKNN occupies the top positions where most recall mass lives, leaving the LLM’s quality ceiling little room to express itself in the fused output. The operational implication is that a marketplace operator can deploy the cheapest, fastest query generator available without ma-terially compromising recall, provided Union fusion is the channel-combination strategy – at 1.6M-property scale, daily refresh with a frontier API-based LLM is infeasible under current rate limits (§3.6), while a self-hosted 3B model completes in hours on a single GPU node. 
+
+## 5.5 LightGBM Re-ranker 
+
+The Union-fused top-1000 pool is re-scored by the downstream LightGBM ranker described in §3.4. The role of this stage is to add complementary incremental value on top of the fused pool Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Zaidi et al. 
+
+Table 5: Downstream LightGBM ranker performance over the Union-fused top-1000 pool on the 1.6M focal set. The ranker delivers a small but consistent lift at 𝐾 ≥ 10 , with peak absolute lift in the mid-𝐾 range, and converges to Union’s R@1000 because re-ranking cannot expand the candidate pool.                
+
+> R@10 R@50 R@100 R@300 Union (pre-ranker) 9.91% 23.97% 32.26% 45.84% Union + LightGBM 10.08% 25.26% 33.95% 47.51%
+> Δ+0.17pp +1.29pp +1.69pp +1.67pp
+
+by exploiting features (geographic distance, property similarity, demand profiles) that the upstream channels do not directly model. Table 5 reports the best-performing ranker variant’s lift over the pre-ranker Union fused pool. The ranker improves Union’s recall at every 𝐾 from 10 through 500, with the lift staying above +1.2 percentage points across the entire 𝐾 = 50 –500 range and peaking near the middle. At 𝐾 = 1000 
+
+the two systems are identical because re-ranking redistributes can-didates within the pool but cannot add new ones – the candidate generator’s recall is the ceiling, and the ranker’s role is to push rel-evant candidates into earlier positions within that ceiling. The mid-
+
+𝐾 range where the lift concentrates corresponds to the operating points most relevant for downstream surface ranking, where the top hundreds of candidates are re-scored by additional business-logic models. We also note that the ranker introduces a small geographic-precision cost relative to Union (mean haversine at 𝐾 = 5 rises from 5.60 km to 7.27 km), reflecting that property-level demand and sim-ilarity features pull the model slightly away from raw geographic proximity. The candidate-set guarantees from §3.3 are unaffected by this stage: the ranker is free to reorder anything in the fused pool, but the pool itself preserves IBKNN’s coverage and ordering by construction. 
+
+## 6 Discussion 
+
+Deployment implications for two-sided marketplaces. The results in §5 support a specific deployment pattern for LLM-based candi-date generation in marketplace settings: use a mature behavioral channel (IBKNN) as the primary signal, complement it with an LLM channel via Union fusion, and re-rank the fused pool with a learned model. This stack delivers three properties that marketplace operators need simultaneously: (i) no regression on well-served properties (recall-preservation guarantee), (ii) incremental recall on the long tail where behavioral signal is sparse ( +4.34 pp at R@300 
+
+on the very_low segment), and (iii) complete coverage of cold-start properties that behavioral methods cannot reach. The Union fusion guarantee is especially important in marketplace contexts where per-property regression translates directly into host-side exposure loss – a concern that average-recall improvements do not address. 
+
+Limitations. Several limitations merit acknowledgment. First, our evaluation uses offline recall against held-out clickstream co-occurrences; online metrics such as click-through rate and booking conversion may tell a different story, particularly for cold-start prop-erties where the ground-truth signal is inherently sparse. Second, the LLM channel’s geographic precision is lower than IBKNN’s (§5.4), reflecting that metadata-derived queries retrieve from a broader geographic distribution than IBKNN’s 30 km neighborhood; surfaces where geographic adjacency is paramount may require tighter location filtering. Third, the pipeline currently generates queries once and serves them statically; it does not incorporate user-level personalization or session context, which limits its ability to adapt recommendations to individual traveler intent. Fourth, the LLM channel’s candidate pool is bounded by its retrieval configura-tion ( 𝑄 = 12 queries × top-50 per query ≈ 500 unique candidates); expanding retrieval depth or adding sparse retrieval channels could raise this ceiling. 
+
+Future work. Three directions follow naturally. First, online A/B testing of the Union-fused pipeline against the IBKNN baseline would validate whether the offline recall gains translate to user-facing engagement improvements. Second, iterative query refine-ment – feeding retrieved candidates back to the LLM to generate improved queries – could lift retrieval quality for properties where first-pass queries miss relevant facets. Third, prompt-variant op-timization (several facet-diversity variants remain unevaluated) could further improve candidate quality without requiring model fine-tuning. 
+
+## 7 Conclusion 
+
+We presented a training-free, LLM-based candidate generation pipeline for item-to-item recommendation in vacation rental mar-ketplaces, evaluated at scale on 1.6M focal properties over an 11.7M-property catalog. The pipeline uses an off-the-shelf LLM to syn-thesize diverse search queries from property metadata, retrieves candidates via dense search, and merges them with a behavioral baseline through Union fusion, a channel-combination strategy that preserves the behavioral channel’s ordering by construction. Four findings emerge from the evaluation. First, Union fusion improves recall over IBKNN at every 𝐾 on shared properties, with the lift growing from +0.24 pp at R@100 to +1.40 pp at R@1000 ,driven by only 4% candidate overlap between the two channels. Second, the improvement concentrates on the long tail: +4.34 pp at 
+
+R@300 on properties with 1–5 interactions, diminishing to +0.14 pp on the densest segment, exactly the asymmetric profile predicted by Union’s append-only design. Third, the LLM channel extends coverage to the cold-start properties that IBKNN cannot serve, a structural consequence of metadata-only eligibility rather than a trained behavior. Fourth, the choice of query generator LLM matters far less under Union than it appears in isolation. Used standalone, a 3B open-weights model trails by 27–46% in recall. Under Union fusion, the gap collapses to under 1%. This makes self-hosted small-model deployment a defensible choice at marketplace catalog scale. A downstream LightGBM re-ranker adds incremental lift over the Union-fused pool ( +1.69 pp at R@100 ), confirming that the fused candidate set is amenable to learned re-scoring. Our proposed solu-tion addresses the supply-side exposure imbalance that motivates this work: long-tail and cold-start properties receive candidates without regressing well-served, high interaction properties. Serving the Long Tail: Training-Free LLM Candidate Generation for Vacation Rental Marketplaces Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+## References 
+
+[1] Keqin Bao, Jizhi Zhang, Yang Zhang, Wenjie Wang, Fuli Feng, and Xiangnan He. 2023. TALLRec: An Effective and Efficient Tuning Framework to Align Large Language Model with Recommendation. In Proceedings of the 17th ACM Conference on Recommender Systems (RecSys ’23) . 1007–1014. doi:10.1145/3604915. 3608857 [2] Oren Barkan and Noam Koenigstein. 2016. Item2Vec: Neural Item Embedding for Collaborative Filtering. In 2016 IEEE 26th International Workshop on Machine Learning for Signal Processing (MLSP) . IEEE, 1–6. arXiv:1603.04259 [3] Gordon V. Cormack, Charles L. A. Clarke, and Stefan Büttcher. 2009. Reciprocal Rank Fusion Outperforms Condorcet and Individual Rank Learning Methods. In Proceedings of the 32nd International ACM SIGIR Conference on Research and Development in Information Retrieval (SIGIR ’09) . ACM, 758–759. doi:10.1145/ 1571941.1572114 [4] Abhimanyu Dubey, Abhinav Jauhri, Abhinav Pandey, et al . 2024. The Llama 3 Herd of Models. arXiv preprint arXiv:2407.21783 (2024). arXiv:2407.21783 [5] Sein Kim, HongSeok Kang, Kibum Kim, Jiwan Kim, et al . 2025. Rethinking LLM-Based Recommendations: A Query Generation-Based, Training-Free Approach. 
+
+arXiv preprint arXiv:2504.11889 (2025). arXiv:2504.11889 [6] Greg Linden, Brent Smith, and Jeremy York. 2003. Amazon.com Recommenda-tions: Item-to-Item Collaborative Filtering. IEEE Internet Computing 7, 1 (2003), 76–80. doi:10.1109/MIC.2003.1167344 [7] Shashank Rajput, Nikhil Mehta, Anima Singh, Raghunandan H. Keshavan, Trung Vu, Lukasz Heldt, Lichan Hong, Yi Tay, Vinh Q. Tran, Jonah Samost, Maciej Kula, Ed H. Chi, and Maheswaran Sathiamoorthy. 2023. Recommender Systems with Generative Retrieval. In Advances in Neural Information Processing Systems (NeurIPS) , Vol. 36. 10299–10315. arXiv:2305.05065 [8] Ali Sadeghian, Shervin Minaee, Ioannis Partalas, Xinxin Li, Daisy Zhe Wang, and Brooke Cowan. 2019. Hotel2vec: Learning Attribute-Aware Hotel Embeddings with Self-Supervision. In arXiv preprint arXiv:1910.03943 . arXiv:1910.03943 [9] Badrul Sarwar, George Karypis, Joseph Konstan, and John Riedl. 2001. Item-Based Collaborative Filtering Recommendation Algorithms. In Proceedings of the 10th International Conference on World Wide Web (WWW ’01) . 285–295. doi:10.1145/ 371920.372071 [10] Liang Wang, Nan Yang, Xiaolong Huang, Binxing Jiao, Linjun Yang, Daxin Jiang, Rangan Majumder, and Furu Wei. 2022. Text Embeddings by Weakly-Supervised Contrastive Pre-training. arXiv preprint arXiv:2212.03533 (2022). arXiv:2212.03533 [11] Xinyang Yi, Ji Yang, Lichan Hong, Derek Zhiyuan Cheng, Lukasz Heldt, Aditee Kumthekar, Zhe Zhao, Li Wei, and Ed Chi. 2019. Sampling-Bias-Corrected Neural Modeling for Large Corpus Item Recommendations. In Proceedings of the 13th ACM Conference on Recommender Systems (RecSys ’19) . 269–277. doi:10.1145/ 3298689.3346996 [12] Rex Ying, Ruining He, Kaifeng Chen, Pong Eksombatchai, William L. Hamilton, and Jure Leskovec. 2018. Graph Convolutional Neural Networks for Web-Scale Recommender Systems. In Proceedings of the 24th ACM SIGKDD International Conference on Knowledge Discovery & Data Mining (KDD ’18) . 974–983. doi:10. 1145/3219819.3219890

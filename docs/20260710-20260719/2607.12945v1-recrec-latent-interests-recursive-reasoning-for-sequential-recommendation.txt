@@ -1,0 +1,596 @@
+Title: RecRec: Latent Interests Recursive Reasoning for Sequential Recommendation
+
+URL Source: https://arxiv.org/pdf/2607.12945v1
+
+Published Time: Wed, 15 Jul 2026 11:59:12 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# RecRec: Latent Interests Recursive Reasoning for Sequential Recommendation 
+
+## Wenhao Deng 
+
+w.deng.1@research.gla.ac.uk University of Glasgow Glasgow, United Kingdom 
+
+## Junchen Fu ∗
+
+j.fu.3@research.gla.ac.uk University of Glasgow Glasgow, United Kingdom 
+
+## Hanwen Du 
+
+du.1128@osu.edu Ohio State University Columbus, OH, USA 
+
+## Alexandros Karatzoglou 
+
+alexandros.karatzoglou@gmail.com Amazon Barcelona, Spain 
+
+## Ioannis Arapakis 
+
+ioannis.arapakis@telefonica.com Telefónica Scientific Research Barcelona, Spain 
+
+## Hangjun Guo 
+
+hangjung@andrew.cmu.edu Carnegie Mellon University Pittsburgh, PA, USA 
+
+## Kaiwen Zheng 
+
+k.zheng.1@research.gla.ac.uk University of Glasgow Glasgow, United Kingdom 
+
+## Yongxin Ni 
+
+niyongxin@u.nus.edu National University of Singapore Singapore, Singapore 
+
+## Joemon M. Jose 
+
+Joemon.Jose@glasgow.ac.uk University of Glasgow Glasgow, United Kingdom 
+
+## Abstract 
+
+Sequential recommender systems rely on a single forward pass to encode user interaction histories and predict the next item. Increas-ing inference-time computation through latent reasoning, with the model proceeding step by step before the final prediction, has been recently explored in sequential recommendation with promising results. However, how to structure the reasoning process for sequen-tial recommendation remains an open question. Existing approaches couple reasoning and prediction in a single 𝑑 -dimensional state, limiting reasoning depth and often relying on multi-stage pipelines with reinforcement learning (RL). We propose RecRec (Recursive Reasoning for Recommendation), an RL-free framework that decou-ples reasoning from prediction, overcoming the fixed 𝑑 -dimensional state bottleneck of prior methods. RecRec consists of a Context Compressor and a Recursive Reasoner, trained in two simple su-pervised stages. The Context Compressor distills the backbone’s hidden states into a small set of latent interests, with an Interest Di-versity Regularizer encouraging each interest to capture a distinct aspect of user behavior. The Recursive Reasoner then refines these interests by reasoning in a separate intermediate latent space. Deep supervision lets the reasoning depth be freely adjusted at inference without retraining. On four real-world datasets, RecRec outper-forms state-of-the-art reasoning-enhanced methods, and on three of four datasets, gains extend past the training-time depth. Our findings point to a decoupled, multi-vector recipe that unleashes latent reasoning from the single-state bottleneck of prior methods, suggesting reasoning-state structure as a design axis to explore further in sequential recommendation. 
+
+## 1 Introduction 
+
+Sequential recommender systems encode a user’s interaction his-tory in a single forward pass and predict the next item from the resulting user representation. While deeper or wider backbone encoders can improve this representation [ 51 ], the prediction is still produced in one shot, with no opportunity to revisit or refine 
+
+> ∗Corresponding author.
+
+Table 1: Reasoning and prediction spaces across reasoning-enhanced sequential recommendation methods (the se-quence space is the backbone’s hidden states H in all cases). 
+
+Method Reasoning space Pred. latent space Decoupled? ReaRec reasoning tokens appended to sequence last reasoning token (or average) No LARES iterates over all 𝐿 
+
+hidden states last position of final iteration No RecRec (ours) dedicated reasoning state ( S)dedicated latent interests ( M)Yes 
+
+the user’s latent interests before committing to a ranking. In large language models (LLMs), chain-of-thought reasoning [ 46 ] and ex-tended thinking enabled by reinforcement learning (RL) [8, 38, 49, 53 ] have shown that allocating computation between the input and the final answer lets the model scratch and refine effectively through the intermediate reasoning steps, reducing errors that a single forward pass would commit to irreversibly. Latent-space vari-ants [ 14 , 19 ] push this further by reasoning in continuous hidden states. Bringing this idea to sequential recommendation has begun to show promising results [33, 42]. How to structure the reasoning process for sequential recommen-dation, however, still remains an open question. A central issue is that existing methods do not cleanly separate three distinct spaces: the user’s behavior history (sequence), the intermediate reasoning, and the latent state used for prediction. As summarized in Table 1, ReaRec [ 42 ] appends reasoning tokens directly to the backbone’s input sequence, so reasoning shares the space with the history. LARES [ 33 ] iterates a shared block over all 𝐿 hidden states of the history itself, making reasoning a refinement of the sequence. In both cases, the final prediction collapses to a single 𝑑 -dimensional vector regardless of reasoning effort, a bottleneck on the prediction state that prior work on iterative architectures has identified as limiting modeling capacity [2, 6, 16].  
+
+> 1arXiv:2607.12945v1 [cs.IR] 14 Jul 2026 RecSys ’26, September 28–October 2, 2026, Minneapolis, MN, USA Deng et al. Sequential
+> Recommender
+> Context
+> Compressor
+> Context
+> Compressor
+> Sequential
+> Recommender
+> Reasoner
+
+Stage 2 : Recursive Reasoner Training Stage 1 : Backbone+Compressor Training         
+
+> Reasoner
+> GRU gate
+> Reasoner
+> GRU gate
+> Reasoner
+> GRU gate
+> Reasoner
+> Reasoner
+> Reasoning step Reasoning step Reasoning step 12
+> detached as inputs for
+> next deep supervision
+> = learnable queries
+> = latent interests
+> = trainable = frozen
+> =backbone last hidden state
+> = intermediate reasoning state
+> = item embedding table
+> = prediction
+> = target item
+> Reasoner =inner reasoning passes
+> = Log-mean-exp pooling
+
+Figure 1: Training pipeline of RecRec. Stage 1: the backbone and Context Compressor are jointly trained, with 𝑅 learnable queries distilling the hidden states H into latent interests M0 that produce the next-item prediction. Stage 2: the backbone and Context Compressor are frozen; only the Recursive Reasoner is trained. The figure shows the first deep supervision round ,where S starts from S0 and M starts from M0. Within the round, the Reasoner executes 𝑇 reasoning steps. Each step updates S
+
+(middle, purple) via 𝑛 inner passes attending to H and the current M, then commits an update to M (bottom, orange) through a GRU gate. Stage 2 repeats this round 𝐾 times; subsequent rounds inherit detached S and M from the previous round. 
+
+A second issue is how reasoning depth is controlled. ReaRec allocates reasoning position embeddings for a fixed number of steps; inference can use fewer steps than training, but cannot go beyond that number. LARES allows the step count to vary at inference time, but achieving this flexibility requires randomizing the step count during training and an additional RL stage [38]. Recent recursive reasoning models [ 26 , 45 ] offer a different recipe for iterative latent computation. The Tiny Recursion Model (TRM) [ 26 ] maintains two latent states updated by a single shared-weight block: a scratchpad for intermediate computation and an answer state that maps to the final output. Deep supervision, ap-plied at every detached step, teaches each step to improve whatever input it receives, so the model generalizes to more steps than it was trained on. By recursively applying a single shared-weight block, TRM matches frontier LLMs on combinatorial tasks. This simple yet effective dual-state, shared-weight, deep-supervision paradigm has not yet been explored for recommendation. We propose RecRec , a backbone-agnostic framework that in-troduces the dual-state recursive reasoning paradigm to sequential recommendation. A Context Compressor distills the backbone’s 𝐿 
+
+hidden states into a small set of 𝑅 latent interests. A Recursive Rea-soner then alternates between refining an intermediate reasoning state, which revisits the user’s behavior history and the current interests, and committing an update to the interests through a sin-gle Transformer block. The framework is trained in two simple supervised stages. Our main contributions are as follows. 
+
+• We introduce RecRec, to the best of our knowledge the first framework to bring dual-state recursive reasoning to sequential recommendation. Reasoning happens in a dedicated intermediate reasoning state that is separate from the latent interests used for prediction, so intermediate computation does not directly constrain the prediction state, removing the single 𝑑 -dimensional bottleneck of prior methods. 
+
+• A Recursive Reasoner bridges this paradigm to the recommenda-tion setting with a single Transformer block alternating between the two states, where the intermediate reasoning state selectively attends to the user’s behavior history and current interests. This replaces TRM’s concatenation-based MLP with attention-based information routing tailored to the recommendation setting. 
+
+• A Context Compressor distills the backbone’s hidden states into 
+
+𝑅 latent interests that jointly produce the prediction. An Interest Diversity Regularizer (IDR) encourages each interest to capture a distinct aspect of user behavior. 
+
+• Through deep supervision with detached steps and without an RL stage, the reasoning depth can be freely adjusted at inference time beyond the reasoning depth used at training. Experiments on four real-world datasets show that RecRec out-performs state-of-the-art reasoning-enhanced sequential recom-menders. On three of four datasets, gains extend past the training-time depth. 
+
+## 2 Related Work 2.1 Sequential Recommendation 
+
+Sequential recommendation predicts the next item a user will inter-act with based on their ordered interaction history. GRU4Rec [ 21 ]and Caser [ 43 ] first applied recurrent and convolutional archi-tectures to this task. SASRec [ 27 ] introduced unidirectional self-attention that lets each position attend to all previous items. BERT4Rec [40 ] adopted bidirectional self-attention with a cloze-style masked item prediction objective, allowing each position to leverage both past and future context during training. These Transformer-based  
+
+> 2RecRec: Latent Interests Recursive Reasoning for Sequential Recommendation RecSys ’26, September 28–October 2, 2026, Minneapolis, MN, USA
+
+models have become the de facto backbone for sequential recom-mendation, with later variants further incorporating modality fea-tures [ 10 –13 , 20 , 23 , 29 , 30 , 48 , 50 , 54 ]. Despite architectural differ-ences, all of the above models share one property: they produce a single user representation from one forward pass through, and the prediction is read directly from this representation. There is no mechanism to revisit or refine the user representation before prediction. Several orthogonal lines of work relax this single-vector design: multi-interest recommenders replace the user vector with a set of in-terest vectors [ 4, 28 , 52 ], LLM-based methods cast recommendation as language modeling or align LLMs with backbones [ 1, 15 , 31 , 32 ], and generative retrieval replaces dense scoring with semantic-ID autoregression [9, 37]. 
+
+## 2.2 Reasoning-Enhanced Sequential Recommendation 
+
+Recent work increases inference-time computation for sequential recommendation by introducing multi-step latent reasoning on top of a backbone encoder. ReaRec [ 42 ] was the first to bring latent reasoning into sequen-tial recommendation. It reuses the backbone for several forward passes, feeding the last hidden state back through the same encoder with dedicated reasoning position embeddings. Each step appends reasoning tokens to the input, so the attention cost per step grows as reasoning tokens accumulate. The reasoning position embed-dings are allocated for a fixed number of steps, so inference can use fewer steps than training but cannot use more steps than at training. ReaRec trains with either Ensemble Reasoning Learning (ERL), which aggregates reasoning states, or Progressive Reasoning Learning (PRL), which applies per-step supervision with progres-sively sharpened targets. LARES [ 33 ] also reasons over the full sequence, applying a shared core-block 𝑘 times, with 𝑘 sampled during training, to allow flexible depth at test time. LARES trains in three stages: self-supervised pre-training with trajectory-level and step-level alignment, followed by reinforcement post-training via GRPO using ranking metrics as reward signals. From an architectural perspective, these two methods represent opposite ends of the evolving state design space. ReaRec evolves a single 𝑑 -dimensional vector per step. LARES evolves all 𝐿 hidden states at every step through full self-attention, yet only the last position of the final iteration is used for prediction. Both therefore collapse to a single 𝑑 -dimensional vector at the prediction step. In both cases the state being refined is also the state from which the prediction is made, with no separate space for intermediate reason-ing. RecRec takes a middle ground by compressing the backbone’s output into 𝑅 latent interests and reasoning exclusively on them. Several concurrent efforts scale reasoning along complementary axes. Parallel Latent Reasoning [ 41 ] scales reasoning width via aggregated parallel streams within a single-state paradigm, com-plementary to our depth-extrapolation axis. Diffusion-based two-stage refinement [ 25 ], manifold-constrained adaptive test-time com-pute [ 47 ], and process-reward-guided beam search in generative retrieval [ 17 ] explore further orthogonal directions. Prompt-level reflection frameworks over LLM backbones [ 36 ] operate in a differ-ent paradigm from latent-space reasoning. Across these directions, RecRec’s reason-then-update loop, inspired by TRM [ 26 ] (discussed next), is distinguished by maintaining a dedicated intermediate reasoning state separate from the evolving interests. 
+
+## 2.3 Recursive Reasoning Models 
+
+Chain-of-thought prompting [ 46 ] demonstrated that multi-step rea-soning substantially improves LLM performance on tasks requiring compositional logic, and recent reasoning-focused models [ 18 ] have scaled this idea with RL. A parallel line of work replaces discrete token generation with continuous latent reasoning: Coconut [ 19 ]trains LLMs to reason entirely in continuous hidden states with-out emitting intermediate tokens, and recurrent-depth models [ 14 ]apply depth-wise recursion in latent space to scale test-time compu-tation. The Universal Transformer [ 7] earlier showed that iteratively applying the same Transformer block improves compositional gen-eralization. Generating explicit reasoning tokens is expensive and bottlenecked by the vocabulary; latent reasoning can iterate freely in a continuous representation space. The Hierarchical Reasoning Model (HRM) [ 45 ] introduced a two-module recurrent architecture where a high-level module maintains a slow planning state and a low-level module handles rapid step-by-step computation. Building on HRM, TRM [ 26 ] unifies both modules into a single shared-weight block that alternates between two roles. An answer state 𝑦 maps to the predicted output, while a scratchpad state 𝑧 holds intermediate reasoning but is never decoded. Within each round the block is applied 𝑛 times to update 𝑧 , then once to update 𝑦 . Training uses 𝑇 −1 no-gradient warmup rounds followed by one back-propagated round (1-step BPTT), repeated across 𝐾 de-tached deep supervision steps so each step independently learns to improve whatever input it receives. Because a single block handles all computation, TRM achieves strong results on combinatorially hard tasks such as Sudoku and ARC-AGI. RecRec introduces recursive reasoning to sequential recommen-dation. The latent interests M correspond to TRM’s answer state 𝑦 ,and the intermediate reasoning state S to the scratchpad 𝑧 .
+
+## 3 Method 
+
+RecRec is designed to work with any sequential backbone. Figure 1 illustrates the overall architecture. Given a sequential backbone, a Context Compressor (§3.2) first extracts the last layer’s hidden states into a compact array of 𝑅 latent interests via learned queries and cross-attention. A Recursive Reasoner (§3.3) then iteratively re-fines these interests through a reason-then-update loop. The refined interests directly predict item relevance via log-mean-exp pool-ing (§3.4). The framework is trained in two supervised stages (§3.5). 
+
+## 3.1 Problem Formulation 
+
+In sequential recommendation, each user is associated with a chrono-logically ordered interaction sequence x = (𝑣 1, 𝑣 2, . . . , 𝑣 𝐿 ) where 
+
+𝑣 𝑖 ∈ V denotes an item from the item set. The task is to predict the next item 𝑣 𝐿 +1 the user is likely to interact with. A sequential backbone (e.g., SASRec [ 27 ] or BERT4Rec [ 40 ]) encodes the interaction sequence and produces hidden states H ∈
+
+R𝐿 ×𝑑 , where 𝐿 is the sequence length and 𝑑 is the hidden dimension. Standard practice predicts from only the final position’s hidden  
+
+> 3RecSys ’26, September 28–October 2, 2026, Minneapolis, MN, USA Deng et al.
+
+state h𝐿 , compressing the entire interaction history into a single 
+
+𝑑 -dimensional vector. RecRec augments this pipeline by extracting 𝑅 latent interests from H, iteratively refining them through recursive reasoning, and predicting items directly from the refined interests. Given the user’s behavior history H and an initial estimate of their interests, the question RecRec asks at each reasoning step (formally defined in §3.3) is: with what is known now, how can these interests be revised to better anticipate what the user wants next? 
+
+## 3.2 Context Compressor 
+
+The Context Compressor extracts the backbone’s last-layer hidden states H ∈ R𝐿 ×𝑑 into a compact array of 𝑅 latent interests M0 ∈
+
+R𝑅 ×𝑑 , reducing a variable-length interaction history to a fixed-size representation for the downstream Recursive Reasoner to refine. The compressor uses 𝑅 learned queries that cross-attend to the input sequence and are refined through cross-attention layers, following the learned-query cross-attention design [3, 24]. The input sequence is first normalized once: ¯H = LN input (H),and this normalized representation is shared across all layers. The learned queries are initialized with Xavier uniform and expanded to the batch dimension; no positional encoding is applied, as the 𝑅 
+
+latent interests form an unordered set. Let Z denote the queries being refined, initialized to the learned queries. Each layer applies three pre-norm residual sub-operations: 
+
+Z ← Z + CrossAttn  LN crossattn (Z), ¯H, ¯H, (1) 
+
+Z ← Z + SelfAttn  LN selfattn (Z), (2) 
+
+M0 = Z + FFN  LN ffn (Z). (3) In the cross-attention, normalization is applied to the queries; ¯H
+
+reuses the input normalization. Padding positions in ¯H are masked via a key padding mask. Neither cross-attention nor self-attention uses a causal mask, as the 𝑅 latent interests form an unordered set. 
+
+## 3.3 Recursive Reasoner 
+
+The Recursive Reasoner iteratively refines the latent interests M0
+
+produced by the Context Compressor. To decouple the roles of reasoning and prediction, we maintain two separate states. Latent interests M ∈ R𝑅 ×𝑑 are the representations decoded into predictions; they are initialized from M0. An intermediate reasoning state S ∈
+
+R𝑅 ×𝑑 carries out intermediate reasoning but is never directly used for prediction. We match S to M’s shape so that a single shared Reasoner block (introduced below) processes both with the same query dimension. A reasoning step consists of 𝑛 inner passes in which S gathers information from H and the current M, followed by one gated update that commits this information back to M
+
+through a GRU [ 5] gate. At the start of each supervision round, S
+
+is initialized from a fixed random tensor S0 ∈ R𝑅 ×𝑑 , drawn once at model construction from a truncated normal distribution. We keep S0 fixed rather than learnable because the first 𝑇 −1 reasoning steps of every supervision round run without gradient (see below), so a learnable S0 would never receive a gradient signal to update. This separation of roles lets the model reason deeply through S
+
+without destabilizing M. In particular, since S is never used for prediction, its representations can evolve at a different magnitude Hidden States   
+
+> as user history
+> Latent
+> Interests
+> Reasoning
+> State
+> Reasoner
+> Update
+> Update
+> Refined Latent Interests
+> GRU gate
+> Cross-Attention
+> LayerNorm *
+> LayerNorm
+> SwiGLU FFN
+> Inner Reasoning Passes
+> Reasoning Steps
+
+Figure 2: Recursive Reasoner architecture and inference be-havior. The block is applied to both states in alternation, not in parallel. In the S update phase, S attends to H and the current M; in the M update phase, M attends to the refined S
+
+and is committed through a GRU gate to produce the refined latent interests. Each reasoning step first performs 𝑛 inner 
+
+S updates, then one M update, and the outer loop runs 𝑁 
+
+reasoning steps ( 𝑁 = 𝐾 × 𝑇 at training; freely adjustable at inference). The asterisk on the first LayerNorm denotes the separate Q / external-KV normalization detailed in §3.3. 
+
+from the latent interests, which must stay compatible with the item embeddings used to predict the relevance (via dot product, see §3.4). The GRU gate on M further controls how much of this freely evolved reasoning is committed to the prediction state at each step. A single Transformer block handles both roles, updating S and 
+
+M with the same parameters but different inputs. The two-state formulation follows recursive reasoning models [26]. 
+
+The Reasoner block. Both states are updated by a single Trans-former [ 44 ] block, denoted as Reasoner (· , ·) in the equations below, with pre-norm LayerNorm, bias-free multi-head attention, and a SwiGLU [ 39 ] feed-forward network. Queries and key-value inputs are normalized by separate LayerNorm layers, matching the nor-malization structure of the Context Compressor. When additional KV tokens C are provided, they are normalized by a separate KV norm and appended to the key-value set: 
+
+X′ = X + Attn  LN 𝑞 (X), [LN 𝑞 (X); LN 𝑘𝑣 (C)] , (4) 
+
+Reasoner (X, C) = X′ + FFN  LN ffn (X′), (5) where LN 𝑞 , LN 𝑘𝑣 , and LN ffn are separate LayerNorm layers. Both the attention output projection and the FFN output layer are zero-initialized, so the Reasoner starts as an identity mapping. This  
+
+> 4RecRec: Latent Interests Recursive Reasoning for Sequential Recommendation RecSys ’26, September 28–October 2, 2026, Minneapolis, MN, USA
+
+stabilizes early training by letting the Reasoner learn to modify the representations it receives from the Context Compressor. 
+
+The reasoning step. Each reasoning step proceeds in two phases. First, the intermediate reasoning state is updated for 𝑛 inner reason-ing passes, each time attending to the full backbone hidden states 
+
+H and the current latent interests: 
+
+S ← Reasoner  S, [H; M], repeated 𝑛 times , (6) where H ∈ R𝐿 ×𝑑 is the sequence of hidden states from the frozen backbone. Padding positions in H are masked in the key-value attention; M is held fixed while S evolves, so each pass lets S re-examine the encoded user history in light of the current interests. Second, M reads the refined intermediate reasoning state through the Reasoner block, producing a candidate update ˆM that a GRU gate then blends into the committed M:
+
+ˆM = Reasoner (M, S), (7) 
+
+M ← GRU ( ˆM, Mprev ), (8) where Mprev is the value of M before the current reasoning step. Directly overwriting M with ˆM risks large jumps per reasoning step. Following Slot Attention [ 34 ], we apply a GRU [ 5 ] gate that blends ˆM with Mprev , letting the model learn how much to change at each step. The gate’s inputs are layer-normalized before the blending ratio is computed, so the update decision is not affected by representation magnitude. 
+
+Deep supervision and reasoning depth. Rather than training the Reasoner with a single loss at the end of all reasoning, we adopt deep supervision [ 45 ]: a loss is computed after each of 𝐾 supervision rounds, with S and M detached between rounds. This detachment forces each round to improve whatever state it receives, rather than co-adapting with earlier rounds through long gradient chains: each round learns the same “given state, make it better” objective inde-pendently. Each supervision round executes 𝑇 reasoning steps, of which only the final step is back-propagated through; the first 𝑇 −1
+
+steps execute without gradient, preparing a good starting point for 
+
+M without consuming gradient memory (a 1-step back-propagation-through-time (BPTT) strategy, following [ 26 ]). The total training reasoning depth is therefore 𝐾 × 𝑇 steps, each containing 𝑛 inner reasoning passes. Because each round operates on its inputs inde-pendently with no dependence on the history of preceding rounds, the Reasoner can be applied for additional steps beyond the training configuration at inference, deepening the refinement of the latent interests before prediction. 
+
+## 3.4 Prediction 
+
+After reasoning, the refined latent interests M𝐾 ∈ R𝑅 ×𝑑 are used to predict the relevance of all candidate items. Each latent interest computes a per-item relevance via inner product with the item embedding e𝑣 ∈ R𝑑 from the shared embedding table, scaled by a temperature 𝜏 :
+
+𝑠 𝑟 (𝑣 ) = m⊤ 
+
+> 𝑟
+
+e𝑣 
+
+𝜏 , 𝑟 = 1, . . . , 𝑅. (9) The 𝑅 per-interest relevances are aggregated into a single prediction 
+
+𝑠 (𝑣 ). We want the most relevant interest to dominate the prediction, while keeping gradients flowing through all 𝑅 interests so that every interest can be refined during training. A log-mean-exp pooling provides this soft maximum behavior: 
+
+𝑠 (𝑣 ) = log 1
+
+𝑅 
+
+> 𝑅
+
+∑︁  
+
+> 𝑟 =1
+
+exp  𝑠 𝑟 (𝑣 ). (10) This serves as the final prediction for both training and evaluation. 
+
+## 3.5 Training and Inference 
+
+RecRec is trained in two supervised stages. 
+
+Stage 1: Backbone and compressor co-training. The backbone and Context Compressor are jointly trained from scratch. The backbone encodes the interaction sequence into H, and the Context Compres-sor produces initial latent interests M0. The Recursive Reasoner is not used in this stage; item relevance is predicted directly from 
+
+M0 via log-mean-exp pooling (Eq. (10) ) and supervised with cross-entropy loss against the ground-truth next item 𝑣 +. An interest diversity regularizer LIDR is added to prevent the learned queries from collapsing to identical interests. The softmax probability of the ground-truth item under the scores 𝑠 (·) (Eq. (10) ) computed from a given interest tensor is: 
+
+ˆ𝑦 𝑣 + (M) = exp  𝑠 (𝑣 +)Í𝑣 ∈ V exp  𝑠 (𝑣 ) , (11) where the scores 𝑠 (𝑣 ) are obtained from M via Eq. (9) and Eq. (10). The Stage 1 loss is: 
+
+L1 = − log ˆ 𝑦 𝑣 + (M0) + 𝜆 IDR · L IDR . (12) 
+
+Interest diversity regularization (IDR). All 𝑅 learned queries at-tend to the same hidden states H via cross-attention. Without ex-plicit regularization, they converge to attend to the same region of the sequence, producing near-identical latent interests (inter-interest cosine similarity exceeds 0.8 in practice). IDR penalizes this collapse by minimizing the mean off-diagonal cosine similarity among M0’s interests: 
+
+LIDR = 1
+
+𝑅 (𝑅 −1)∑︁ 𝑟 ≠𝑟 ′
+
+ˆm⊤ 
+
+> 𝑟
+
+ˆm𝑟 ′ , (13) where ˆm𝑟 = m𝑟 /∥ m𝑟 ∥ denotes the L2-normalized interest. With IDR active, inter-interest cosine drops from 0.82 –0.90 to 0.14 –0.75 
+
+across datasets (see Figure 5), maintaining sufficient diversity for the downstream prediction to benefit from distinct interests. 
+
+Stage 2: Recursive Reasoner training. The backbone is frozen (eval mode). The Context Compressor is also frozen but keeps dropout active, serving as a regularizer on the Reasoner’s input. The Recur-sive Reasoner is initialized from scratch and is the only trainable component, zero-initialized so that it starts as an identity mapping, stabilizing early training. Training follows the deep supervision scheme of §3.3 with 𝐾 
+
+supervision rounds per batch. At each round 𝑘 : the Reasoner takes 
+
+H and the detached S, M from the previous round and runs 𝑇 
+
+reasoning steps; only the final step, consisting of 𝑛 inner reasoning passes on S and one gated update on M, is back-propagated through (1-step BPTT); the loss in Eq. (14) is computed on the resulting M(𝑘 ) ,one gradient step is taken, and both S(𝑘 ) and M(𝑘 ) are detached before being fed to round 𝑘 +1. At the first round, S is initialized  
+
+> 5RecSys ’26, September 28–October 2, 2026, Minneapolis, MN, USA Deng et al.
+
+Table 2: Statistics of the experimental datasets. 
+
+Dataset #Users #Items #Inter. Avg.L Sparsity S-Shop 89,284 15,552 384,741 12.64 99.97% V-Shop 54,005 21,439 249,505 14.77 99.98% MicroLens 98,133 16,959 502,561 5.12 99.97% Steam 157,998 7,960 1,292,442 25.97 99.90% from S0 and M from M0. The Stage 2 loss at round 𝑘 adds IDR to the cross-entropy on M(𝑘 ) :
+
+L (𝑘 ) 
+
+> 2
+
+= − log ˆ 𝑦 𝑣 + (M(𝑘 ) ) + 𝜆 IDR · L IDR (M(𝑘 ) ), 𝑘 = 1, . . . , 𝐾 . (14) 
+
+Inference. Figure 2 summarizes the Reasoner block and its outer loop at inference. At inference, the Reasoner is applied for 𝑁 rea-soning steps, each consisting of 𝑛 inner passes on S and one gated update to M. At training, 𝑁 = 𝐾 × 𝑇 is determined by the deep supervision schedule (Eq. (14) ); at inference, there is no supervision, so 𝑁 can be chosen freely. Because the Reasoner learns to improve whatever state it receives, the model can be evaluated at values of 
+
+𝑁 larger than used during training, without retraining. 
+
+## 4 Experiments 
+
+We organize the experimental evaluation around three research questions: RQ1: Does RecRec’s dual-state design outperform prior reasoning-enhanced methods? RQ2: Does deep supervision enable flexible reasoning depth at inference, including beyond the training-time depth? RQ3: How do the latent interests and other components of RecRec contribute to its overall performance? 
+
+## 4.1 Experimental Setup 
+
+4.1.1 Datasets. We conduct experiments on four datasets: two shopping datasets [ 22 ], a short-video dataset (MicroLens [ 35 ]), and a gaming dataset (Steam [ 27 ]), all filtered with a 5-core threshold. For simplicity, we refer to the two shopping datasets as S-Shop and V-Shop. To ensure training quality, we further remove users whose training split contains fewer than 5 interactions. Statistics are in Table 2. 
+
+S-Shop and V-Shop. The two shopping datasets contain prod-uct ratings and reviews: S-Shop covers user interactions with soft-ware products, while V-Shop covers user interactions with video games. Together they span e-commerce scenarios of different scales and sparsity levels. To focus on positive interaction signals, we retain only records with ratings above 3. Interaction sequences are constructed by sorting records by timestamp. Since both datasets provide absolute timestamps, the training, validation, and test splits follow the official temporal partitions. 
+
+MicroLens-100K. MicroLens-100K is a short-video recommen-dation dataset that records user click behavior on a short-video platform. Unlike the e-commerce datasets, it contains only implicit feedback (clicks), making the interaction patterns closer to real-world feed recommendation scenarios. The raw data is provided as time-ordered user interaction sequences without absolute times-tamps. We adopt a relative time split at the 80% and 90% positions of each user’s sequence length for training, validation, and test sets. 
+
+Steam. The Steam dataset is collected from user reviews on the Steam gaming platform and serves as a classic benchmark in sequen-tial recommendation, widely adopted by representative methods such as SASRec and BERT4Rec. Since the raw data may contain multiple reviews from the same user for the same game, we dedupli-cate and keep only the first review. As with MicroLens, the dataset lacks absolute timestamps, so we adopt a relative time split at the 80% and 90% positions of each user’s interaction sequence. 
+
+4.1.2 Baselines. We compare RecRec against two groups of base-lines. Non-reasoning methods. SASRec [ 27 ] uses causal self-attention to encode user interaction sequences. BERT4Rec [40 ]applies bidirectional self-attention with masked item prediction. 
+
+Reasoning-enhanced methods. ERL and PRL [42 ] are two vari-ants of ReaRec that perform multi-step reasoning by autoregres-sively feeding the last hidden state back into the backbone encoder. ERL aggregates reasoning states via ensemble, while PRL uses pro-gressive contrastive learning. Both are evaluated with SASRec (S) and BERT4Rec (B) backbones. LARES [33 ] is a depth-recurrent rea-soning model that iterates a shared core-block over the full token sequence, trained with self-supervised pre-training and reinforce-ment post-training. ERL and PRL results come from the official ReaRec codebase; LARES from its official implementation. 
+
+4.1.3 Implementation Details. We report NDCG@ 𝐾 and Recall@ 𝐾 
+
+for cutoffs 10 and 20, evaluated under full ranking. To ensure fair comparison, all baselines use an embedding dimension of 256, a batch size of 2048, the AdamW optimizer at a learning rate of 10 −3,early stopping with patience 10 on validation NDCG@10, and a temperature 𝜏 = 0.07 across all experiments. For RecRec Stage 1, the Context Compressor uses 𝑅 = 8 latent interests, 1 layer, and 2 attention heads, with an FFN inner dimen-sion of 512. 𝜆 IDR is tuned from {0, 0.01 , 0.05 , 0.1}. For Stage 2, the reasoning configuration is 𝑇 = 3 reasoning steps per supervision round, 𝐾 = 3 supervision rounds, and 𝑛 = 3 inner reasoning passes, giving 𝑁 = 𝐾 × 𝑇 = 9 reasoning steps at training. The Reasoner uses 1 layer, 2 attention heads, and an FFN inner dimension of 512. 
+
+## 4.2 Overall Performance (RQ1) 
+
+Table 3 presents the overall results. For a fair comparison with base-lines whose reasoning depth is fixed at training, we report RecRec’s prediction at 𝑁 = 9, without selecting the inference-time peak; Sec-tion 4.3 examines those sweeps. RecRec variants achieve the best performance on all four datasets. RecRec (S) improves NDCG@10 over the best reasoning-enhanced baseline by 14.8% on Steam, 9.3% on MicroLens, 8.2% on V-Shop, and 4.3% on S-Shop. These gains come against baselines that either entangle the reasoning state with the input sequence or derive predictions from a single 𝑑 -dim vector, both limitations that RecRec removes by design. RecRec (S) generally outperforms RecRec (B), opposite to what one might ex-pect from BERT4Rec’s bidirectional context. NDCG gains match or exceed Recall gains across datasets, indicating that recursive reasoning helps rank the target item higher rather than merely expanding the recall set. 
+
+Answer to RQ1: RecRec’s dual-state design outperforms all reasoning-enhanced baselines across four datasets. These baselines either en-tangle reasoning with the input sequence or predict from a single  
+
+> 6RecRec: Latent Interests Recursive Reasoning for Sequential Recommendation RecSys ’26, September 28–October 2, 2026, Minneapolis, MN, USA
+
+Table 3: Overall performance comparison. Best results are in bold, second best are underlined . “N@K” and “R@K” denote “NDCG@K” and “Recall@K”, respectively. ∗ denotes statistically significant improvement over the best baseline (paired 𝑡 -test, 
+
+𝑝 < 0.05 ). † marks reasoning-enhanced methods. S = SASRec backbone, B = BERT4Rec backbone. 
+
+Non-reasoning Reasoning-enhanced † Ours Dataset Metric BERT4Rec SASRec ERL (B) ERL (S) PRL (B) PRL (S) LARES RecRec (B) RecRec (S) S-Shop N@10 0.0734 0.0737 0.0766 0.0776 0.0777 0.0818 0.0809 0.0833 0.0853 ∗
+
+N@20 0.0950 0.0952 0.0982 0.0989 0.0997 0.1015 0.1009 0.1039 0.1058 ∗
+
+R@10 0.1570 0.1544 0.1594 0.1616 0.1627 0.1568 0.1530 0.1638 0.1619 R@20 0.2426 0.2399 0.2450 0.2461 0.2461 0.2351 0.2328 0.2501 0.2432 V-Shop N@10 0.0153 0.0158 0.0160 0.0161 0.0155 0.0173 0.0182 0.0184 0.0197 ∗
+
+N@20 0.0196 0.0206 0.0204 0.0217 0.0215 0.0221 0.0222 0.0241 0.0248 ∗
+
+R@10 0.0303 0.0289 0.0324 0.0378 0.0348 0.0381 0.0327 0.0422 0.0449 ∗
+
+R@20 0.0476 0.0479 0.0500 0.0601 0.0586 0.0571 0.0488 0.0649 0.0651 ∗
+
+MicroLens N@10 0.0428 0.0428 0.0435 0.0432 0.0448 0.0453 0.0460 0.0481 0.0503 ∗
+
+N@20 0.0523 0.0533 0.0533 0.0538 0.0554 0.0562 0.0564 0.0585 0.0611 ∗
+
+R@10 0.0885 0.0875 0.0865 0.0893 0.0898 0.0908 0.0863 0.0921 0.0939 
+
+R@20 0.1263 0.1291 0.1251 0.1313 0.1318 0.1344 0.1276 0.1331 0.1370 
+
+Steam N@10 0.0343 0.0347 0.0371 0.0383 0.0385 0.0408 0.0419 0.0477 0.0481 ∗
+
+N@20 0.0459 0.0454 0.0496 0.0505 0.0501 0.0535 0.0545 0.0607 0.0621 ∗
+
+R@10 0.0695 0.0698 0.0723 0.0780 0.0754 0.0804 0.0831 0.0922 0.0978 ∗
+
+R@20 0.1158 0.1126 0.1219 0.1266 0.1214 0.1308 0.1330 0.1440 0.1536 ∗
+
+vector; decoupling reasoning from prediction and using multiple latent interests both contribute to this lift. 
+
+## 4.3 Inference-Time Reasoning Depth (RQ2) 
+
+Figure 3 reports NDCG@20 as the inference-time 𝑁 varies from 0
+
+to 16 . Two patterns stand out across datasets. Moving from 𝑁 = 0
+
+(the Stage-1 baseline) to 𝑁 = 1 produces a large jump in NDCG, for example from 0.0966 to 0.103 on S-Shop (SASRec) and from 
+
+0.0496 to 0.058 on Steam (SASRec). The first Reasoner pass alone therefore accounts for a large share of the gain over the Stage-1 baseline. Additional reasoning steps continue to refine the state, with diminishing returns. The Reasoner improves a rough starting state substantially within a few passes, while refinement of an already-improved state produces smaller gains. Increasing 𝑁 beyond 9 continues to yield small additional im-provements on S-Shop, V-Shop, and Steam, where the best-performing 
+
+𝑁 lies at 15 , 12 , and 16 respectively (e.g., from 0.1058 to 0.1062 
+
+on S-Shop (SASRec); from 0.0248 to 0.0251 on V-Shop (SASRec)). The model remains stable when 𝑁 is pushed well beyond 9. On MicroLens, the initial Reasoner pass also produces a clear improve-ment, but the gains are smaller, and the curve saturates near 𝑁 ≈ 4
+
+and then declines. 
+
+Answer to RQ2: Deep supervision enables RecRec to use flexible reasoning depth at inference. The largest gain comes from the first few steps, and on three of four datasets, performance is sustained past the training-time depth 𝑁 = 9 with small additional gains. This extrapolation is what deep supervision with detached steps sets up. Each round is trained to improve whatever state it receives, so the Reasoner can keep doing this when more steps are appended. 
+
+## 4.4 Ablation Study (RQ3) 
+
+Figure 4 reports the ablation study on RecRec components on S-Shop and Steam with the SASRec backbone. We evaluate four vari-ants against the full RecRec and the raw SASRec backbone as a non-reasoning reference. w/o Reasoner predicts directly from M0,skipping Stage-2 entirely and testing the Reasoner’s overall con-tribution. Frozen S (𝑛 =0) keeps S fixed at S0, isolating the iterative refinement of the intermediate reasoning state. w/o GRU gate re-places the gated M update with direct overwriting. w/o IDR removes the diversity regularizer from both training stages. All variants are evaluated at 𝑁 = 9.On both datasets, NDCG@20 follows the same pattern, with the raw SASRec backbone trailing all variants. The full RecRec leads, and removing the Reasoner or IDR drops to roughly the Stage-1 baseline level while removing the GRU gate or fixing S at S0 causes moderate drops in between. Removing the Reasoner equals the Stage-1 baseline by construction. Removing IDR drops to a similar level: with the diversity regularizer disabled in both training stages, the 𝑅 latent interests collapse to near-identical directions in the final 
+
+M (verified in Figure 5). Fixing S at S0 (zero inner reasoning passes) lowers NDCG on both datasets, degenerating the dual-state de-sign into M-only evolution where the intermediate reasoning state contributes nothing M does not already carry. Removing the GRU gate also costs NDCG, but less than fixing S; the gate shapes how each candidate update is absorbed into M rather than whether the update mechanism works. The Recall@20 ordering largely follows NDCG@20 with one exception. On S-Shop, removing the gated update slightly exceeds full RecRec ( 0.2483 vs. 0.2432 ), suggesting that the gate trades a small amount of Recall coverage for sharper ranking. 
+
+> 7
+
+RecSys ’26, September 28–October 2, 2026, Minneapolis, MN, USA Deng et al. 0 4 8 12 16 
+
+> Reasoning Steps
+> 0.0950
+> 0.0975
+> 0.1000
+> 0.1025
+> 0.1050
+> 0.1075
+> NDCG@20  0.1058
+> 0.1062
+> 0.1039 0.1051
+
+S-Shop     
+
+> SASRec
+> BERT4Rec
+> 04812 16
+> Reasoning Steps
+> 0.021
+> 0.022
+> 0.023
+> 0.024
+> 0.025
+> 0.026
+> 0.0248
+> 0.0251
+> 0.0241
+> 0.0244
+
+V-Shop     
+
+> SASRec
+> BERT4Rec
+> 04812 16
+> Reasoning Steps
+> 0.054
+> 0.056
+> 0.058
+> 0.060
+> 0.062
+> 0.064
+> 0.0611
+> 0.0619
+> 0.0585
+> 0.0598
+
+MicroLens      
+
+> SASRec
+> BERT4Rec
+> 04812 16
+> Reasoning Steps
+> 0.050
+> 0.055
+> 0.060
+> 0.065 0.0621 0.0622
+> 0.0607
+> 0.0609
+
+Steam   
+
+> SASRec
+> BERT4Rec
+> training budget ( B= 9 )peak
+
+Figure 3: NDCG@20 as the inference-time 𝑁 is swept from 0 to 16 on each dataset. Squares mark 𝑁 = 𝐾 × 𝑇 = 9 used at training and stars mark the best 𝑁 in the sweep. Both backbones start from the Stage-1 baseline at 𝑁 = 0 (no reasoning) and are free to use more reasoning steps at inference than they were trained with. 0.0950 
+
+> 0.0975
+> 0.1000
+> 0.1025
+> 0.1050
+> 0.1075
+> S-Shop
+
+NDCG@20 
+
+> 0.1058
+> 0.0966
+> 0.1007
+> 0.0980
+> 0.1033
+> 0.0952
+> 0.230
+> 0.235
+> 0.240
+> 0.245
+> 0.250
+
+Recall@20   
+
+> 0.2432
+> 0.2408
+> 0.2318
+> 0.2412
+> 0.2483
+> 0.2399
+> 0.045
+> 0.050
+> 0.055
+> 0.060
+> 0.065
+> Steam
+> 0.0621
+> 0.0496
+> 0.0581
+> 0.0538
+> 0.0603
+> 0.0454
+> 0.11
+> 0.12
+> 0.13
+> 0.14
+> 0.15
+> 0.16 0.1536
+> 0.1219
+> 0.1394
+> 0.1338
+> 0.1513
+> 0.1126
+> Full
+> w/o Reasoner
+> Frozen S ( n= 0 )
+> w/o IDR
+> w/o GRU gate
+> Backbone
+
+Figure 4: Ablation study of RecRec components on NDCG@20 and Recall@20 for S-Shop and Steam (SASRec backbone). Full is the complete RecRec; w/o Reasoner skips Stage-2; Frozen S ( 𝑛 =0) fixes the intermediate reasoning state; w/o GRU gate replaces the gated M update with overwriting; w/o IDR disables the diversity regularizer. 
+
+Figure 5 measures the inter-interest cosine similarity of the final latent interests M on the test set. Without IDR, M’s 𝑅 interests collapse to nearly identical directions across all four datasets, falling into the marked collapse zone. With IDR, the interests stay diverse to varying degrees across datasets. The NDCG@20 improvement gained by enabling IDR (the vertical drop of each arrow) tracks the cosine reduction. IDR keeps the 𝑅 interests separable, and the Reasoner’s gain depends on having distinct interests to refine. 
+
+R sweep. Table 4 reports the 𝑅 sweep on NDCG@20, with 𝑅 
+
+kept consistent between Stage 1 and Stage 2. A single-vector latent (𝑅 =1) trails every multi-vector configuration on every dataset, the clearest signal that the prediction state benefits from carrying more than a single 𝑑 -dimensional vector. Beyond 𝑅 =2 the optimum is dataset-dependent without a single explanatory axis. 𝑅 =4 wins on V-Shop and MicroLens, 𝑅 =8 on Steam, 𝑅 =16 on S-Shop. Pushing to 0.0 0.2 0.4 0.6 0.8 1.0   
+
+> final Minter-interest cosine similarity
+> 0.0000
+> 0.0025
+> 0.0050
+> 0.0075
+> 0.0100
+> 0.0125
+> 0.0150
+> 0.0175
+> 0.0200
+> NDCG@20 vs backbone
+
+orthogonal collapsed 
+
+collapse zone 
+
+> with IDR
+> without IDR
+> MicroLens
+> Steam
+> S-Shop
+> V-Shop
+> Arrow direction: removing IDR
+
+Figure 5: IDR mechanism: inter-interest cosine similarity of the final M versus NDCG@20 improvement over the SASRec backbone, on each dataset’s test set. Filled circles are with IDR; hollow circles are without IDR; arrows show the effect of removing IDR. Without IDR, datasets enter the collapse zone (cosine > 0.8) and lose most of the IDR-induced gain. Table 4: 𝑅 sweep: NDCG@20 with the SASRec backbone, 𝑅 
+
+kept consistent between Stage 1 and Stage 2. Best is in bold. 
+
+𝑅 1 2 4 8 16 S-Shop 0.0990 0.1001 0.1078 0.1058 0.1095 
+
+V-Shop 0.0219 0.0237 0.0255 0.0248 0.0239 MicroLens 0.0554 0.0614 0.0618 0.0611 0.0587 Steam 0.0520 0.0567 0.0604 0.0621 0.0618 
+
+𝑅 =16 degrades performance on V-Shop and MicroLens, suggesting that an overly large 𝑅 can dilute the training signal across slots that the dataset cannot fully populate. The default 𝑅 =8 stays within 5% 
+
+of the per-dataset best, a safe middle-ground choice. 
+
+Answer to RQ3: Every component of RecRec contributes. The Rea-soner, IDR, and 𝑛 inner reasoning passes that evolve S are required for the dual-state design to deliver, while the GRU gate shapes how each update is absorbed into M rather than whether the update works. A multi-vector prediction latent ( 𝑅 ≥ 2) outperforms a single vector across four datasets, with the optimal 𝑅 dataset-dependent. 
+
+8RecRec: Latent Interests Recursive Reasoning for Sequential Recommendation RecSys ’26, September 28–October 2, 2026, Minneapolis, MN, USA 
+
+## 5 Conclusion 
+
+We presented RecRec, a recursive reasoning framework for sequen-tial recommendation that separates the reasoning state from the prediction state and predicts from 𝑅 latent interests rather than a single vector. A Context Compressor with an Interest Diversity Regularizer initializes the latent interests, and a Recursive Reasoner refines them through alternating updates with a dedicated reason-ing state. The framework is trained in two supervised stages, with deep supervision and detached steps allowing inference-time rea-soning depth to be adjusted freely. Experiments on four datasets show consistent gains over reasoning-enhanced baselines; on three of four datasets, gains extend past the training-time reasoning depth. Taken together, our results show that the gain from recursive rea-soning in sequential recommendation comes primarily from two architectural choices: detaching the reasoning state from the pre-diction latent, and predicting from a set of latent interests rather than a single vector. Both are lightweight and backbone-agnostic, suggesting that reasoning-state architecture is an orthogonal axis worth exploring alongside backbone improvements. 
+
+Future directions. A learned halting mechanism [ 26 ] would let RecRec stop reasoning early on easy sequences and continue on harder ones, but designing a halting signal for ranking objectives is non-trivial since there is no single discrete correct answer to supervise against. Allowing asymmetric shapes for the reasoning and prediction states, currently constrained to the same 𝑅 ×𝑑 form, is a natural extension that would let the reasoning state carry more capacity than the prediction state. A more behavioral study of how the latent interests evolve across reasoning steps, including gate dynamics and attention patterns, would clarify the mechanism behind the empirical lift and its variation across datasets. 
+
+## References 
+
+[1] Keqin Bao, Jizhi Zhang, Yang Zhang, Wenjie Wang, Fuli Feng, and Xiangnan He. 2023. Tallrec: An effective and efficient tuning framework to align large language model with recommendation. In Proceedings of the 17th ACM conference on recommender systems . 1007–1014. [2] Aydar Bulatov, Yury Kuratov, and Mikhail Burtsev. 2022. Recurrent memory transformer. Advances in Neural Information Processing Systems 35 (2022), 11079– 11091. [3] Nicolas Carion, Francisco Massa, Gabriel Synnaeve, Nicolas Usunier, Alexan-der Kirillov, and Sergey Zagoruyko. 2020. End-to-end object detection with transformers. In European conference on computer vision . Springer, 213–229. [4] Yukuo Cen, Jianwei Zhang, Xu Zou, Chang Zhou, Hongxia Yang, and Jie Tang. 2020. Controllable multi-interest framework for recommendation. In Proceedings of the 26th ACM SIGKDD international conference on knowledge discovery & data mining . 2942–2951. [5] Kyunghyun Cho, Bart Van Merriënboer, Çağlar Gulçehre, Dzmitry Bahdanau, Fethi Bougares, Holger Schwenk, and Yoshua Bengio. 2014. Learning phrase representations using RNN encoder–decoder for statistical machine translation. In Proceedings of the 2014 conference on empirical methods in natural language processing (EMNLP) . 1724–1734. [6] Tri Dao and Albert Gu. 2024. Transformers are ssms: Generalized models and efficient algorithms through structured state space duality. arXiv preprint arXiv:2405.21060 (2024). [7] Mostafa Dehghani, Stephan Gouws, Oriol Vinyals, Jakob Uszkoreit, and Łukasz Kaiser. 2018. Universal transformers. arXiv preprint arXiv:1807.03819 (2018). [8] Wenhao Deng, Long Wei, Chenglei Yu, and Tailin Wu. 2025. Unlocking reason-ing capabilities in llms via reinforcement learning exploration. arXiv preprint arXiv:2510.03865 (2025). [9] Junchen Fu, Xuri Ge, Alexandros Karatzoglou, Ioannis Arapakis, Suzan Ver-berne, Joemon M Jose, and Zhaochun Ren. 2026. Differentiable Semantic ID for Generative Recommendation. arXiv preprint arXiv:2601.19711 (2026). [10] Junchen Fu, Xuri Ge, Xin Xin, Alexandros Karatzoglou, Ioannis Arapakis, Jie Wang, and Joemon M Jose. 2024. IISAN: Efficiently adapting multimodal repre-sentation for sequential recommendation with decoupled PEFT. In Proceedings of the 47th International ACM SIGIR Conference on Research and Development in Information Retrieval . 687–697. [11] Junchen Fu, Xuri Ge, Xin Xin, Alexandros Karatzoglou, Ioannis Arapakis, Kaiwen Zheng, Yongxin Ni, and Joemon M Jose Joemon. 2025. Efficient and effective adaptation of multimodal foundation models in sequential recommendation. IEEE Transactions on Knowledge and Data Engineering (2025). [12] Junchen Fu, Yongxin Ni, Joemon M Jose, Ioannis Arapakis, Kaiwen Zheng, Youhua Li, and Xuri Ge. 2025. Crossan: Towards efficient and effective adaptation of multiple multimodal foundation models for sequential recommendation. arXiv preprint arXiv:2504.10307 (2025). [13] Junchen Fu, Fajie Yuan, Yu Song, Zheng Yuan, Mingyue Cheng, Shenghui Cheng, Jiaqi Zhang, Jie Wang, and Yunzhu Pan. 2024. Exploring adapter-based transfer learning for recommender systems: Empirical studies and practical insights. In 
+
+Proceedings of the 17th ACM international conference on web search and data mining . 208–217. [14] Jonas Geiping, Sean McLeish, Neel Jain, John Kirchenbauer, Siddharth Singh, Brian R Bartoldson, Bhavya Kailkhura, Abhinav Bhatele, and Tom Goldstein. 2025. Scaling up test-time compute with latent reasoning: A recurrent depth approach. arXiv preprint arXiv:2502.05171 (2025). [15] Shijie Geng, Shuchang Liu, Zuohui Fu, Yingqiang Ge, and Yongfeng Zhang. 2022. Recommendation as language processing (rlp): A unified pretrain, personalized prompt & predict paradigm (p5). In Proceedings of the 16th ACM conference on recommender systems . 299–315. [16] Albert Gu, Karan Goel, and Christopher Ré. 2021. Efficiently modeling long sequences with structured state spaces. arXiv preprint arXiv:2111.00396 (2021). [17] Chengcheng Guo, Kuo Cai, Yu Zhou, Qiang Luo, Ruiming Tang, Han Li, Kun Gai, and Guorui Zhou. 2026. PROMISE: Process Reward Models Unlock Test-Time Scaling Laws in Generative Recommendations. arXiv preprint arXiv:2601.04674 
+
+(2026). [18] Daya Guo, Dejian Yang, Haowei Zhang, Junxiao Song, Peiyi Wang, Qihao Zhu, Runxin Xu, Ruoyu Zhang, Shirong Ma, Xiao Bi, et al. 2025. Deepseek-r1: Incen-tivizing reasoning capability in llms via reinforcement learning. arXiv preprint arXiv:2501.12948 (2025). [19] Shibo Hao, Sainbayar Sukhbaatar, DiJia Su, Xian Li, Zhiting Hu, Jason Weston, and Yuandong Tian. 2024. Training large language models to reason in a continuous latent space. arXiv preprint arXiv:2412.06769 (2024). [20] Yaoqin He, Junchen Fu, Kaiwen Zheng, Songpei Xu, Fuhai Chen, Jie Li, Joe-mon M Jose, and Xuri Ge. 2025. Double-filter: Efficient fine-tuning of pre-trained vision-language models via patch&layer filtering. In Forty-second International Conference on Machine Learning .[21] Balázs Hidasi, Alexandros Karatzoglou, Linas Baltrunas, and Domonkos Tikk. 2015. Session-based recommendations with recurrent neural networks. arXiv preprint arXiv:1511.06939 (2015). [22] Yupeng Hou, Jiacheng Li, Zhankui He, An Yan, Xiusi Chen, and Julian McAuley. 2024. Bridging language and items for retrieval and recommendation. arXiv preprint arXiv:2403.03952 (2024). [23] Yupeng Hou, Shanlei Mu, Wayne Xin Zhao, Yaliang Li, Bolin Ding, and Ji-Rong Wen. 2022. Towards universal sequence representation learning for recommender systems. In Proceedings of the 28th ACM SIGKDD conference on knowledge discovery and data mining . 585–593. [24] Andrew Jaegle, Felix Gimeno, Andy Brock, Oriol Vinyals, Andrew Zisserman, and Joao Carreira. 2021. Perceiver: General perception with iterative attention. In International conference on machine learning . PMLR, 4651–4664. [25] Jie Jiang, Yang Wu, Qian Li, Yuling Xiong, Yihang Su, Junbang Huo, Longfei Lu, Jun Zhang, and Huan Yu. 2026. DiffuReason: Bridging Latent Reasoning and Generative Refinement for Sequential Recommendation. arXiv preprint arXiv:2602.09744 (2026). [26] Alexia Jolicoeur-Martineau. 2025. Less is more: Recursive reasoning with tiny networks. arXiv preprint arXiv:2510.04871 (2025). [27] Wang-Cheng Kang and Julian McAuley. 2018. Self-attentive sequential recom-mendation. In 2018 IEEE international conference on data mining (ICDM) . IEEE, 197–206. [28] Chao Li, Zhiyuan Liu, Mengmeng Wu, Yuchi Xu, Huan Zhao, Pipei Huang, Guoliang Kang, Qiwei Chen, Wei Li, and Dik Lun Lee. 2019. Multi-interest network with dynamic routing for recommendation at Tmall. In Proceedings of the 28th ACM international conference on information and knowledge management .2615–2623. [29] Jiacheng Li, Ming Wang, Jin Li, Jinmiao Fu, Xin Shen, Jingbo Shang, and Julian McAuley. 2023. Text is all you need: Learning language representations for sequential recommendation. In Proceedings of the 29th ACM SIGKDD Conference on Knowledge Discovery and Data Mining . 1258–1267. [30] Ruyu Li, Wenhao Deng, Yu Cheng, Zheng Yuan, Jiaqi Zhang, and Fajie Yuan. 2025. Exploring the upper limits of text-based collaborative filtering using large language models: Discoveries and insights. In Proceedings of the 34th ACM International Conference on Information and Knowledge Management . 1643–1653. [31] Xinhang Li, Chong Chen, Xiangyu Zhao, Yong Zhang, and Chunxiao Xing. 2023. E4srec: An elegant effective efficient extensible solution of large language models for sequential recommendation. arXiv preprint arXiv:2312.02443 (2023). 9RecSys ’26, September 28–October 2, 2026, Minneapolis, MN, USA Deng et al. 
+
+[32] Jiayi Liao, Sihang Li, Zhengyi Yang, Jiancan Wu, Yancheng Yuan, Xiang Wang, and Xiangnan He. 2024. Llara: Large language-recommendation assistant. In 
+
+Proceedings of the 47th International ACM SIGIR Conference on Research and Development in Information Retrieval . 1785–1795. [33] Enze Liu, Bowen Zheng, Xiaolei Wang, Wayne Xin Zhao, Jinpeng Wang, Sheng Chen, and Ji-Rong Wen. 2025. Lares: Latent reasoning for sequential recommen-dation. arXiv preprint arXiv:2505.16865 (2025). [34] Francesco Locatello, Dirk Weissenborn, Thomas Unterthiner, Aravindh Mahen-dran, Georg Heigold, Jakob Uszkoreit, Alexey Dosovitskiy, and Thomas Kipf. 2020. Object-centric learning with slot attention. Advances in neural information processing systems 33 (2020), 11525–11538. [35] Yongxin Ni, Yu Cheng, Xiangyan Liu, Junchen Fu, Youhua Li, Xiangnan He, Yongfeng Zhang, and Fajie Yuan. 2025. A content-driven micro-video recommen-dation dataset at scale. In Proceedings of the 34th ACM International Conference on Information and Knowledge Management . 6486–6491. [36] Weicong Qin, Yi Xu, Weijie Yu, Chenglei Shen, Xiao Zhang, Ming He, Jianping Fan, and Jun Xu. 2025. More: A mixture of reflectors framework for large language model-based sequential recommendation. In Proceedings of the Nineteenth ACM Conference on Recommender Systems . 299–308. [37] Shashank Rajput, Nikhil Mehta, Anima Singh, Raghunandan Hulikal Keshavan, Trung Vu, Lukasz Heldt, Lichan Hong, Yi Tay, Vinh Tran, Jonah Samost, et al .2023. Recommender systems with generative retrieval. Advances in Neural Information Processing Systems 36 (2023), 10299–10315. [38] Zhihong Shao, Peiyi Wang, Qihao Zhu, Runxin Xu, Junxiao Song, Xiao Bi, Haowei Zhang, Mingchuan Zhang, YK Li, Yang Wu, et al . 2024. Deepseekmath: Pushing the limits of mathematical reasoning in open language models. arXiv preprint arXiv:2402.03300 (2024). [39] Noam Shazeer. 2020. Glu variants improve transformer. arXiv preprint arXiv:2002.05202 (2020). [40] Fei Sun, Jun Liu, Jian Wu, Changhua Pei, Xiao Lin, Wenwu Ou, and Peng Jiang. 2019. BERT4Rec: Sequential recommendation with bidirectional encoder rep-resentations from transformer. In Proceedings of the 28th ACM international conference on information and knowledge management . 1441–1450. [41] Jiakai Tang, Xu Chen, Wen Chen, Jian Wu, Yuning Jiang, and Bo Zheng. 2026. Parallel Latent Reasoning for Sequential Recommendation. arXiv preprint arXiv:2601.03153 (2026). [42] Jiakai Tang, Sunhao Dai, Teng Shi, Jun Xu, Xu Chen, Wen Chen, Jian Wu, and Yuning Jiang. 2025. Think before recommend: Unleashing the latent reasoning power for sequential recommendation. arXiv preprint arXiv:2503.22675 (2025). [43] Jiaxi Tang and Ke Wang. 2018. Personalized top-n sequential recommenda-tion via convolutional sequence embedding. In Proceedings of the eleventh ACM international conference on web search and data mining . 565–573. [44] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N Gomez, Łukasz Kaiser, and Illia Polosukhin. 2017. Attention is all you need. Advances in neural information processing systems 30 (2017). [45] Guan Wang, Jin Li, Yuhao Sun, Xing Chen, Changling Liu, Yue Wu, Meng Lu, Sen Song, and Yasin Abbasi Yadkori. 2025. Hierarchical reasoning model. arXiv preprint arXiv:2506.21734 (2025). [46] Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, Fei Xia, Ed Chi, Quoc V Le, Denny Zhou, et al . 2022. Chain-of-thought prompting elicits reasoning in large language models. Advances in neural information processing systems 35 (2022), 24824–24837. [47] Kun Yang, Yuxuan Zhu, Yazhe Chen, Siyao Zheng, Bangyang Hong, Kangle Wu, Yabo Ni, Anxiang Zeng, Cong Fu, and Hui Li. 2026. ManCAR: Manifold-Constrained Latent Reasoning with Adaptive Test-Time Computation for Se-quential Recommendation. arXiv preprint arXiv:2602.20093 (2026). [48] Yu Ye, Junchen Fu, Yu Song, Kaiwen Zheng, and Joemon M Jose. 2026. Are multimodal embeddings truly beneficial for recommendation? A deep dive into whole vs. individual modalities. In European Conference on Information Retrieval .Springer, 66–81. [49] Qiying Yu, Zheng Zhang, Ruofei Zhu, Yufeng Yuan, Xiaochen Zuo, Yu Yue, Weinan Dai, Tiantian Fan, Gaohong Liu, Lingjun Liu, et al . 2025. Dapo: An open-source llm reinforcement learning system at scale. arXiv preprint arXiv:2503.14476 
+
+(2025). [50] Zheng Yuan, Fajie Yuan, Yu Song, Youhua Li, Junchen Fu, Fei Yang, Yunzhu Pan, and Yongxin Ni. 2023. Where to go next for recommender systems? id-vs. modality-based recommender models revisited. In Proceedings of the 46th International ACM SIGIR Conference on Research and Development in Information Retrieval . 2639–2649. [51] Jiaqi Zhai, Lucy Liao, Xing Liu, Yueming Wang, Rui Li, Xuan Cao, Leon Gao, Zhao-jie Gong, Fangda Gu, Michael He, et al . 2024. Actions speak louder than words: Trillion-parameter sequential transducers for generative recommendations. arXiv preprint arXiv:2402.17152 (2024). [52] Shengyu Zhang, Lingxiao Yang, Dong Yao, Yujie Lu, Fuli Feng, Zhou Zhao, Tat-Seng Chua, and Fei Wu. 2022. Re4: Learning to re-contrast, re-attend, re-construct for multi-interest recommendation. In Proceedings of the ACM web conference 2022 . 2216–2226. [53] Chujie Zheng, Shixuan Liu, Mingze Li, Xiong-Hui Chen, Bowen Yu, Chang Gao, Kai Dang, Yuqiong Liu, Rui Men, An Yang, et al . 2025. Group sequence policy optimization. arXiv preprint arXiv:2507.18071 (2025). [54] Ziyi Zhuang, Hongji Li, Junchen Fu, Jiacheng Liu, Joemon M Jose, Youhua Li, and Yongxin Ni. 2025. Frequency-Decoupled distillation for efficient multimodal recommendation. In Proceedings of the 34th ACM International Conference on Information and Knowledge Management . 4571–4581. 10

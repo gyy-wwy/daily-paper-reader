@@ -1,0 +1,345 @@
+Title: Consensus vs. Dissent: Dynamic LLM Modeling of Subjective Preferences in Group Recommenders
+
+URL Source: https://arxiv.org/pdf/2607.10235v1
+
+Published Time: Tue, 14 Jul 2026 01:24:49 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# Consensus vs. Dissent: Dynamic LLM Modeling of Subjective Preferences in Group Recommenders 
+
+# Cedric Waterschoot 
+
+Maastricht University Maastricht, The Netherlands cedric.waterschoot @maastrichtuniversity.nl 
+
+# Nava Tintarev 
+
+Maastricht University Maastricht, The Netherlands n.tintarev @maastrichtuniversity.nl 
+
+# Francesco Barile 
+
+Maastricht University Maastricht, The Netherlands f.barile @maastrichtuniversity.nl 
+
+## Abstract 
+
+Previous work in group recommender systems has demonstrated a sensitivity to the distribution of preferences within a group. Specif-ically, the selection of the preference aggregation strategy benefits from considering such group configurations. In this paper, we study whether LLMs are able to mimic this sensitivity and to select the ideal aggregation strategy (and corresponding recommendation) according to nuanced human perceptions of fairness, satisfaction, and consensus. We do this by fine-tuning Large Language Models (LLMs) on human survey data to serve as real-time judgmental models within the recommendation pipeline. Using a reasoning dataset distilled from DeepSeek-V3.1 and human ground truth assessments, we de-velop Judgmental Llama and Judgmental OLMo to simulate group assessments. Our pipeline successfully generates multiple recom-mendation candidates based on social choice-based aggregation strategies and dynamically selects the one that maximizes these predicted human-like evaluations. We further validate these sug-gestions in a user study ( 𝑛 = 284 ) and find that our methodology achieved the highest scores for satisfaction and group consensus. Furthermore, we find that LLM judgments are most aligned with human perceptions of fairness, satisfaction and consensus when we also consider interaction effects between our LLM-based method and group configuration (e.g., minority or coalition). These findings give further support for dynamically adapting aggregation strate-gies to specific within-group preference distributions, and highlight the advantage of using LLMs for an adaptation that is aligned with subjective human judgments. 
+
+## CCS Concepts 
+
+• Information systems → Recommender systems ; • Comput-ing methodologies → Natural language generation .
+
+## Keywords 
+
+Large Language Models, Fairness, Group Recommender Systems, LLM-as-judge, User study  
+
+> Permission to make digital or hard copies of all or part of this work for personal or classroom use is granted without fee provided that copies are not made or distributed for profit or commercial advantage and that copies bear this notice and the full citation on the first page. Copyrights for components of this work owned by others than the author(s) must be honored. Abstracting with credit is permitted. To copy otherwise, or republish, to post on servers or to redistribute to lists, requires prior specific permission and/or a fee. Request permissions from permissions@acm.org.
+> Conference’17, Washington, DC, USA
+> ©2026 Copyright held by the owner/author(s). Publication rights licensed to ACM. ACM ISBN 978-x-xxxx-xxxx-x/YYYY/MM https://doi.org/10.1145/nnnnnnn.nnnnnnn
+
+ACM Reference Format: 
+
+Cedric Waterschoot, Nava Tintarev, and Francesco Barile. 2026. Consensus vs. Dissent: Dynamic LLM Modeling of Subjective Preferences in Group Recommenders. In . ACM, New York, NY, USA, 10 pages. https://doi.org/10. 1145/nnnnnnn.nnnnnnn 
+
+## 1 Introduction 
+
+The challenge for Group Recommender Systems (GRS) is the inher-ent difficulty of generating and adapting recommendations to the nuanced, sometimes conflicting, preferences of distinct group mem-bers. GRS research has often relied on social choice-based aggrega-tion strategies, such as Average, Least Misery, or Most Pleasure, to bridge the gap between individual ratings and group outcomes [ 37 ]. While these methods are computationally efficient, transparent, and well-evaluated in the literature, they are essentially static math-ematical calculations. To evaluate their effectiveness, researchers typically conduct user studies to gather subjective assessments of perceived satisfaction, fairness, and group consensus from human participants [5, 6]. However, a significant gap exists between evaluation and imple-mentation. While user studies provide invaluable insights into how recommendations may be perceived by a group, these subjective metrics cannot be easily integrated into an automated, real-time rec-ommendation pipeline. Current systems lack a scalable mechanism to predict how a specific group will feel about a recommendation before it is presented. As a result, GRS are not adaptable to ac-count for the nuanced group scenarios and dynamics that human participants account for during a user evaluation. In this paper, we propose a novel approach that bridges this gap by leveraging Large Language Models (LLMs) and the survey data in the literature. We utilize existing human data to fine-tune LLMs, transforming them into judgmental models capable of delivering human-like evaluations. By integrating these models directly into a recommendation pipeline, we move beyond static aggregation. More precisely, our system generates multiple recommendation options via various social choice-based strategies and employs our fine-tuned models to generate multiple assessments per outcome, mimicking a group of human participants evaluating the specific group recommendation. Afterwards, our system selects the out-come that maximizes these human-like assessments, providing the group with a final recommendation which was perceived as fair, satisfactory and as group consensus for their specific preference profile. We evaluated our approach through a user study, measuring our dynamic, LLM-based method against traditional static strate-gies. Our user evaluation showed that our LLM-based selection of aggregation strategy achieved the highest average scores for arXiv:2607.10235v1 [cs.CL] 11 Jul 2026 Conference’17, July 2017, Washington, DC, USA Waterschoot et al. 
+
+perceived fairness and consensus, as well as the second highest for perceived satisfaction. All in all, our results show that our dy-namic system is capable of managing both polar opposites: groups with high consensus (uniform) and groups with clear dissent (coali-tional). Full documentation, code and data are available in the com-panion repository: https://github.com/Cwaterschoot/Consensus-vs-dissent-2026/tree/main In short, our paper makes the following contributions: 
+
+• We present a distilled reasoning dataset based on DeepSeek-V3.1, grounded in human assessments of fairness, satisfaction, and consensus from Barile [4], Barile et al. [5]. 
+
+• We introduce Judgmental Llama and Judgmental OLMo , mod-els specifically fine-tuned and evaluated on human judgment and distilled reasoning to simulate group assessments. 
+
+• We develop an end-to-end recommendation pipeline that em-ploys these fine-tuned models to dynamically select group rec-ommendation outcomes based on human-like evaluations. 
+
+• We conduct a user study ( 𝑛 = 284 ) to evaluate the effectiveness of our judgment-based GRS and show that our proposed method achieved the highest assessments for fairness and consensus. Additionally, our user study showcases statistically significant interactions with group configuration. 
+
+## 2 Related Work 
+
+In the following paragraphs, we outline the related work on GRS and the use of LLMs within the context of group recommendation. Additionally, we discuss fairness in (group) recommendation and how it is evaluated in the literature. Finally, we present the literature on using LLMs to automate the evaluation of such metrics under the paradigm of LLM-as-judge. 
+
+## 2.1 Group Recommendation 
+
+Traditional recommender systems generate a recommendation on the individual level. In contrast, GRS need to process multiple, pos-sible conflicting, preferences to produce a group recommendation which reflects the preferences of the group members [ 30 ]. We find recent applications for GRS in restaurant recommendation (e.g., [ 5, 7, 47 ], tourism [ 11 , 14 ], content moderation [ 46 ], or music rec-ommendation [31]. A large variety of methodologies have been proposed to gen-erate such group recommendations based on a set of individual preference ratings. Cao et al . [9] and Huang et al . [19] put for-ward GRS based on attentive neural networks, while others have proposed graph neural networks [ 51 ] or reinforcement learning [ 39 ]. While these recent methodologies present promising avenues for generating group recommendations, social choice-based ag-gregation strategies, rooted in Social Choice Theory [21 ], remain a prominent procedure in the GRS literature, whether as main aggre-gation step [ 5, 41 , 44 ] or baseline in comparison to more complex models (e.g., [ 15 , 32 , 34 , 40 ]). Additionally, neural network-based approaches require large datasets containing group decisions and feedback that are not widely available. On the other hand, social choice-based aggregation strategies offer a wide range of calcula-tions transforming a simple matrix of individual preferences (user-item ratings) into a singular group outcome [ 29 , 37 ]. They are often categorized as either borderline (using only a subset of ratings, e.g., Least Misery or Most Pleasure), majority-based (only using the most popular items/ratings, e.g., Approval Voting) or consensus-based (using all ratings, e.g., Additive Utilitarian). In this study, we include strategies from all three categories. Included aggregation strategies are summarized in Table 1. We implement social choice-based aggregation instead of more recent approaches due to their transparent aggregation procedures and widely spread use in the literature, maximizing reproducibility. Recently, LLMs have been implemented within the GRS pipeline for a variety of reasons. LLMs have been used as decision-making for both individual [ 3, 26 ] and group recommendations [ 40 , 43 ]. Additionally, LLMs have been used for generating explanations for (group) recommender systems [ 27 , 35 , 43 ] and to address specific is-sues such as cold-start problems [ 12 , 36 , 48 ] or cross-domain recom-mendation [ 22 , 33 ]. A recent focus are conversational recommender systems employing an LLM as backbone model [ 17 , 50 ]. While LLMs are capable of challenging the more conventional methodologies for generating recommendations, these models come with specific drawbacks such as growing computational power and privacy con-cerns [ 44 , 49 , 52 ]. In our study, we make use of LLMs-as-judge with the goal of generating human-like assessments of perceived fairness, satisfaction and group consensus. 
+
+## 2.2 Human Assessment of GRS 
+
+Fairness is an important topic in recommender systems [ 13 , 20 ,25 ]. Additional subjective assessments such as satisfaction, and specifically for group recommendation, perceived group consensus receive attention [ 5, 6 ]. Several metrics have been proposed with regard to fairness. Each of these focus on specific aspects of fairness, such as demographic parity and equal opportunity, i.e., all qualified items are being considered [ 23 ]. For GRS specifically, fairness has been defined as balancing preferences of top-ranked items across group members by Kaya et al . [20] to define a greedy algorithm to generate group recommendations that satisfy this condition. In the context of GRS, human evaluations are usually collected through user studies [ 6]. The literature makes the distinction be-tween external evaluation, in which the participant is not part of the group and assessing the recommendation as an outsider [ 5, 41 ], and internal evaluation in which the user provides their ratings and is part of the group itself [ 6]. Participants are provided with a group context (user-item matrix) and are asked to rate statements on a Likert scale. In this study, we make use of the such a dataset 1
+
+[4 , 5 ], which asked participants to rate fairness (“ The group recom-mendation is fair to all group members ”), satisfaction (“ The group members will be satisfied with regard to the group recommendation ”), and consensus (“ The group members will agree on the group recom-mendation ”). The human response distributions from this study are visualized in Figure 1. 
+
+## 2.3 LLM-as-judge 
+
+The LLM-as-judge paradigm has emerged as a potential, scalable alternative to human evaluation, suited to address the traditional bottlenecks of group recruitment and the costs associated with  
+
+> 1Source dataset can be found here: https://dataverse.nl/dataset.xhtml?persistentId=doi: 10.34894/8EVX4U Consensus vs. Dissent Conference’17, July 2017, Washington, DC, USA
+
+Table 1: Preference aggregation strategies used in this study [5, 16, 41] 
+
+Strategy Procedure Additive Utilitarian (ADD) Recommends the item with the highest sum of all group members’ ratings Fairness (FAI) Ranking and recommending items according to how individuals choose them in turn Approval Voting (APP) Recommends the item with the highest number of ratings above a predefined threshold Least Misery (LMS) Recommends the item which has the highest of all lowest per-item ratings Most Pleasure (MPL) Recommends the item with the highest individual group member rating Majority (MAJ) Recommends the item with the highest number of all ratings representing the majority of item-specific ratings Strongly   
+
+> disagree
+> Disagree Somewhat
+> disagree
+> Neither agree
+> nor disagree
+> Somewhat
+> agree
+> Agree Strongly
+> agree
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> Density
+
+## Distributions of Human Assessments of Group Recommendations 
+
+Fairness 
+
+Consensus 
+
+Satisfaction 
+
+Figure 1: Human distributions of responses to rating group recommendations in terms of fairness, satisfaction and consensus on a 7-point Likert scale (n= 1, 152 ), collected in a the user study by Barile et al. [5]. 
+
+user studies. Under this framework, LLMs are implemented as eval-uators to generate human-like natural language assessments or Likert scores [ 2, 24 ], including for subjective forms of evaluation such as sexism detection [ 1 ]. The shift toward automated evaluation offers potential for the real-time assessment of algorithmic decision-making [ 8 ]. However, an unexplored possibility lies in employing these models to evaluate group recommendations at scale or within a larger GRS pipeline, where complex trade-offs between individual preferences and collective satisfaction are simultaneously consid-ered. If LLMs result in similar assessments, they can complement traditional user studies or produce real-time scoring to provide the fairest group recommendations given a specific group scenario. Despite their promises, the performance of base models (not fine-tuned for the particular task) as impartial judges may be limited by systematic evaluative bias. Shi et al . [38] demonstrate that base mod-els often result in significant issues regarding preference fairness and position consistency. Additionally, similar to human evaluation, base models are susceptible to various forms of cognitive and social bias. Malberg et al . [28] provide a systematic overview of 30 cogni-tive biases across 20 state-of-the-art LLMs, while Chen et al . [10] show LLM susceptibility to biases based on gender or authority, leading to skewed assessments. Furthermore, base models often demonstrate a self-preference bias, favoring output that mirrors their own style [ 42 ]. Thus, we opt to fine-tune LLMs to anchor our evaluation models in the human ground truth, evaluated using the human distribution of assessments (Figure 1). We showcase the improvement when fine-tuning the LLM-as-judge models as opposed to implementing base models for evaluation. 
+
+## 3 Methodology 
+
+The following paragraphs describe the methodology used in this study. The full pipeline is visualized in Figure 2. First, we outline the LLM fine-tuning using an augmented training set, grounded in human ground truth. Second, we employ the best-performing model in our GRS pipeline to decide the final group recommendation based on the LLM-generated assessments. Finally, we describe the user study which we performed to evaluate the final recommendations. 
+
+## 3.1 LLM Fine-Tuning 
+
+3.1.1 Survey Data. The starting point of obtaining fine-tuned LLMs for generating human-aligned assessments was the human ground truth presented in Barile [4] , Barile et al . [5] . The authors conducted a user study in which 288 participants rated their perception of fairness, satisfaction and group consensus based on a group pref-erence matrix (containing ratings) and a final recommendation. A 7-point Likert scale was used and each participant rated four scenarios, resulting in a final dataset containing 1, 152 assessments. Each human assessments contained a separate score for fairness, satisfaction and consensus. The distribution of human responses is visualized in Figure 1. 
+
+3.1.2 Chain-of-Thought Generation. To address the limited scale of the original human-annotated dataset and to provide the necessary training signals for effective fine-tuning, we employed Knowledge Distillation via Synthetic Chain-of-Thought (CoT) Generation [ 18 ]. We partitioned the data into an train/test split ( 𝑛 _𝑡𝑟𝑎𝑖𝑛𝑖𝑛𝑔 = 890 ,
+
+𝑛 _𝑡𝑒𝑠𝑡 = 262 ) using stratified sampling to ensure that the score distributions remained balanced across both subsets. This approach Conference’17, July 2017, Washington, DC, USA Waterschoot et al. 1.2 CoT Generation  
+
+> 1.3 LLM Fine -tuning
+> 2.1 RecSys Pipeline 2.2 User Study 1.1 Survey Data
+
+## 1. LLM Fine -Tuning  
+
+> Deepseek
+> Augmented
+> Train set
+> (n = 5,318)
+> N= 1,152
+> Train set = 890
+> Train set
+> 1.4 Judgmental LLMs
+
+## 2. Group Recommender System & Evaluation                 
+
+> Llama3.1 Olmo3
+> 1.5.1 LLMs 1.5.2 Unseen
+> groups
+> 1.5.3 Assessment
+> distributions
+> compared to human
+> 2.2.1 Human
+> Participants via
+> Prolific
+> 2.1.1 Group Preference Matrix
+> 2.2.2 Group Matrix &
+> Recommendation by aggregation
+> 2.2.3 User Evaluation of fairness,
+> satisfaction and consensus
+> 2.2.4 Analyze whether final group
+> recommendation received highest
+> scores from participants
+> 2.1.2 Generate recommendations
+> using multiple aggregation
+> strategies
+> 2.1.3 Generate LLM
+> assessments for each
+> recommendation
+> 2.1.4 Rank recommendations
+> based on fairness /
+> satisfaction / consensus
+> 2.1.5 Provide top choice as
+> final group recommendation
+> 1.5 LLM Evaluation
+
+Figure 2: Visualization of the full pipeline. The methodology is divided into two main parts: (1) LLM fine-tuning for automated assessment of fairness, consensus, and satisfaction; (2) GRS, in which the best-performing, fine-tuned LLM generates assessments of potential recommendations. 
+
+was particularly important for capturing infrequent edge cases (the highest and lowest Likert scores) ensuring the test set remained representative of the full spectrum of human sentiment. To expand the training set, we utilized DeepSeek-V3 (671B) (via the Ollama cloud API 2) as a teacher model to generate diverse, syn-thetic reasoning for the existing human ground truth. By applying high sampling parameters ( 𝑇 𝑒𝑚𝑝𝑒𝑟𝑎𝑡𝑢𝑟𝑒 = 0.95 ,𝑡𝑜𝑝 _𝑝 = 0.95 ), we oversampled our 890 training instances to produce a total of 5, 318 
+
+training samples. This approach allowed us to generate multiple dis-tinct reasoning paths for the same outcome, capturing the nuanced justifications behind identical Likert scores. For each instance, the teacher model was provided with the full recommendation scenario, the group preference table, and the specific human-assigned score. The model was then prompted to generate concise, 2-3 sentence jus-tifications that explicitly referenced individual group members (e.g., “Member 1 does not like this outcome... ”). 3 Throughout this expansion, we conducted checks to ensure the original human ground truth scores remained unaltered. The result of this knowledge distillation was an augmented dataset suitable for fine-tuning LLMs to generate both reasoning and assessment scores for group recommendations. The dataset is available in the companion repository. 
+
+3.1.3 Fine-tuning. We fine-tuned two open-source LLMs, Llama-3.1-8B-Instruct and OLMo-3-7B-Instruct-SFT , using the augmented training corpus ( 𝑛 = 5, 318 ). Both base models are available on Hug-gingface (Llama is open-weight, Olmo open-source). Training was 
+
+> 2https://ollama.com/library/deepseek-v3.1
+> 3Full prompt is documented in the companion repository: https://github.com/ Cwaterschoot/Consensus-vs-dissent-2026/tree/main
+
+conducted on a single Google Colab A100 GPU utilizing Parameter-Efficient Fine-Tuning (PEFT) via Low-Rank Adaptation (LoRA). To optimize memory efficiency, models were loaded in 4-bit NF4 quan-tization using bitsandbytes library. The LoRA configuration utilized a rank ( 𝑟 ) of 16 and an alpha ( 𝛼 ) of 32. 4
+
+A critical component of our training pipeline was the imple-mentation of a custom label masking function. To make sure that the models learned to replicate the reasoning process and scores rather than the prompt structure and group ratings, we applied a mask to the loss function for all tokens preceding the assistant’s response. This forced the gradient updates to focus exclusively on the synthetic Chain-of-Thought and the human ground truth. We employed the standard transformers Trainer (combined with our custom masking) and a learning rate of 1 × 10 −4, a batch size of 2 with 4 gradient accumulation steps.The models were trained for 4 epochs, and the best-performing checkpoint was selected based on the lowest evaluation loss on the original (not augmented) test set. 
+
+3.1.4 LLM Evaluation. To evaluate the LLMs, we make use of the exact procedure by Barile et al . [5] to generate novel group sce-narios, allowing us to evaluate the LLMs with data that was not seen during fine-tuning. In total, we generated 1, 180 new group scenarios. In order to showcase the impact of the fine-tuning phase, we generated a distribution of assessments with the Llama3.1-8B 
+
+base model (not fine-tuned). We compared the resulting assessment distributions of the base model and both fine-tuned versions to the human ground truth us-ing the Wasserstein Distance (Earth Mover’s Distance). This metric,  
+
+> 4Full training documentation and augmented dataset are available in the companion repository. Consensus vs. Dissent Conference’17, July 2017, Washington, DC, USA
+
+suitable for the ordinal Likert scale data, measures the minimum work required to transform the LLM-generated distribution into the observed human ground truth. A smaller distance (from now on referred to as WD) is better. In the results, we also report the average Likert score as well as the standard deviation to provide a full overview of the LLM-generated assessments. 
+
+## 3.2 GRS and Evaluation 
+
+3.2.1 Recommender System Pipeline. Our GRS pipeline is designed around the repeated evaluation of aggregation strategies to de-termine the most suitable outcome for a given group. Following the established scenario construction in GRS literature [ 5 , 7 , 44 ], we utilize a user preference matrix containing explicit ratings for restaurants on a scale from 1 to 5.Starting from the group’s preferences, the system calculates the outcomes for six distinct social choice-based aggregation strategies: 
+
+Additive Utilitarian (ADD), Approval Voting (APP), Fairness (FAI), 
+
+Least Misery (LMS), Majority Voting (MAJ), and Most Pleasure (MPL). These strategies were selected due to their presence in the training data. The recommendations derived by each strategy are evaluated five separate times each, simulating the assessment of five different survey participants to ensure a variety in responses. The number of generated assessments is a configurable parameter. The final score for each strategy is determined by calculating the average across the five scores for each of the three metrics (fairness, satisfac-tion, consensus). Once the final scores are calculated, the strategies are ranked and the group is presented with the recommendation based on the top-ranked strategy. Our pipeline allows for deciding which of the three metrics is used as deciding factor. Consistent with the scenarios used in the original survey data [ 5, 47 ], we ac-count for prior group history by assuming the top three items in the resulting list have already been visited. Consequently, the sys-tem recommends the fourth-ranked item as the final output for the group. We follow the scenario structure from the literature to maximize consistency and reproducibility of GRS evaluation and data collection. 
+
+3.2.2 User Study Evaluation. Following the code and procedure provided by Barile et al . [5] and thus, adhering to the format of the previously used survey data, we generated a set of group scenarios to be used in the user evaluation. 5 Each scenario consisted of a user-item matrix in which a group of five members is presented alongside their fictitious ratings of 10 restaurants (scale from 1 to 5). Repli-cating the original data, we generated group scenarios across four different group configurations (within-group preference similarity): (i) uniform (all similar), (ii) divergent (all dissimilar), (iii) minority (all similar except one), and (iv) coalitional (two subgroups) [ 5 ]. The sce-nario describes that the group has already visited three restaurants and thus, the group is now recommended the fourth restaurant in the ranked list. This list was generated by a social choice-based aggregation strategy [ 37 ]. Included strategies are those included in the survey data: Additive Utilitarian (ADD), Approval Voting (APP), 
+
+Fairness (FAI), Least Misery (LMS), Majority voting (MAJ), and Most Pleasure (MPL). For our specific evaluation, we add a final category to the strategy list, namely LLM . The latter presents the participant 
+
+> 5Our user evaluation was preregistered on OSF: https://osf.io/98kuw/overview?view_ only=41c006b50fb84f0abb76347c98e94ff9
+
+with the recommendation generated by the strategy which was chosen by the LLM. Participants were recruited via the online participant platform Prolific. 6 Aggregation strategy was between-subject; each partici-pant was assigned one of the seven options (one of six strategies or the LLM’s pick) and was only presented scenarios in which the recommendations were generated by that strategy. Group config-uration was within-subject, which means that every participant rated scenarios based on all four group configurations. Each par-ticipant saw one group for each group configuration (randomly selected out of four options), resulting in four groups assessed per participant. Thus, our survey contained a total of 16 group scenar-ios, from which the participants each saw four. This survey design matches the study used to generate the survey data described in Section 3.1.1 and used for LLM fine-tuning. For each new group scenario, the participant had to rate the following three statements (taken from [ 5 ]) using a 7-point Likert scale from −3 (strongly dis-agree) to 3 (strongly agree): “ The group recommendation is fair to all group members ” (fairness), “ The group members will agree on the group recommendation ” (consensus), and “ The group members will be satisfied with regard to the group recommendation ” (satisfaction). In order to evaluate the performance of our GRS described in Section 3.2.1, we constructed an mixed-design ANOVA model to test whether the LLM category received significantly higher scores compared to the singular (static) aggregation strategies. This result would imply the benefit of dynamically adapting the aggregation strategy based on LLM-generated assessments, providing end-users with the fairest or most satisfying recommendations. Based on power analysis, we calculated a required sample size of 284 partici-pants. Additionally, we report average scores for fairness, satisfac-tion and consensus, as well as the standard deviation for each of the seven options (six strategies and our dynamic LLM-based selection). As an exploratory analysis, we compare the performance across the four group configurations. The full survey outline is found in the preregistration on OSF. 7
+
+## 4 Results 
+
+In the following paragraphs, we present the results of our study. First, we discuss the performance of our fine-tuned models relative to the base model. Second, we present the results of our user study performed to evaluate our proposed GRS pipeline. 
+
+## 4.1 LLM Evaluation 
+
+We evaluated the performance of our fine-tuned models ( Judgmen-tal Llama and Judgmental Olmo ) against the base models (both Llama and Olmo) by comparing their output distributions to the human ground truth. Table 2 summarizes these results across the three dimensions: fairness, satisfaction, and consensus. The Llama base model exhibited significant misalignment with the ground truth, resulting in a high Wasserstein Distance (WD) and low standard deviation (Table 2). This suggests that the base model generated an exceedingly narrow set of assessments. In contrast, our fine-tuned models demonstrated a reduction in WD, indicating closer alignment with the human distribution (Figure    
+
+> 6https://www.prolific.com/
+> 7https://osf.io/98kuw/overview?view_only=41c006b50fb84f0abb76347c98e94ff9 Conference’17, July 2017, Washington, DC, USA Waterschoot et al. Strongly
+> disagree
+> Disagree Somewhat
+> disagree
+> Neither agree
+> nor disagree
+> Somewhat
+> agree
+> Agree Strongly
+> agree
+> 0.00
+> 0.05
+> 0.10
+> 0.15
+> 0.20
+> 0.25
+> Density
+
+Distributions (across fairness/satisfaction/consensus) 
+
+> Human
+> Judgmental Llama
+> Judgmental Olmo
+
+Figure 3: Distributions (across fairness, satisfaction, consensus) for both judgmental models and the human ground truth. Table 2: Overview comparing the ground truth human distri-butions with LLM-generated assessment distributions. Mod-els included the Llama/Olmo base models and our fine-tuned versions (Judgmental Llama and Judgmental Olmo). Lower Wasserstein Distance (WD) indicates a distribution closer to Ground Truth. 
+
+Assessment Model WD ( ↓) Mean 𝜎 
+
+Fairness Llama3.1-8B (Base) 1.57 1.82 0.54 Olmo3-7B (Base) 0.88 -0.18 1.53 Judgmental Llama 0.96 0.39 1.54 Judgmental Olmo 0.70 0.33 1.58 
+
+Ground Truth 0.55 1.74 
+
+Satisfaction Llama3.1-8B (Base) 1.06 0.76 0.48 Olmo3-7B (Base) 1.16 1.29 1.40 Judgmental Llama 0.78 0.60 1.13 Judgmental Olmo 0.68 0.31 1.55 
+
+Ground Truth 0.50 1.58 
+
+Consensus Llama3.1-8B (Base) 1.09 1.82 0.54 Olmo3-7B (Base) 1.09 0.94 1.88 Judgmental Llama 0.85 0.10 1.32 Judgmental Olmo 0.82 0.15 1.59 
+
+Ground Truth 0.64 1.63 3).While the Olmo3 base model did achieve a relatively low distance to the human distribution for fairness, its distance for the other two metrics was the highest, indicating relatively strong misalignment (Table 2). Notably, Judgmental Olmo emerged as the best-performing model, achieving the lowest WD scores across all three dimensions (0.70 for fairness, 0.68 for satisfaction, and 0.82 for consensus). Additionally, the fine-tuned model replicated the variety in human responses ( 𝜎 > 1.55 ), closely approaching the ground truth ( 𝜎 ≈
+
+1.6). Judgmental Olmo was selected as the assessment generator for the GRS pipeline and subsequent user study. Additionally, we analyzed the Pearson correlation coefficients between fairness, satisfaction and consensus scores generated by the Judgmental Olmo model. The results show relatively strong correlations (ranging between 0.64 and 0.78 ), consistent with the strong correlations found in the original human ground truth ( 0.71 
+
+to 0.83 ). From a practical perspective, these correlations imply that these factors will largely align in their ranking of recommendation outcomes, providing a consistent signal regardless of which specific dimension of the three is prioritized as a deciding factor in the GRS pipeline. For this study, we calculate the average across the three metrics and rank the aggregation strategies based on these average scores. This is the most standard approach, while future work may optimize towards either fairness, satisfaction or consensus. 
+
+## 4.2 User Evaluation 
+
+4.2.1 Participants. Our user study resulted in a total of 1, 136 as-sessments provided by 284 participants. Those who failed an at-tention check were omitted from the analysis and were replaced by a new participant. They were required to be proficient English speakers above 18 years of age. Each participant was allowed to participate in the study once, and received a reimbursement ac-cording to Prolific guidelines. 8 Our sample consisted of 172 (60 .5% )male, 105 (37 .0% ) female, and 7 (2.5% ) non-binary participants. 101 
+
+(35 .56% ) were between 26-35 years old, 74 (26 .05% ) between 18-25, 
+
+65 (22 .9% ) between 36-45, 25 (8.8% ) between 46-55, and 19 (6.7% )above the age of 56. 
+
+4.2.2 LLM Selection. To obtain the LLM category in our user study, we processed all included group scenarios using our GRS pipeline. In order to decide which strategy was dynamically selected for each given group, our recommendation pipeline generated five assessments (committee size) per potential recommendation. An assessment is a set of three scores: one for perceived fairness, sat-isfaction and consensus. We averaged across the five assessments per recommendation to obtain the final scores. In total, ADD was the winning strategy (picked by the LLM as best based on fairness, consensus and satisfaction scores) for six out of 16 (four groups times four configurations). FAI was the second most picked (4), while LMS and MPL were selected twice. APP and MAJ were only selected once. We saw several patterns across group configurations. For minority groups, only ADD or FAI were selected (each strategy twice), while the MPL strategy was only used for uniform groups (alongside one occurrence of LMS and ADD). For divergent groups, ADD was selected twice, followed by one occurrence of APP and  
+
+> 8https://www.prolific.com/resources/how-much-should-you-pay-research-participants Consensus vs. Dissent Conference’17, July 2017, Washington, DC, USA
+
+one of FAI. Finally, for coalitional groups, each included group dif-fered in terms of dynamically selected strategy (one times ADD, FAI, LMS, and MAJ). 
+
+Table 3: Average Likert scores (-3 to 3) and standard deviation for perceived fairness, satisfaction and consensus of group recommendations. Split by aggregation strategy (between-subject). 
+
+Fairness Satisfaction Consensus ADD 0.51 (1.72) 0.58 (1.56) 0.76 (1.57) APP 0.28 (1.73) 0.41 (1.58) 0.47 (1.62) FAI 0.61 (1.67) 0.70 (1.64) 0.74 (1.76) LMS 0.48 (1.55) 0.48 (1.47) 0.68 (1.48) MAJ 0.20 (1.65) 0.20 (1.60) 0.26 (1.71) MPL 0.20 (1.79) 0.14 (1.63) 0.18 (1.76) LLM 0.82 (1.68) 0.68 (1.50) 0.81 (1.56) 
+
+4.2.3 User Scores. Descriptive statistics reveal that our LLM-based aggregation strategy selection tends to outperformed static social choice-based aggregation (Table 3), achieving the highest mean scores for perceived fairness ( 0.82 ) and consensus ( 0.81 ), and the second-highest for satisfaction ( 0.68 , surpassed only by FAI, which scored 0.70 ). Strategies like APP, MAJ and MPL lagged behind alternatives with regard to all three metrics. The ANOVA results for the three metrics are summarized in Table 4. P-values were adjusted using Bonferroni correction ( 0.05 /3 = 0.017 ). 
+
+Table 4: ANOVA results for perceived fairness, satisfaction, and consensus. Significance was calculated using a corrected threshold of 0.017. Statistical significance is indicated using an asterisk (*). 
+
+Metric Source 𝐹 𝑝 
+
+Fairness Agg 1.98 .068 Config 49.69 <.001* Interaction 5.18 <.001* 
+
+Satisfaction Agg 2.32 .032 Config 37.81 <.001* Interaction 4.28 <.001* 
+
+Consensus Agg 2.77 .012* Config 35.96 <.001* Interaction 4.49 <.001* 
+
+Perceived fairness. There was no main effect for aggregation strategy with regard to perceived fairness , however, our analysis indicated a significant interaction between group configuration and aggregation strategy ( 𝐹 = 5.18 , 𝑝 < .001 ). In a post-hoc analysis, we found a significant interaction effect in coalitional groups, with LLM outperforming both APP ( 𝑡 = 4.44 , 𝑝 < .001 ) and ADD ( 𝑡 =
+
+3.22 , 𝑝 = .002 ) strategies. On a global level, the LLM was perceived as significantly more fair than the Majority (MAJ) strategy ( 𝑡 =
+
+2.81 , 𝑝 = .006 ). 
+
+Perceived satisfaction . The analysis revealed a significant interac-tion effect between group configuration and aggregation strategy (𝐹 = 4.28 , 𝑝 < .001 ). Our dynamic LLM aggregation selection out-performed in minority and coalitional groups. In the former, the aggregation strategies selected based on the LLM-generated assess-ments provided significantly higher satisfaction than both the MAJ (𝑡 = 4.11 , 𝑝 < .001 ) and MPL ( 𝑡 = 3.01 , 𝑝 = .004 ) strategies. Fur-thermore, in coalitional groups, the LLM statistically outperformed APP ( 𝑡 = 3.07 , 𝑝 = .003 ). 
+
+Perceived consensus . The third and final metric was perceived consensus. Our dynamic LLM-based selection significantly outper-formed MPL regardless of group configuration ( 𝑡 = 2.50 , 𝑝 = .015 ). Looking at the significant interaction effects between consensus and group configuration (Table 4), our proposed method outper-formed APP ( 𝑡 = 4.83 , 𝑝 < .001 ) and ADD ( 𝑡 = 3.17 , 𝑝 = .002 )for coalitional groups, as well as MAJ for minority configurations (𝑡 = 3.24 , 𝑝 = .002 ). 
+
+## 5 Discussion 
+
+In the following paragraphs, we contextualize our results. First, we discuss that our results, both in terms of LLM evaluation and user study, strengthen the validity of the proposed fine-tuning procedure as well as its implementation for dynamic selection of aggregation strategy. Second, we outline potential adjustments and parame-ter tuning that we propose to investigate in future work. Thirdly, we discuss the significant interaction with group configuration. Fourthly, we discuss potential adjustments to the pipeline. After-wards, we discuss additional avenues for future work, including scaling down model size to optimize for real-time inference as well as comparing our pipeline to other state-of-the-art GRS method-ologies. Finally, we identify and outline several limitations of our work. 
+
+## 5.1 Validity of Fine-tuning 
+
+Our results highlight the potential benefits of fine-tuning on hu-man ground truth and (distilled) reasoning for aligning LLMs with human subjective assessments. We show that base models may fail to capture the nuance of group dynamics or produce biased (overtly positive) results, resulting in a narrow distribution with high Wasserstein Distance to the ground truth distribution. The fine-tuned versions successfully reduced the distance to human ground truth, allowing our implemented model to increasingly replicate the diversity ( 𝜎 ≈ 1.6) found in human fairness, satisfac-tion, and consensus ratings. The validity of our proposed pipeline is further illustrated by the user study, where the dynamic selection pipeline achieved the highest mean scores for both fairness and consensus. Additionally, many of our findings align with findings in pre-viously conducted user studies regarding social choice-based ag-gregation. For example, MPL was only selected by the LLM-based pipeline for uniform groups, a result corresponding to previous findings comparing uniform groups to other configurations [ 5 , 6]. Additionally, these studies found consistently strong results for FAI and ADD as well, mirroring the frequency at which these strategies were selected in our pipeline. Conference’17, July 2017, Washington, DC, USA Waterschoot et al. 
+
+By adapting the aggregation strategy based on automated, human-like assessments rather than relying on a static social choice-based aggregation strategy, the system was able to adapt to potential unfair or unsatisfying outcomes in a way that is consistent with previous human selections. These findings suggest that our dynamic approach to group recommendations, still rooted in transparent preference aggregation, may offer a more robust and fair framework compared to traditional aggregation methods. 
+
+## 5.2 The Impact of Group Configuration 
+
+The strength of our pipeline lies not in inventing new formulas for aggregation, but in its ability to adapt when static strategies reach a recommendation that might be deemed poor by the group. The selection of different aggregation strategies by our LLM high-lights again that there are contexts where it is beneficial to deviate from what might be a globally strong strategy. For some group configurations, a strategy may produce inferior recommendations and an alternative strategy might lead to a better outcome. For example, our pipeline correctly identified that recommendations generated by MPL might be useful for obtaining the most positive assessments for uniform groups [ 5]. Additionally, our results show that the strongest strategies (ADD and FAI) might struggle with some coalitional groups, resulting in a dynamical selection in which each coalitional group received a recommendation generated from a broader pool of aggregation strategies (ADD, FAI, MAJ, LMS). Ad-ditional exploratory analysis, in which we ran 40 additional group scenarios (10 per configuration, 𝑛 = 1, 200 ) using our pipeline re-vealed that this pattern holds. MPL was strictly used for uniform scenarios (3 out of 10 uniform groups), while for coalitional groups all six strategies were chosen at least once. Similar as for the groups in oru user study, FAI was chosen most frequently. 
+
+## 5.3 Pipeline Adjustments 
+
+Several avenues exist to refine our optimization logic within the GRS pipeline. While the current implementation made use of a simple average across fairness, satisfaction, and consensus to select the winning aggregation strategy, the system could be tuned to prioritize a single dimension depending on the specific application context. Furthermore, in our current study we generated five assess-ments (committee size) per potential recommendation outcome and calculated the average across those to obtain a final score for each metric. Future work will determine the optimal number of internal assessments, balancing robustness and computational efficiency. While our results demonstrate that distilling reasoning from a high-capacity model like DeepSeek-V3.1 into a smaller model (such as Olmo3) is effective, this approach serves as a bridge towards an optimal outcome, i.e., training on actual human reasoning provided by participants as opposed to human-like reasoning. Additional experimentation suggests that the failure of base models is systemic [45 ]. Regardless of model family or parameter size (whether 7 billion, 20 billion or 235 billion), generated assessments consistently lack behind fine-tuned output with regard to the distance to the human ground truth distribution. This finding underscores that quality fine-tuning data cannot be substituted by scale. 
+
+## 5.4 Future Work 
+
+Our findings open up several other avenues for future work. First, while our pipeline demonstrates clear potential, the reliance on five parallel assessments per recommendation, resulting in a total of 
+
+30 inferences per group, creates significant latency. Depending on hardware, this can go all the way up to several minutes per group. To make this judgmental framework viable within a real-time GRS pipeline, future work will explore the distillation of reasoning into Small Language Models (SLMs) with 1.5 billion parameters or fewer (as opposed to 8B+ in the current study). Transitioning to these smaller models would drastically reduce computational require-ments (e.g., GPU time) as well as overall response times, potentially allowing for a larger number of assessments per recommendation (increasing robustness) without sacrificing feasibility and user ex-perience in real-time contexts. Second, we strictly constrained our recommendation procedure to social choice-based aggregation strategies to prioritize trans-parency and take advantage of the large body of literature on ex-plainable group recommendations. However, future research should benchmark our dynamic selection pipeline against state-of-the-art Deep Learning-based GRS models, such as attentive group recom-mendation frameworks [ 9, 11 ]. Additionally, we do not have access to the required datasets and documentation to include these ap-proaches into our comparative analysis, as they rely on specific features or data requirements. 
+
+## 5.5 Limitations 
+
+We identified several limitations of our work. First, a primary limi-tation in developing our fine-tuned models is the scarcity of large-scale, high-quality human datasets that include both quantitative scores and qualitative reasoning. To circumvent this, our study uti-lized a distillation pipeline, generating synthetic reasoning from a high-capacity model (DeepSeek-V3.1) to fine-tune our smaller mod-els. While our results show this to be effective, it may introduces a dependency on the teacher model. In future work, we will focus on longitudinal data collection specifically designed for model training, incentivizing participants to provide their internal reasoning in text alongside their Likert scores. Secondly, the requirement for a five-member assessment com-mittee per recommendation presents a computational bottleneck. In a real-time system with many end-users, the cumulative latency of generating and parsing multiple reasoning blocks hinders imme-diate interaction. As mentioned earlier, the use of tiny LLMs might be the key in circumventing this limitation. Finally, our system is domain-dependent due to the scenarios present in the previously conducted user studies. Additionally, we focused solely on GRS. Whether our findings generalize beyond group recommendation specifically is unclear. For example, in our training data, the participant was presented with a group scenario in which the first three restaurants were already visited. Subsequently, the fourth-ranked restaurant became the recommendation. A more standardized input format is required to move towards domain- and scenario-independence. Due to the fact that this originates from the data collection phase, we will move towards multi-domain data collection in future work. Consensus vs. Dissent Conference’17, July 2017, Washington, DC, USA 
+
+## 6 Conclusion 
+
+Our methodology focused on bridging the gap between LLM out-put and human ground truth assessments of group recommenda-tions. By utilizing DeepSeek-V3.1 to generate reasoning rooted in ground truth, we addressed the limitations of base models. Through fine-tuning on this distilled reasoning and human assessments, we aligned the models’ logic with human-like perceptions of group dy-namics and recommendations. We demonstrated this by a reduction in Wasserstein distance from the human distribution. We also validated the best-performing LLM approach through a user study ( 𝑛 = 284 ). Our pipeline achieved the highest aver-age scores for perceived fairness and consensus. Additionally, our system showed adaptability in complex groups such as the coali-tional group configuration. In the case of complex scenarios, such as coalitional groups, our pipeline showed the strength of making use of the wide set of aggregation strategies, outperforming static baselines with regard to fairness, satisfaction and consensus. All in all, our pipeline shows capabilities for both groups with consensus (uniform) as dissent (coalitional). Moving beyond the constraints of static aggregation, our work provides a scalable blueprint for GRS that accounts for the nuanced human-like interpretation of a recommendation outcome, while retaining the transparency and range of options provided by social choice-based aggregation strategies. 
+
+## References 
+
+[1] Paula Akemi Aoyagui, Kelsey Stemmler, Sharon A Ferguson, Young-Ho Kim, and Anastasia Kuzminykh. 2025. A Matter of Perspective(s): Contrasting Human and LLM Argumentation in Subjective Decision-Making on Subtle Sexism. In 
+
+Proceedings of the 2025 CHI Conference on Human Factors in Computing Systems (CHI ’25) . Association for Computing Machinery, New York, NY, USA, Article 529, 16 pages. doi:10.1145/3706598.3713248 [2] Michiel A. Bakker, Martin J. Chadwick, Hannah R. Sheahan, Michael Henry Tessler, Lucy Campbell-Gillingham, Jan Balaguer, Nat McAleese, Amelia Glaese, John Aslanides, Matthew M. Botvinick, and Christopher Summerfield. 2022. Fine-tuning language models to find agreement among humans with diverse preferences. In Proceedings of the 36th International Conference on Neural Infor-mation Processing Systems (New Orleans, LA, USA) (NIPS ’22) . Curran Associates Inc., Red Hook, NY, USA, Article 2766, 14 pages. [3] Keqin Bao, Jizhi Zhang, Yang Zhang, Xinyue Huo, Chong Chen, and Fuli Feng. 2024. Decoding Matters: Addressing Amplification Bias and Homogeneity Issue in Recommendations for Large Language Models. In Proceedings of the 2024 Con-ference on Empirical Methods in Natural Language Processing , Yaser Al-Onaizan, Mohit Bansal, and Yun-Nung Chen (Eds.). Association for Computational Linguis-tics, Miami, Florida, USA, 10540–10552. doi:10.18653/v1/2024.emnlp-main.589 [4] Francesco Barile. 2023. UM XAI Explainable - GRS Impact of scenario complexity. doi:10.34894/8EVX4U [5] Francesco Barile, Tim Draws, Oana Inel, Alisa Rieger, Shabnam Najafian, Amir Ebrahimi Fard, Rishav Hada, and Nava Tintarev. 2023. Evaluating explainable social choice-based aggregation strategies for group recommendation. User Modeling and User-Adapted Interaction (2023), 1–58. [6] Francesco Barile, Pierre Hurlin, Cedric Waterschoot, and Nava Tintarev. 2026. Critical reflections on user studies’ evaluation methods for group recommender systems. International Journal of Human-Computer Studies (2026), 103742. doi:10. 1016/j.ijhcs.2026.103742 [7] Francesco Barile, Shabnam Najafian, Tim Draws, Oana Inel, Alisa Rieger, Rishav Hada, and Nava Tintarev. 2021. Toward Benchmarking Group Explanations: Evaluating the Effect of Aggregation Strategies versus Explanation. (2021). [8] Jan Baumeister, Bernd Finkbeiner, Frederik Scheerer, Julian Siber, and Tobias Wagenpfeil. 2025. Stream-Based Monitoring of Algorithmic Fairness. In Tools and Algorithms for the Construction and Analysis of Systems , Arie Gurfinkel and Marijn Heule (Eds.). Springer Nature Switzerland, Cham, 60–81. [9] Da Cao, Xiangnan He, Lianhai Miao, Yahui An, Chao Yang, and Richang Hong. 2018. Attentive Group Recommendation. In The 41st International ACM SIGIR Conference on Research & Development in Information Retrieval (Ann Arbor, MI, USA) (SIGIR ’18) . Association for Computing Machinery, New York, NY, USA, 645–654. doi:10.1145/3209978.3209998 [10] Guiming Hardy Chen, Shunian Chen, Ziche Liu, Feng Jiang, and Benyou Wang. 2024. Humans or LLMs as the Judge? A Study on Judgement Bias. In Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing ,Yaser Al-Onaizan, Mohit Bansal, and Yun-Nung Chen (Eds.). Association for Computational Linguistics, Miami, Florida, USA, 8301–8327. doi:10.18653/v1/ 2024.emnlp-main.474 [11] Lei Chen, Jie Cao, Huanhuan Chen, Weichao Liang, Haicheng Tao, and Guixiang Zhu. 2021. Attentive multi-task learning for group itinerary recommendation. 
+
+Knowl. Inf. Syst. 63, 7 (2021), 1687–1716. doi:10.1007/s10115-021-01567-3 [12] Sunhao Dai, Ninglu Shao, Haiyuan Zhao, Weijie Yu, Zihua Si, Chen Xu, Zhongx-iang Sun, Xiao Zhang, and Jun Xu. 2023. Uncovering ChatGPT’s Capabilities in Recommender Systems. In Proceedings of the 17th ACM Conference on Recom-mender Systems (Singapore, Singapore) (RecSys ’23) . Association for Computing Machinery, New York, NY, USA, 1126–1132. doi:10.1145/3604915.3610646 [13] Yashar Deldjoo, Dietmar Jannach, Alejandro Bellogin, Alessandro Difonzo, and Dario Zanzonelli. 2024. Fairness in recommender systems: research landscape and future directions. User Model. User-adapt Interact. 34, 1 (March 2024), 59–108. [14] Amra Delić, Hanif Emamgholizadeh, Francesco Ricci, and Judith Masthoff. 2024. Supporting Group Decision-Making: Insights from a Focus Group Study. In 
+
+Proceedings of the 32nd ACM Conference on User Modeling, Adaptation and Per-sonalization . 301–306. doi:10.1145/3627043.3659538 [15] Amra Delic, Judith Masthoff, Julia Neidhardt, and Hannes Werthner. 2018. How to use social relationships in group recommenders: empirical evidence. In Pro-ceedings of the 26th Conference on User Modeling, Adaptation and Personalization .121–129. [16] Alexander Felfernig, Ludovico Boratto, Martin Stettinger, and Marko Tkalčič. 2018. Explanations for Groups. In Group Recommender Systems . Springer, 105– 126. [17] Yunfan Gao, Tao Sheng, Youlin Xiang, Yun Xiong, Haofen Wang, and Jiawei Zhang. 2023. Chat-REC: Towards interactive and explainable LLMs-augmented recommender system. (2023). arXiv:2303.14524 [cs.IR] [18] Cheng-Yu Hsieh, Chun-Liang Li, Chih-kuan Yeh, Hootan Nakhost, Yasuhisa Fujii, Alex Ratner, Ranjay Krishna, Chen-Yu Lee, and Tomas Pfister. 2023. Distill-ing Step-by-Step! Outperforming Larger Language Models with Less Training Data and Smaller Model Sizes. In Findings of the Association for Computational Linguistics: ACL 2023 , Anna Rogers, Jordan Boyd-Graber, and Naoaki Okazaki (Eds.). Association for Computational Linguistics, Toronto, Canada, 8003–8017. doi:10.18653/v1/2023.findings-acl.507 [19] Zhenhua Huang, Xin Xu, Honghao Zhu, and MengChu Zhou. 2020. An Efficient Group Recommendation Model With Multiattention-Based Neural Networks. 
+
+IEEE Transactions on Neural Networks and Learning Systems 31, 11 (2020), 4461– 4474. doi:10.1109/TNNLS.2019.2955567 [20] Mesut Kaya, Derek Bridge, and Nava Tintarev. 2020. Ensuring fairness in group recommendations by rank-sensitive balancing of relevance. In Fourteenth ACM Conference on Recommender Systems (Virtual Event Brazil). ACM, New York, NY, USA. [21] J.S. Kelly. 2013. Social Choice Theory: An Introduction . Springer Berlin Heidelberg. [22] Sein Kim, Hongseok Kang, Seungyoon Choi, Donghyun Kim, Minchul Yang, and Chanyoung Park. 2024. Large language models meet collaborative filtering: An efficient all-round LLM-based recommender system. In Proceedings of the 30th ACM SIGKDD Conference on Knowledge Discovery and Data Mining (Barcelona Spain), Vol. 25. ACM, New York, NY, USA, 1395–1406. [23] Deepak Kumar, Tessa Grosz, Navid Rekabsaz, Elisabeth Greif, and Markus Schedl. 2023. Fairness of recommender systems in the recruitment domain: an analysis from technical and legal perspectives. Frontiers in Big Data Volume 6 - 2023 (2023). doi:10.3389/fdata.2023.1245198 [24] Dawei Li, Bohan Jiang, Liangjie Huang, Alimohammad Beigi, Chengshuai Zhao, Zhen Tan, Amrita Bhattacharjee, Yuxuan Jiang, Canyu Chen, Tianhao Wu, Kai Shu, Lu Cheng, and Huan Liu. 2025. From Generation to Judgment: Opportunities and Challenges of LLM-as-a-judge. In Proceedings of the 2025 Conference on Empirical Methods in Natural Language Processing , Christos Christodoulopoulos, Tanmoy Chakraborty, Carolyn Rose, and Violet Peng (Eds.). Association for Computational Linguistics, Suzhou, China, 2757–2791. doi:10.18653/v1/2025. emnlp-main.138 [25] Yunqi Li, Hanxiong Chen, Shuyuan Xu, Yingqiang Ge, Juntao Tan, Shuchang Liu, and Yongfeng Zhang. 2023. Fairness in Recommendation: Foundations, Methods, and Applications. ACM Trans. Intell. Syst. Technol. 14, 5, Article 95 (Oct. 2023), 48 pages. doi:10.1145/3610302 [26] Jiayi Liao, Sihang Li, Zhengyi Yang, Jiancan Wu, Yancheng Yuan, Xiang Wang, and Xiangnan He. 2024. LLaRA: Large Language-Recommendation Assis-tant. In Proceedings of the 47th International ACM SIGIR Conference on Re-search and Development in Information Retrieval (Washington DC, USA) (SIGIR ’24) . Association for Computing Machinery, New York, NY, USA, 1785–1795. doi:10.1145/3626772.3657690 [27] Sebastian Lubos, Thi Ngoc Trang Tran, Alexander Felfernig, Seda Polat Erdeniz, and Viet-Man Le. 2024. LLM-generated Explanations for Recommender Systems. In Adjunct Proceedings of the 32nd ACM Conference on User Modeling, Adaptation Conference’17, July 2017, Washington, DC, USA Waterschoot et al. 
+
+and Personalization (Cagliari, Italy) (UMAP Adjunct ’24) . Association for Comput-ing Machinery, New York, NY, USA, 276–285. doi:10.1145/3631700.3665185 [28] Simon Malberg, Roman Poletukhin, Carolin Schuster, and Georg Groh Groh. 2025. A Comprehensive Evaluation of Cognitive Biases in LLMs. In Proceedings of the 5th International Conference on Natural Language Processing for Digital Humanities , Mika Hämäläinen, Emily Öhman, Yuri Bizzoni, So Miyagawa, and Khalid Alnajjar (Eds.). Association for Computational Linguistics, Albuquerque, USA, 578–613. doi:10.18653/v1/2025.nlp4dh-1.50 [29] Judith Masthoff. 2015. Group recommender systems: aggregation, satisfaction and group attributes. In recommender systems handbook . Springer, 743–776. [30] Judith Masthoff and Amra Delić. 2022. Group Recommender Systems: Beyond Preference Aggregation . Springer US, New York, NY, 381–420. doi:10.1007/978-1-0716-2197-4_10 [31] Shabnam Najafian and Nava Tintarev. 2018. Generating Consensus Explanations for Group Recommendations: an exploratory study. In Adjunct Publication of the 26th Conference on User Modeling, Adaptation and Personalization (Singapore, Singapore) (UMAP ’18) . Association for Computing Machinery, 6 pages. doi:10. 1145/3213586.3225231 [32] Thuy Ngoc Nguyen, Francesco Ricci, Amra Delic, and Derek Bridge. 2019. Conflict resolution in group decision making: insights from a simulation study. User Modeling and User-Adapted Interaction 29, 5 (2019), 895–941. [33] Alessandro Petruzzelli, Cataldo Musto, Lucrezia Laraspata, Ivan Rinaldi, Marco de Gemmis, Pasquale Lops, and Giovanni Semeraro. 2024. Instructing and prompting large language models for explainable cross-domain recommendations. In 18th ACM Conference on Recommender Systems (Bari Italy). ACM, New York, NY, USA, 298–308. [34] Silvia Rossi, Francesco Cervone, and Francesco Barile. 2018. An Altruistic-Based Utility Function for Group Recommendation. In Transactions on Computational Collective Intelligence XXVIII . Springer, 25–47. [35] Alan Said. 2025. On explaining recommendations with Large Language Models: a review. Frontiers in Big Data 7 (2025). doi:10.3389/fdata.2024.1505284 [36] Scott Sanner, Krisztian Balog, Filip Radlinski, Ben Wedin, and Lucas Dixon. 2023. Large language models are competitive near cold-start recommenders for language- and item-based preferences. In Proceedings of the 17th ACM Conference on Recommender Systems (Singapore Singapore), Vol. 1. ACM, New York, NY, USA, 890–896. [37] Christophe Senot, Dimitre Kostadinov, Makram Bouzid, Jérôme Picault, Armen Aghasaryan, and Cédric Bernier. 2010. Analysis of strategies for building group profiles. In International Conference on User Modeling, Adaptation, and Personal-ization . Springer, 40–51. [38] Lin Shi, Chiyu Ma, Wenhua Liang, Xingjian Diao, Weicheng Ma, and Soroush Vosoughi. 2025. Judging the Judges: A Systematic Study of Position Bias in LLM-as-a-Judge. In Proceedings of the 14th International Joint Conference on Natural Language Processing and the 4th Conference of the Asia-Pacific Chapter of the Association for Computational Linguistics , Kentaro Inui, Sakriani Sakti, Haofen Wang, Derek F. Wong, Pushpak Bhattacharyya, Biplab Banerjee, Asif Ekbal, Tanmoy Chakraborty, and Dhirendra Pratap Singh (Eds.). The Asian Federation of Natural Language Processing and The Association for Computational Linguistics, Mumbai, India, 292–314. doi:10.18653/v1/2025.ijcnlp-long.18 [39] Maria Stratigi, Evaggelia Pitoura, and Kostas Stefanidis. 2023. SQUIRREL: A framework for sequential group recommendations through reinforcement learn-ing. Information Systems 112 (2023), 102128. doi:10.1016/j.is.2022.102128 [40] Antonela Tommasel. 2024. Fairness Matters: A look at LLM-generated group recommendations. In 18th ACM Conference on Recommender Systems (Bari Italy). ACM, New York, NY, USA, 993–998. [41] Thi Ngoc Trang Tran, Müslüm Atas, Alexander Felfernig, Viet Man Le, Ralph Samer, and Martin Stettinger. 2019. Towards social choice-based explanations in group recommender systems. In Proceedings of the 27th ACM Conference on User Modeling, Adaptation and Personalization . 13–21. [42] Koki Wataoka, Tsubasa Takahashi, and Ryokan Ri. 2025. Self-preference bias in LLM-as-a-judge. (June 2025). arXiv:2410.21819 [cs.CL] [43] Cedric Waterschoot, Nava Tintarev, and Francesco Barile. 2025. Consistent Explainers or Unreliable Narrators? Understanding LLM-generated Group Rec-ommendations. In Proceedings of the Nineteenth ACM Conference on Recommender Systems (RecSys ’25) . Association for Computing Machinery, New York, NY, USA. doi:10.1145/3705328.3748015 [44] Cedric Waterschoot, Nava Tintarev, and Francesco Barile. 2025. The Pitfalls of Growing Group Complexity: LLMs and Social Choice-Based Aggregation for Group Recommendations. In Adjunct Proceedings of the 33rd ACM Conference on User Modeling, Adaptation and Personalization (UMAP Adjunct ’25) . Association for Computing Machinery, New York, NY, USA. doi:10.1145/3708319.3733659 [45] Cedric Waterschoot, Nava Tintarev, and Francesco Barile. 2026. Who is the Fairest of Them All? Using Large Language Models for Fairness Assessments. In Proceedings of the 34th ACM Conference on User Modeling, Adaptation and Personalization (UMAP ’26) . Association for Computing Machinery, New York, NY, USA, 567–570. doi:10.1145/3774935.3812703 [46] Cedric Waterschoot and Antal van den Bosch. 2024. A time-robust group recom-mender for featured comments on news platforms. Frontiers in Big Data Volume 7 - 2024 (2024). doi:10.3389/fdata.2024.1399739 [47] Cedric Waterschoot, Raciel Yera Toledo, Nava Tintarev, and Francesco Barile. 2025. With Friends Like These, Who Needs Explanations? Evaluating User Under-standing of Group Recommendations. In Proceedings of the 33rd ACM Conference on User Modeling, Adaptation and Personalization (UMAP ’25) . Association for Computing Machinery, New York, NY, USA. doi:10.1145/3699682.3728345 [48] Xuansheng Wu, Huachi Zhou, Yucheng Shi, Wenlin Yao, Xiao Huang, and Ning-hao Liu. 2024. Could small language models serve as recommenders? Towards data-centric cold-start recommendation. In Proceedings of the ACM Web Confer-ence 2024 (Singapore Singapore), Vol. 55. ACM, New York, NY, USA, 3566–3575. [49] Ziqing Wu. 2023. Enhanced privacy preservation for recommender systems. In 
+
+Proceedings of the 17th ACM Conference on Recommender Systems (Singapore Singapore), Vol. 11. ACM, New York, NY, USA, 1364–1368. [50] Dayu Yang, Fumian Chen, and Hui Fang. 2024. Behavior alignment: A new perspective of evaluating LLM-based conversational recommendation systems. In Proceedings of the 47th International ACM SIGIR Conference on Research and Development in Information Retrieval (Washington DC USA), Vol. 35. ACM, New York, NY, USA, 2286–2290. [51] Junwei Zhang, Min Gao, Junliang Yu, Lei Guo, Jundong Li, and Hongzhi Yin. 2021. Double-Scale Self-Supervised Hypergraph Learning for Group Recom-mendation. In Proceedings of the 30th ACM International Conference on Informa-tion & Knowledge Management (Virtual Event, Queensland, Australia) (CIKM ’21) . Association for Computing Machinery, New York, NY, USA, 2557–2567. doi:10.1145/3459637.3482426 [52] Zihuai Zhao, Wenqi Fan, Jiatong Li, Yunqing Liu, Xiaowei Mei, Yiqi Wang, Zhen Wen, Fei Wang, Xiangyu Zhao, Jiliang Tang, and Qing Li. 2024. Recommender systems in the era of large language models (LLMs). IEEE Trans. Knowl. Data Eng. 36, 11 (Nov. 2024), 6889–6907.

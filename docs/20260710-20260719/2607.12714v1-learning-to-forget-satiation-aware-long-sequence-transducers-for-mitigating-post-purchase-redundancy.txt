@@ -1,0 +1,315 @@
+Title: Learning to Forget: Satiation-Aware Long-Sequence Transducers for Mitigating Post-Purchase Redundancy
+
+URL Source: https://arxiv.org/pdf/2607.12714v1
+
+Published Time: Wed, 15 Jul 2026 12:02:04 GMT
+
+Number of Pages: 5
+
+Markdown Content:
+# Learning to Forget: Satiation-Aware Long-Sequence Transducers for Mitigating Post-Purchase Redundancy 
+
+## Yipin Dai 
+
+Alibaba Group Hangzhou, China 220245072@seu.edu.cn 
+
+## Ruocong Tang ∗
+
+Alibaba Group Hangzhou, China tangruocong.trc@taobao.com 
+
+## Xing Fang 
+
+Alibaba Group Hangzhou, China fangxing.fx@taobao.com 
+
+## Yang Huang 
+
+Alibaba Group Hangzhou, China hy234680@taobao.com 
+
+## Jing Wang 
+
+Alibaba Group Hangzhou, China jing.wangj1@taobao.com 
+
+## Zhentao Song 
+
+Alibaba Group Hangzhou, China 220245077@seu.edu.cn 
+
+## He Guo 
+
+Alibaba Group Hangzhou, China 2401210268@stu.pku.edu.cn 
+
+## Abstract 
+
+Sequential recommendation models predominantly interpret user interactions as positive signals for preference accumulation. How-ever, in e-commerce scenarios, a purchase action often signifies the termination of a specific intent ("Interest Exit") rather than its continuation. Existing models overlook this distinction, suf-fering from Action-Intent Asymmetry, which leads to severe post-purchase redundancy. In this paper, we propose the Satiation-Aware Mechanism (SAM), an end-to-end framework designed to explic-itly model the lifecycle of user interests. SAM incorporates three key components: (1) A Dual-path Cross-Attention architecture that retroactively suppresses historical clicks associated with a fulfilled intent while simultaneously retrieving personalized replenishment rhythms from long-term purchase history; (2) An Adaptive Sa-tiation Gating Unit (ASGU) that generates a time-sensitive soft mask to inhibit satisfied interests immediately after purchase and gradually "re-awaken" them as the predicted repurchase cycle ap-proaches; and (3) A self-supervised Time-to-Next-Purchase (TTNP) auxiliary task to learn latent product lifecycles without manual annotation. Extensive offline experiments on industrial datasets and online A/B testing demonstrate that SAM significantly reduces the Post-Purchase Repeat Rate (PPRR) by over 60%. 
+
+## CCS Concepts 
+
+• Information systems → Recommender systems .
+
+## Keywords 
+
+Recommender Systems, User Behavior Modeling  
+
+> ∗Corresponding author.
+> This work is licensed under a Creative Commons Attribution 4.0 International License.
+> SIGIR ’26, Melbourne, VIC, Australia
+> ©2026 Copyright held by the owner/author(s). ACM ISBN 979-8-4007-2599-9/2026/07 https://doi.org/10.1145/3805712.3808427
+
+ACM Reference Format: 
+
+Yipin Dai, Ruocong Tang, Xing Fang, Yang Huang, Jing Wang, Zhentao Song, and He Guo. 2026. Learning to Forget: Satiation-Aware Long-Sequence Transducers for Mitigating Post-Purchase Redundancy. In Proceedings of the 49th International ACM SIGIR Conference on Research and Development in Information Retrieval (SIGIR ’26), July 20–24, 2026, Melbourne, VIC, Australia. 
+
+ACM, New York, NY, USA, 5 pages. https://doi.org/10.1145/3805712.3808427 
+
+## 1 Introduction 
+
+Modern recommender systems and advertising platforms increas-ingly rely on long behavioral sequences to infer users’ evolving intent. Transformer-style self-attention has become the dominant paradigm due to its capability to capture long-range dependen-cies and perform efficient parallel computation [ 15 ]. In sequential recommendation, models such as SASRec and BERT4Rec repre-sent the state-of-the-art for next-item prediction [7, 13]. Similarly, in industrial CTR/ranking scenarios, architectures like DIN and DIEN model candidate-aware activation and interest evolution over rich behavior histories, demonstrating production viability at scale [20, 21]. However, in e-commerce scenarios where purchase events are semantically critical, current systems overlook a fundamental phase in the user interest lifecycle: Interest Exit . While standard attentive models excel at capturing interest evolution and accumulation, they fail to model the termination of an intent. This deficiency leads to what we term Action-Intent Asymmetry: a single purchase action often signifies the satisfaction and consequent closure of a broader underlying intent (manifested as a cluster of preceding clicks). Yet, standard self-attention mechanisms treat the purchase merely as another positive signal to be aggregated for future reinforcement [ 10 ]. This inability to recognize "Interest Exit" results in a persis-tent challenge known as post-purchase redundancy , where fulfilled intents linger in the user representation, causing the system to recommend identical items immediately after conversion, thereby wasting premium recommendation slots and degrading user trust. The difficulty in modeling Interest Exit lies in the inherent com-plexity of Satiation Dynamics . The "exit" is rarely a binary event arXiv:2607.12714v1 [cs.IR] 14 Jul 2026 SIGIR ’26, July 20–24, 2026, Melbourne, VIC, Australia Yipin Dai et al. 
+
+but a continuous process governed by product-specific lifecycles and user habits. First, the duration of satiation varies significantly: the purchase of a durable good (e.g., a refrigerator) typically signals a permanent or long-term exit of that intent, whereas a consum-able (e.g., paper towels) implies a temporary exit with a latent, periodic resurrection need. Second, user consumption styles are diverse, ranging from "serial buying" to single-transaction satisfac-tion. Existing solutions often rely on post-hoc reranking rules (e.g., MMR [ 1], DPP [ 9 ]) or heuristic probabilities between repeat and ex-plore modes [ 12 ]. While effective to some extent, these approaches operate outside the representation learning process and lack the granularity to model item-level satiation decay and the "lead-in" effects required for accurately predicting the re-emergence of an interest. To tackle this issue, we propose the Satiation-Aware Mech-anism (SAM) , an end-to-end framework designed to explicitly model the lifecycle of user interests. Unlike previous methods that treat interactions uniformly, SAM introduces a Dual-path Cross-Attention architecture to decouple intent localization from rhythm estimation. First, to address Action-Intent Asymmetry, we design a retroactive suppression mechanism that uses the purchased item as a probe to identify and suppress not only the purchase event itself but also the relevant pre-purchase browsing history. Second, to capture personalized product lifecycles, we retrieve replenish-ment rhythms from a separate long-term purchase sequence ( 𝑆 buy ). These signals are fused into our proposed Adaptive Satiation Gating Unit (ASGU) . ASGU functions as a soft, time-sensitive mask within the attention layer: it suppresses attention to satisfied interests immediately after purchase and gradually "re-awakens" them as the elapsed time approaches the predicted cycle, controlled by a learnable lead-in offset. A central challenge in SAM is learning accurate cycle embed-dings without explicit manual labels (e.g., labeling items as "durable" or "consumable"). Drawing inspiration from continuous-time event modeling [ 4, 11 ], we introduce a self-supervised auxiliary task: 
+
+Time-to-Next-Purchase (TTNP) . By mining repurchase segments from raw logs and predicting the time gap to the next equivalent action, TTNP aligns the latent cycle embeddings with real-world repurchase rhythms, enabling ASGU to learn personalized "exit strength" across different users and categories. In summary, our main contributions are: 
+
+• Satiation-Aware Paradigm: We identify the Action-Intent Asymmetry problem and propose an end-to-end representa-tion learning framework that treats purchase as a signal for intent termination rather than just accumulation. 
+
+• Dual-path SAM Architecture: We propose the Satiation-Aware Mechanism featuring a Dual-path structure. It com-bines retroactive suppression (to locate past exploratory clicks) with retrieval-based rhythm estimation (to model long-term habits). 
+
+• Adaptive Gating & TTNP Supervision: We design the ASGU with a "lead-in" mechanism to balance redundancy suppression and repurchase recall, supervised by a Time-to-Next-Purchase auxiliary task that learns latent product lifecycles without manual annotation. Empirically, SAM effectively mitigates post-purchase redundancy while improving long-term accuracy metrics on industrial-scale datasets, demonstrating that "knowing when to forget" is as crucial as "knowing what to remember." By implementing our framework, we enable models to autonomously determine when an interest thread should exit the active representation, effectively mitigating to the post-purchase redundancy problem. 
+
+## 2 Methodology 
+
+We propose the Satiation-Aware Mechanism (SAM) to explicitly model the Interest Exit phenomenon in sequential recommendation. Unlike heuristic rule-based filtering, SAM learns personalized satia-tion cycles and retroactively suppresses historical intents in an end-to-end manner. The architecture consists of three core components: (1) a Dual-path Cross-Attention module for intent localization and rhythm retrieval, (2) an Adaptive Satiation Gating Unit (ASGU) for dynamic mask generation, and (3) a Satiation-aware Attention layer for logit-level intervention. As illustrated in Figure 1, the SAM framework follows a multi-tower fusion architecture. 
+
+## 2.1 Problem Formulation 
+
+In the ranking stage of an industrial recommendation system, the objective is to estimate the Click-Through Rate (CTR) for a specific candidate item. Formally, given a user 𝑢 , we define the inputs as follows: 1) User Profile 𝑃 𝑢 , which includes static features such as demographics and long-term preferences; 2) User Behavior Sequence 𝑆 = {𝑥 1, . . . , 𝑥 𝐿 }, a chronological sequence of clicks and purchases where each interaction 𝑥 𝑗 contains item features and the category 𝑔 𝑗 ; 3) User Purchase Sequence 𝑆 buy = {𝑥 (𝑝 ) 
+
+> 1
+
+, . . . , 𝑥 (𝑝 ) 
+
+> 𝐻
+
+},a long-term history filtering only purchase events to capture con-sumption rhythms; and 4) Candidate Item 𝑖 , the target item to be scored with category 𝑔 𝑖 .The goal is to learn a scoring function 𝑓 (𝑃 𝑢 , 𝑆, 𝑆 buy , 𝑖 ) → ˆ𝑦 ,where ˆ𝑦 ∈ [0, 1] represents the probability of interaction. Our specific focus is to correctly identify “Interest Exit” events within 𝑆 
+
+to suppress the score ˆ𝑦 when candidate 𝑖 belongs to a category the user has recently satisfied. 
+
+## 2.2 Dual-path Interest Modeling 
+
+To address the Action-Intent Asymmetry , we employ a dual-path cross-attention mechanism that simultaneously identifies “what to suppress” and “how long to suppress.” To ensure semantic consis-tency and parameter efficiency, both paths share the same projec-tion matrices ( 𝑊 𝑄 ,𝑊 𝐾 ). 
+
+2.2.1 Intent Localization (Retroactive Suppression). A purchase sig-nals the fulfillment of an entire intent cluster. To avoid the weight dilution inherent in Softmax for long sequences (e.g., 𝐿 = 500 ), we define the intent attribution weight 𝑎 𝑗 as a pointwise similarity gate. We use the category embedding e𝑔 buy of the purchase as a probe query against the category embeddings e𝑔 𝑗 of historical nodes: 
+
+𝑎 𝑗 = 𝜎 (𝑊 𝑄 e𝑔 buy )⊤ (𝑊 𝐾 e𝑔 𝑗 )√𝑑 
+
+!
+
+(1) where 𝜎 is the Sigmoid function. Unlike Softmax, this pointwise formulation allows 𝑎 𝑗 to maintain a high suppression strength Learning to Forget: Satiation-Aware Long-Sequence Transducers for Mitigating Post-Purchase Redundancy SIGIR ’26, July 20–24, 2026, Melbourne, VIC, Australia User Behavior Sequence Candidate Item 
+
+MLP 
+
+> User Profile
+> Embedding Layer
+> Fusion
+> 𝑒 !"#
+> $%&
+> User Purchase Sequence
+
+MLP  
+
+> CTR Loss (CE Loss)
+
+𝑦 "𝑦 " 
+
+> Time Interval Loss
+
+𝑦 !#
+
+> 𝑞𝑢𝑒𝑟𝑦
+> Cate id
+
+Pointwise Intent Gating 
+
+> Cate id
+> 𝑒 '( )*+
+> $%&
+> 𝑘𝑒𝑦
+> Cate id
+> 𝑘𝑒𝑦
+> Time Interval
+
+ASGU 
+
+> 𝑐
+> 𝑎 !
+> 𝑣𝑎𝑙𝑢𝑒
+
+Cross Attention  
+
+> △𝑡
+> 𝑚 ),
+
+# ⨁  
+
+> Final Loss
+> Input Layer
+
+Item 
+
+Tower  
+
+> Dual -path
+> Interest
+> Modeling
+> Satiation -Aware
+> Inference Module
+> Sequence Encoding
+> Joint Optimization
+> Layer
+> 𝑟 "#
+
+Transformer 
+
+Transformer 
+
+Transformer × N
+
+Figure 1: The overall architecture of the Satiation-Aware Mechanism (SAM). 
+
+(near 1.0) for all nodes within the same intent cluster, regardless of sequence length. 
+
+2.2.2 Personalized Rhythm Retrieval. Simultaneously, we retrieve the user’s consumption rhythm from the long-term purchase his-tory 𝑆 buy = {( e𝑔 𝑘 , eΔ𝑇 𝑘 )} 𝐻 𝑘 =1. We employ target-aware cross-attention to compute a rhythm representation r𝑢,𝑔 :
+
+r𝑢,𝑔 =
+
+> 𝐻
+
+∑︁ 
+
+> 𝑘 =1
+
+𝛽 𝑘 · ( 𝑊 𝑉 eΔ𝑇 𝑘 ), 𝛽 𝑘 = Softmax 𝑘 
+
+(𝑊 𝑄 e𝑔 buy )⊤ (𝑊 𝐾 e𝑔 𝑘 )√𝑑 
+
+!
+
+(2) where eΔ𝑇 𝑘 is the embedding of historical time intervals. The resulting r𝑢,𝑔 is a weighted sum of historical paces, which is then decoded by an MLP into a positive scalar 𝑐 = Softplus (MLP (r𝑢,𝑔 )) ,representing the predicted replenishment cycle in days. This cycle 
+
+𝑐 is explicitly supervised by the TTNP auxiliary task (detailed in Section 2.5). The shared 𝑊 𝑄 ,𝑊 𝐾 ensure that the rhythm retrieval and intent localization paths operate within a unified semantic space. 
+
+## 2.3 Adaptive Satiation Gating Unit (ASGU) 
+
+The ASGU generates a satiation mask 𝑚 𝑖 𝑗 to modulate historical nodes. To balance immediate redundancy suppression with future demand forecasting, we design the mask to be deepest right after purchase and gradually release as it approaches the predicted cycle 
+
+𝑐 :
+
+𝑚 𝑖 𝑗 = 1 − 𝑎 𝑗 · 𝜎 
+
+
+
+𝑘 ·
+
+
+
+𝛼 − Δ𝑡 𝑖 𝑗 
+
+𝑐 
+
+ | {z } 
+
+> Satiety Function 𝜙
+
+(3) where Δ𝑡 𝑖 𝑗 is the elapsed time since purchase and 𝑘 is a learnable steepness factor. Specifically, in the Satiety Phase , when Δ𝑡 𝑖 𝑗 → 0, the term 
+
+(𝛼 − Δ𝑡 𝑐 ) ≈ 𝛼 . Given 𝛼 ∈ ( 0, 1] is a Lead-in Offset (e.g., 0.8), 𝜙 
+
+remains high, leading to 𝑚 𝑖 𝑗 ≈ 1 − 𝑎 𝑗 . For identical categories (𝑎 𝑗 ≈ 1), the node is effectively masked ( 𝑚 𝑖 𝑗 → 0). During the 
+
+Recovery Phase , as Δ𝑡 𝑖 𝑗 approaches the threshold 𝛼𝑐 , the term inside 𝜎 nears 0, causing 𝜙 → 0.5 and the mask to fade. Finally, for Pre-purchase Recall , once Δ𝑡 𝑖 𝑗 > 𝛼𝑐 , 𝜙 drops towards 0, and 
+
+𝑚 𝑖 𝑗 → 1. This “lead-in” mechanism ensures that the model can re-activate historical interests slightly before the predicted cycle 𝑐 
+
+ends to capture early browsing for replenishment. 
+
+## 2.4 Satiation-aware Attention 
+
+To maintain numerical stability, we inject the gating signal as a Logit-bias Mask. For any query 𝑖 and key 𝑗 , the modified attention logit ℓ𝑖 𝑗 is formulated as: 
+
+ℓ𝑖 𝑗 = q⊤ 
+
+> 𝑖
+
+k𝑗 
+
+√𝑑 + log (clip (𝑚 𝑖 𝑗 , 𝜖, 1)) (4) This ensure that when 𝑚 𝑖 𝑗 → 0, the corresponding attention weight 
+
+𝛼 𝑖 𝑗 → 0.
+
+## 2.5 TTNP Auxiliary Task and Training 
+
+To ground the latent cycle 𝑐 in physical time, we introduce the Time-to-Next-Purchase (TTNP) auxiliary task. For a sequence of purchases of the same category 𝑔 at times 𝑡 𝑘 and 𝑡 𝑘 +1, the model minimizes a censored regression loss: 
+
+Laux =∑︁ |log (𝑐 + 1) − log (Δ𝑡 + 1)| 2 (5) where Δ𝑡 = 𝑡 𝑘 +1 − 𝑡 𝑘 is the target interval to the next purchase. Crucially, to handle right-censored cases where a user only has a single purchase of category 𝑔 without a subsequent purchase in our observation window, we impute the missing Δ𝑡 using the platform’s global average repurchase cycle ¯𝑐 𝑔 for that category. Specifically, we set Δ𝑡 = max (𝑇 end − 𝑡 𝑘 , ¯𝑐 𝑔 ), where 𝑇 end is the end of the data window. This ensures the model learns a robust lower bound even for sparse, long-cycle durables. The total loss is a joint optimization: L = LCTR + 𝜆 Laux .SIGIR ’26, July 20–24, 2026, Melbourne, VIC, Australia Yipin Dai et al. 
+
+Table 1: Offline and Online comparison results. (Mean ± Std.) * indicates 𝑝 < 0.05 . In the Online A/B section, all metrics are reported as relative percentage improvements/reductions over the deployed baseline (DIN). Model Offline Metrics Online A/B Testing AUC ( ↑) GAUC ( ↑) PPRR ( ↓) Δ CTR ( ↑) Δ GMV ( ↑) Δ Bad-Case ( ↓)
+
+Classic Models 
+
+DNN 0.741 ± 0.001 0.665 ± 0.002 10.5% - - -DCN-v2 [16] 0.745 ± 0.001 0.669 ± 0.001 11.2% - - -DIN [21] (Baseline) 0.749 ± 0.001 0.674 ± 0.001 15.5% 0.00% 0.00% 0.00% DIN + Fixed-Window Filter 0.745 ± 0.001 0.670 ± 0.002 7.7% -0.2% -0.3% -31.9% 
+
+Recent SOTA 
+
+HiFormer [5] 0.753 ± 0.002 0.679 ± 0.002 14.5% - - -RankMixer [22] 0.754 ± 0.001 0.680 ± 0.001 13.8% - - -HSTU [18] 0.758 ± 0.001 0.684 ± 0.001 15.2% +0.8% +0.4% +11.0% HHFT [17] 0.759 ± 0.002 0.685 ± 0.002 14.9% - - -MTGR [6] 0.761 ± 0.001 0.687 ± 0.001 16.1% - - -OneTrans [19] 0.762 ± 0.001 0.689 ± 0.001 15.8% +1.1% +0.6% +10.2% 
+
+SAM (Ours) 0.763 ∗ ± 0.001 0.691 ∗ ± 0.001 4.1% +1.1% +0.9% -74.5% 
+
+## 3 Experiments 3.1 Experimental Setup 
+
+3.1.1 Datasets. We collected and sampled the online service logs from the online Tmall e-commerce platform between 2025/06/07 to 2025/11/07 to construct the experimental dataset D. As shown in Table 2, the entire dataset is split chronologically into a training set Dtrain (first 5 months) and a testing set Dtest (last 1 month) to prevent data leakage. We filter for active users with at least 20 interactions and truncate sequences to length 𝐿 = 500 .
+
+Table 2: Statistics of the established Industrial Logs. Dataset #Users #Items #Actions #Purchases 
+
+Dtrain 11.52M 7.82M 190.33M 9.06M 
+
+Dtest 6.13M 4.65M 52.74M 3.22M 
+
+3.1.2 Evaluation Metrics. Since we focus on the fine-ranking stage (CTR prediction), we adopt a comprehensive set of metrics to evalu-ate both accuracy and diversity. For Ranking Accuracy , we utilize 
+
+AUC (Area Under ROC Curve) to measure global ranking capability and GAUC (Group AUC) to assess quality within each user’s per-sonalized list, the latter being more indicative of online performance in industrial systems [ 21 ]. Beyond accuracy, we introduce Redun-dancy Control metrics to quantify the "Interest Exit" capability: 
+
+PPRR (Post-Purchase Repeat Rate) tracks the global percentage of impressions where the recommended item shares the exact same leaf-category as the user’s most recent purchase, computed within a category-specific time window drawn from a pre-existing repur-chase cycle lookup table [ 1, 9 ]. Meanwhile, the Bad-Case Ratio 
+
+is a direct online business metric: it measures the proportion of "already purchased" reasons among all explicit negative feedback events (e.g., clicking "dislike") submitted by users. For online A/B testing, we monitor CTR and GMV on complementary items to ensure balanced business growth. 
+
+3.1.3 Competitors. We compare SAM against a comprehensive set of baselines categorized into three groups. The first group con-sists of Classic & Interaction Models , including standard DNN 
+
+[ 2, 3 ], DCN-v2 [ 16 ], and DIN [ 21 ], which focus on feature inter-actions and candidate-relevant user interests. The second group covers Efficient Sequence Models such as HiFormer [ 5] and 
+
+RankMixer [22 ], utilizing hierarchical mechanisms for efficiency. The third group represents Generative/Large-Scale Models , in-cluding HSTU [ 18 ], MTGR [ 6], OneTrans [19 ], and HHFT [ 17 ], which are state-of-the-art architectures designed for extremely long-term history modeling. 
+
+## 3.2 Experimental Results 
+
+3.2.1 SOTA Comparison. For offline evaluation, all experiments were repeated 5 times on Dtest . For online A/B testing (following standard protocols [ 8]), models are deployed to serve 1% of live traffic. The comparative results are presented in Table 1. Analyzing the results reveals a clear evolution in model perfor-mance. Traditional models like DNN and DCN-v2 show limited GAUC as they fail to capture sequential dependencies. While DIN significantly improves accuracy by introducing attention mecha-nisms, it inadvertently exacerbates redundancy because it explicitly attends to the purchased item if the candidate is similar. Modern SOTA sequence models (e.g., MTGR, OneTrans) achieve the highest GAUC scores, proving their ability to capture long-term interests; however, their high PPRR indicates a critical flaw—they treat post-purchase signals merely as “strong positive feedback,” leading to severe post-purchase redundancy. In contrast, our SAM framework achieves a significant improve-ments across all metrics. It statistically ties with or surpasses One-Trans in AUC and GAUC, while crucially reducing the PPRR by over 60% compared to the strongest baseline. This confirms that SAM correctly "exits" satisfied interests without compromising the prediction accuracy for other relevant items. Online A/B testing further validates this impact, showing a +1.1% lift in CTR and a 
+
++0.9% lift in GMV, driven by the effective reduction of redundant Learning to Forget: Satiation-Aware Long-Sequence Transducers for Mitigating Post-Purchase Redundancy SIGIR ’26, July 20–24, 2026, Melbourne, VIC, Australia 
+
+exposures which allows users to explore new categories. Further-more, a quantitative breakdown confirms that SAM successfully captures distinct product lifecycles: it predicts extended satiation cycles averaging over 300 days for typical durables (e.g., refriger-ators), while correctly inferring much shorter rhythms ( ∼15–30 days) for high-frequency consumables (e.g., tissues). By learning these personalized cycles rather than relying on a rigid heuristic baseline (e.g., DIN + Fixed-Window Filter , which severely degrades GAUC to 0.670 and drops online GMV by 0.3% due to indiscrim-inate over-suppression), SAM dynamically balances redundancy mitigation with legitimate repurchase demands. 
+
+3.2.2 Ablation Study. To validate the contribution of each compo-nent, we conduct an ablation study shown in Table 3. The observed order of contribution to GAUC and Redundancy reduction is Dual-path Retrieval > TTNP > ASGU Gating . Specifically, removing the rhythm retrieval module causes a slight drop in GAUC but a sharp increase in PPRR, confirming that historical purchase rhythm is the primary signal for determining "when to stop." Furthermore, without the auxiliary TTNP loss, the model fails to learn the diverse satiation cycles of different goods (e.g., distinguishing refrigerators from tissues), leading to sub-optimal GAUC. Finally, replacing the adaptive ASGU with a hard mask maintains low redundancy but hurts GAUC, as it mistakenly suppresses "lead-in" interests such as pre-repurchase browsing. 
+
+Table 3: Ablation outcomes on SAM variants. GAUC is the primary accuracy metric. Variant GAUC ( ↑) PPRR ( ↓)Full SAM 0.691 4.1% 
+
+w/o TTNP Task 0.688 ( ↓) 8.4% ( ↑)w/o Dual-path Retrieval 0.682 ( ↓) 12.9% ( ↑↑ )w/o ASGU (Hard Mask) 0.685 ( ↓) 4.0% ( ≈)
+
+## 4 Conclusion 
+
+In this paper, we propose the Satiation-Aware Mechanism (SAM) ,a novel framework to address the post-purchase redundancy prob-lem in industrial fine-ranking systems. By introducing a Dual-path Context Retrieval module and an adaptive gating unit supervised by a Time-to-Next-Purchase (TTNP) task, SAM effectively models the “Interest Exit” phenomenon. Extensive experiments on industrial datasets demonstrate that SAM significantly reduces redundancy metrics (PPRR) while maintaining state-of-the-art ranking accuracy (GAUC). Online A/B testing further validates its business value, showing substantial gains in CTR and GMV. These findings high-light the importance of explicitly modeling intent termination in long-sequence user behavior learning. 
+
+## 5 Acknowledgments 
+
+We acknowledge the Alibaba PAI Team for releasing TorchEasyRec[ 14 ], which supported the engineering implementation and large-scale training of our experiments. 
+
+## References 
+
+[1] Jaime Carbonell and Jade Goldstein. 1998. The Use of MMR, Diversity-Based Reranking for Reordering Documents and Producing Summaries. In Proceedings of the 21st Annual International ACM SIGIR Conference on Research and Development in Information Retrieval . 335–336. [2] Heng-Tze Cheng, Levent Koc, Jeremiah Harmsen, Tal Shaked, Tushar Chandra, Hrishi Aradhye, Glen Anderson, Greg Corrado, Wei Chai, Mustafa Ispir, et al .2016. Wide & Deep Learning for Recommender Systems. In Proceedings of the 1st Workshop on Deep Learning for Recommender Systems . 7–10. [3] Paul Covington, Jay Adams, and Emre Sargin. 2016. Deep Neural Networks for YouTube Recommendations. In Proceedings of the 10th ACM Conference on Recommender Systems . 191–198. [4] Nan Du, Hanjun Dai, Rakshit Trivedi, Utkarsh Upadhyay, Manuel Gomez-Rodriguez, and Le Song. 2016. Recurrent Marked Temporal Point Processes: Embedding Event History to Vector. In Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining . 1555–1564. [5] Huan Gui, Ruoxi Wang, Ke Yin, Long Jin, Maciej Kula, Taibai Xu, Lichan Hong, and Ed H. Chi. 2023. Hiformer: Heterogeneous Feature Interactions Learning with Transformers for Recommender Systems. arXiv preprint arXiv:2311.05884 
+
+(2023). [6] Ruidong Han, Bin Yin, Shangyu Chen, He Jiang, Fei Jiang, Xiang Li, Chi Ma, Mincong Huang, Xiaoguang Li, Chunzhen Jing, Yueming Han, Menglei Zhou, Lei Yu, Chuan Liu, and Wei Lin. 2025. MTGR: Industrial-Scale Generative Rec-ommendation Framework in Meituan. arXiv preprint arXiv:2505.18654 (2025). [7] Wang-Cheng Kang and Julian McAuley. 2018. Self-Attentive Sequential Recom-mendation. In 2018 IEEE International Conference on Data Mining (ICDM) . IEEE, 197–206. [8] Ron Kohavi, Roger Longbotham, Dan Sommerfield, and Randal M. Henne. 2009. Controlled Experiments on the Web: Survey and Practical Guide. Data Mining and Knowledge Discovery 18, 1 (2009), 140–181. [9] Alex Kulesza and Ben Taskar. 2012. Determinantal Point Processes for Machine Learning. Foundations and Trends in Machine Learning 5, 2–3 (2012), 123–286. [10] Jiacheng Li, Yujie Wang, and Julian McAuley. 2020. Time Interval Aware Self-Attention for Sequential Recommendation. In Proceedings of the 13th International Conference on Web Search and Data Mining . 322–330. [11] Hongyuan Mei and Jason M. Eisner. 2017. The Neural Hawkes Process: A Neurally Self-Modulating Multivariate Point Process. Advances in Neural Information Processing Systems 30 (2017). [12] Pengjie Ren, Zhumin Chen, Jing Li, Zhaochun Ren, Jun Ma, and Maarten de Rijke. 2019. RepeatNet: A Repeat Aware Neural Recommendation Machine for Session-Based Recommendation. In Proceedings of the AAAI Conference on Artificial Intelligence , Vol. 33. 4806–4813. [13] Fei Sun, Jun Liu, Jian Wu, Changhua Pei, Xiao Lin, Wenwu Ou, and Peng Jiang. 2019. BERT4Rec: Sequential Recommendation with Bidirectional Encoder Rep-resentations from Transformer. In Proceedings of the 28th ACM International Conference on Information and Knowledge Management . 1441–1450. [14] Alibaba PAI Team. 2024. TorchEasyRec: An Easy-to-Use Framework for Recom-mendation. https://github.com/alibaba/TorchEasyRec. [15] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Lukasz Kaiser, and Illia Polosukhin. 2017. Attention Is All You Need. Advances in Neural Information Processing Systems 30 (2017). [16] Ruoxi Wang, Rakesh Shivanna, Derek Z. Cheng, Sagar Jain, Dong Lin, Lichan Hong, and Ed H. Chi. 2021. DCN V2: Improved Deep & Cross Network and Practical Lessons for Web-Scale Learning to Rank Systems. In Proceedings of the Web Conference 2021 . 1785–1797. [17] Liren Yu, Wenming Zhang, Silu Zhou, Tao Zhang, Zhixuan Zhang, and Dan Ou. 2025. HHFT: Hierarchical Heterogeneous Feature Transformer for Recommenda-tion Systems. arXiv preprint arXiv:2511.20235 (2025). [18] Jiaqi Zhai, Lucy Liao, Xing Liu, Yueming Wang, Rui Li, Xuan Cao, Leon Gao, Zhao-jie Gong, Fangda Gu, Michael He, Yinghai Lu, and Yu Shi. 2024. Actions Speak Louder than Words: Trillion-Parameter Sequential Transducers for Generative Recommendations. arXiv preprint arXiv:2402.17152 (2024). [19] Zhaoqi Zhang, Haolei Pei, Jun Guo, Tianyu Wang, Yufei Feng, Hui Sun, Shaowei Liu, and Aixin Sun. 2025. OneTrans: Unified Feature Interaction and Sequence Modeling with One Transformer in Industrial Recommender. arXiv preprint arXiv:2510.26104 (2025). [20] Guorui Zhou, Na Mou, Ying Fan, Qi Pi, Weijie Bian, Chang Zhou, Xiaoqiang Zhu, and Kun Gai. 2019. Deep Interest Evolution Network for Click-Through Rate Prediction. In Proceedings of the AAAI Conference on Artificial Intelligence , Vol. 33. 5941–5948. [21] Guorui Zhou, Xiaoqiang Zhu, Chengru Song, Kun Gai, Ying Fan, Han Zhu, Xiao Ma, Yanghui Yan, Junqi Jin, and Han Li. 2018. Deep Interest Network for Click-Through Rate Prediction. In Proceedings of the 24th ACM SIGKDD International Conference on Knowledge Discovery & Data Mining . 1059–1068. [22] Jie Zhu, Zhifang Fan, Xiaoxie Zhu, Yuchen Jiang, Hangyu Wang, Xintian Han, Haoran Ding, Xinmin Wang, Wenlin Zhao, Zhen Gong, Huizhi Yang, Zheng Chai, Zhe Chen, Yuchao Zheng, Qiwei Chen, Feng Zhang, Xun Zhou, Peng Xu, Xiao Yang, Di Wu, and Zuotao Liu. 2025. RankMixer: Scaling Up Ranking Models in Industrial Recommenders. arXiv preprint arXiv:2507.15551 (2025).

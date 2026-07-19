@@ -1,0 +1,584 @@
+Title: SlimPer: Make Personalization Model Slim and Smart
+
+URL Source: https://arxiv.org/pdf/2607.12281v1
+
+Published Time: Wed, 15 Jul 2026 11:56:12 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+# SlimPer: Make Personalization Model Slim and Smart 
+
+## Siqi Wang ∗, Xianjie Chen ∗† , Shaofeng Deng, Albert Chen, Romil Shah, Jiawei Huang, Zhaoqin Wang, Zhang Zhang, Yiqun Liu, Meilei Jiang, Anish Dubey, Moyan Mei, Tongxin Wang, Nathan Berrebbi, Misael Manjarres, Armand Sauzay, Shardul Kothapalli, Aryaman Vinchhi, Kevin Johnstone, Juheon Lee, Gufan Yin, Ziheng Huang, Justin Lin, Mert Terzihan, Yilin Qi, Cynthia Yang, Colin Peppler, Qi Ding, Ruohan Sun, Ge Song, Litao Deng, Parichay Kapoor, Matt Ma, Huihui Cheng, Jiyuan Zhang, Yanli Zhao, Yiping Han, Fangqiu Han, Ning Yao, Arun Singh, Jordan Edwards, Zhengyu Su, Abhishek Kumar, Guangdeng Liao, Ankit Asthana 
+
+Meta Platforms, Inc. USA 
+
+## Abstract 
+
+Transformer-style architectures are increasingly adopted for indus-trial recommendation systems, yet they inherit a design premise misaligned with the task: generative models rely on per-token autoregressive prediction, which justifies maintaining large inter-mediate tensors that scale with sequence length. In contrast, rec-ommendation systems produce a single set of relevance scores for each <user, item> pair without token-level supervision. Lever-aging this observation, we propose SlimPer , which reformulates personalized ranking as iterative refinement of a compact, unified <user, item> knowledge base . At each layer, the model selectively queries raw multi-modal user-side tokens, computes explicit rele-vance matching scores, and refines the knowledge base, all in O( 𝑁 )
+
+per-layer cost with a fixed-size intermediate representation. As a result, model depth is decoupled from user history length, enabling deeper relevance understanding without proportional growth in compute or memory; request-only optimization further trims mem-ory by sharing a single copy of user-side tokens across all candidate items. SlimPer unifies sparse, dense, and sequence features within a single backbone and provides inherent interpretability through its attention mechanism. Deployed on Instagram Reels and Feed, SlimPer yields measurable improvements in user engagement while streamlining the overall system and enabling effective modeling of 10k+ fine-grained user history events. 
+
+## CCS Concepts 
+
+• Information systems → Recommender systems .
+
+## 1 Introduction 1.1 The Transformer Mismatch in Recommendation 
+
+Discriminative personalization models, commonly known as rank-ing models, shape the content feeds, video recommendations, and product suggestions that users interact with every day. These mod-els need to rank candidate items according to user preferences in real time while maintaining accurate predictions under production cost constraints. Industrial recommendation models typically consume multi-modal input features, where each modality offers different trade-offs between computational cost and the ability to capture fine-grained  
+
+> ∗Equal contribution. †Project lead and corresponding author (cxj@meta.com).
+
+information (see Table 1 for a detailed comparison). In common practice, different modalities are processed by separate specialized components and then shallowly stitched together for final predic-tions. Recently, motivated by the success of Transformers in large language models (LLMs), adapting transformer-like architectures to recommendation systems has become a popular direction, either for modeling variable-length sequence features (e.g., HSTU [ 27 ], Interformer [26]) or for unifying the modeling of different feature modalities (e.g., OneTrans [31], HHFT [25], RankMixer [34]). However, this trend overlooks a structural difference between recommendation systems and LLMs. In LLMs, per-position autore-gressive supervision requires maintaining full token-level repre-sentations throughout the network, and the computational cost is amortized across predictions at every token position. Current recommendation systems have no such requirement : they are trained for discriminative prediction and produce a single set of relevance scores for each <user, item> pair without token-level autoregres-sive losses. As a result, Transformer-like designs face an unnec-essary dilemma: either intermediate representations are heavily compressed across layers, leading to information loss, or large in-termediate tensors are preserved, incurring considerable memory and computational overhead as the number of input tokens scales. This dilemma is not inherent to the recommendation itself; it is an artifact of borrowing an architectural premise that does not apply. 
+
+## 1.2 A New Paradigm: Iterative Refinement of a Knowledge Base 
+
+We argue that the appropriate abstraction for discriminative rec-ommendation is not sequence modeling, but iterative refinement 
+
+over a compact user-item knowledge base. Under this formulation, the model maintains a fixed-size representation of <user, item> rel-evance and progressively refines it by selectively querying raw multi-modal evidence, without materializing large intermediate tensors whose size grows with input sequence length. Based on this principle, we propose SlimPer , a recommendation-centric architecture for personalized ranking. As shown in Fig. 1, SlimPer formulates personalized ranking as an iterative refinement process over a unified fixed-size <user, item> knowledge base. Each layer performs three steps: (1) Selection : all-modality-aware QKV at-tention queries the complete set of raw user-side tokens conditioned on the current knowledge base; (2) Matching : explicit dot-product relevance scores are computed between the retrieved evidence and arXiv:2607.12281v1 [cs.IR] 14 Jul 2026 SlimPer: Make Personalization Model Slim and Smart Wang and Chen, et al. 
+
+multifaceted templates; (3) Refinement : the knowledge base is up-dated using the matched evidence. This design resolves the transformer dilemma at its root: increas-ing model depth to improve understanding of the <user, item> pair no longer requires maintaining large intermediate tensors whose size scales with the number of user-side input tokens. At the same time, model quality is preserved because every layer retains di-rect access to the complete set of raw user-side information when refining the knowledge base. The resulting smaller intermediate representations translate directly into lower computational and memory cost (i.e., Slim ). Moreover, the knowledge base focuses its entire learning capacity on <user, item> relevance, allocating resources more deliberately toward relevance matching compared to architectures that must maintain full token-level representations (i.e., Smart ). In addition, inspired by the success of request-only optimization (ROO) in HSTU [ 27 ] for processing user-side sequence features, we explicitly separate user-side features from non-user-side features and extend ROO to all user-side feature modalities. This is another recommendation-centric design choice, motivated by the fact that recommendation models typically rank multiple candidate items for the same user during both training and inference. We conduct experiments on Instagram’s two major ranking sur-faces, Reels and Feed, using final-stage ranking models. SlimPer broadly outperforms prior models while achieving lower computa-tional and memory cost with a more streamlined model architecture. 
+
+## 1.3 Contributions 
+
+In summary, our main contributions are as follows: (1) Iterative refinement as a new paradigm for personalized ranking: We formulate discriminative recommendation as an iterative refinement process over a compact <user, item> knowl-edge base, departing from the dominant transformer-mimicking paradigm. At each refinement step, the model directly queries the full set of raw multi-modal tokens, thereby decoupling model depth from input sequence length. This design achieves 
+
+O( 𝑁 ) per-layer complexity with a fixed-size intermediate rep-resentation, effectively resolving the efficiency-quality trade-off faced by transformer-like architectures when scaling to long user histories. (2) Unified multi-modal architecture with recommendation-centric efficiency: SlimPer naturally provides a unified back-bone for processing sparse, dense, and sequence features using only standard neural network building blocks including MLPs, QKV attention, linear projections, and RMSNorm [ 30 ]. Further-more, inspired by the effectiveness of request-only optimization (ROO) in HSTU for user history modeling, SlimPer extends ROO awareness to all user-side feature modalities: user-side to-kens are computed once per request batch and shared across all candidate items within the same request, reducing redundant computation and memory overhead. Together, these design choices improve both ranking quality and system efficiency compared with transformer-mimicking baselines. (3) Intrinsic interpretability for real-world recommender sys-tems: The iterative refinement framework also provides intrin-sic interpretability. At each layer, the QKV attention mechanism KB₀ (init from Item/Cross)      
+
+> ⟨user, item ⟩knowledge base K×d
+> Multi-Task Predictions
+> SlimPer Layer L Match & Refine
+> KB₁ (refined)
+> SlimPer Layer 1 Match & Refine
+> All User-Side Tokens N x d
+> Sparse • Dense • EBF
+> Item/Cross-Side Tokens
+> Sparse • Dense
+> Select
+> Select
+> User Raw Features Item/Cross Raw Features
+> KB L(refined) Final refined KB
+> Tokenization Tokenization
+> Initialize
+
+Figure 1: High-level overview of SlimPer. Three design prin-ciples: (1) Slim — fixed-size knowledge base ( 𝐾 ×𝑑 ), cost decou-pled from input length 𝑁 ; (2) Complete Access — user-side tokens queried at every layer; (3) ROO-Aware — user-side tokens computed once and shared across all candidates in a request. 
+
+directly associates recommendation outcomes with specific user interaction history events, making model behavior easier to in-terpret and debug in real-world recommendation scenarios. 
+
+## 2 Methodology 2.1 Design Philosophy 
+
+The design principles motivating SlimPer arise from the observation that recommendation requires only discriminative prediction, not per-token autoregressive output. The idea of iterative refinement over a compact knowledge base, and the resulting architectural advantages (i.e., decoupled depth and length, complete information access, and more focused capacity allocation), were introduced in Section 1. We now formalize these principles into a concrete architecture. 
+
+## 2.2 Problem Formulation 
+
+Consider a recommendation request consisting of a user 𝑢 and a set of candidate items I = {𝑖 1, 𝑖 2, . . . , 𝑖 𝐶 } to be ranked. The input consists of diverse sets of feature modalities: a set of Sparse features (S), Dense features ( D), and a sequence of user interaction history events ( E). The goal is to learn a scoring function 𝑓 (𝑢, 𝑖 ; S, D, E) → 
+
+R𝜏 that estimates the relevance of 𝑖 by matching it against the user’s latent interests representation. In multi-task settings, this function simultaneously predicts 𝜏 objectives representing different engagement signals. 
+
+## 2.3 Notation and Preliminaries 
+
+We restrict the model to a minimal set of building blocks: MLP 
+
+(multilayer perceptron with SiLU activations), L (segment-wise linear projection: 𝛽 = L( 𝛼 ) = 𝜌𝛼 , 𝜌 ∈ R𝐿 out ×𝐿 in ), and the all-modality <user, item> knowledge base X, initialized as X0 = L( Sin )
+
+from non-user-side input tokens. The knowledge base has shape 
+
+X𝑘 ∈ R𝐾 ×𝑑 , where 𝐾 is the number of knowledge base slots and 𝑑 
+
+is the embedding dimension. The size may in general differ across layers; in our experiments we keep it consistent with 𝐾 = 64 across all layers. Full notation details are in Appendix B.  
+
+> 2SlimPer: Make Personalization Model Slim and Smart Wang and Chen, et al.
+
+Table 1: Different information modalities        
+
+> Modality Input Type Representative Signals
+> Sparse High-cardinality categorical IDs Summarized user interests (e.g., top en-gaged creators or categories), providing salient but coarse-grained preference sig-nals. Sequence Structured user engagement records Fine-grained behavioral signals captur-ing individual user actions (e.g., con-tent consumed, dwell time, engagement type, and timestamp), providing high-resolution temporal information. Dense Continuous nu-merical values Contextual and real-time signals, such as user-level statistics (e.g., CTR), item qual-ity metrics (e.g., reshare rate), and contex-tual attributes (e.g., time or device).
+
+## 2.4 Overall Architecture 
+
+A SlimPer model consists of stacked SlimPer layers preceded by multi-modality tokenization. The overall architecture is shown in Fig. 2. The model takes raw sparse and dense features, along with a sequence of user history events, as inputs. All features are first tokenized using their corresponding tokenizers (see Table 5), producing a set of multi-head 𝑑 -dimensional embeddings. For sim-plicity, we describe our algorithms in single-head form without loss of generality. Each layer performs the Select–Match–Refine cycle (Section 2.6), leveraging standard Query-Key-Value (QKV) atten-tion for all-modality-aware token selection and explicit relevance matching. The model inherently incorporates request-only optimization (ROO) awareness by explicitly decoupling user-side and item-side features. Historically, ROO has been associated with quality-efficiency trade-offs (e.g., two-tower architectures in early-stage ranking) or narrowly applied to user history modeling. Our design extends ROO awareness across the entire model, encompassing all user-side input features beyond just user history. Tokenization for all user-side features is performed once per request batch, and a single copy of these user-side tokens is shared across all items within the same request, minimizing memory and compute cost. Input   
+
+> Output
+> Event Sparse Features
+> Delta Timestamp & Position
+> Explicit Actions One-Hot Encodings
+> Implicit Watch Time Bucketization
+> Sparse Lookup & Pooling
+> …
+> Bucketization Encodings
+> Concat Action Embeddings
+> Watch Time Encoding
+> Concat & MLP
+> Surrounding Events Context
+> Contextual Encodings
+> SUM
+> SUM Concat & MLP SUM
+
+Figure 3: Event modeling module that encodes each event using content, engagement type, temporal and contextual information. 
+
+## 2.5 Tokenization Module 
+
+All raw input features are converted into modality-specific tokens within the unified backbone. Sparse features are tokenized via em-bedding pooling into fixed-size vectors. Each user history event is encoded into a 1 × 𝑑 token by fusing content, engagement type, temporal, and contextual information. Dense features are concate-nated and projected through an MLP. The resulting multi-modal token set serves as input to the SlimPer layers. Full tokenization details for standard components (embedding pooling and dense processing) are provided in Appendix C. 
+
+Contextual Encoding for Event Tokens. Intuitively, user behavior often exhibits local continuity, where an event is most informa-tive when interpreted together with its nearby events. To capture these local contextual relationships, we introduce an additional con-textual encoding e(𝑡 ) 
+
+> context
+
+that explicitly summarizes neighborhood information around each event token (Fig. 3, green box): 
+
+e(𝑡 ) 
+
+> context
+
+= Ψcontext (𝑥 𝑡 −𝑤 +1, . . . , 𝑥 𝑡 ) (1) where Ψcontext represents the encoding function, 𝑤 is the win-dow size, and 𝑥 𝑡 denotes the information collected from the user history event at position 𝑡 . We explored convolutional neural net-works [ 11 ], sliding-window attention [ 2], and combinations of both as Ψcontext ; all variants achieved similar performance. We also ex-perimented with using different information at each event position for contextual encoding; see the ablation study in Section 4.5.1 for details. 
+
+## 2.6 SlimPer Layer: Select, Match, and Refine 
+
+As illustrated in Fig. 2, each SlimPer layer follows a three-step iter-ative refinement procedure. Tokens from all modalities are jointly processed in Steps 1 and 2, where QKV attention is used to retrieve relevant user-side tokens and compute explicit relevance matching scores. Step 3 then refines the knowledge base with the matched evidence. This design reallocates compute and memory away from pairwise user-side token-to-token interactions and toward learn-ing discriminative user-item interactions. Table 2 compares the compute and memory allocation of SlimPer with representative transformer-like architectures. 
+
+2.6.1 Step 1: Token Selection via All-Modality-Aware Attention. 
+
+We leverage information from all input feature modalities during attention-based token selection. Let X𝑘 denote the unified knowl-edge base at iteration 𝑘 , representing the model’s current under-standing of the user-item pair. Query vectors Q are derived from 
+
+X𝑘 through segment-wise linear projection: 
+
+Q = L(X 𝑘 ) ∈ R𝑞 ×𝑑 . (2) Intuitively, Q captures the information that the model seeks to retrieve from user-side tokens, conditioned on the current user-item context encoded in X𝑘 . All user-side input tokens serve as keys K
+
+and values V (with optional linear projection). We organize them into two key-value sets: fixed-size sparse features and variable-length sequence features. QKV attention is applied to both sets to compute attention weights, which are used to aggregate the corresponding values to produce attention output R:
+
+R = Φ(Q, K) V (3) 
+
+> 3
+
+SlimPer: Make Personalization Model Slim and Smart Wang and Chen, et al. Layer 1 Layer 0         
+
+> Select:
+> QKV Attention
+> Match:
+> Dot Product
+> Refine:
+> MLP & Add & Norm
+> KB 0(B x K x d )KB 1(B x K x d )
+> Init
+> Q
+> T
+> Use as Key &Value
+> Selected Tokens
+> Matching Scores KB L(B x K x d )Multi-task Logits
+> Select:
+> QKV Attention
+> Match:
+> Dot Product
+> Refine:
+> MLP & Add & Norm
+> Q
+> T
+> Selected Tokens
+> Matching Scores
+> All User-Side Tokens ( N x d)  Item/Cross Side Tokens
+
+…
+
+Figure 2: Architecture of the multi-layer SlimPer model. Each layer performs iterative refinement of a compact knowledge base ( 𝐾 =16–64 slots) by querying the full set of user-side tokens ( 𝑁 =O( 10 3)–O( 10 4) in production), decoupling the memory and compute cost of stacking layers from input sequence length. Table 2: Per-item Big-O complexity across architectures. The rightmost column is per-layer user-item interaction capacity, where SlimPer’s 𝐾 × advantage is analyzed in Section 2.7. Typical production values: 𝑁 =O( 10 3)–O( 10 4), 𝐾 =64, 𝑞 =16, 𝐵 ≈ 5
+
+(training) / O( 10 2) (inference).    
+
+> Model Tokenization Cost (per item) Stacked Layers Cost (per item) User-Item Interaction Capacity Conventional DLRM Model
+
+• not ROO-aware; no sequence feature support Memory: O ( 𝑁 ) 
+
+> Compute:
+
+O ( 𝑁 ) 
+
+> Memory:
+
+O ( 𝐿 · 64 ) 
+
+> Compute:
+
+O ( 𝐿 · 𝑁 · 16 )O ( 𝐿 · 𝑁 · 64 )
+
+> ROO-aware Transformer-like Model (e.g., HSTU)
+
+• ROO-aware for user history modeling Memory: O ( 𝑁 /𝐵 ) 
+
+> Compute:
+
+O ( 𝑁 /𝐵 ) 
+
+> Memory:
+
+O ( 𝐿 · 𝑁 /𝐵 ) 
+
+> Compute:
+
+O  𝐿 · ( 𝑁 + 1)2/𝐵  O ( 𝐿 · 𝑁 )
+
+> Non-ROO-aware Transformer-like Model (e.g., OneTrans)
+
+• not ROO-aware Memory: O ( 𝑁 ) 
+
+> Compute:
+
+O ( 𝑁 ) 
+
+> Memory:
+
+O ( 𝐿 · 𝑁 ) 
+
+> Compute:
+
+O  𝐿 · 𝑁 2  O ( 𝐿 · 𝑁 )
+
+> Sub-quadratic Transformer-like Model
+> (e.g., linear or sliding-window attention)
+
+• linearized attention  
+
+> Memory:
+
+O ( 𝑁 ) 
+
+> Compute:
+
+O ( 𝑁 ) 
+
+> Memory:
+
+O ( 𝐿 · 𝑁 ) 
+
+> Compute:
+
+O ( 𝐿 · 𝑁 )O ( 𝐿 · 𝑁 )
+
+> SlimPer
+
+• ROO-aware for all feature modalities Memory: O ( 𝑁 /𝐵 ) 
+
+> Compute:
+
+O ( 𝑁 /𝐵 ) 
+
+> Memory:
+
+O ( 𝐿 · 𝐾 ) 
+
+> Compute:
+
+O ( 𝐿 · 𝑁 · 𝑞 )O ( 𝐿 · 𝑁 · 𝐾 )
+
+Here the attention kernel Φ is modality-dependent. For fixed-size sparse tokens, we employ a lightweight parametric kernel imple-mented as an MLP since the token count is constant. For variable-length user history sequence features, we adopt a non-parametric standard scaled dot-product kernel [ 22 ]. Dense features, which typically have relatively small dimensionality (e.g., ∼1000 floats), are directly propagated and fused at each layer without passing through an attention kernel: 
+
+Φ(Q, K) =
+
+(
+
+MLP (Concat (L( Q), L( K))) , sparse features Softmax (𝛾𝑄𝐾 ⊤) , sequence features (4) where 𝛾 denotes the softmax temperature. Applying this formu-lation to the two user-side token streams yields two attention-based representations: 
+
+R𝑠 = Φ𝑠 (Q, S) S, R𝑠 ∈ R𝑞 ×𝑑 , (5) 
+
+R𝑒 = Φ𝑒 (Q, E) E, R𝑒 ∈ R𝑞 ×𝑑 . (6) The attention outputs R𝑠 and R𝑒 summarize the evidence se-lected from both token streams. In our implementation, the raw sparse feature tokens S and sequence feature tokens E are directly used as keys and values in the QKV attention. We also explored applying additional linear projections to derive keys and values, but observed no performance improvement; therefore, these projections are omitted for computational efficiency. This design yields an all-modality-aware attention mechanism. Since the query representation Q is derived from the unified knowl-edge base X𝑘 , it incorporates information from all input modalities. Consequently, sparse feature information can influence token se-lection over sequence features, and vice versa. 
+
+2.6.2 Step 2: Explicit Multifaceted Dot-Product Relevance Matching. 
+
+To perform relevance matching, we derive a set of multifaceted templates T ∈ R𝑡 ×𝑑 from the unified <user, item> knowledge base using a linear transformation: 
+
+T = L(X 𝑘 ), T ∈ R𝑡 ×𝑑 . (7) The relevance matching scores are computed via explicit dot products between the templates and each stream’s attention output: 
+
+𝝀 𝑠 = DotProduct (R𝑠 , T), 𝝀 𝑠 ∈ R𝑞 ×𝑡 , (8) 
+
+𝝀 𝑒 = DotProduct (R𝑒 , T), 𝝀 𝑒 ∈ R𝑞 ×𝑡 . (9) 
+
+4SlimPer: Make Personalization Model Slim and Smart Wang and Chen, et al. 
+
+2.6.3 Step 3: Refine the Knowledge Base. The relevance scores are then normalized and transformed via MLP 𝜇 to refine the <user, item> 
+
+knowledge base X𝑘 and produce the next layer’s representation 
+
+X𝑘 +1. The dense tokens D are concatenated to incorporate dense feature information when updating the knowledge base: 
+
+X𝑘 +1 = X𝑘 + MLP 𝜇 
+
+
+
+Concat  RMSNorm (𝝀 𝑠 ), RMSNorm (𝝀 𝑒 ),
+
+L(X 𝑘 ), D
+
+(10) At each layer, we optionally output a task embedding for each prediction task, representing the model’s current understanding of that task. The task embeddings across layers can be summed before applying a final linear projection to produce task logits: 
+
+P𝑘 𝑝 = MLP 𝑝 (L(X 𝑘 )) (11) where 𝑝 ∈ [ 1, 𝜏 ] indexes the prediction tasks. 
+
+## 2.7 Iterative Personalization via Stacking SlimPer Layers 
+
+SlimPer is inherently stackable: multiple SlimPer layers are com-posed sequentially, each performing one iteration of the Select– Match–Refine cycle (Section 2.6) over the shared knowledge base 
+
+X. In our production setting, we typically stack 5 to 10 layers. The intuition is that deeper layers benefit from the evidence accumulated by earlier layers , enabling progressively more in-formed personalization. For example, earlier layers may focus on collecting broad evidence related to the target item, such as whether the user historically engaged with dog videos. This accumulated evidence then conditions subsequent layers, which can focus on more nuanced signals, e.g., whether recent behaviors (e.g., frequent skipping of dog videos) indicate that the user’s interest has shifted. In this way, later layers can determine whether earlier preferences should be reinforced or discounted. This iterative refinement capability is enabled by two architec-tural properties. First, each layer directly attends to the complete set of raw input tokens across all modalities, preserving fine-grained signals without incurring the memory overhead of maintaining large intermediate tensors. Unlike transformer-like architectures, which progressively compress information into intermediate hid-den states, SlimPer performs lossless cross-modality and cross-side (user ↔item) fusion at every depth. Second, the knowledge base maintains a fixed size throughout the refinement process. As a result, increasing depth does not require intermediate memory to scale with input length, making it practical to stack many refine-ment layers even for users with long interaction histories. 
+
+2.7.1 Information-Theoretic Justification. The fixed-size knowledge base that enables these efficiency gains may appear to sacrifice in-formation, but analysis reveals the opposite: SlimPer’s bottleneck 
+
+redirects capacity toward task-relevant signals rather than discard-ing them. 
+
+The bottleneck is capacity-abundant. The recommendation task demands only 𝜏 scalar predictions per <user, item> pair, so the mu-tual information between target 𝑌 and input 𝑋 is bounded by 
+
+𝐻 (𝑌 ) ≤ 𝜏 bits—far below the representational capacity of a 𝐾 × 𝑑 
+
+knowledge base. Moreover, as shown in the interaction capacity col-umn of Table 2, SlimPer achieves O( 𝐿 · 𝑁 · 𝐾 ) user-item interaction capacity—matching DLRM and 𝐾 × larger than transformer-like models that achieve only O( 𝐿 · 𝑁 ). The difference arises because transformers allocate the majority of their O( 𝑁 2) computation to pairwise user-side token interactions that do not directly serve rele-vance estimation, whereas SlimPer directs all 𝐾 ×𝑁 interactions per layer toward knowledge-base-to-token relevance matching. The bottleneck thus constrains intermediate memory , not learning ca-pacity for user-item relevance . Notably, this capacity argument is independent of whether attention is quadratic or linearized. Sub-quadratic variants such as linear attention [ 10 ] and sliding-window attention [ 2] reduce per-layer compute to O( 𝑁 ), but they still (i) propagate 𝑁 -sized token-level intermediate tensors across depth, leaving memory at O( 𝐿 · 𝑁 ) rather than O( 𝐿 · 𝐾 ), and (ii) devote their interaction capacity to user-side token mixing, leaving user– item interaction capacity at O( 𝐿 · 𝑁 )—a factor of 𝐾 below SlimPer. We therefore expect SlimPer to retain a quality advantage over efficient-attention baselines, not merely an efficiency one, because the gain stems from how capacity is allocated rather than from lowering the asymptotic order of attention. 
+
+Iterative access prevents irreversible loss. Standard bottleneck ar-chitectures are constrained by the Data Processing Inequality: for a Markov chain 𝑋 → 𝑇 → 𝑌 , information discarded during com-pression is irrecoverable. SlimPer breaks this chain—each layer cross-attends directly into the raw input tokens 𝑋 , not only the compressed representation from the previous layer. In the language of the Information Bottleneck framework [ 21 ], SlimPer performs 
+
+iterative compression: each layer extracts additional task-relevant mutual information 𝐼 (X 𝑘 ; 𝑌 ) while the raw evidence remains avail-able to correct earlier omissions—a property validated by the atten-tion heatmaps in Appendix E, which show that successive layers progressively narrow their focus from broad historical context to the most relevant recent signals. 
+
+## 3 Related Work 
+
+We situate SlimPer within three lines of research: feature inter-action learning for fixed-size inputs, user history modeling for variable-length event sequences, and cross-attention bottleneck architectures from adjacent domains. 
+
+## 3.1 Feature Interaction Learning 
+
+This paradigm focuses on capturing complex, high-order interac-tions among fixed-size input features. Factorization Machines [ 17 ]and DeepFM [ 5 ] introduced efficient second-order interaction mod-eling through pairwise factorization. DLRM [14] combined sparse embeddings with MLP-processed dense features and explicit dot-product interactions, a design that has since been widely cited. Deep Cross Network (DCN) [ 23 ] and DCNv2 [ 24 ] proposed cross net-works to model bounded-degree feature crosses, while AutoInt [ 19 ]applied multi-head self-attention over feature embeddings to learn implicit higher-order interactions. More recent work emphasizes architectural scalability: DHEN [ 29 ] and Wukong [ 28 ] systemati-cally studied stacking interaction modules, demonstrating favorable scaling laws for fixed-size features.  
+
+> 5SlimPer: Make Personalization Model Slim and Smart Wang and Chen, et al.
+
+Relation to SlimPer. These approaches treat user history as a pre-aggregated feature vector. SlimPer subsumes their capability through its knowledge base refinement while additionally enabling direct access to individual user history events at every layer. 
+
+## 3.2 User History Modeling 
+
+Effectively capturing signals from sequence features has become in-creasingly important as user history data grows richer. DIN [ 33 ] and DIEN [ 32 ] introduced target-aware attention over user interaction histories for intent modeling. Transformer-based models (BST [ 4 ], BERT4Rec [ 20 ], SASRec [ 9]) treat user events as tokens and apply full self-attention, achieving expressive user representations but incurring O( 𝑁 2) cost that limits scaling. Research on ultra-long user histories has explored several strate-gies: (1) Retrieval-based : SIM [ 16 ] uses a two-stage hard search to re-trieve relevant behaviors; (2) Memory-based : MIMN [ 15 ] maintains fixed-size representations of long-term interests; (3) Compression-based : LONGER [ 3] applies token merging, and HSTU [ 27 ] uses stochastic length sampling; (4) Offline aggregation : TWIN-V2 [ 18 ]and DV365 [ 13 ] shift long-range modeling to pre-computed em-beddings. A common pattern across these strategies is that they reduce the cost of long histories by limiting how much raw behav-ioral detail is available for modeling user-item interactions, trading fine-grained, target-aware access to user history information for tractability at scale. Despite these advances, user history modeling typically remains a separate component whose output is summarized and combined with fixed-size features via late fusion, limiting deep cross-modality interactions. Recent unified architectures, such as OneTrans [ 31 ], HHFT [ 25 ], RankMixer [ 34 ], process all modalities jointly using Transformer-style designs, but inherit the same quadratic cost when scaling to long sequences. 
+
+Relation to SlimPer. SlimPer resolves this trade-off with O( 𝐾 · 𝑁 )
+
+per-layer compute and a fixed-size memory footprint that does not grow with sequence length, scaling to 10k+ events while accessing raw user-side tokens at every layer without information loss. 
+
+## 3.3 Cross-Attention Bottleneck Architectures 
+
+SlimPer’s use of a fixed-size knowledge base that iteratively cross-attends into a larger token set shares structural resemblance with architectures from other domains. Perceiver [ 8] and Perceiver IO [ 7 ]maintain a learned latent array that iteratively cross-attends into raw inputs, achieving linear complexity in input length. Set Trans-former [ 12 ] introduces Induced Set Attention Blocks (ISAB) with a similar bottleneck for set-structured data. Flamingo [ 1] applies cross-attention from a language model into visual tokens for multi-modal understanding. While SlimPer shares the principle of decoupling computation from input length through a compact bottleneck, it introduces sev-eral recommendation-specific inductive biases that are absent from general-purpose architectures: (1) discriminative relevance fo-cus : the knowledge base is initialized from item-side features and dedicated entirely to <user, item> relevance scoring; (2) explicit rel-evance matching : a dedicated dot-product step (Step 2) computes scores between retrieved evidence and multifaceted templates, with no analog in Perceiver-style designs; (3) ROO awareness : user-side tokens are computed once and shared across all candidates within a request, reducing redundant computation and memory usage; and (4) modality-dependent attention kernels : SlimPer employs parametric MLP-based attention for fixed-size sparse tokens and scaled dot-product attention for variable-length sequence features. 
+
+## 4 Experiments 4.1 Experiment Setup 
+
+Dataset. We conduct experiments on Instagram’s final-stage ranking models using the same training and evaluation data used to train the current models. 
+
+Evaluation Metrics. We evaluate model performance using Nor-malized Entropy (NE), a standard offline metric that exhibits direc-tional alignment with A/B test results. NE normalizes the model’s binary cross-entropy loss (BCEloss) by dividing it by the BCEloss of a naive baseline that predicts the global label average 𝑝 𝑘 for all samples. An NE improvement of approximately 0.03% is considered empirically significant. NE 𝑘 = BCEloss ( ˆ𝑦 (𝑘 ) , 𝑦 (𝑘 ) )− [ 𝑝 𝑘 ln (𝑝 𝑘 ) + ( 1 − 𝑝 𝑘 ) ln (1 − 𝑝 𝑘 )] , (12) 
+
+Baseline. We compare SlimPer against Instagram’s existing mod-els, which employ a late-fusion architecture that stitches together HSTU [ 27 ] for modeling variable-length user interaction history sequences and Wukong [ 28 ] for modeling fixed-size sparse/dense features. These models perform the final-stage ranking for Insta-gram’s major surfaces and represent an established baseline. To ensure a fair comparison, we report NE improvements relative to the baseline using the same training and evaluation date ranges. All other experimental settings are held constant across models, in-cluding optimizer configuration and feature sets, unless otherwise noted. 
+
+## 4.2 Offline Performance 
+
+We conducted an offline evaluation of SlimPer against the baseline on both Reels and Feed. The main results are summarized in Ta-ble 3. We make three observations that are consistent across both surfaces: (1) SlimPer achieves consistent NE improvements across all tasks. Due to space constraints, we report only representative tasks for both surfaces. (2) At the same sequence length, SlimPer delivers both NE wins and QPS wins compared to the baseline, indi-cating that the proposed design improves prediction quality while also improving efficiency. (3) We observe a scaling trend: NE wins increase as sequence length grows. For example, on Feed reshare prediction, NE improvements grow from -0.49% at 1k sequence length to -0.94% at 4k sequence length, corresponding to close to 2× relative gain in model quality, albeit with a 16% QPS regression. These empirical findings are consistent with the Big-O analysis in Table 2: SlimPer’s linear-in-𝑁 computational complexity and its 
+
+O( 𝐿 · 𝐾 · 𝑑 ) memory footprint directly account for the observed 11%+ QPS improvement and 9–18% memory reduction compared to the quadratic-cost baseline. Because this cost reduction stems from replacing self-attention over the full sequence with fixed-size knowledge base refinement, it generalizes to any transformer-like  
+
+> 6SlimPer: Make Personalization Model Slim and Smart Wang and Chen, et al.
+
+method that processes the full token sequence via quadratic self-attention. 
+
+## 4.3 A/B Test Performance 
+
+We launched SlimPer w/ 5k events for Instagram Reels and SlimPer w/ 4k events for Instagram Feed, the models described in Sec-tion 4.2. After pre-testing and backtesting, SlimPer was launched to full traffic on both surfaces, where it delivers statistically significant gains across multiple major engagement metrics, with an aggregate topline impact roughly 10 × that of a typical statistically significant launch—a notable improvement from modeling changes in 2025. Moreover, SlimPer introduces no regression on ecosystem guardrail metrics (e.g., integrity, diversity, and recency) and maintains train-ing and inference GPU capacity at approximately neutral levels, confirming that the efficiency gains observed offline (Section 4.2) translate to real-world serving. In 2026, we have launched additional SlimPer variants that scale to 10k+ events with increased model capacity. These launches have delivered major engagement wins across multiple product surfaces at Meta, further validating SlimPer’s efficacy and scalability under real-world constraints. 
+
+## 4.4 Scaling and Efficiency Analysis 
+
+The Big-O analysis in Table 2 predicts that SlimPer’s O( 𝐾 · 𝑁 ) per-layer complexity should yield clear efficiency advantages over qua-dratic baselines, with the gap widening as sequence length grows. We validate this prediction empirically by comparing SlimPer against the baseline (late-fusion HSTU + Wukong) across different sequence length configurations, using the Reels model as a representative ex-ample. Whereas the baseline’s usable history length is constrained by the quadratic attention cost over the sequence, SlimPer avoids this bottleneck. Results are summarized in Figure 4. 
+
+Main findings. At matched 2k length, SlimPer outperforms the baseline by −0.51% NE (reshare) while also delivering higher throughput ( +11% QPS) and lower memory—improving quality and efficiency simultaneously. The gain compounds with sequence length: at 6k, SlimPer reaches −0.86% NE at under 20% QPS regres-sion, whereas the baseline gains only −0.13% NE while losing 48% 
+
+QPS. As the curves show, SlimPer’s NE improves monotonically as the compact knowledge base absorbs richer long-term signals, while the quadratic-cost baseline sees diminishing returns at longer sequences. 
+
+These results confirm that SlimPer’s quality gains come not from spending more compute, but from allocating it more effectively toward user-item relevance matching. Consistent with Table 2 and the information-theoretic analysis in Section 2.7, SlimPer’s O( 𝐾 · 𝑁 ) per-layer cost translates to 8–25 × fewer FLOPs in practice (Appendix F), with the advantage growing superlinearly in input length: the compact knowledge base redirects interaction capacity away from the O( 𝑁 2) user-side-to-user-side computa-tions that dominate transformer-like models and toward O( 𝐾 × 𝑁 )
+
+relevance-focused interactions per layer. 
+
+Memory efficiency. The observed 9–18% memory reduction at matched sequence length stems from two complementary mech-anisms: the fixed-size knowledge base replaces O( 𝑁 )-sized inter-mediate tensors at every layer, and the ROO-aware design shares a Training QPS Regression Percentage w.r.t Production (%) Reshare NE win (%) 0.00 0.25 0.50 0.75 1.00 -10 0 10 20 30 40 Baseline SlimPer 
+
+> Scaling and Efficiency Analysis
+
+Figure 4: Quality–efficiency scaling as user-history sequence length grows (2k–6k). Each curve traces one model (SlimPer vs. the baseline) across sequence lengths; the 𝑥 -axis is train-ing QPS regression and the 𝑦 -axis is NE win, both relative to the baseline (%). SlimPer sustains larger NE wins at smaller QPS regressions, and its advantage widens as sequence length increases. 
+
+single copy of all user-side tokens across candidates within each request. 
+
+## 4.5 Ablation Studies 
+
+We conduct ablation experiments to validate our design decisions. 
+
+4.5.1 Effect of Contextual Encoding. We ablate whether incorpo-rating surrounding event information into each history token im-proves performance by comparing three strategies: (1) no context (independent encoding), (2) event-type context (encoding surround-ing actions, e.g., like, reshare, long watch), and (3) full context (event-type + event content jointly). Introducing contextual encod-ing yields approximately −0.15% NE improvement on the reshare task. Notably, the gain comes primarily from encoding event type alone; adding event content provides only marginal additional bene-fit ( < 0.02% NE). This suggests that users’ behavioral patterns— what actions they take—are more informative than the specific items they interact with, highlighting an important difference from language modeling where content dependencies determine meaning. 
+
+4.5.2 Effect of Knowledge Base Size and Model Depth. We further ablate the knowledge base size 𝐾 and the number of stacked SlimPer layers. A knowledge base size of 𝐾 =64 provides a favorable quality-efficiency balance; reducing to 𝐾 =4 yields +23.2% QPS but degrades NE by +1.2%, confirming the knowledge base’s role as an effective information bottleneck. For model depth, 7 layers offers strong per-formance; gains continue up to 9 layers ( −0.12% NE) with moderate cost increase. Full ablation tables are provided in Appendix D. 
+
+## 4.6 Interpretability of Model Predictions 
+
+SlimPer’s attention mechanism enables direct attribution of rec-ommendations to specific user history events. For a given request, the model produces attention scores between candidate items and sequence tokens, allowing practitioners to identify the top-𝑘 histor-ical interactions that most influenced each prediction. Spot-check  
+
+> 7SlimPer: Make Personalization Model Slim and Smart Wang and Chen, et al.
+
+Table 3: SlimPer vs. baseline. NE and QPS are relative changes (%); Memory is absolute change in average usage (%); all w.r.t. surface-specific baselines. Lower NE/Memory and higher QPS are better.                                                              
+
+> Surface Model Configuration NE (%) QPS (%) Memory Diff (%) reshare skip like comment follow save Reels
+> Baseline w/ 2k events 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 SlimPer w/ 2k events -0.51 -0.31 -0.23 -0.41 -0.35 -0.35 +11.0 -9.32
+> SlimPer w/ 5k events -0.80 -0.57 -0.49 -0.64 -0.53 -0.62 -10.0 +4.59
+> Feed
+> Baseline w/ 1k events 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 SlimPer w/ 1k events -0.49 -0.28 -0.54 -0.52 -0.71 -0.62 +12.5 -18.12
+> SlimPer w/ 4k events -0.94 -0.52 -0.91 -0.94 -1.00 -1.05 -16.07 +2.04
+
+analyses confirm that attention weights align with ranking outputs, indicating high matching fidelity. We provide a detailed analysis of attention patterns across model layers in Appendix E. For reproducibility details including hyperparameter settings, see Appendix A. 
+
+## 5 Limitations 
+
+Limited direct comparison with recent unified architectures. We compare SlimPer against a mature baseline (HSTU + Wukong) rather than directly against recent transformer-style unified archi-tectures (e.g., OneTrans, HHFT, RankMixer). In practice, a stan-dalone unified HSTU performs worse than this hybrid, which uses dedicated components per modality (HSTU for user history, Wukong for fixed-size features); the hybrid is therefore a stronger com-parison point than any single unified architecture, and SlimPer outperforms it by a clear margin while also simplifying the sys-tem into a single backbone. Differences in training data, feature sets, and serving constraints across organizations further make reported numbers from other systems non-comparable. Our com-plexity analysis (Table 2) is nonetheless general: any architecture using quadratic self-attention over the full sequence faces the same 
+
+O( 𝑁 2) compute bottleneck, and any architecture maintaining 𝑁 -sized intermediate tensors or duplicating user-side representations per candidate faces the same memory bottleneck—both of which SlimPer’s fixed-size, ROO-aware knowledge base resolves. 
+
+Reproducibility on internal data. All experiments are conducted on internal Instagram training and evaluation data, which limits independent reproduction of our exact results. Furthermore, our models are trained to convergence on data volumes not readily available in public benchmarks, which further limits exact repro-ducibility but also validates SlimPer’s effectiveness in deployment. To mitigate this, we provide detailed architectural hyperparame-ters (Appendix A), describe the model using only standard building blocks (MLPs, QKV attention, linear projections, RMSNorm), and re-port relative improvements against a clearly defined baseline under controlled experimental conditions. We believe these details are suf-ficient for practitioners to reimplement and validate the approach on their own recommendation datasets. 
+
+## 6 Conclusion 
+
+We presented SlimPer, a unified personalization model that reframes recommendation ranking as iterative refinement of a compact 
+
+<user, item> knowledge base. By departing from the transformer-mimicking paradigm dominant in recent work, SlimPer achieves a distinct efficiency-quality trade-off: model depth is decoupled from input sequence length, raw multi-modal evidence is preserved uncompressed and accessed directly at every layer, and the entire model capacity is focused on relevance estimation rather than main-taining token-level representations. SlimPer further minimizes GPU memory by eliminating 𝑁 -sized intermediate tensors across layers and maintaining a single shared copy of user-side tokens across all candidates within a request via request-only optimization. Our experiments on an industrial recommender system validate the effectiveness of SlimPer. The proposed architecture achieves strong offline performance with lower computational cost than transformer-based alternatives, and delivers statistically significant engagement improvements in controlled A/B experiments. More-over, SlimPer is inherently interpretable: attention weights at each refinement stage reveal how evidence is selected and aggregated, facilitating principled debugging, auditing, and model analysis. Looking ahead, we see several promising directions for future work. First, the iterative refinement paradigm naturally extends beyond sequential user histories to evidence sources without inher-ent ordering, such as cross-surface engagement signals or candi-dates generated by upstream selection systems. Because the knowl-edge base interacts directly with raw tokens rather than relying on sequence structure, SlimPer can integrate such signals with-out architectural changes. Second, SlimPer’s whole-model ROO-aware design enables efficient deployment across ranking stages, such as early-stage ranking, where larger candidate sets further increase the benefits of amortized computation. Finally, the current matching and refinement modules are intentionally lightweight, relying on simple dot-product matching and MLP-based updates. Exploring more expressive operators within these components may yield additional quality improvements while preserving the iterative-refinement framework with its O( 𝑁 ) per-layer complex-ity and fixed-size memory footprint. More broadly, we believe that recommendation-centric architectural design around the unique computational and modeling requirements of personalization will continue to drive practical advances in industrial recommendation systems.  
+
+> 8SlimPer: Make Personalization Model Slim and Smart Wang and Chen, et al.
+
+## Acknowledgments 
+
+Engineering Collaborators. We are grateful to the many collabora-tors across Meta whose partnership has been invaluable in building and scaling SlimPer across our family of apps: Jay Wang, Keming Zhang, Chen Chen, Qichao Que, Wanli Ma, Maxwell Lin-He, Yu Liu, Yanhong Wu, Xinye Zheng, Wen-Yun Yang, Rui Zhang, Jiyan Yang, Zichao Li, Lei Nie, Yan Sun, Rongcheng Lin, Ivan Ji, Cory Nezin, Jeffrey Cordero, Lambert Chu, Leon Yan, Keyi Wu, Yiming Liao, Irra Na, Neel Pawar, Tingting Zhang, Xue Zou, Ziwei Li, Zhe (Joe) Wang, Haifeng Lan, Qinjie Lin, Ye Wang, Huasha Zhao, Jianming He, William Pei, Dawei Fan, Yezhou Huang, Minhan Li, Zhiwei Zhang, Dev (Devashish) Shankar, Jackie (Jiaqi) Xu, Chunzhi Yang, Haoxun Luo, Hao Lin, Prashasti Baid, Lu Zhang, Liang Guo, and Rui Jian. 
+
+Leadership. We are also grateful for the leadership support span-ning Meta’s family of apps and MRS: Jayant Subramanian, Haotian Wu, Jing Qian, Hui Zhang, Shilin Ding, Sophia (Xueyao) Liang, Xinyao Hu, Linhong Zhu, Yisong Song, Shujian Bu, Aameek Singh, Hong Yan, Meihong Wang, Mahesh Srinivasan, Adam (Yang) Song, Nipun Mathur, Lars Backstrom, Jeff Huang, Tessa Lyons-Laing, Deepak Agarwal, and Max Eulenstein, whose guidance and invest-ment made this work possible. 
+
+## A Reproducibility 
+
+Table 4 summarizes the main architectural hyperparameters for SlimPer on Feed and Reels. All models are trained for one epoch with the Shampoo optimizer [ 6 ] at a learning rate of 0.05, with identical optimizer settings across all model configurations (both SlimPer and baseline). 
+
+Table 4: SlimPer architectural hyperparameters for Feed and Reels.             
+
+> Hyperparameter Feed Reels
+> Number of SlimPer layers ( 𝐿 )57Knowledge base size ( 𝐾 )64 64 Hidden dimension ( 𝑑 )256 256 Query slots ( 𝑞 )16 16 Template slots ( 𝑡 )32 32
+
+## B Notation and Preliminaries 
+
+To reduce architectural complexity and simplify the implementa-tion, we restrict the model to a minimal set of building blocks with identical internal structures, differing only in hyperparameter set-tings. We define the following notations and operator blocks used throughout the network. 
+
+Multilayer Perceptrons ( MLP ). MLP denotes the standard multi-layer perceptron, a stack of fully connected layers with nonlinear activations applied between layers. In our experiments, we use SiLU as the activation function. 
+
+Segment-wise Linear Projection ( L). L is a segment-wise linear projection module that transforms an input tensor 𝛼 ∈ R𝐿 in ×𝑑 into an output tensor 𝛽 ∈ R𝐿 out ×𝑑 using a learnable projection matrix 𝜌 :
+
+𝛽 = L( 𝛼 ) = 𝜌𝛼, 𝜌 ∈ R𝐿 out ×𝐿 in . (13) 
+
+Table 5: Continuous tokenization approaches across different information modalities.               
+
+> Modality Continuous Tokenization Approaches
+> Sparse Embedding Pooling (E-P): Sparse features are tokenized via sum or mean pooling over embeddings, yielding one or a small number of fixed-size vectors (e.g., 1×𝑑 ). Sequence Event Modeling (E-M): All information describing each event is aggregated and fused into a fixed-length event repre-sentation (e.g., 1×𝑑 per event). Dense Dense Processing (D-P): Dense features are normalized and projected by an MLP into a fixed-size vector (e.g., 1024).
+
+In our network, we use this module multiple times, each with independent learnable parameters. For simplicity, we omit the dis-tinguishing subscripts and superscripts in subsequent equations. 
+
+All-Modality-Aware <user, item> Knowledge Base ( X). We use 
+
+X to denote the all-modality <user, item> knowledge base. This knowledge base is initialized at Layer-0 as: 
+
+X0 = L( Sin ) (14) where Sin represents the non-user-side input tokens, typically derived from item-side or cross-side sparse features. The shape of X𝑘 can vary across layers, but in our experiments, we use a consistent shape of 𝐾 × 𝑑 (with 𝐾 = 64 ) for all layers. 
+
+## C Tokenization Details 
+
+All raw input features are first converted into a set of modality-specific tokens within the unified backbone. This step preserves the semantic distinctions of the feature types while preparing them for the shared interaction stack. We consider three types of in-put modalities: sparse features, user history sequence features and dense features. The corresponding tokenization approaches are summarized in Table 5. 
+
+C.0.1 Multi-modality Tokenization. 
+
+Embedding-Pooling Module (E-P). Sparse features are first mapped to embedding vectors through standard embedding lookup tables. For features with multiple values (e.g., a user’s top-𝑘 liked cate-gories), we apply pooling operations: 
+
+S𝑗 = Pool  {e𝑗, 1, e𝑗, 2, . . . , e𝑗,𝑘 } (15) where Pool (·) can be mean or sum pooling. Concatenating the pooled results from all sparse features, we obtain the tensor rep-resenting sparse feature tokens as S = (S(1) , . . . , S( | S| ) ) ∈ R|𝑆 | × 𝑑 ,with 𝑑 as the dimension for each token. 
+
+Event-Modeling Module (E-M). The E-M module processes each event in the user history into a token representation. Each event is typically described by several sparse features representing its content, the user’s explicit action types, implicit watch time, engage-ment timestamps, and other metadata. We use E = (E(1) , . . . , E(𝑡 ) , . . . )
+
+to represent the tokenized user history event sequence. To obtain each E(𝑡 ) , the E-M module builds several parallel encoding com-ponents, projects each to the shared embedding dimension 𝑑 , and combines them via summation:  
+
+> 9SlimPer: Make Personalization Model Slim and Smart Wang and Chen, et al.
+
+E(𝑡 ) = MLP 𝑠 𝐸 (e(𝑡 )
+
+> sparse
+
+) + e(𝑡 )
+
+> temporal
+
++ MLP 𝑒 𝐸 (e(𝑡 )
+
+> type
+
+) + e(𝑡 )
+
+> context
+
+(16) where e(𝑡 ) 
+
+> sparse
+
+is the content embedding from concatenated pooled sparse features describing the event item, e(𝑡 ) 
+
+> type
+
+is the event type en-coding that captures both explicit and implicit actions, and e(𝑡 )
+
+> temporal
+
+is the temporal encoding, which is the sum of positional encoding and delta-time encoding. 
+
+Dense-Processing Module (D-P). Dense features are concatenated and projected into a fixed-size vector through a simple MLP: 
+
+D = MLP  Concat (d1, d2, . . . , d| D | ) (17) 
+
+## D Ablation Studies 
+
+We conduct ablation experiments to validate our design decisions underlying SlimPer’s iterative refinement paradigm. The baseline corresponds to the Reels SlimPer model with 5k events used in Table 3 with knowledge base size 𝐾 = 64 and 7 refinement layers. 
+
+D.0.1 Effect of Knowledge Base Size. Table 6 presents an abla-tion study on the number of knowledge base slots 𝐾 (i.e., 𝐾 ∈{4, 8, 16 , 32 , 64 }), which directly evaluates the information capacity of the iterative refinement bottleneck. The baseline configuration has 𝐾 = 64 . For each configuration, the query size 𝑞 is defined as one quarter of the knowledge base size, while the template size 𝑡 is defined as one half of 𝐾 .
+
+Table 6: Ablation study on knowledge base size (relative to the 𝐾 = 64 baseline).                   
+
+> K, q, t NE (%) QPS (%) Mem Diff (%)
+> (64, 16, 32) 0.0 0.0 0.0 (4, 1, 2) +1.2 +23.2 -9.53 (8, 2, 4) +0.53 +21.2 -8.19 (16, 4, 8) +0.36 +17.8 -7.43 (32, 8, 16) +0.18 +4.25 -1.31
+
+D.0.2 Effect of Number of Refinement Layers. Table 7 presents an ablation study on the number of stacked SlimPer refinement layers (i.e., 𝐿 ∈ { 3, 5, 7, 9}). This experiment evaluates whether iterative refinement consistently improves ranking quality and examines the depth at which performance gains begin to saturate. The baseline configuration has 7 refinement layers. 
+
+Table 7: Ablation study on the number of SlimPer refinement layers (relative to the 7-layer baseline).                
+
+> Layer NE (%) QPS (%) Mem Diff (%)
+> 70.0 0.0 0.0 3+0.32 +21 -8.60 5+0.14 +8.8 -5.50 9-0.12 -7.16 +4.92
+
+## E Interpretability of Model Predictions 
+
+SlimPer’s iterative refinement design provides intrinsic interpretabil-ity: the QKV attention at each layer directly links past user inter-actions to the current prediction, making it possible to attribute recommendations to specific historical events. Unlike prior models that stitch together opaque components, SlimPer’s attention scores offer a natural explanation for why an item is recommended to a user. 
+
+Attention Analysis Across Layers. For a given request, the model produces an attention matrix mapping candidate items (queries) to sequence tokens (keys). We aggregate attention distributions across 200 requests with 5k sequence length and visualize them as heatmaps, where the x-axis represents sequence indices in sequen-tial position and the y-axis represents candidate items. 
+
+Figure 5: Attention heatmaps for lower and middle SlimPer layers. Lower layers attend broadly across the full history; middle layers concentrate on more recent events. 
+
+As shown in Fig. 5, at the lowest layers the model attends broadly across the first 4k sequence indices, capturing coarse-grained his-torical context. At the middle layers, attention concentrates on the first few hundred indices, focusing on a narrower and more recent subset of interactions. At the upper layers (Fig. 6), the pattern sharpens further—attention is concentrated within the most recent ∼400 events. This hierarchi-cal attention behavior—broad context at lower layers, progressively narrower focus at upper layers—is consistent with SlimPer’s itera-tive refinement design: earlier layers gather broad evidence about user preferences, while later layers refine predictions using the most recent and most influential behavioral signals. 
+
+> 10
+
+SlimPer: Make Personalization Model Slim and Smart Wang and Chen, et al. 
+
+Figure 6: Attention heatmap for upper SlimPer layers. Atten-tion further narrows to the most recent ∼400 events. 
+
+## F FLOPs Analysis 
+
+Beyond throughput (QPS), we quantify the computational cost by counting all matrix multiplications in the forward pass (ex-cluding embedding lookups, normalizations, and activations). Ta-ble 8 reports the estimated FLOPs at different sequence lengths. At the shared default of 2k, SlimPer uses ∼8× fewer FLOPs than the baseline. The gap widens with sequence length: at 6k, SlimPer (∼6 GFLOPs) still uses ∼4× fewer FLOPs than the baseline at its native 2k ( ∼24 GFLOPs), while achieving −0.86% NE improvement. 
+
+Table 8: Estimated forward-pass FLOPs per example (GFLOPs), counting all matrix multiplications. Baseline counts the HSTU encoder (the sequence-length-dependent component) only. 
+
+Seq. Len. Baseline (HSTU) SlimPer Ratio 
+
+2048 ∼24 ∼3 ∼8×
+
+4096 ∼74 ∼5 ∼16 ×
+
+6144 ∼150 ∼6 ∼25 ×
+
+## References 
+
+[1] Jean-Baptiste Alayrac, Jeff Donahue, Pauline Luc, Antoine Miech, Iain Barr, Yana Hasson, Karel Lenc, Arthur Mensch, Katherine Millican, Malcolm Reynolds, Roman Ring, Eliza Rutherford, Serkan Cabi, Tengda Han, Zhitao Gong, Sina Samangooei, Mariber Monteiro, Jacob Menick, Sebastian Borgeaud, Andrew Brock, Aida Nematzadeh, Sahand Sharifzadeh, Mikolaj Binkowski, Ricardo Bar-reira, Oriol Vinyals, Andrew Zisserman, and Karen Simonyan. 2022. Flamingo: a Visual Language Model for Few-Shot Learning. In Advances in Neural Information Processing Systems (NeurIPS) .[2] Iz Beltagy, Matthew E Peters, and Arman Cohan. 2020. Longformer: The Long-Document Transformer. arXiv preprint arXiv:2004.05150 (2020). [3] Zheng Chai, Qin Ren, Xijun Xiao, Huizhi Yang, Bo Han, Sijun Zhang, Di Chen, Hui Lu, Wenlin Zhao, Lele Yu, Xionghang Xie, Shiru Ren, Xiang Sun, Yaocheng Tan, Peng Xu, Yuchao Zheng, and Di Wu. 2025. LONGER: Scaling Up Long Sequence Modeling in Industrial Recommenders. arXiv:2505.04421 [cs.IR] https: //arxiv.org/abs/2505.04421 [4] Qiwei Chen, Huan Zhao, Wei Li, Pipei Huang, and Wenwu Ou. 2019. Behavior sequence transformer for e-commerce recommendation in alibaba. In Proceedings of the 1st international workshop on deep learning practice for high-dimensional sparse data . 1–4. [5] Huifeng Guo, Ruiming Tang, Yunming Ye, Zhenguo Li, and Xiuqiang He. 2017. DeepFM: A Factorization-Machine Based Neural Network for CTR Prediction. In Proceedings of the 26th International Joint Conference on Artificial Intelligence (IJCAI) . 1725–1731. [6] Vineet Gupta, Tomer Koren, and Yoram Singer. 2018. Shampoo: Preconditioned Stochastic Tensor Optimization. In International Conference on Machine Learning .PMLR, 1842–1850. [7] Andrew Jaegle, Sebastian Borgeaud, Jean-Baptiste Alayrac, Carl Doersch, Catalin Ionescu, David Ding, Skanda Koppula, Daniel Zoran, Andrew Brock, Evan Shel-hamer, Olivier Hénaff, Matthew M. Botvinick, Andrew Zisserman, Oriol Vinyals, and João Carreira. 2022. Perceiver IO: A General Architecture for Structured Inputs & Outputs. In International Conference on Learning Representations (ICLR) .[8] Andrew Jaegle, Felix Gimeno, Andrew Brock, Oriol Vinyals, Andrew Zisserman, and Joao Carreira. 2021. Perceiver: General Perception with Iterative Attention. In International Conference on Machine Learning (ICML) .[9] Wang-Cheng Kang and Julian McAuley. 2018. Self-attentive sequential recom-mendation. In 2018 IEEE international conference on data mining (ICDM) . IEEE, 197–206. [10] Angelos Katharopoulos, Apoorv Vyas, Nikolaos Pappas, and François Fleuret. 2020. Transformers are RNNs: Fast Autoregressive Transformers with Linear Attention. In ICML . 5156–5165. [11] Yann LeCun, Léon Bottou, Yoshua Bengio, and Patrick Haffner. 1998. Gradient-based learning applied to document recognition. Proc. IEEE 86, 11 (1998), 2278– 2324. [12] Juho Lee, Yoonho Lee, Jungtaek Kim, Adam Kosiorek, Seungjin Choi, and Yee Whye Teh. 2019. Set Transformer: A Framework for Attention-based Permutation-Invariant Neural Networks. In International Conference on Machine Learning (ICML) .[13] Wenhan Lyu, Devashish Tyagi, Yihang Yang, Ziwei Li, Ajay Somani, Karthikeyan Shanmugasundaram, Nikola Andrejevic, Ferdi Adeputra, Curtis Zeng, Arun K. Singh, Maxime Ransan, and Sagar Jain. 2025. DV365: Extremely Long User History Modeling at Instagram. In Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining (KDD ’25) . 4717–4727. [14] Maxim Naumov, Dheevatsa Mudigere, Hao-Jun Michael Shi, Jianyu Huang, Narayanan Sundaraman, Jongsoo Park, Xiaodong Wang, Udit Gupta, Carole-Jean Wu, Alisson G Azzolini, et al . 2019. Deep learning recommendation model for personalization and recommendation systems. arXiv preprint arXiv:1906.00091 
+
+(2019). [15] Qi Pi, Weijie Bian, Guorui Zhou, Xiaoqiang Zhu, and Kun Gai. 2019. Practice on long sequential user behavior modeling for click-through rate prediction. In Proceedings of the 25th ACM SIGKDD international conference on knowledge discovery & data mining . 2671–2679. [16] Qi Pi, Guorui Zhou, Yujing Zhang, Zhe Wang, Lejian Ren, Ying Fan, Xiaoqiang Zhu, and Kun Gai. 2020. Search-based user interest modeling with lifelong sequential behavior data for click-through rate prediction. In Proceedings of the 29th ACM International Conference on Information & Knowledge Management .2685–2692. [17] Steffen Rendle. 2010. Factorization Machines. In 2010 IEEE International Confer-ence on Data Mining . 995–1000. [18] Zihua Si, Lin Guan, ZhongXiang Sun, Xiaoxue Zang, Jing Lu, Yiqun Hui, Xingchao Cao, Zeyu Yang, Yichen Zheng, Dewei Leng, et al . 2024. Twin v2: Scaling ultra-long user behavior sequence modeling for enhanced ctr prediction at kuaishou. In Proceedings of the 33rd ACM International Conference on Information and Knowledge Management . 4890–4897. [19] Weiping Song, Chence Shi, Zhiping Xiao, Zhijian Duan, Yewen Xu, Ming Zhang, and Jian Tang. 2019. AutoInt: Automatic Feature Interaction Learning via Self-Attentive Neural Networks. In Proceedings of the 28th ACM International Confer-ence on Information and Knowledge Management (CIKM ’19) . 1161–1170. [20] Fei Sun, Jun Liu, Jian Wu, Changhua Pei, Xiao Lin, Wenwu Ou, and Peng Jiang. 2019. BERT4Rec: Sequential recommendation with bidirectional encoder rep-resentations from transformer. In Proceedings of the 28th ACM international conference on information and knowledge management . 1441–1450. [21] Naftali Tishby, Fernando C Pereira, and William Bialek. 2000. The Information Bottleneck Method. arXiv preprint physics/0004057 (2000). [22] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N Gomez, Lukasz Kaiser, and Illia Polosukhin. 2017. Attention is all you need. In Advances in neural information processing systems . 5998–6008. https://arxiv.org/abs/1706.03762 [23] Ruoxi Wang, Bin Fu, Gang Fu, and Mingliang Wang. 2017. Deep & Cross Net-work for Ad Click Predictions. In Proceedings of the 2017 ACM on Conference on Information and Knowledge Management . 12:1–12:7. [24] Ruoxi Wang, Rakesh Shivanna, Derek Zhiyuan Cheng, Sagar Jain, Dong Lin, Lichan Hong, and Ed H. Chi. 2021. DCN V2: Improved Deep & Cross Network and Practical Lessons for Web-scale Learning to Rank Systems. In Proceedings of The Web Conference 2021 . 1785–1797. [25] Liren Yu, Wenming Zhang, Silu Zhou, Tao Zhang, Zhixuan Zhang, and Dan Ou. 2025. HHFT: Hierarchical Heterogeneous Feature Transformer for Recommenda-tion Systems. arXiv preprint arXiv:2511.20235 (2025). [26] Zhichen Zeng, Xiaolong Liu, Mengyue Hang, Xiaoyi Liu, Qinghai Zhou, Chaofei Yang, Yiqun Liu, Yichen Ruan, Laming Chen, Yuxin Chen, Yujia Hao, Jiaqi Xu, Jade Nie, Xi Liu, Buyun Zhang, Wei Wen, Siyang Yuan, Kai Wang, Wen-Yen Chen, Yiping Han, Huayu Li, Chunzhi Yang, Bo Long, Philip S. Yu, Hanghang Tong, and Jiyan Yang. 2025. InterFormer: Towards Effective Heterogeneous Interaction Learning for Click-Through Rate Prediction. In Proceedings of the 34th ACM International Conference on Information and Knowledge Management (CIKM ’25) .6225–6233. [27] Jiaqi Zhai, Lucy Liao, Xing Liu, Yueming Wang, Rui Li, Xuan Cao, Leon Gao, Zhaojie Gong, Fangda Gu, Jiayuan He, Yinghai Lu, and Yu Shi. 2024. Actions Speak Louder than Words: Trillion-Parameter Sequential Transducers for Generative 11 SlimPer: Make Personalization Model Slim and Smart Wang and Chen, et al. Recommendations. In Proceedings of the 41st International Conference on Machine Learning . 58484–58509. [28] Buyun Zhang, Liang Luo, Yuxin Chen, Jade Nie, Xi Liu, Shen Li, Yanli Zhao, Yuchen Hao, Yantao Yao, Ellie Dingqiao Wen, Jongsoo Park, Maxim Naumov, and Wenlin Chen. 2024. Wukong: Towards a Scaling Law for Large-Scale Recommen-dation. In Proceedings of the 41st International Conference on Machine Learning .59421–59434. [29] Buyun Zhang, Liang Luo, Xi Liu, Jay Li, Zeliang Chen, Weilin Zhang, Xiaohan Wei, Yuchen Hao, Michael Tsang, Wenjun Wang, et al . 2022. DHEN: A deep and hierarchical ensemble network for large-scale click-through rate prediction. 
+
+arXiv preprint arXiv:2203.11014 (2022). [30] Biao Zhang and Rico Sennrich. 2019. Root Mean Square Layer Normalization. 
+
+arXiv preprint arXiv:1910.07467 (2019). [31] Zhaoqi Zhang, Haolei Pei, Jun Guo, Tianyu Wang, Yufei Feng, Hui Sun, Shaowei Liu, and Aixin Sun. 2025. OneTrans: Unified Feature Interaction and Sequence Modeling with One Transformer in Industrial Recommender. arXiv preprint arXiv:2510.26104 (2025). [32] Guorui Zhou, Na Mou, Ying Fan, Qi Pi, Weijie Bian, Chang Zhou, Xiaoqiang Zhu, and Kun Gai. 2019. Deep interest evolution network for click-through rate prediction. In Proceedings of the AAAI conference on artificial intelligence , Vol. 33. 5941–5948. [33] Guorui Zhou, Xiaoqiang Zhu, Chenru Song, Ying Fan, Han Zhu, Xiao Ma, Yanghui Yan, Junqi Jin, Han Li, and Kun Gai. 2018. Deep interest network for click-through rate prediction. In Proceedings of the 24th ACM SIGKDD international conference on knowledge discovery & data mining . 1059–1068. [34] Jie Zhu, Zhifang Fan, Xiaoxie Zhu, Yuchen Jiang, Hangyu Wang, Xintian Han, Haoran Ding, Xinmin Wang, Wenlin Zhao, Zhen Gong, et al . 2025. Rankmixer: Scaling up ranking models in industrial recommenders. In Proceedings of the 34th ACM International Conference on Information and Knowledge Management .6309–6316. 12
