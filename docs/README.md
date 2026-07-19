@@ -7,94 +7,72 @@
 
 ## 每次日报
 - 最新运行日期：2026-07-10 ~ 2026-07-19
-- 运行时间：2026-07-19 04:51:19 UTC
+- 运行时间：2026-07-19 05:02:31 UTC
 - 运行状态：成功
-- 本次总论文数：25
-- 精读区：14
+- 本次总论文数：17
+- 精读区：6
 - 速读区：11
 
 ### 今日简报（AI）
-从2026年7月10日至19日，共推荐25篇论文，其中精读14篇、速读11篇，重点关注长尾推荐与序列推荐递归精化两大方向。最值得精读的是聚焦短租平台长尾候选生成的《Serving the Long Tail》与递归精化序列推荐的《RecRec》，两篇均获满分。建议优先深入阅读这两篇高分论文，掌握大模型在长尾数据与推荐精化中的创新应用。
+1) 本期日报聚焦LLM在推荐系统中的应用，精读两篇9.0分论文：候选生成与内容发现，速读覆盖评估方法、主观偏好建模及多模态嵌入。  
+2) 最值得关注的方向是LLM无训练候选生成（面向长尾租赁市场）和智能体驱动的电视内容推荐，两者均展现了零样本/少样本场景下的实用潜力。  
+3) 若想跟进，可优先精读那两篇高分论文，并从速读中学习严格评估框架与群体偏好建模技巧。
 - 详情：[/20260710-20260719/README](/20260710-20260719/README)
 
 ### 精读区论文标签
 1. [Serving the Long Tail: Training-Free LLM Candidate Generation for Vacation Rental Marketplaces](/20260710-20260719/2607.09877v1-serving-the-long-tail-training-free-llm-candidate-generation-for-vacation-rental-marketplaces)  
-   标签：评分：10.0/10、query:rec-sys
-   evidence：基于LLM的度假租赁候选生成方法
-2. [RecRec: Recursive Refinement for Sequential Recommendation](/20260710-20260719/2607.10541v2-recrec-recursive-refinement-for-sequential-recommendation)  
-   标签：评分：10.0/10、query:rec-sys
-   evidence：面向序列推荐的递归精炼模型
-3. [Embark Now: User Demand Oriented Framework for Multi-day Urban Travel Itinerary Planning](/20260710-20260719/2607.10651v1-embark-now-user-demand-oriented-framework-for-multi-day-urban-travel-itinerary-planning)  
-   标签：评分：10.0/10、query:rec-sys
-   evidence：基于LLM的多日城市旅行行程规划框架
-4. [From Raw IDs to Semantic Planning: How Recommender Systems Utilize Information at Scale](/20260710-20260719/2607.09540v2-from-raw-ids-to-semantic-planning-how-recommender-systems-utilize-information-at-scale)  
    标签：评分：9.0/10、query:rec-sys
-   evidence：直接讨论推荐系统演化及大规模利用深度学习方法
-5. [Stream-aware Side Adaptation for Large Pre-trained Multimodal Embedding Models in Sequential Recommendation](/20260710-20260719/2607.10909v1-stream-aware-side-adaptation-for-large-pre-trained-multimodal-embedding-models-in-sequential-recommendation)  
+   evidence：无需训练的LLM候选生成用于度假租赁市场的冷启动
+2. [An LLM-powered Agentic Recommendation System for Connected TV Content Discovery](/20260710-20260719/2607.09988v1-an-llm-powered-agentic-recommendation-system-for-connected-tv-content-discovery)  
    标签：评分：9.0/10、query:rec-sys
-   evidence：使用多模态嵌入的序列推荐侧适配方法
-6. [SISA-Rec: A Semantically Integrated Sequential Recommender with Contrastive Alignment](/20260710-20260719/2607.11168v1-sisa-rec-a-semantically-integrated-sequential-recommender-with-contrastive-alignment)  
+   evidence：基于LLM的智能体推荐系统用于电视内容发现
+3. [Tokenizing Numerical and Embedding Features for LLM RecSys](/20260710-20260719/2607.10016v1-tokenizing-numerical-and-embedding-features-for-llm-recsys)  
    标签：评分：9.0/10、query:rec-sys
-   evidence：语义融合的序列推荐
-7. [SlimPer: Make Personalization Model Slim and Smart](/20260710-20260719/2607.12281v1-slimper-make-personalization-model-slim-and-smart)  
+   evidence：将数值和嵌入特征集成到LLM推荐系统中的软令牌融合框架
+4. [RecRec: Recursive Refinement for Sequential Recommendation](/20260710-20260719/2607.10541v1-recrec-recursive-refinement-for-sequential-recommendation)  
    标签：评分：9.0/10、query:rec-sys
-   evidence：将个性化排序重构成迭代细化过程以实现高效推荐
-8. [Learning to Forget: Satiation-Aware Long-Sequence Transducers for Mitigating Post-Purchase Redundancy](/20260710-20260719/2607.12714v1-learning-to-forget-satiation-aware-long-sequence-transducers-for-mitigating-post-purchase-redundancy)  
+   evidence：递归精炼的序列推荐
+5. [Learning to Forget: Satiation-Aware Long-Sequence Transducers for Mitigating Post-Purchase Redundancy](/20260710-20260719/2607.12714v1-learning-to-forget-satiation-aware-long-sequence-transducers-for-mitigating-post-purchase-redundancy)  
    标签：评分：9.0/10、query:rec-sys
-   evidence：电商场景中考虑饱足感的序列推荐机制
-9. [RecRec: Latent Interests Recursive Reasoning for Sequential Recommendation](/20260710-20260719/2607.12945v1-recrec-latent-interests-recursive-reasoning-for-sequential-recommendation)  
+   evidence：显式建模序列推荐中的意图生命周期和购买后饱和
+6. [ViHoRec: A Quality-Controlled Vietnamese Hotel Recommendation Dataset and Cold-Start Benchmark](/20260710-20260719/2607.12946v1-vihorec-a-quality-controlled-vietnamese-hotel-recommendation-dataset-and-cold-start-benchmark)  
    标签：评分：9.0/10、query:rec-sys
-   evidence：基于递归推理的序列推荐
-10. [ViHoRec: A Quality-Controlled Vietnamese Hotel Recommendation Dataset and Cold-Start Benchmark](/20260710-20260719/2607.12946v1-vihorec-a-quality-controlled-vietnamese-hotel-recommendation-dataset-and-cold-start-benchmark)  
-   标签：评分：9.0/10、query:rec-sys
-   evidence：越南酒店推荐数据集与基准
-11. [Privacy Preserving Recommender Systems Balancing Personalization with Privacy](/20260710-20260719/2607.13328v1-privacy-preserving-recommender-systems-balancing-personalization-with-privacy)  
-   标签：评分：9.0/10、query:rec-sys
-   evidence：结合联邦学习与差分隐私的隐私保护推荐系统
-12. [TMallGS: Scaling Unified Feature and Sequence Modeling for Generative E-commerce Search](/20260710-20260719/2607.13398v1-tmallgs-scaling-unified-feature-and-sequence-modeling-for-generative-e-commerce-search)  
-   标签：评分：9.0/10、query:rec-sys
-   evidence：用于生成式电商搜索的统一特征与序列建模扩展
-13. [OrDA: Orthogonal Disentanglement of Access Habits Framework for Homepage Marketing Block Recommendations](/20260710-20260719/2607.13420v1-orda-orthogonal-disentanglement-of-access-habits-framework-for-homepage-marketing-block-recommendations)  
-   标签：评分：9.0/10、query:rec-sys
-   evidence：面向首页营销推荐的深度学习框架
-14. [Mutable Low-Rank Sketches for Retrain-Free Recommendation](/20260710-20260719/2607.15242v1-mutable-low-rank-sketches-for-retrain-free-recommendation)  
-   标签：评分：9.0/10、query:rec-sys
-   evidence：使用可变草图与低秩投影实现无重训练推荐
+   evidence：酒店推荐中的冷启动基准数据集
 
 ### 速读区论文标签
-1. [An LLM-powered Agentic Recommendation System for Connected TV Content Discovery](/20260710-20260719/2607.09988v1-an-llm-powered-agentic-recommendation-system-for-connected-tv-content-discovery)  
+1. [RouteRec: Strict Evaluation of Recommender-Agent Selection and Aggregation](/20260710-20260719/2607.09908v1-routerec-strict-evaluation-of-recommender-agent-selection-and-aggregation)  
    标签：评分：8.0/10、query:rec-sys
-   evidence：基于LLM的智能体推荐系统，融合多样化上下文信号
-2. [Tokenizing Numerical and Embedding Features for LLM RecSys](/20260710-20260719/2607.10016v1-tokenizing-numerical-and-embedding-features-for-llm-recsys)  
+   evidence：评估包含LLM重排序器在内的异质推荐代理选择
+2. [Consensus vs. Dissent: Dynamic LLM Modeling of Subjective Preferences in Group Recommenders](/20260710-20260719/2607.10235v1-consensus-vs-dissent-dynamic-llm-modeling-of-subjective-preferences-in-group-recommenders)  
    标签：评分：8.0/10、query:rec-sys
-   evidence：提出软令牌融合框架将数值和嵌入特征引入基于LLM的推荐系统
-3. [ZoRRO: A Zero-Weight Personalized Recommender System for Scalable News Recommendation](/20260710-20260719/2607.10910v1-zorro-a-zero-weight-personalized-recommender-system-for-scalable-news-recommendation)  
+   evidence：利用LLM建模群体推荐中的主观偏好
+3. [Stream-aware Side Adaptation for Large Pre-trained Multimodal Embedding Models in Sequential Recommendation](/20260710-20260719/2607.10909v1-stream-aware-side-adaptation-for-large-pre-trained-multimodal-embedding-models-in-sequential-recommendation)  
    标签：评分：8.0/10、query:rec-sys
-   evidence：零权重个性化新闻推荐系统
-4. [Normative Alignment of Recommender Systems via Internal Label Shift](/20260710-20260719/2607.10915v1-normative-alignment-of-recommender-systems-via-internal-label-shift)  
+   evidence：使用预训练多模态嵌入的序列推荐
+4. [ZoRRO: A Zero-Weight Personalized Recommender System for Scalable News Recommendation](/20260710-20260719/2607.10910v1-zorro-a-zero-weight-personalized-recommender-system-for-scalable-news-recommendation)  
    标签：评分：8.0/10、query:rec-sys
-   evidence：将推荐输出与公平性、多样性等规范目标对齐
-5. [Prompt Generation Technical Report](/20260710-20260719/2607.11326v1-prompt-generation-technical-report)  
-   标签：评分：8.0/10、query:rec-sys
-   evidence：生成式检索用于推荐
-6. [RouteRec: Strict Evaluation of Recommender-Agent Selection and Aggregation](/20260710-20260719/2607.09908v1-routerec-strict-evaluation-of-recommender-agent-selection-and-aggregation)  
+   evidence：无训练的个人化新闻推荐系统
+5. [From Raw IDs to Semantic Planning: How Recommender Systems Utilize Information at Scale](/20260710-20260719/2607.09540v3-from-raw-ids-to-semantic-planning-how-recommender-systems-utilize-information-at-scale)  
    标签：评分：7.0/10、query:rec-sys
-   evidence：提出评估和聚合推荐系统智能体的框架
-7. [Consensus vs. Dissent: Dynamic LLM Modeling of Subjective Preferences in Group Recommenders](/20260710-20260719/2607.10235v1-consensus-vs-dissent-dynamic-llm-modeling-of-subjective-preferences-in-group-recommenders)  
+   evidence：从综述角度回顾推荐系统发展，涉及语义规划和大语言模型
+6. [Tool-Adaptive LLM Reranker](/20260710-20260719/2607.10555v1-tool-adaptive-llm-reranker)  
    标签：评分：7.0/10、query:rec-sys
-   evidence：使用LLM的群体推荐系统
-8. [MMRM: A Multiplex Multimodal Representation Model for Product Ranking in E-commerce Search](/20260710-20260719/2607.11030v1-mmrm-a-multiplex-multimodal-representation-model-for-product-ranking-in-e-commerce-search)  
+   evidence：将LLM重排序形式化为马尔可夫决策过程并采用强化学习
+7. [Prompt Generation Technical Report](/20260710-20260719/2607.11326v1-prompt-generation-technical-report)  
    标签：评分：7.0/10、query:rec-sys
-   evidence：提出基于深度学习的多模态表示模型用于商品排序
-9. [Can We Steer the Black-Box? Towards Controllability-Centric Evaluation of Recommender Systems with Collaborative Agents](/20260710-20260719/2607.13418v2-can-we-steer-the-black-box-towards-controllability-centric-evaluation-of-recommender-systems-with-collaborative-agents)  
+   evidence：基于LLM的提示生成框架，用于推荐系统中的生成式检索
+8. [User Preference Induction with LLMs for Offline Top-N Recommendation Evaluation](/20260710-20260719/2607.11354v1-user-preference-induction-with-llms-for-offline-top-n-recommendation-evaluation)  
    标签：评分：7.0/10、query:rec-sys
-   evidence：使用多智能体框架对推荐系统进行可控性评估
-10. [LiteTopK: Exploiting the Curse of Dimensionality for a Fused Indexer-TopK Kernel in Long-Context Sparse Attention](/20260710-20260719/2607.11976v2-litetopk-exploiting-the-curse-of-dimensionality-for-a-fused-indexer-topk-kernel-in-long-context-sparse-attention)  
+   evidence：使用LLM扩展离线推荐评估的相关性判断
+9. [Where Reasoning Matters: Rethinking Latent Reasoning in Semantic ID-based Generative Recommendation](/20260710-20260719/2607.12425v1-where-reasoning-matters-rethinking-latent-reasoning-in-semantic-id-based-generative-recommendation)  
    标签：评分：6.0/10、query:rec-sys
-   evidence：高效的TopK内核，用于推荐系统中的向量检索
+   evidence：基于语义ID的生成式推荐及潜在推理
+10. [TMallGS: Scaling Unified Feature and Sequence Modeling for Generative E-commerce Search](/20260710-20260719/2607.13398v1-tmallgs-scaling-unified-feature-and-sequence-modeling-for-generative-e-commerce-search)  
+   标签：评分：6.0/10、query:rec-sys
+   evidence：将类LLM的Transformer架构应用于电商搜索排序，采用异构分词策略
 11. [Deep-learning Causal Retrieval Optimization for Efficient e-commerce Distribution in Pinterest](/20260710-20260719/2607.14161v1-deep-learning-causal-retrieval-optimization-for-efficient-e-commerce-distribution-in-pinterest)  
    标签：评分：6.0/10、query:rec-sys
-   evidence：运用深度多任务学习进行电商推荐的因果检索优化
+   evidence：用于推荐的因果检索优化，类似于强化学习
 
 
 <div class="dpr-home-promo-card">
