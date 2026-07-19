@@ -1,0 +1,1076 @@
+Title: Where Reasoning Matters: Rethinking Latent Reasoning in Semantic ID-based Generative Recommendation
+
+URL Source: https://arxiv.org/pdf/2607.12425v1
+
+Published Time: Wed, 15 Jul 2026 11:57:49 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+> 1
+
+# Where Reasoning Matters: Rethinking Latent Reasoning in Semantic ID-based Generative Recommendation 
+
+Shangxin Yang, Min Gao ∗, Zongwei Wang, Junliang Yu 
+
+Abstract —Semantic ID-based generative recommendation pre-dicts an item by generating a short sequence of semantic ID tokens, where each token is produced autoregressively. Latent reasoning has recently been introduced to improve this process through additional hidden-state computation before each token decision. This raises a practical question: when one item is represented by a sequence of semantic ID tokens, should each token receive the same fixed number of latent refinement steps, or should these steps be allocated more effectively across positions? We study this question through position-wise information-gain (IG), which measures how much each semantic ID position reduces the uncertainty of the target item. We observe that earlier semantic ID positions usually provide higher information-gain, while later positions contribute less additional information. We further analyze that applying more refinement to high-IG posi-tions tends to bring larger expected benefits. Based on this obser-vation, we propose IBA, an Information-Gain Budget Allocation framework for semantic ID-based generative recommendation. IBA treats latent refinement steps as a limited computational resource and learns how to allocate them across semantic ID positions, assigning more refinement to informative positions and less to positions with smaller contribution. Experiments on multiple public datasets show that IBA consistently improves strong generative recommendation baselines and achieves a better accuracy–computation trade-off than fixed or poorly matched step allocations. 
+
+Index Terms —Generative recommendation, latent reasoning, semantic ID, information-gain. 
+
+I. I NTRODUCTION 
+
+# RECOMMENDER systems have become a critical in-frastructure for personalized services on large-scale e-commerce platforms [1], [2]. Conventional recommendation pipelines often rely on multi-stage retrieval and ranking with independent item IDs. Although effective, this design can accumulate errors across stages [3], [4] and provides limited semantic sharing for sparse or newly introduced items [2], [5]. Generative recommendation addresses these limitations by directly generating item identifiers conditioned on user behavior. In particular, semantic ID-based methods represent each item as a sequence of discrete tokens produced by vector quantization methods such as RQ-VAE [6], allowing related 
+
+*Corresponding Author - S. Yang, M. Gao, and Z. Wang are with Key Laboratory of Dependable Service Computing in Cyber Physical Society (Chongqing University), Min-istry of Education, China; the School of Big Data and Software Engineer-ing, Chongqing University, Chongqing, China. Emails: {zongwei, gaomin, guolinxin }@cqu.edu.cn and yangshangxin@stu.cqu.edu.cn. J. Yu is with the School of Information and Communication Technology, Griffith University, Australia. E-mail: junl.yu@outlook.com. 
+
+items to share code patterns and improving generalization beyond independent item identifiers [5], [7]. Recent progress in reasoning-capable language models [8]– [11] has inspired latent reasoning for generative recommenda-tion [12]–[14]. Instead of generating explicit reasoning text, latent reasoning performs additional computation in hidden space before committing each output token, providing apromising way to improve recommendation quality at infer-ence time. For semantic ID generation, however, one item is predicted through multiple token decisions rather than a single output. This raises a practical question: whether every semantic ID position needs the same number of refinement steps? 
+
+To study this question, we first examine whether all seman-tic ID positions contribute equally to identifying the target item. In semantic ID-based generative recommendation, two intrinsic structures suggest that the answer may be no. First, RQ-VAE quantization produces hierarchical semantic IDs: earlier positions tend to encode dominant item information, while later positions mainly refine residual details. Second, the generation trie restricts each next-token prediction to prefix-valid candidates, making the candidate space much smaller at later positions. These two structures jointly lead to a position-wise information-gain (IG) pattern, as visualized on the Instruments and Beauty datasets in Fig. 1. IG measures how much the uncertainty of the target item is reduced after observing the semantic ID token at a given position. Earlier positions usually reduce more uncertainty than later positions. However, this contribution matters only when the token is predicted correctly, which means a high-IG token can greatly reduce more ambiguity about the target item if it is correct, but a wrong prediction at this position also misdirects the whole semantic ID sequence. Therefore, to evaluate whether a position needs one addi-tional refinement step, we consider the benefit of that step from two factors: how much it improves the current token prediction, and how much uncertainty about the target item can be reduced once the token is correct. Supported by the empirical results in Section III-A, our analysis shows that early positions tend to satisfy both conditions. They have larger IG, and additional refinement still improves their token-level accuracy, whereas later positions are already close to saturation under the trie constraint and receive little benefit from extra refinement. This suggests that assigning the same number of latent arXiv:2607.12425v1 [cs.IR] 14 Jul 2026 2Pos.1  Pos.2  Pos.3         
+
+> Information -Gain Decreases from Earlier to Later Positions
+> 123
+> Pos.4
+> 4
+> Decoder
+> IG
+> Beauty
+> Instruments
+> +3 Refinement
+> Steps
+> +2 Refinement
+> Steps
+> +1 Refinement
+> Step
+> +0 Refinement
+> Step
+> Allocate Refinement Budget According to Position -Wise Information -Gain
+> CodeBook 1
+> Generation Trie
+> 12
+> 3
+> 1
+> 4
+> Candidate Space
+> Shrinks from
+> Earlier to Later
+> Positions
+> Position -Wise Information -Gain
+> Information -Gain Budget Allocation
+> RQ -VAE Quantization
+> Item Text Embedding
+> Semantic ID
+> 1
+> Item Semantic
+> ID Sequence
+> 1Semantic ID at Pos.1
+> Residual
+> Quantization
+> Produces
+> Hierarchical
+> Semantic IDs
+> Valid
+> Semantic IDs CodeBook 1CodeBooks
+> 0
+> 2
+> 4
+> 6
+> 8
+
+Fig. 1. Illustration of position-wise information-gain in semantic ID genera-tion. Empirical IG on Instruments and Beauty shows a decreasing trend across positions, motivating IBA to allocate more refinement steps to high-IG early positions and fewer steps to low-IG later positions. 
+
+refinement steps to every semantic ID position can waste computation on low-value decisions and underuse computation where refinement is more valuable. A more suitable strategy is to assign different numbers of latent refinement steps according to the expected refinement value of each position, using position-wise IG as a structural prior. However, this also raises two challenges. First, executing different numbers of refinement steps at different positions may make the reasoning trajectory unstable. Second, the position-wise IG pattern only describes the overall structure across items, while the benefit of an extra refinement step may still vary for each user sequence. Motivated by this observation, we propose IBA, an Information-Gain Budget Allocation framework for semantic ID-based generative recommendation. Here, the budget refers to the number of latent refinement steps available during semantic ID generation. To address the instability caused by assigning different refinement steps according to the IG pattern, IBA introduces a Dual-Axis Refinement module. It performs semantic alignment along the vertical axis, allowing multi-step reasoning along the horizontal axis to proceed stably. To decide the allocation for each user sequence, IBA uses a lightweight refinement gain predictor to estimate the expected gain of candidate refinement steps and selects the allocation that maximizes the total gain under the overall IG pattern. To train this predictor, IBA adopts a two-stage training strategy that provides empirical supervision signals for gain prediction. It further introduces a lookahead objec-tive, encouraging high-IG early positions that receive more refinement steps to help predict later semantic ID positions, thereby increasing the utility of the limited budget. We evaluate IBA on three public recommendation datasets using strong sequential, generative, and reasoning-enhanced baselines. The results show that IBA consistently improves semantic ID-based generative recommenders across datasets and backbones. Further analyses verify the position-wise IG pattern, compare learned and fixed step schedules, and exam-ine the contribution of each model component. The main contributions of this work are summarized as follows:  
+
+> •
+
+We identify and quantify a position-wise IG pattern in semantic ID-based generative recommendation, showing that different code positions contribute unequally to item identification.  
+
+> •
+
+We propose IBA, a latent-reasoning framework that adap-tively allocates latent refinement steps across semantic ID positions.  
+
+> •
+
+We design a two-stage training strategy that supports learned allocation of refinement steps across semantic ID positions.  
+
+> •
+
+We conduct experiments on multiple public datasets, showing that IBA improves strong generative recom-mendation baselines and provides a better accuracy– computation trade-off than fixed-step or misaligned step allocations. II. P RELIMINARIES 
+
+A. Semantic ID-based Generative Recommendation 
+
+Let U = {u1, u 2, . . . , u |U| } denote the set of users and 
+
+V = {v1, v 2, . . . , v |V| } denote the item vocabulary. For each user u ∈ U , we represent the historical interaction sequence as 
+
+Hu = ( v1, v 2, . . . , v T ), where items are ordered chronologi-cally. The task is to predict the next item vT +1 conditioned on 
+
+Hu. We use a T5 encoder-decoder backbone [15]: the encoder maps Hu into contextual hidden states, from which we denote the encoder-side user context vector as qu, and the decoder autoregressively generates the semantic ID tokens. Following semantic ID-based generative recommendation, each item v ∈ V is represented by a hierarchical semantic ID sequence Sv = ( c1, c 2, . . . , c L), where L is the semantic ID length and ci ∈ { 1, . . . , K } denotes the discrete code index at the i-th position. The semantic IDs are produced by RQ-VAE through residual quantization. Specifically, each position is associated with a codebook Ci = {ei, 1, e i, 2, . . . , e i,K },where ei,k is the codeword representation corresponding to code index k at position i. The collection of these codeword representations defines the semantic ID representation space for item generation. Generative recommendation predicts the semantic ID se-quence of the next item autoregressively. For a target item with semantic ID sequence S = ( c1, c 2, . . . , c L), the generation probability conditioned on the user context is factorized as 
+
+P (S | qu) = 
+
+> L
+
+Y
+
+> i=1
+
+P (ci | c<i , qu), (1) where c<i = ( c1, c 2, . . . , c i−1) denotes the previously gener-ated semantic ID prefix. The standard training objective is the autoregressive cross-entropy loss: 
+
+LCE = −
+
+> L
+
+X
+
+> i=1
+
+log P (ci | c<i , qu). (2) During decoding, the generated prefix is constrained by a generation trie built from valid item semantic IDs, ensuring that each generated sequence corresponds to an item in the catalog. 3
+
+B. Latent Reasoning for Semantic ID Generation 
+
+Standard semantic ID-based generative recommendation di-rectly predicts each semantic ID token from the T5 decoder hidden state. This paradigm is efficient, but the computation used for each token prediction is limited by the fixed depth of the decoder. To exploit test-time scaling without generating explicit reasoning tokens, latent reasoning performs additional hidden-state computation before committing a semantic ID token. Given the user context qu and the committed prefix c<i ,the T5 decoder first produces an initial representation for predicting the i-th semantic ID token: 
+
+H(0)  
+
+> i
+
+= fθ (qu, c <i ). (3) A latent reasoning mechanism then refines this representation for ki steps: 
+
+H(j) 
+
+> i
+
+= R(j) 
+
+> ϕ
+
+(H(j−1)  
+
+> i
+
+, qu, c <i ), j = 1 , . . . , k i, (4) and predicts the current semantic ID token from the final refined representation: 
+
+P (ci | c<i , qu) = softmax 
+
+
+
+gi(H(ki) 
+
+> i
+
+)
+
+
+
+. (5) Here, fθ denotes the T5 decoder that maps the user context and committed prefix to an initial hidden representation; R(j)
+
+> ϕ
+
+denotes the j-th latent refinement operation; and gi(·) denotes the prediction head that maps the refined representation to logits over the i-th semantic ID codebook. Unlike explicit reasoning-token generation, the intermediate latent states are not appended to the generated sequence. They are used privately within the current semantic ID position, and only the committed token ci is exposed to subsequent posi-tions. Under this formulation, two questions become central: how to design the refinement operation R(j) 
+
+> ϕ
+
+for multi-step latent refinement in a stable way, and how to determine how many refinement steps ki should be used at each semantic ID position according to its information contribution. III. T HE PROPOSED METHOD 
+
+In this section, we present IBA, an Information-Gain Bud-get Allocation framework for semantic ID-based generative recommendation. We first provide the motivation analysis, and then introduce the framework and its training procedure. 
+
+A. Motivation Analysis 
+
+To motivate IBA, we first analyze the structural information contribution of different semantic ID positions. This analysis is model-independent and estimated from the training data: it does not determine the exact number of refinement steps for each user sequence, but provides a position-wise IG prior for the budget allocation module introduced later. Following previous work [16], we estimate information-gain offline from the training set only, without relying on model predictions. Specifically, for each item vi, we use its empirical frequency in the training interactions as the prior probability p(vi) = 
+
+nvi /C , where nvi is the number of interactions involving item 
+
+vi and C is the total number of interactions. For each semantic CodeBook1 CodeBook2 CodeBook3 CodeBook4   
+
+> 0
+> 2
+> 4
+> 6
+> 8
+> Average IG (Bits)
+> 7.02
+> 5.12
+> 0.56 0.07
+> 6.03
+> 5.11
+> 0.76
+> 0.09
+> 4.34
+> 6.23
+> 1.14
+> 0.06
+> Average Information Gain by Semantic ID Position
+> Beauty
+> Instruments
+> MicroLens
+> Fig. 2. Mean information-gain (IG) at each semantic ID position, estimated from the training set across three datasets.
+
+ID position t, we define the candidate set S(y1: t) as all training items whose semantic ID sequences share the prefix y1: t. The conditional entropy of the candidate set given the prefix is computed as 
+
+E(y1: t) = − X
+
+> vi∈S (y1: t)
+
+pt(vi) log 2 pt(vi), (6) where pt(vi) = p(vi)/ P  
+
+> vj∈S (y1: t)
+
+p(vj ) is the normalized prior within the candidate set. The information-gain at position 
+
+t is then defined as the entropy reduction: 
+
+IG t = E(y1: t−1) − E (y1: t). (7) This metric measures how much the uncertainty over the candidate item set is reduced after observing the token at position t, and therefore quantifies the contribution of that position to identifying the target item. Since IG t is computed from training interactions and semantic-ID prefixes rather than model outputs, it characterizes the global discriminative structure of semantic ID generation. We aggregate IG t across items by position and report the mean values in Fig. 2. Instruments and Beauty show a mono-tonic decrease from position 1 to position 4, while MicroLens has a slightly higher mean IG at position 2 than position 1 but still shows a clear decline at later positions. These results indicate that semantic ID tokens at early positions have higher IG, which suggests that earlier tokens reduce more uncertainty about the target item. We next clarify why positions with higher IG are more valuable targets for additional latent refinement. Let qt(k)
+
+denote the probability of correctly predicting the semantic ID token at position t after using k refinement steps. We define the expected refinement utility at position t as 
+
+Ut(k) = qt(k)IG t. (8) This utility measures the expected contribution of position 
+
+t to correctly identifying the target item: qt(k) captures the probability that the token is predicted correctly, while IG t
+
+captures how much item-level uncertainty is reduced once this prediction is correct. The utility of one additional refinement step is therefore 
+
+∆Ut(k) = Ut(k + 1) − Ut(k)=  qt(k + 1) − qt(k)IG t = ρt(k)IG t, (9) 4…
+
+User Interaction History 
+
+𝑐 1 𝑐 2 𝑐 3 𝑐 3𝑐 2𝑐 1
+
+Reasoning -T5 
+
+Encoder 
+
+ෞ𝑠 𝑖 ,𝑟 
+
+𝐪 𝐮 
+
+Refinement Gain 
+
+Predictor 
+
+𝐞 𝐢  𝐞 𝐫 
+
+𝑚 𝑖 ,𝑟 
+
+> +
+
+𝐤 ∗ = 𝑘 1
+
+> ∗
+
+, … , 𝑘 𝐿 
+
+> ∗
+
+Reasoning -T5 Decoder 
+
+𝑐 1 𝑐 2 𝑐 3 
+
+> <BOS>
+
+𝑐 1 𝑐 2
+
+Gain Prediction Loss  Cross -Entropy Loss & Lookahead Loss 
+
+Stage 2  Reasoning -T5 
+
+T5 Decoder 
+
+> <BOS>
+
+Stage 1 
+
+# …𝑐 1 𝑐 2 𝑐 3 𝑐 3𝑐 2𝑐 1
+
+T5 Encoder 
+
+𝐪 𝐮  Cross -Entropy Loss 
+
+User Interaction History 
+
+Item 1  Item n 
+
+Item 1  Item n 
+
+Contextual Embedding 
+
+Position Embedding 
+
+Step Embedding 
+
+Semantic IDs 
+
+𝑐 1 𝑐 2 𝑐 3
+
+𝑐 1 𝑐 2          
+
+> 𝒌 1
+> ∗steps 𝒌 2
+> ∗steps 𝒌 3
+> ∗steps
+> 𝒌 steps 𝒌 steps 𝒌 steps
+
+Empirical Refinement Gain 𝑚 𝑖 ,𝑟 
+
+> +
+
+ෞ𝑠 𝑖 ,𝑟  Predicted Refinement Gain 
+
+Allocation 
+
+Objective 
+
+𝐤 ∗ Selected Step Allocation  
+
+> Fig. 3. Overview of the IBA framework. T5 denotes the original encoder-decoder backbone, while Reasoning-T5 denotes the Stage 1 model trained with a uniform refinement depth and reused in Stage 2.
+
+where ρt(k) denotes the token-level improvement brought by the additional refinement step. This expression shows that a refinement step is more beneficial when a position has higher information-gain and the additional refinement step at this position improves token-level accuracy more. Within a moderate range of refinement steps, our step-wise refinement analysis in Section IV-G2 later verifies this pattern: early semantic ID positions improve token-level accuracy more from additional refinement, whereas later positions are already close to saturation and yield negligible further improvements. There-fore, earlier positions tend to offer larger expected refinement benefits, motivating IBA to allocate more refinement steps to early positions. Since different user sequences may still require slightly different budget allocation, IBA learns the allocation for each user sequence under this prior. We next describe how IBA implements this idea. 
+
+B. Overview of IBA 
+
+IBA is built on top of the T5 encoder-decoder backbone and allocates latent refinement steps across semantic ID posi-tions. Before introducing the step allocation strategy, we first introduce a Dual-Axis Refinement Module to keep the reason-ing process stable when different positions receive different numbers of refinement steps. The detailed architecture of this module is shown in Fig. 4. Based on the observed position-wise IG pattern, IBA then uses a Budget Allocation Module to select the step allocation with the largest expected gain for each user sequence under a fixed total budget. Finally, to train the introduced modules, IBA adopts a two-stage training strategy that first obtains empirical gain signals and then optimizes the model with the selected allocation. The following subsections describe these components in detail. The complete framework is shown in Fig. 3. 
+
+C. Dual-Axis Refinement 
+
+The information-gain pattern suggests that different seman-tic ID positions should receive different numbers of refine-ment steps. To make this refinement pattern stable, the Dual-Axis Refinement Module operates along two complementary axes: horizontal multi-step reasoning progressively updates the hidden state within a position, while vertical semantic alignment keeps the intermediate state at each step close to the semantic ID space of that position. Given the user context 
+
+qu and the committed prefix, the T5 decoder first produces an initial hidden representation for the current semantic ID position. The module then updates this representation through the two components described below, and the number of refinement steps is provided by the step allocation strategy in Section III-D. 
+
+1) Vertical Semantic Alignment Refinement: Instead of di-rectly projecting the last-layer decoder hidden state to semantic ID logits, we vertically align the intermediate representation at every refinement step with the semantic ID representation space. This vertical operation keeps the hidden state aligned with the position-specific semantic space at each refinement step, reducing semantic drift during horizontal reasoning. We further analyze this representation gap and the role of vertical alignment in Section IV-G1. Specifically, at position t, the model performs latent refinement over steps indexed by j. Let 
+
+H(j) 
+
+> raw ,t
+
+denote the raw decoder hidden state at refinement step j,where j = 0 corresponds to the initial decoder representation produced from qu and the committed prefix. The prediction target at this position is a discrete code index ct whose representation comes from the codebook Ct for position t.At each refinement step j, we pass the raw decoder hidden state through an alignment stack built with the T5 decoder-layer architecture: 
+
+H(j) 
+
+> align ,t
+
+= DecoderStack align 
+
+ H(j)
+
+> raw ,t
+
+, (10) 5
+
+where H(j) 
+
+> align ,t
+
+denotes the semantically aligned representation, and DecoderStack align denotes a stack that reuses the layer architecture of the T5 decoder. This design preserves the contextual modeling structure of the backbone while providing additional hidden-state computation specialized for semantic alignment. To allow different refinement steps to apply different align-ment intensities, we further use a Feature-wise Linear Modu-lation (FiLM) mechanism [17]. For each step j, a step-specific MLP produces scale and shift parameters conditioned on the raw hidden state: 
+
+γ(j) 
+
+> t
+
+, β(j) 
+
+> t
+
+= MLP (j) H(j)
+
+> raw ,t
+
+, (11) where γ(j) 
+
+> t
+
+and β(j) 
+
+> t
+
+are d-dimensional modulation vectors. The final aligned representation is computed as 
+
+H(j) 
+
+> out ,t
+
+=  1 + γ(j)
+
+> t
+
+ ⊙ H(j) 
+
+> align ,t
+
++ β(j) 
+
+> t
+
+, (12) where ⊙ denotes element-wise multiplication. The residual scaling form (1 + γ(j) 
+
+> t
+
+) preserves the aligned signal when 
+
+γ(j) 
+
+> t
+
+= 0, while allowing the model to amplify or suppress spe-cific semantic dimensions according to the current refinement step. The resulting representation H(j) 
+
+> out ,t
+
+is used for semantic ID prediction and also serves as the refined signal for the next step update when additional refinement step is required. 
+
+2) Horizontal Hidden Refinement: The horizontal hidden refinement component performs iterative latent reasoning within the same semantic ID position. Inspired by resid-ual connections [18], we avoid feeding only the previous aligned representation into the next refinement step. A direct recurrence of this form may accumulate errors, especially when the refinement trajectory drifts away from the target semantic ID representation space. To stabilize the recurrence, we retain the raw decoder output from the previous step, 
+
+H(j−1)  
+
+> raw ,t
+
+, as an anchor and combine it with the previous aligned representation. For refinement step j ∈ { 1, . . . , k ∗ 
+
+> t
+
+} at position 
+
+t, the input representation is constructed as 
+
+H(j) 
+
+> in ,t
+
+= (1 − γrec ) · H(j−1)  
+
+> raw ,t
+
++ γrec · H(j−1)  
+
+> out ,t
+
++ aj , (13) where k∗ 
+
+> t
+
+is the number of refinement steps selected for posi-tion t, γrec is the recurrence fusion coefficient, and aj ∈ Rd is a learnable step embedding that identifies the j-th refinement step. The fused representation is processed by the T5 decoder to produce the next raw hidden state: 
+
+H(j) 
+
+> raw ,t
+
+= Decoder  H(j)
+
+> in ,t
+
+. (14) This raw hidden state is again passed through the vertical semantic alignment component in Eqs. (10)–(12), yielding 
+
+H(j)
+
+> out ,t
+
+. After k∗ 
+
+> t
+
+refinement steps, the final representation is projected to semantic ID logits: 
+
+zt = LMHead t
+
+ H(k∗ 
+
+> t)
+> out ,t
+
+. (15) When k∗ 
+
+> t
+
+= 0 , the model directly uses the initial refined representation H(0)  
+
+> out ,t
+
+for prediction. Thus, the same Dual-Axis Refinement Module supports positions assigned different numbers of refinement steps under a unified formulation in a stable way. T5 Decoder 
+
+𝑐 ≤𝑡 −1
+
+𝑐 t 
+
+> DecoderStack
+> 𝛾 t
+> 0,𝛽 t
+> 0
+
++  
+
+> Fusion Step
+> Embedding
+> CodeBook t
+
++         
+
+> Fusion Step
+> Embedding
+> Step 1 Step 2
+> Fi LM
+> 𝐻 𝑟𝑎𝑤
+> 0
+> 𝐻 out
+> 0𝐻 out
+> 1
+> 𝐻 𝑟𝑎𝑤
+> 1𝐻 𝑟𝑎𝑤
+> 2
+> 𝐻 out
+> 2
+> Fi LM Fi LM
+> 𝛾 t
+> 1,𝛽 t
+> 1𝛾 t
+> 2,𝛽 t
+> 2
+> Fig. 4. Architecture of the Dual-Axis Refinement Module.
+
+D. Budget Allocation 
+
+This module determines how many latent refinement steps to assign to each semantic ID position. We refer to the total number of available refinement steps as the budget. Formally, ki denotes the number of refinement steps assigned to position i, and B denotes the total step budget across the whole semantic ID sequence. Guided by the information-gain analysis in Section III-A, IBA uses a prior that assigns more refinement steps to early positions while allowing the final allocation to vary across user sequences. For a user sequence u, IBA uses the encoder-side user context vector qu defined in Section II. Before decoding the target semantic ID, IBA evaluates the refinement gain by a lightweight MLP predictor for each candidate refinement step 
+
+r ∈ { 1, . . . , K max } at each semantic ID position i:
+
+bsi,r = Softplus ( gψ ([ qu; ei; er ])) , (16) where gψ denotes the refinement gain predictor, and ei and 
+
+er are learnable embeddings for the semantic ID position and the refinement step, respectively. The predicted score bsi,r 
+
+estimates the user-conditioned gain score of assigning the r-th refinement step to position i for the current user sequence. The Softplus activation keeps this score non-negative. To make this score meaningful, the refinement gain predic-tor is supervised by empirical refinement gains estimated from the Stage 1 model. The overall two-stage training procedure is described in Section III-E. After training with the same refinement steps across positions, we unroll the Stage 1 check-point up to Kmax candidate refinement steps and compute the prediction loss at each step. Let z(r) 
+
+> i
+
+be the logits produced for position i after r refinement steps, and define 
+
+ℓ(r) 
+
+> i
+
+= LCE 
+
+
+
+z(r) 
+
+> i
+
+, c i
+
+
+
+. (17) Following the refinement utility analysis in Section III-A, the gain of one additional refinement step is defined as 
+
+∆Ut(k) = ρt(k)IG t, where ρt(k) denotes the token-level 6
+
+accuracy improvement. In the refinement gain predictor, we replace this accuracy improvement term with the reduction in token-level prediction loss. This loss reduction also reflects how much the additional refinement step improves token prediction, and it provides a continuous training signal that is easier to compute for supervising the predictor. The clipped empirical refinement gain of the r-th refinement step is 
+
+m+ 
+
+> i,r
+
+= max 
+
+
+
+0, ℓ (r−1)  
+
+> i
+
+− ℓ(r)
+
+> i
+
+
+
+· IG i, (18) which measures the utility brought by the additional refine-ment step at position i. We train the predictor with 
+
+Lgain =
+
+> L
+
+X
+
+> i=1
+> Kmax
+
+X
+
+> r=1
+
+ bsi,r − sg  m+
+
+> i,r
+
+ 2 , (19) where sg( ·) denotes stop-gradient. This loss calibrates the predicted score bsi,r to refinement gain from the Stage 1 model, so a larger score indicates that the corresponding refinement step is expected to be more useful for that position and user sequence. Given these predicted refinement gain scores, IBA selects the step allocation by solving an allocation objective with a prior penalty: 
+
+k∗ = arg max 
+
+> k∈K
+
+" LX
+
+> i=1
+> ki
+
+X
+
+> r=1
+
+bsi,r − λP k − kprior 
+
+> 1
+
+#
+
+, (20) where k∗ = ( k∗ 
+
+> 1
+
+, . . . , k ∗
+
+> L
+
+) is the selected step allocation and 
+
+k∗ 
+
+> i
+
+denotes the number of refinement steps assigned to the i-th semantic ID position. The first term accumulates the predicted refinement gains, while the second term softly biases the selected allocation toward a prior step allocation kprior . The coefficient λP controls the strength of this prior, so the selected allocation may still deviate from kprior when the predicted gains support another allocation. The feasible set is 
+
+K =
+
+(
+
+k | 0 ≤ ki ≤ Kmax ,
+
+> L
+
+X
+
+> i=1
+
+ki = B
+
+)
+
+, (21) where B is the total number of refinement steps available for one semantic ID sequence. The constraint P 
+
+> i
+
+ki = B fixes the total number of latent refinement steps, while the prior term in Eq. (20) softly encourages the selected allocation to follow the overall information-gain pattern. Because L and 
+
+Kmax are small in semantic ID generation, Eq. (20) can be solved by enumerating all feasible allocations with negligible overhead. The selected step allocation is computed once for each user sequence and shared across beam-search candidates, keeping the decoding process deterministic and efficient. In Section IV-C, we further examine different choices of kprior ,including a uniform prior, a prior that assigns more steps to later positions, and a prior that assigns more steps to early positions. 
+
+E. Two-Stage Training 
+
+IBA uses a two-stage training protocol to make the re-finement operation and step allocation learnable in sequence. Stage 1 obtains a uniformly refined checkpoint and empirical gain signals, while Stage 2 trains the refinement gain predic-tor and fine-tunes the recommender under the selected step allocation and the lookahead objective. 
+
+1) Stage 1 Training: During Stage 1 training, every se-mantic ID position is assigned the same number of refinement steps. Formally, for all positions i ∈ { 1, . . . , L }, we set 
+
+ki = K, (22) where K is a small constant, such as K = 2 . This setting gives all positions the same refinement process and avoids introducing different refinement steps across positions before the model has learned the basic refinement operation. The model is trained with standard cross-entropy loss on semantic ID prediction under this refinement process. 
+
+2) Stage 2 Training: During Stage 2 training, we initialize the model from the Stage 1 checkpoint and introduce the refinement gain predictor defined in Eq. (16). For each user sequence, the predictor produces gain scores bsi,r for candidate refinement steps, and the allocation objective in Eq. (20) selects k∗ = ( k∗ 
+
+> 1
+
+, . . . , k ∗
+
+> L
+
+) to maximize the total predicted gain under the budget constraint. This stage optimizes gain prediction with Lgain and fine-tunes the recommender under the same selected step allocation used during inference. Given the selected step allocation, Stage 2 optimizes the terminal prediction associated with the selected number of refinement steps at each position. Let z(k∗  
+
+> i)
+> i
+
+denote the logits produced at position i after k∗ 
+
+> i
+
+refinement steps. The main loss is 
+
+Lmain = 1
+
+L
+
+> L
+
+X
+
+> i=1
+
+LCE 
+
+ z(k∗  
+
+> i)
+> i
+
+, c i
+
+. (23) IBA usually allocates more refinement steps to earlier semantic ID positions, which receive more computation and contain much of the information needed to identify the target item. Their refined representations should therefore support not only the current token prediction but also later semantic ID predictions. We introduce a prefix lookahead objective as an auxiliary regularizer, encouraging early refined representations to remain useful for predicting nearby future semantic ID tokens. For each valid lookahead offset δ ∈ {1, . . . , ∆},we add a learnable offset vector oδ to the final refined representation at position t and use the LM head to predict the future token ct+δ :
+
+Pδ (ct+δ | qu, c <t ) = softmax 
+
+
+
+LMHead t+δ
+
+ H(k∗  
+
+> t)
+> out ,t
+
++ oδ
+
+
+
+,
+
+(24) where LMHead t+δ (·) denotes the shared prediction head for the semantic ID codebook at position t + δ, and ∆ is the maximum lookahead offset. The lookahead loss is computed over all valid position-offset pairs: 
+
+LLA = 1
+
+|Ω|
+
+X
+
+> (t,δ )∈Ω
+
+LCE 
+
+ Pδ (ct+δ | qu, c <t ), c t+δ
+
+, (25) where 
+
+Ω = {(t, δ ) | 1 ≤ t ≤ L, 1 ≤ δ ≤ ∆, t + δ ≤ L}. (26) The full Stage 2 objective is 
+
+Lstage2 = Lmain + λLA LLA + λgain Lgain , (27) 7                 
+
+> TABLE I DATASET STATISTICS
+> Dataset #Users #Items #Interactions #Avg.n
+> Instruments 24,772 9,922 206,153 8.32 Beauty 22,363 12,101 198,502 8.88 MicroLens 13,210 5,312 78,255 5.92
+
+where λLA and λgain control the contributions of the looka-head objective and gain prediction loss, respectively. IV. E XPERIMENTS 
+
+In this section, we conduct experiments to evaluate the ef-fectiveness of IBA and analyze how its learned step allocation affects both accuracy and efficiency. We aim to answer the following research questions: 
+
+RQ1: How does IBA compare with existing state-of-the-art recommendation methods? 
+
+RQ2: What are the individual contributions of semantic alignment refinement, the refinement gain predictor, and the lookahead auxiliary objective? 
+
+RQ3: How sensitive is IBA to key hyperparameters, in-cluding the lookahead weight λLA and the recurrence fusion coefficient γrec ?
+
+RQ4: How does semantic alignment refinement affect the hidden space, and how much token-level hit-rate gain does each position obtain from refinement steps? 
+
+A. Experimental Setup 1) Datasets: We conduct experiments on three publicly available datasets spanning different domains: Instruments, Beauty, and MicroLens. The Instruments and Beauty datasets are derived from the Amazon review corpus [19]. Instru-ments contains user interactions with musical instruments, and Beauty contains user interactions with beauty products. MicroLens is a micro-video recommendation dataset that contains user interactions with micro-videos [20]. Following the standard protocol in generative recommendation [5], [21], we apply a leave-one-out splitting strategy for each dataset. We filter out users with fewer than 5 interactions. During training, we limit the number of items in a user’s history to 20. Item semantic IDs are generated via residual vector quantization (RQ-VAE) [6], with each item represented as a 4-token hierarchical sequence. Table I summarizes the statistics of the three datasets after preprocessing. 
+
+2) Baselines: We compare IBA with four groups of base-lines: traditional sequential recommenders, including SAS-Rec [22] and CASER [23]; LLM-based recommendation with latent reasoning, represented by LatentR 3 [24]; semantic ID-based generative recommenders, including TIGER [5] and LETTER [21]; and semantic ID-based generative recommen-dation with latent reasoning, represented by CARE [12]. To evaluate IBA as a modular enhancement, we apply it on top of TIGER and LETTER. The “+” notation in our tables indicates that IBA is added to the corresponding base model. 
+
+3) Evaluation Metrics: Following standard practices in generative recommendation [5], [7], we evaluate all methods using Recall and Normalized Discounted Cumulative Gain (NDCG) at cutoffs of 5 and 10, denoted as R@5, R@10, N@5, and N@10, respectively. Since the leave-one-out protocol yields exactly one ground-truth item per user, the ideal DCG is always 1.0, making NDCG equivalent to the discounted hit position. Higher values for all metrics indicate better recommendation performance. 
+
+4) Implementation Details: We instantiate the backbone with T5-small [15] in all experiments. Item semantic IDs are produced by an RQ-VAE tokenizer, where each item’s text information (e.g., title, category, and description) is encoded into a dense vector using Sentence-T5 [25]. The model is trained using a two-stage protocol. In Stage 1, we train the model with uniform refinement steps ( K = 2 ) for 200 epochs, using a learning rate of 5 × 10 −4, batch size of 128, and gradient accumulation steps of 2. In Stage 2, we fine-tune the Stage 1 checkpoint with the learned refinement gain predictor for 50 epochs, using a lower learning rate of 5 × 10 −5.Unless otherwise specified, the prior step allocation is set to 
+
+kprior = (3 , 2, 1, 0) , corresponding to a total step budget of 6, and the prior weight is set to λP = 0 .1. The lookahead auxiliary objective uses a maximum offset of ∆ = 2 with weight λLA = 0 .15 . The recurrence fusion coefficient is set to γrec = 0 .5. The semantic alignment stack uses Lalign = 5 
+
+layers and follows the architecture of the T5 decoder blocks. During inference, we employ beam search with 20 beams and a maximum of 10 generated tokens. The generation is con-strained by a prefix trie to ensure that all generated semantic ID sequences correspond to valid items in the catalog. All models are trained and evaluated on an NVIDIA RTX 4090 GPU (24 GB) with a random seed of 42 for reproducibility. 
+
+B. Main Results 
+
+Table II summarizes the main results on three public datasets. From the table, we have the following observations: (1) IBA consistently improves semantic ID-based generative recommenders. When applied to TIGER, IBA improves all metrics on all three datasets. The same pattern holds for LETTER: IBA improves Instruments, Beauty, and MicroLens across all reported metrics, showing that the proposed step allocation is not tied to a single base tokenizer or backbone. (2) IBA achieves competitive or stronger performance than existing reasoning-enhanced baselines. Compared with CARE, both TIGER+IBA and LETTER+IBA obtain higher scores on every dataset and metric. Compared with LatentR 3, IBA-enhanced semantic ID models also achieve stronger overall results: TIGER+IBA slightly exceeds LatentR 3 on Instruments and matches or improves it on Beauty, while LETTER+IBA gives the best overall results on Beauty R@10/N@10 and all MicroLens metrics. (3) The strongest IBA-enhanced backbone differs across datasets. TIGER+IBA obtains the best results on In-struments and the best R@5/N@5 on Beauty, whereas LETTER+IBA performs best on Beauty R@10/N@10 and all MicroLens metrics. 8                                                                                                              
+
+> TABLE II PERFORMANCE COMPARISON OF DIFFERENT METHODS ON THREE PUBLIC DATASETS . B EST RESULTS IN EACH COLUMN ARE BOLDFACED .
+> Method Instruments Beauty MicroLens R@5 R@10 N@5 N@10 R@5 R@10 N@5 N@10 R@5 R@10 N@5 N@10
+> SASRec 0.0512 0.0746 0.0301 0.0373 0.0196 0.0368 0.0106 0.0160 0.0375 0.0698 0.0210 0.0314 CASER 0.0563 0.0746 0.0443 0.0502 0.0203 0.0340 0.0125 0.0170 0.0157 0.0301 0.0076 0.0122 LatentR 30.0749 0.0963 0.0641 0.0709 0.0268 0.0453 0.0161 0.0220 0.0388 0.0617 0.0248 0.0322 CARE 0.0572 0.0872 0.0413 0.0510 0.0229 0.0444 0.0135 0.0204 0.0372 0.0583 0.0233 0.0301 TIGER 0.0687 0.0853 0.0576 0.0629 0.0206 0.0355 0.0127 0.0174 0.0350 0.0561 0.0221 0.0289 + IBA 0.0780 0.0975 0.0663 0.0725 0.0277 0.0453 0.0173 0.0230 0.0431 0.0646 0.0278 0.0347 LETTER 0.0705 0.0882 0.0604 0.0661 0.0216 0.0362 0.0129 0.0176 0.0464 0.0729 0.0298 0.0382 + IBA 0.0766 0.0964 0.0656 0.0719 0.0274 0.0475 0.0172 0.0236 0.0540 0.0780 0.0360 0.0437
+> TABLE III EFFECT OF DIFFERENT PRIOR STEP SCHEDULES . B EST RESULTS IN EACH COLUMN ARE BOLDFACED .
+
+Instruments MicroLens Prior Step Schedule R@10 N@10 R@10 N@10 
+
+IBA w/ (2 , 2, 2, 2) 0.0961 0.0718 0.0605 0.0335 IBA w/ (0 , 1, 2, 3) 0.0947 0.0707 0.0597 0.0330 IBA w/ (3 , 2, 1, 0) 0.0975 0.0725 0.0646 0.0347 
+
+C. Effect of Prior Step Schedules 
+
+Before analyzing model components, we first examine how the prior step schedule in Eq. (20) affects recommendation performance. The tuple kprior specifies the preferred number of refinement steps at each semantic ID position, and its sum corresponds to the total step budget used by the allocator. We include kprior = (2 , 2, 2, 2) as a uniform 8-step reference, where every position receives the same prior preference. We further compare two 6-step non-uniform priors: (0 , 1, 2, 3) 
+
+assigns more steps to later positions, while the default prior 
+
+(3 , 2, 1, 0) assigns more steps to early positions. This compar-ison tests whether performance depends only on using more refinement steps, or whether the direction of step allocation also matters. Table III summarizes the results. The uniform 8-step prior 
+
+(2 , 2, 2, 2) already provides a strong reference, but it is not the best choice. The prior (0 , 1, 2, 3) performs worse on both datasets, especially on MicroLens, indicating that a non-uniform allocation can hurt performance when it conflicts with the position-wise IG pattern. In contrast, the prior (3 , 2, 1, 0) 
+
+achieves the best results on both datasets. These results suggest that allocating refinement steps according to the information structure is more effective than simply using a larger uniform step budget. 
+
+D. Ablation Studies 
+
+To answer RQ2, we conduct an ablation study on three key components in IBA: semantic alignment refinement, user-specific step allocation enabled by refinement gain prediction, and the lookahead auxiliary objective. We remove each com-ponent while keeping the rest of the framework unchanged, and report the results in Table IV.  
+
+> TABLE IV ABLATION STUDIES OF IBA. B EST RESULTS IN EACH COLUMN ARE BOLDFACED .
+
+Instruments MicroLens Method R@10 N@10 R@10 N@10 
+
+IBA (full) 0.0975 0.0725 0.0646 0.0347 
+
+w/o Alignment 0.0939 0.0724 0.0556 0.0303 w/o Predictor 0.0958 0.0715 0.0628 0.0345 w/o Lookahead 0.0948 0.0714 0.0612 0.0338 
+
+Table IV shows that the full model performs best on both datasets, and each removed component causes a performance drop.  
+
+> •
+
+Removing semantic alignment refinement weakens the alignment between T5 decoder states and the semantic ID codeword space. This makes token prediction rely more directly on the raw decoder representation, which has a gap with semantic ID space.  
+
+> •
+
+Removing the predictor means that IBA no longer learns a step allocation for each user sequence. Instead, it uses the fixed allocation (3 , 2, 1, 0) for all user sequences. This variant remains competitive, confirming that the information-gain prior provides a useful allocation di-rection, but it cannot adapt the refinement steps to the specific user context.  
+
+> •
+
+Removing the lookahead objective eliminates an auxiliary signal that encourages early refined representations to preserve information useful for later semantic ID posi-tions. Without this signal, early-position refinement may focus too narrowly on the current token and provide weaker support for subsequent generation. 
+
+E. Hyperparameter Sensitivity 
+
+To answer RQ3, we investigate the sensitivity of IBA to two key hyperparameters: the lookahead weight λLA and the recurrence fusion coefficient γrec . All experiments are conducted on the Instruments and MicroLens datasets with the default configuration unless otherwise specified. 
+
+1) Lookahead Weight λLA : The lookahead weight λLA 
+
+controls the contribution of the lookahead auxiliary loss rel-ative to the cross-entropy loss. We vary λLA from 0 to 0.45 and report the performance in Fig. 5 (top row). 90 0.05 0.15 0.30 0.45                                     
+
+> Lookahead Weight LA
+> 0.090
+> 0.092
+> 0.094
+> 0.096
+> 0.098
+> Recall@10
+> Instruments
+> 00.05 0.15 0.30 0.45
+> Lookahead Weight LA
+> 0.0700
+> 0.0705
+> 0.0710
+> 0.0715
+> 0.0720
+> 0.0725
+> 0.0730
+> NDCG@10
+> Instruments
+> 00.05 0.15 0.30 0.45
+> Lookahead Weight LA
+> 0.054
+> 0.056
+> 0.058
+> 0.060
+> 0.062
+> 0.064
+> 0.066
+> Recall@10
+> MicroLens
+> 00.05 0.15 0.30 0.45
+> Lookahead Weight LA
+> 0.028
+> 0.029
+> 0.030
+> 0.031
+> 0.032
+> 0.033
+> 0.034
+> 0.035
+> 0.036
+> NDCG@10
+> MicroLens
+> 0.3 0.4 0.5 0.6 0.7
+> Recurrence Fusion Coefficient rec
+> 0.092
+> 0.093
+> 0.094
+> 0.095
+> 0.096
+> 0.097
+> 0.098
+> 0.099
+> Recall@10
+> Instruments
+> 0.3 0.4 0.5 0.6 0.7
+> Recurrence Fusion Coefficient rec
+> 0.0700
+> 0.0705
+> 0.0710
+> 0.0715
+> 0.0720
+> 0.0725
+> 0.0730
+> NDCG@10
+> Instruments
+> 0.3 0.4 0.5 0.6 0.7
+> Recurrence Fusion Coefficient rec
+> 0.030
+> 0.035
+> 0.040
+> 0.045
+> 0.050
+> 0.055
+> 0.060
+> 0.065
+> Recall@10
+> MicroLens
+> 0.3 0.4 0.5 0.6 0.7
+> Recurrence Fusion Coefficient rec
+> 0.015
+> 0.020
+> 0.025
+> 0.030
+> 0.035
+> NDCG@10
+> MicroLens
+
+Fig. 5. Hyperparameter sensitivity analysis on Instruments and MicroLens. Top row: Lookahead weight λLA ; bottom row: Recurrence fusion coefficient γrec .Each column shows a specific dataset and metric combination. 
+
+2) Recurrence Fusion Coefficient γrec : The recurrence fu-sion coefficient γrec controls how much the previous refined representation is incorporated into the input of the current refinement step. We vary γrec from 0.3 to 0.7 and report the results in Fig. 5 (bottom row). For the lookahead weight λLA , Fig. 5 shows that removing the lookahead objective leads to weaker performance on both datasets. The recommendation performance improves as λLA 
+
+increases from 0 to a moderate value, with the best overall results achieved at λLA = 0 .15 . However, further increasing the weight hurts performance, especially on MicroLens. These results indicate that the lookahead objective is useful as an auxiliary signal, but it should remain moderately weighted so that it does not dominate the main semantic ID prediction objective. For the recurrence fusion coefficient γrec , the best perfor-mance is also achieved at a moderate value, with γrec = 0 .5
+
+performing best on both datasets. Smaller values provide insufficient feedback from the previous refined representation, limiting iterative improvement. Larger values place too much weight on the refined state and can destabilize the refinement trajectory. The sensitivity is more pronounced on MicroLens, suggesting that the balance between the raw decoder state and the previous refined representation is important for stable latent refinement. 
+
+F. Performance and Efficiency Analysis 
+
+We further evaluate the performance–efficiency trade-off of IBA on the Instruments dataset. Table V reports the parameter count, recommendation accuracy, and average inference time per test user under the same GPU, beam size, and decoding setting. TIGER has the lowest latency because it directly pre-dicts semantic ID tokens without additional latent refinement. Uniform-k = 2 refinement and IBA both introduce the Dual-Axis Refinement Module and therefore have the same 
+
+TABLE V PERFORMANCE AND EFFICIENCY COMPARISON ON INSTRUMENTS .TIME /U SER DENOTES THE AVERAGE INFERENCE TIME PER TEST USER , 
+
+> MEASURED OVER THE MODEL GENERATION STEP ON AN
+
+NVIDIA RTX 4090. B EST ACCURACY RESULTS ARE BOLDFACED .
+
+Method Params R@10 N@10 Time/User 
+
+TIGER 60.9M 0.0853 0.0629 20.99 ms IBA w/ (2 , 2, 2, 2) 83.5M 0.0961 0.0718 25.78 ms IBA w/ (3 , 2, 1, 0) 83.5M 0.0975 0.0725 24.61 ms 
+
+parameter count. The key difference is that uniform-k = 2 
+
+uses eight refinement steps for each semantic ID sequence, whereas IBA uses a six-step allocation biased toward earlier positions. As shown in Table V, IBA reduces inference time compared with uniform refinement while maintaining slightly better recommendation accuracy. This result indicates that a step allocation consistent with the position-wise information-gain pattern is more effective: assigning more budget to earlier positions and reducing redundant refinement at later positions can lower the total computation and inference latency while also bringing a meaningful performance improvement. 
+
+G. Qualitative Analysis 
+
+To answer RQ4, we analyze both the geometric effect of semantic alignment refinement on the hidden space and the token-level hit-rate gain obtained by each semantic ID position across successive refinement steps. We first visualize the hidden representations before and after semantic alignment refinement, and then compare how Hit@5 changes from Step 0 to later refinement steps at each position. 
+
+1) Visualization of Hidden Representations: To provide an intuitive understanding of how semantic alignment refinement transforms hidden representations, we visualize the hidden states in a reduced 2D space using PCA on the Instruments dataset. 10 
+
+Fig. 6. PCA visualization of raw decoder outputs, semantically aligned outputs, and semantic ID embeddings on Instruments at the first semantic ID position. 
+
+Fig. 6 shows that semantic alignment refinement brings hidden states closer to the semantic ID space. It plots three types of points on the test set: (1) the raw decoder output 
+
+Hraw before semantic alignment refinement, (2) the refined output Hout after semantic alignment refinement, and (3) the ground-truth semantic ID embeddings obtained from the RQ-VAE codebook. The key observation is that Hout lies closer to the corresponding semantic ID embeddings than Hraw . This supports the role of vertical semantic alignment described in Section III-C1: it maps the decoder hidden representation toward the RQ-VAE codeword space before semantic ID prediction, making the refined representation more compatible with the target codebook. 
+
+2) Step-wise Refinement Analysis: Beyond the geometric visualization, we further examine how the effect of latent refinement varies across semantic ID positions by measuring token-level accuracy at each refinement step. This analysis is conducted using the checkpoint trained with uniform k = 2 
+
+refinement, so that every semantic ID position receives the same number of refinement steps. This setting allows us to test whether extra refinement improves token-level accuracy at later positions. Specifically, we measure the Hit@5 of each Hout vector, i.e., whether the top-5 nearest semantic ID tokens in the codebook include the ground-truth token at that position, under teacher forcing on the Instruments and MicroLens datasets. Fig. 7 reports the token-level Hit@5 from Step 0 to Step 2 at every position, evaluated under teacher forcing with the generation trie constraint on both the Instruments and MicroLens datasets. Several consistent patterns emerge across both datasets. At positions 1 and 2, Hit@5 improves steadily as refinement proceeds, indicating that additional refinement steps move the hidden representation closer to the ground-truth token. In contrast, positions 3 and 4 are already near-saturated at Step 0, and subsequent refinement steps yield negligible further improvement. Step 0 Step 1 Step 2          
+
+> Reasoning Step
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> 1.0
+> Position 1 Hit@5
+> 48.20%
+> 64.55%
+> 48.55%
+> 66.09%
+> 49.35%
+> 67.40%
+> +0.35%
+> +1.54%
+> +0.80%
+> +1.31%
+> Step 0 Step 1 Step 2
+> Reasoning Step
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Position 2 Hit@5
+> 52.51%
+> 26.34%
+> 54.88%
+> 27.87%
+> 55.83%
+> 29.57%
+> +2.37%
+> +1.53%
+> +0.95%
+> +1.70%
+> Step 0 Step 1 Step 2
+> Reasoning Step
+> 0.97
+> 0.98
+> 0.99
+> 1.00
+> 1.01
+> 1.02
+> Position 3 Hit@5
+> 98.37%
+> 99.45%
+> 98.89%
+> 99.42%
+> 98.93%
+> 99.40%
+> +0.52%
+> -0.03%
+> +0.04%
+> -0.02%
+> Step 0 Step 1 Step 2
+> Reasoning Step
+> 0.98
+> 0.99
+> 1.00
+> 1.01
+> 1.02
+> 1.03
+> Position 4 Hit@5
+> 99.58%
+> 100.00%
+> 99.59%
+> 100.00%
+> 99.62%
+> 100.00%
+> +0.01%
+> +0.00%
+> +0.03%
+> +0.00%
+> Instruments MicroLens Instruments MicroLens
+
+Fig. 7. Token-level Hit@5 of H(j) 
+
+> out
+
+from Step 0 to Step 2 under teacher forcing, evaluated using the uniform k = 2 checkpoint. 
+
+These results provide empirical support for the refinement gain analysis in Section III-A. Early positions not only have higher information-gain, but also obtain higher token-level improvements from additional refinement steps, corresponding to a larger ρt(k) in Eq. (9). In contrast, later positions are already near saturation, so their additional refinement utility is limited and may even decrease when unnecessary refinement disturbs reliable representations. V. R ELATED WORK 
+
+In this section, we review related work on generative recommendation with semantic IDs and reasoning-enhanced recommendation. 
+
+A. Semantic ID-based Generative Recommendation 1) Generative Recommendation: Generative recommenda-tion reformulates recommendation as a sequence generation task, directly generating item identifiers conditioned on user behavior sequences. TIGER [5] pioneers semantic ID-based generation by using RQ-VAE item codes and an encoder-decoder model to autoregressively generate the next item’s se-mantic ID sequence. Subsequent studies further scale or extend this paradigm. HSTU [26] studies generative ranking from raw user behavior sequences, and OneRec [7] reformulates the recommendation pipeline as autoregressive generation for industrial deployment. 
+
+2) Semantic IDs: A key component of generative recom-mendation is the design of semantic IDs, which serve as discrete tokenized item representations. Existing semantic ID construction methods can be broadly grouped into parallel and hierarchical structures. Parallel semantic IDs are often produced by product quantization [27], with representative methods including VQ-Rec [28], RPG [29], and Action-Piece [30]. Another widely used family constructs hierarchical semantic IDs through residual quantization, such as RQ-VAE [6]. Re-cent work improves hierarchical semantic IDs from different perspectives. PSRQ [31] preserves prefix semantic features 11 
+
+to mitigate semantic drift, and HiD-VAE [32] introduces hierarchical supervision and uniqueness regularization. LET-TER [21] incorporates collaborative signals and mitigates code assignment bias, while TokenRec [33], TRM [34], and ETEGRec [35] study tokenization designs for large-scale or end-to-end recommendation. These studies improve the quality of semantic IDs, whereas our work focuses on how latent refinement steps should be allocated across semantic ID posi-tions during generation. 
+
+B. Reasoning-Enhanced Recommendation 1) LLM Reasoning: Recent advances in large language models have produced a broad family of reasoning methods. Chain-of-Thought prompting [36] elicits intermediate natural-language reasoning steps, Tree of Thoughts [37] explores multiple reasoning branches, and DeepSeek-R1 [9] shows that reinforcement learning can incentivize reasoning behaviors. Latent reasoning instead uses hidden states or repeated compu-tation as intermediate reasoning carriers, as explored by Leap-of-Thought [38], Coconut [39], Reasoning to Learn from La-tent Thoughts [40], and Reasoning with Latent Thoughts [41]. 
+
+2) Reasoning for Generative Recommendation: Recent work has introduced reasoning mechanisms into generative recommendation. R 2ec [42] unifies reasoning and recommen-dation in a large model, while OnePiece [43] and OneRec-Think [44] use context engineering or in-text reasoning scaf-folds for industrial recommendation scenarios. Latent reasoning methods enhance internal computation without generating explicit reasoning text. CARE [12] in-troduces reasoning into semantic ID-based generative recom-mendation from a cascaded-ranking perspective. STREAM-Rec [13] uses a multi-step deliberative process to improve sequential recommendation. LatentR 3 [24] shifts recommen-dation reasoning to compact latent states and optimizes the process with reinforcement learning. SIDReasoner [45] studies reasoning over semantic IDs by strengthening semantic ID-language alignment and applying outcome-driven optimiza-tion. These methods show that additional reasoning computation can improve recommendation. However, most existing ap-proaches allocate reasoning computation uniformly or accord-ing to heuristic rules, without explicitly considering that se-mantic ID positions contribute unequally to item identification. In contrast, IBA studies the position-wise information structure of semantic ID generation and allocates latent refinement steps accordingly. VI. C ONCLUSION AND FUTURE DIRECTIONS 
+
+This paper introduces IBA, an Information-Gain Budget Al-location framework for semantic ID-based generative recom-mendation. IBA starts from the observation that semantic ID positions contribute unequally to item identification, and treats latent refinement steps as a limited computational resource. By combining an information-gain prior, a learned refinement gain predictor, and stable hidden-space refinement, IBA im-proves strong semantic ID-based generative recommendation baselines across multiple datasets. Looking ahead, this work suggests that the position-wise information structure of semantic ID generation should be explicitly considered when allocating latent refinement steps. The current step-allocation strategy follows the observed information-gain pattern while adapting the allocation to the current user context. Future work could explore more flexible mechanisms to adjust refinement depth according to item semantics or prefix uncertainty. REFERENCES [1] G. Zhou, X. Zhu, C. Song, Y. Fan, H. Zhu, X. Ma, Y. Yan, J. Jin, H. Li, and K. Gai, “Deep Interest Network for Click-Through Rate Prediction,” in Proceedings of the 24th ACM SIGKDD International Conference on Knowledge Discovery & Data Mining , 2018, pp. 1059–1068. [2] S. Zhang, L. Yao, A. Sun, and Y. Tay, “Deep Learning Based Recom-mender System: A Survey and New Perspectives,” ACM Comput. Surv. ,vol. 52, no. 1, pp. 5:1–5:38, 2019. [3] Y. Wang, Z. Zhang, Z. Wang, Z. Yang, Y. Li, J. Yang, S. Wen, P. Jiang, and K. Gai, “Learning Cascade Ranking as One Network,” in 
+
+Proceedings of the 42nd International Conference on Machine Learning ,2025, pp. 65 828–65 844. [4] J. Wei, Y. Zhou, Z. Wu, and Z. Liu, “Enhancing Pre-Ranking Per-formance: Tackling Intermediary Challenges in Multi-Stage Cascading Recommendation Systems,” in Proceedings of the 30th ACM SIGKDD Conference on Knowledge Discovery and Data Mining , 2024, pp. 5950– 5958. [5] S. Rajput, N. Mehta, A. Singh, R. Hulikal Keshavan, T. Vu, L. Heldt, L. Hong, Y. Tay, V. Tran, and J. Samost, “Recommender systems with generative retrieval,” Advances in Neural Information Processing Systems , vol. 36, pp. 10 299–10 315, 2023. [6] D. Lee, C. Kim, S. Kim, M. Cho, and W.-S. Han, “Autoregressive image generation using residual quantization,” in Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , 2022, pp. 11 523–11 532. [7] G. Zhou, J. Deng, J. Zhang, K. Cai, L. Ren, Q. Luo, Q. Wang, Q. Hu, R. Huang, S. Wang et al. , “OneRec Technical Report,” arXiv preprint arXiv:2506.13695 , 2025. [8] T. Fu, Y. You, Z. Chen, G. Dai, H. Yang, and Y. Wang, “Think-at-hard: Selective latent iterations to improve reasoning language models,” arXiv preprint arXiv:2511.08577 , 2025. [9] D. Guo, D. Yang, H. Zhang, J. Song, P. Wang, Q. Zhu, R. Xu, R. Zhang, S. Ma, X. Bi et al. , “Deepseek-r1: Incentivizing reasoning capability in llms via reinforcement learning,” arXiv preprint arXiv:2501.12948 ,2025. [10] L. Qiu, F. Sha, K. Allen, Y. Kim, T. Linzen, and S. Van Steenkiste, “Bayesian teaching enables probabilistic reasoning in large language models,” Nature Communications , vol. 17, no. 1, p. 1238, 2026. [11] D. Shi, A. Asi, K. Li, X. Yuan, L. Pan, W. Lee, and W. Xiao, “Swireasoning: Switch-thinking in latent and explicit for pareto-superior reasoning llms,” arXiv preprint arXiv:2510.05069 , 2025. [12] X. Lin, P. Liu, W. Wang, Y. Hu, C. Xu, F. Feng, Q. Wang, and T.-S. Chua, “Bringing Reasoning to Generative Recommendation Through the Lens of Cascaded Ranking,” in Proceedings of the ACM Web Conference 2026 , ser. WWW ’26, 2026, pp. 8939–8949. [13] J. Zhang, B. Zhang, W. Sun, H. Lu, W. X. Zhao, Y. Chen, and J.-R. Wen, “Slow thinking for sequential recommendation,” arXiv preprint arXiv:2504.09627 , 2025. [14] Z. Guo, J. Wang, R. Zhou, Y. Liu, J. Guo, J. Zhao, X. Xu, Y. Liu, and K. Zhan, “S$ˆ2$GR: Stepwise Semantic-Guided Reason-ing in Latent Space for Generative Recommendation,” arXiv preprint arXiv:2601.18664 , 2026. [15] C. Raffel, N. Shazeer, A. Roberts, K. Lee, S. Narang, M. Matena, Y. Zhou, W. Li, and P. J. Liu, “Exploring the limits of transfer learning with a unified text-to-text transformer,” Journal of machine learning research , vol. 21, no. 140, pp. 1–67, 2020. [16] Z. Lin, Y. Zhang, X. Zhao, F. Zhu, F. Feng, and T.-S. Chua, “Igd: Token decisiveness modeling via information gain in llms for personalized recommendation,” arXiv preprint arXiv:2506.13229 , 2025. [17] E. Perez, F. Strub, H. De Vries, V. Dumoulin, and A. Courville, “Film: Visual reasoning with a general conditioning layer,” in Proceedings of the AAAI conference on artificial intelligence , vol. 32, no. 1, 2018. [18] K. He, X. Zhang, S. Ren, and J. Sun, “Deep residual learning for image recognition,” in Proceedings of the IEEE conference on computer vision and pattern recognition , 2016, pp. 770–778. 12 
+
+[19] J. Ni, J. Li, and J. McAuley, “Justifying recommendations using distantly-labeled reviews and fine-grained aspects,” in Proceedings of the 2019 conference on empirical methods in natural language pro-cessing and the 9th international joint conference on natural language processing (EMNLP-IJCNLP) , 2019, pp. 188–197. [20] Y. Ni, Y. Cheng, X. Liu, J. Fu, Y. Li, X. He, Y. Zhang, and F. Yuan, “A content-driven micro-video recommendation dataset at scale,” in 
+
+Proceedings of the 34th ACM International Conference on Information and Knowledge Management , 2025, pp. 6486–6491. [21] W. Wang, H. Bao, X. Lin, J. Zhang, Y. Li, F. Feng, S.-K. Ng, and T.-S. Chua, “Learnable item tokenization for generative recommendation,” in 
+
+Proceedings of the 33rd ACM International Conference on Information and Knowledge Management , 2024, pp. 2400–2409. [22] W.-C. Kang and J. McAuley, “Self-attentive sequential recommenda-tion,” in 2018 IEEE international conference on data mining (ICDM) .IEEE, 2018, pp. 197–206. [23] J. Tang and K. Wang, “Personalized Top-N Sequential Recommendation via Convolutional Sequence Embedding,” in Proceedings of the Eleventh ACM International Conference on Web Search and Data Mining , 2018, pp. 565–573. [24] Y. Zhang, W. Xu, X. Zhao, W. Wang, F. Feng, X. He, and T.-S. Chua, “Reinforced latent reasoning for llm-based recommendation,” in Proc. Int. Conf. Learn. Represent. , 2026. [25] J. Ni, G. H. Abrego, N. Constant, J. Ma, K. Hall, D. Cer, and Y. Yang, “Sentence-t5: Scalable sentence encoders from pre-trained text-to-text models,” in Findings of the association for computational linguistics: ACL 2022 , 2022, pp. 1864–1874. [26] J. Zhai, L. Liao, X. Liu, Y. Wang, R. Li, X. Cao, L. Gao, Z. Gong, F. Gu, J. He et al. , “Actions Speak Louder than Words: Trillion-Parameter Sequential Transducers for Generative Recommendations,” in 
+
+Proceedings of the 41st International Conference on Machine Learning ,2024, pp. 58 484–58 509. [27] T. Ge, K. He, Q. Ke, and J. Sun, “Optimized product quantization,” IEEE transactions on pattern analysis and machine intelligence , vol. 36, no. 4, pp. 744–755, 2013. [28] Y. Hou, Z. He, J. McAuley, and W. X. Zhao, “Learning vector-quantized item representation for transferable sequential recommenders,” in Proceedings of the ACM Web Conference 2023 , 2023, pp. 1162–1171. [29] Y. Hou, J. Li, A. Shin, J. Jeon, A. Santhanam, W. Shao, K. Hassani, N. Yao, and J. McAuley, “Generating long semantic ids in parallel for recommendation,” in Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining V. 2 , 2025, pp. 956–966. [30] Y. Hou, J. Ni, Z. He, N. Sachdeva, W.-C. Kang, E. H. Chi, J. Mcauley, and D. Z. Cheng, “ActionPiece: Contextually Tokenizing Action Se-quences for Generative Recommendation,” in Proceedings of the 42nd International Conference on Machine Learning , 2025, pp. 24 004– 24 024. [31] S. Wang, T. Ouyang, Q. Xiao, D. Wang, Y. Ren, S. Xu, D. Guo, and C. Luo, “Progressive semantic residual quantization for multimodal-joint interest modeling in music recommendation,” in Proceedings of the 34th ACM International Conference on Information and Knowledge Management , 2025, pp. 6119–6127. [32] D. Fang, J. Gao, C. Zhu, Y. Li, X. Zhao, and Y. Chang, “Hid-vae: In-terpretable generative recommendation via hierarchical and disentangled semantic ids,” arXiv preprint arXiv:2508.04618 , 2025. [33] H. Qu, W. Fan, Z. Zhao, and Q. Li, “Tokenrec: Learning to tokenize id for llm-based generative recommendations,” IEEE Transactions on Knowledge and Data Engineering , 2025. [34] Z. Zhao, T. Zhang, J. Xu, Q. Cai, Q. Zhang, L. Yang, D. Xiao, and X. Chang, “Farewell to item ids: Unlocking the scaling potential of large ranking models via semantic tokens,” arXiv preprint arXiv:2601.22694 ,2026. [35] E. Liu, B. Zheng, C. Ling, L. Hu, H. Li, and W. X. Zhao, “Generative recommender with end-to-end learnable item tokenization,” in Proceed-ings of the 48th International ACM SIGIR Conference on Research and Development in Information Retrieval , 2025, pp. 729–739. [36] J. Wei, X. Wang, D. Schuurmans, M. Bosma, F. Xia, E. Chi, Q. V. Le, D. Zhou et al. , “Chain-of-thought prompting elicits reasoning in large language models,” Advances in neural information processing systems ,vol. 35, pp. 24 824–24 837, 2022. [37] S. Yao, D. Yu, J. Zhao, I. Shafran, T. Griffiths, Y. Cao, and K. Narasimhan, “Tree of thoughts: Deliberate problem solving with large language models,” Advances in neural information processing systems ,vol. 36, pp. 11 809–11 822, 2023. [38] A. Talmor, O. Tafjord, P. Clark, Y. Goldberg, and J. Berant, “Leap-of-thought: Teaching pre-trained models to systematically reason over implicit knowledge,” Advances in Neural Information Processing Sys-tems , vol. 33, pp. 20 227–20 237, 2020. [39] S. Hao, S. Sukhbaatar, D. Su, X. Li, Z. Hu, J. Weston, and Y. Tian, “Training large language models to reason in a continuous latent space,” 
+
+arXiv preprint arXiv:2412.06769 , 2024. [40] Y. Ruan, N. Band, C. J. Maddison, and T. Hashimoto, “Reasoning to learn from latent thoughts,” arXiv preprint arXiv:2503.18866 , 2025. [41] N. Saunshi, N. Dikkala, Z. Li, S. Kumar, and S. J. Reddi, “Reasoning with Latent Thoughts: On the Power of Looped Transformers,” Interna-tional Conference on Learning Representations , vol. 2025, pp. 14 855– 14 881, 2025. [42] R. You, Y. Li, X. Lin, X. Zhang, W. Wang, W. Li, and L. Nie, “R$ˆ2$ec: Towards Large Recommender Models with Reasoning,” Advances in Neural Information Processing Systems , vol. 38, pp. 62 376–62 405, 2026. [43] S. Dai, J. Tang, J. Wu, K. Wang, Y. Zhu, B. Chen, B. Hong, Y. Zhao, C. Fu, K. Wu et al. , “OnePiece: Bringing Context Engineering and Reasoning to Industrial Cascade Ranking System,” arXiv preprint arXiv:2509.18091 , 2025. [44] Z. Liu, S. Wang, X. Wang, R. Zhang, J. Deng, H. Bao, J. Zhang, W. Li, P. Zheng, X. Wu et al. , “OneRec-Think: In-Text Reasoning for Generative Recommendation,” arXiv preprint arXiv:2510.11639 , 2025. [45] Y. He, Y. Sun, J. Tan, Y. Chen, X. Kong, C. Shen, X. Wang, A. Zhang, and T.-S. Chua, “Reasoning over semantic ids enhances generative recommendation,” arXiv preprint arXiv:2603.23183 , 2026.

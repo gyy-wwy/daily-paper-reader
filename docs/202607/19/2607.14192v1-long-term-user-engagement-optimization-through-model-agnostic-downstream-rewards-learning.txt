@@ -1,0 +1,451 @@
+Title: Long-term User Engagement Optimization through Model-agnostic Downstream Rewards Learning
+
+URL Source: https://arxiv.org/pdf/2607.14192v1
+
+Published Time: Fri, 17 Jul 2026 00:09:01 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# Long-term User Engagement Optimization through Model-agnostic Downstream Rewards Learning 
+
+# Dingsu Wang ∗
+
+# Filip Ryzner ∗
+
+# Kelly He ∗
+
+# Armando Ordorica ∗
+
+# David Woo †
+
+derekwang@pinterest.com fryzner@pinterest.com kellyhe@pinterest.com aordorica@pinterest.com dwoo@pinterest.com Pinterest San Francisco, CA, USA 
+
+# Aditya Mantha Liyao Lu Usha Amrutha Nookala Haoran Guo ‡
+
+# Jiacong He ‡
+
+amantha@pinterest.com llu@pinterest.com unookala@pinterest.com haoranguo@pinterest.com jiaconghe@pinterest.com Pinterest San Francisco, CA, USA 
+
+# Olafur Gudmundsson Matt Chun Krystal Benitez Dhruvil Deven Badani Yijie Dylan Wang 
+
+ogudmundsson@pinterest.com mchun@pinterest.com kbenitez@pinterest.com dbadani@pinterest.com dylanwang@pinterest.com Pinterest San Francisco, CA, USA 
+
+## Abstract 
+
+As recommender systems mature in the past few years, their op-timization objectives have evolved from a primary focusing on short-term behavioral signals to a broader emphasis on long-term user engagement and retention. However, directly optimizing re-tention is difficult because return signals are sparse, delayed, and only partially attributable to earlier recommendations. Prior work has addressed this challenge with sequential modeling and rein-forcement learning, but these approaches typically require task specific reward engineering, substantial computational overhead, and surface specific implementations that are difficult to generalize. In this paper, we present a unified, model-agnostic downstream re-ward framework for optimizing long-term user value in large-scale recommendation systems. First, we formulate the downstream re-ward learning problem and develop an offline screening framework to identify session level behaviors that are both observable early and predictive of future retention. We then propose several model-agnostic downstream rewards signals derived from observed user action patterns across multiple sources. We further discuss the en-gineering effort to productionize the proposed rewards derivations and challenges we faced when adding them to our ranking mod-els. Online A/B experiments demonstrate consistent improvements in engagement and retention-related metrics, and the framework has been deployed across multiple Pinterest surfaces, including Homefeed, Related Pins, Search, and Notifications. 
+
+## CCS Concepts 
+
+• Information systems → Recommender systems ; • Comput-ing methodologies → Machine learning .
+
+## Keywords 
+
+Recommendation Systems, Personalization, Downstream Rewards 
+
+> ∗All authors contributed equally to this research work.
+> †Corresponding author.
+> ‡Work done at Pinterest.
+
+## 1 Introduction 
+
+Many modern recommendation systems have proven to be effective at optimizing short-term user actions. However, optimizing for immediate engagement alone could potentially hurt long-term user value. Prior works argue that feedback loops driven by short-term interaction signals may increase homogeneity and hurt user return behavior over time [ 7, 35 , 45 ]. For large-scale recommendation platforms such as Pinterest, the core challenge is therefore not only to predict what a user will do next immediately, but also to optimize recommendations for longer-term engagement and retention. Direct optimization of long-term retention is difficult for several reasons. First of all, retention labels are sparse, noisy, and often only weakly observable [ 43 ]. Secondly, retention is delayed: even when downstream outcomes are observed, attributing them to spe-cific earlier recommendations is challenging [ 5, 48 ]. Finally, user interests and data distributions evolve over time, so fixed surrogate objectives can become stale and lose alignment with the behaviors that actually drive long-term value [50]. Recent work has approached this problem using reinforcement learning (RL) and related long-horizon optimization methods [ 5, 43 ,47 –49 , 52 , 54 ]. These methods are appealing because they explicitly optimize accumulated future reward. However, deploying RL in production recommendation systems remains difficult: it requires large amounts of interaction data [ 10 ], must operate over extremely large action spaces [ 13 ], and depends on reward designs that may not transfer cleanly across surfaces with different product goals, such as Homefeed, Search, and Notifications at Pinterest. To tackle all the challenges above, we propose a unified model-agnostic solution based on downstream rewards (DR) modeling. Our method have two benefits: (1) it could work with any RL or supervised-learning based recommendation models across different surfaces, (2) the proxy rewards we proposed can help drive long-term retention optimization. Specifically, we study billions of user activity data from Pinterest, and we propose to use downstream rewards signals from P2P (i.e. Pin to Pin) rabbit hole, negative user engagements and user interests from engagement sequences as an proxy optimization signal to maximize the long-term user engage-ments and retention. An illustration of user actions in P2P rabbit 
+
+> 1arXiv:2607.14192v1 [cs.LG] 15 Jul 2026 Derek Wang et al.
+
+Figure 1: An illustration of user action patterns in P2P rabbit hole with closeup action at Pinterest. 
+
+hole could be found in Figure 1. Our approach is motivated by offline analysis showing that deeper P2P exploration, saves, and deep en-gagement across diverse content are strongly associated with future engagements and retention, while shallow high-volume browsing is often misleading and noisy. These downstream rewards are ob-served earlier and at much higher volume than long-term retention labels, which makes them more practical for large-scale learning. The proposed downstream rewards consist of both positive and negative user action signals which cover majority of important ac-tion patterns at Pinterest. Since these semi-orthogonal downstream rewards are observed along the user’s near-term interactions se-quences, they provide denser and less delayed information than long-term retention labels, which helps alleviate the label sparsity and attribution challenges. Moreover, since the downstream re-wards are derived from observed engagements, they remain aligned with evolving feature distributions and user behaviors over time which help model capture this change and mitigate the data distri-bution shift challenge. Finally, we also discuss the infrastructure optimization for deriving the labels at scale efficiently in the paper. To validate the effectiveness of the proposed DR signals, we exper-iment with incorporating them in a production recommendation system at Pinterest [ 46 ]. Results from long-time online A/B testing experiment show that our methods significantly improve the user engagement and retention across different platforms. The main contributions of this paper can be summarized as: 
+
+• Insights for User Retention Modeling. We present an offline evaluation framework that identifies which session-level signals should serve as downstream reward. The frame-work screens candidates against three criteria (indicative of long-term retention, observable at the session level, and incrementally predictive in a multivariate model) and nar-rows the search space from hundreds of candidates to a smaller set for online experimentation. 
+
+• Model-agnostic Downstream Rewards. We propose a unified, model-agnostic downstream reward framework for optimizing long-term user engagement and retention that can be applied to different deep learning based recommen-dation models across surfaces. The framework combines complementary rewards that capture multiple aspects of user value and transfer readily across surfaces. 
+
+• Reward Label Generation. We built an efficient infras-tructure to generate the downstream rewards signal based on multiple level of engagement sequences so that recom-mendation models from different platforms could easily adopt. 
+
+• Empirical Evaluations. We conducted online A/B testing on a real-world recommendation system using the proposed DR modeling methods to demonstrate its effectiveness. The rest of the paper is organized as follows: Problem definitions are included in Section 2 and data insights for our downstream rewards as well as analysis are listed in Section 3. Section 4 presents the proposed downstream reward designs as well as engineering effort to generate them in productions. Experiments and the reviews of related works are given in Section 5 and Section 6 respectively. Section 7 concludes the paper. 
+
+## 2 Problem Definition 
+
+Definition 2.1 ( Optimal User Retention Objective ). Let H𝑢,𝑡 
+
+denote the available historical data for user 𝑢 and its engaged Pins before time 𝑡 , and 𝑥 𝑢,𝑡 ∼ 𝜋 𝜃 (·| H𝑢,𝑡 ) denote the candidate recom-mended Pin for user 𝑢 at time t by the recommendation policy 𝜋 𝜃 .
+
+R𝑢,𝑡 ∈ { 0, 1} denote the conditional reward: whether user 𝑢 will return and remain active or take any action within time window Δ
+
+after time 𝑡 . Its conditional distribution is induced by user dynamics given past history H𝑢,𝑡 and recommended candidate Pin 𝑥 𝑢,𝑡 . The ideal objective for maximizing user 𝑢 ’s retention can be defined as: 
+
+J𝑢 (𝜃 ) = E𝜏 ∼( 𝜋 𝜃 ,𝑃 𝑢 )
+
+" 𝑇 ∑︁  
+
+> 𝑡 =0
+
+𝛾 𝑡 R𝑢,𝑡 (H𝑢,𝑡 , 𝑥 𝑢,𝑡 )
+
+#
+
+,
+
+where 𝛾 ∈ ( 0, 1] is the discount factor, and 𝑃 𝑢 is the user dynamics. 
+
+𝜏 here stands for the interaction trajectory inferred by the recom-mendation model and the user corresponding engagements. Based on the above definition, then the goal is to find optimal recommendation models 𝜃 ★ that 𝜃 ★ ∈ arg max 𝜃 J𝑢 (𝜃 )
+
+Definition 2.2 ( Proxy Downstream Rewards ). Let S𝑢,𝑡 denote the user 𝑢 ’s action trajectory in the P2P rabbit hole after closeup on the source Pin 𝑥 𝑢,𝑡 at time 𝑡 , which can be defined as: 
+
+S𝑢,𝑡 =  (𝑥 𝑢,𝑡 , closeup ), (𝑥 𝑢,𝑡 +𝑖 , 𝐴 𝑢,𝑡 +𝑖 ), ..., (𝑥 𝑢,𝑡 +𝑛 , 𝐴 𝑢,𝑡 +𝑛 )
+
+where 𝐴 𝑢,𝑡 +𝑖 represents user 𝑢 ’s action on Pin 𝑥 𝑢,𝑡 +𝑖 which could be 
+
+click , closeup , save , download etc. Let the proxy learned P2P entry model be 𝑝 𝑒𝑛𝑡𝑒𝑟 𝛽 (E| H𝑢,𝑡 , 𝑥 𝑢,𝑡 ) where E ∈ {0, 1} indicates whether the user will closeup on 𝑥 𝑢,𝑡 , and let 𝑝 𝜙 (S𝑢,𝑡 |H𝑢,𝑡 , 𝑥 𝑢,𝑡 , E=1)
+
+be the learned proxy downstream trajectory prediction model. Here, 
+
+𝛾 and 𝜙 denote the learnable parameter sets of the entry model and the downstream trajectory model respectively. Then, the proxy 
+
+downstream rewards is: 
+
+ˆR𝑢,𝑡 (H𝑢,𝑡 , 𝑥 𝑢,𝑡 ) = EE∼ 𝑝 𝑒𝑛𝑡𝑒𝑟 𝛽 
+
+h
+
+EˆS∼𝑝 𝜙 
+
+R( ˆS) i
+
+where R is a surrogate rewards aggregation function that depends on actions in the predicted trajectory ˆS such as sum of action re-wards R( ˆS) = Í𝑛 𝑖 =1 𝑟 
+
+ ˆ𝐴 𝑢,𝑡 +𝑖 
+
+
+
+where 𝑟 (closeup ) = 𝑟 (exit ) = 0.
+
+R( ˆS) = 0 if E = 0, which means user never enters P2P rabbit hole. 
+
+> 2Long-term User Engagement Optimization through Model-agnostic Downstream Rewards Learning
+
+While Definition 2.2 is generic, its implementation varies across surfaces. On Homefeed and Search, ranking is applied to source candidate Pins 𝑥 𝑢,𝑡 , so the optimized predictions are primarily tied to the entry model 𝑝 enter  
+
+> 𝛽
+
+, which estimates whether a candidate will trigger closeup and lead to a valuable downstream P2P trajec-tory. On Related Pins, ranking occurs within the P2P rabbit hole itself, so the implementation is more closely aligned with 𝑝 𝜙 , which models the quality of the subsequent sequence of related Pins inter-actions. Other downstream rewards in this paper, such as negative rewards and rewards for use-case adoption, can be defined within the same framework by modifying the action sequence S𝑢,𝑡 , the reward function R, and the time horizon 𝑇 .
+
+Definition 2.3 ( Proxy User Retention Objective ). Similar to Def-inition 2.1, the proxy user retention objective based on downstream rewards can be defined as: 
+
+ˆJ𝑢 (𝜃 ; 𝛽, 𝜙 ) = E𝜏 ∼( 𝜋 𝜃 ,𝑃 𝑢 )
+
+" 𝑇 ∑︁ 
+
+> 𝑡 =0
+
+𝛽 𝑡 ˆR𝑢,𝑡 (H𝑢,𝑡 , 𝑥 𝑢,𝑡 )
+
+#
+
+## 3 Insights and Analysis 
+
+Directly optimizing long-term retention is difficult because revisit labels are sparse, delayed, and only partially attributable to any recommendation. We therefore use an offline screening framework to identify session-level behaviors that are sufficiently aligned with future revisitation to serve as proxy downstream rewards. A candi-date reward should (1) correlate with future revisitation rather than only immediate activity, (2) be observable within or shortly after the session, and (3) remain predictive after controlling for correlated signals. The output is a ranked list of candidates for online testing. 
+
+Data and target. Each training and evaluation example is a per-user daily observation centered on a "pivot day" 𝑡 = 0. We fo-cus on users in a stable low-engagement state before the pivot. Let 𝐷 𝑢 (𝑖 ) be the number of active days for user 𝑢 in week 𝑖 rela-tive to the pivot. We define a user to have low engagement when 
+
+𝐷 𝑢 (− 2) ≤ 1 and 𝐷 𝑢 (− 1) ≤ 1 , and label a positive transition by 
+
+𝑌 𝑢 = 1 if 𝐷 𝑢 (+ 1) ≥ 3 and 𝐷 𝑢 (+ 2) ≥ 3. About 4% of the total low-engagement population satisfies this criteria. The task for our offline analysis is to predict whether the pivot day behavior precedes a transition from low engagement to sustained higher engagement. 
+
+Features and normalization. For each "pivot day", we extract cross-session, cross-surface activity features, including impressions, closeups, saves, clicks, search effort, and diversity signals, expand-ing 174 base features into ∼ 10 3 crossed candidates. Because raw counts depend strongly on exposure, we normalize each feature by comparing its pivot-day action density to the user’s recent baseline: 
+
+𝑟 ( 𝑗 ) 
+
+> 𝑢, 0
+
+= 𝑎 ( 𝑗 ) 
+
+> 𝑢, 0
+
+/𝐼 𝑢, 0 and ˆ𝑥 ( 𝑗 ) 
+
+> 𝑢, 0
+
+= 𝑟 ( 𝑗 ) 
+
+> 𝑢, 0
+
+− ˜𝑟 ( 𝑗 ) 
+
+> 𝑢
+
+, where ˜𝑟 ( 𝑗 ) 
+
+> 𝑢
+
+is the user-specific median action density over the prior two weeks. We call this user-prevalence (UP) normalization; ˆ𝑥 ( 𝑗 ) 
+
+> 𝑢, 0
+
+> 0 and ˆ𝑥 ( 𝑗 ) 
+
+> 𝑢, 0
+
+< 0 indicate above and below baseline engagement respectively. We also impute miss-ing values and remove highly collinear features. For comparison in Table 1, we report results with percentile normalization (Pctl), which normalizes each feature to its percentile within the user’s historical distribution. 
+
+Screening model. We train a Random Forest on hundreds of thou-sands of pivot-day examples with held-out validation and test sets. We use the model for screening : correlations, feature importances, SHAP values, and dependence analysis are used to rank candidate downstream rewards. On held-out data, the model achieves AUC 
+
+0.65 –0.70 , which indicates sufficient predictive signal.                                           
+
+> Pctl. Norm. UP Norm. RF Feature category Sign Str. Sign Str. Imp.
+> Diverse (shallow) +H−HHDiverse (deep) +H+MHP2P engagement +H+HHPin clicks +H−MMSaves +M+HMP2P entry diversity +M−M–Surface diversity +L−LM
+
+Table 1: Summary of univariate correlations and Random Forest importance from different normalizations. Several shallow signals flip sign after controlling for impression volume, while P2P engagement, saves, and deep diverse en-gagement remain positive. 
+
+Main screening result. Table 1 summarizes the main feature groups under two normalization schemes: Pctl. Norm. and UP Norm. as discussed above. For each scheme, Sign indicates the direction of association with future sustained engagement, Str. is its strength (high, medium, or low), and RF Imp. is the feature-group importance from the Random Forest. A consistent pattern from results is that several shallow signals are positive under percentile normalization but negative under UP normalization, including shallow diverse engagement, Pin clicks, P2P entry diversity, and surface diversity. This suggests that they mainly capture broad but shallow browsing. In contrast, deep engagement remains positive under both schemes. P2P engagement, saves, and deep engagement over diverse content also rank highly in the Random Forest. Overall, how users engage is more predictive than how much content they see. Two findings are especially robust. First, P2P exploration den-sity correlates with faster return : downstream rewards in P2P are a valid proxy for long-term user engagement. Second, shallow and deep diversity have opposite effects : lightly interacting with many categories is negative after exposure normalization, whereas deep exploration across different categories remains positive.          
+
+> Starting surface-action state Expected feedviews
+> HF save+closeup 7.80 RP save+closeup 7.45 HF closeup 7.36 Search save+closeup 7.26 Board Feed closeup 6.45 Homefeed 4.45 Related Pins 4.39 Search 3.60
+
+Table 2: Representative expected downstream session lengths from the session-level Markov analysis. Deep states involv-ing closeups and especially saves yield substantially longer continuation than surface-only entry states. 
+
+> 3Derek Wang et al.
+
+Deeper actions lead to longer sessions. The pivot-day model above operates on daily aggregates. To corroborate the same pattern at the session level, we analyze a Markov chain whose states are surface-action pairs, with session end as the terminal state, and estimate the expected number of subsequent feedviews 1 transitions before termination from each starting state using the empirical transition matrix from production traffic. Table 2 shows results of representative states. Deep states dominate: closeup states extend sessions beyond surface only entries, and states that combine save 
+
+and closeup rank highest. On Homefeed, save +closeup yields 
+
+7.80 expected feedviews versus 4.45 for Homefeed only. 
+
+Longer sessions lead to faster revisit. Finally, we test whether longer sessions are associated with faster return. Figure 2 compares the median time to next revisit for sessions above and below a range of duration thresholds. Across all nine thresholds tested (2– 38 minutes), longer sessions revisit significantly sooner (all 𝑡 -tests satisfy 𝑝 < 10 −43 ). The median gap is about 2.2 hours at the 5-minute threshold and about 2.7 hours at the 20-minute threshold. Although observational rather than causal, these results support a consistent empirical chain: deeper actions ⇒ longer sessions ⇒ faster revisit ⇒ retention ↑ .
+
+Figure 2: Median hours to next revisit for sessions above versus below each duration threshold. Longer sessions con-sistently revisit sooner. 
+
+Summary. The offline framework uses pivot-day behavior to pre-dict later engagements pattern and then screens candidate reward metrics using the trained model. The main result is that deep P2P exploration, saves, and deep engagement across diverse content are the strongest positive proxies for long-term retention. In con-trast, shallow high-volume browsing signals are often misleading once exposure is controlled for. These findings motivate down-stream rewards that favor depth, cross-surface exploration, and revisitation-oriented actions rather than raw activity volume. 
+
+> 1Each feedview is a request from user such as actions or multiple impressions etc.
+
+## 4 Methodology 
+
+We approximate long-term user value with a set of complementary downstream rewards derived from near-term user behavior. As shown in Section 3, the strongest proxies reflect multiple aspects of user experience, including deeper engagement and avoidance of low-quality interactions, while the value of exploration depends on whether it is shallow or deep. We therefore define three reward families: (1) deeper session engagement, (2) negative rewards, and (3) use case adoption. We then describe the infrastructures opti-mization efforts to derive these rewards at scale and the objective balance between DR signals and immediate action signals. 
+
+## 4.1 Downstream Rewards 
+
+4.1.1 Rewards for Deeper Session Engagement. In practice, a rec-ommendation can contribute to user value not only by triggering a single high-intent action, but also by sustaining a series of down-stream interactions such as additional closeups, saves, long clicks, and P2P exploration. To capture this effect, we define a reward based on the discounted cumulative engagement over the downstream session trajectory. Specifically, consider a trajectory S𝑢,𝑡 as defined in Definition 2.2, consisting of downstream events after a recommendation at time 
+
+𝑡 : S𝑢,𝑡 =  𝑒 𝑢,𝑡 +1, 𝑒 𝑢,𝑡 +2, . . . , 𝑒 𝑢,𝑡 +𝑛 𝑢,𝑡 
+
+ , where 𝑒 𝑢,𝑡 +𝑖 = (𝑥 𝑢,𝑡 +𝑖 , 𝐴 𝑢,𝑡 +𝑖 )
+
+denotes the item-action pair at downstream step 𝑖 , and 𝑛 𝑢,𝑡 is the number of downstream events until the end of the session. Let Aeng 
+
+denote the set of engagement actions of interest such as: Aeng =
+
+{save , downloads , screenshots }. For each action 𝑎 ∈ A eng , let 
+
+𝑤 𝑎 ≥ 0 denote its engagement value. We define the per-step en-gagement reward as 𝑟 eng   
+
+> 𝑢,𝑡 +𝑖
+
+= Í𝑎 ∈ A eng 𝑤 𝑎 I[𝐴 𝑢,𝑡 +𝑖 = 𝑎 ].
+
+The deeper session engagement reward is then defined as the discounted sum of downstream engagement: 
+
+Reng (S𝑢,𝑡 ) =
+
+> 𝑛 𝑢,𝑡
+
+∑︁ 
+
+> 𝑖 =1
+
+𝛾 𝑖 −1𝑟 eng  
+
+> 𝑢,𝑡 +𝑖
+
+,
+
+where 𝛾 ∈ ( 0, 1] is a discount factor that assigns greater credit to engagement events that occur closer to the original recommended Pins, and Reng captures cumulative downstream engagement over the session. For a predicted trajectory ˆS, we could analogously define Reng ( ˆS) based on predicted per-step reward ˆ𝑟 eng  
+
+> 𝑢,𝑡 +𝑖
+
+.
+
+4.1.2 Negative Rewards. While the above downstream rewards focus on positive user actions, we also explicitly model negative en-gagement patterns that are predictive of poor long-term outcomes. An important class of such signals at Pinterest are shallow closeups :closeups of a Pin that are quickly abandoned and do not lead to meaningful downstream activity. Empirically, closeups shorter than one second have substantially lower probability of leading to high-intent actions (e.g., saves, long clicks, deeper P2P exploration) and higher probability of immediate session abandonment compared to longer closeups. This is shown in Figure 3. At the same time, shal-low closeups occur at volumes comparable to major positive signals such as saves, thus indicating high-coverage implicit feedback from user engagements. For each downstream step 𝑖 of user 𝑢 , let 𝑑 𝑢,𝑡 +𝑖 denote the dwell time if 𝐴 𝑢,𝑡 +𝑖 = closeup , and let Ipos   
+
+> 𝑢,𝑡 +𝑖
+
+∈ { 0, 1} indicate whether that closeup is followed by any downstream high-intent action  
+
+> 4Long-term User Engagement Optimization through Model-agnostic Downstream Rewards Learning
+> (a) Probability of session exits of different closeup durations.
+> (b) Probability of downstream action (save, clicks, downloads, etc.) as a function of closeup duration based on different user states a.
+> aUser states group users by their behavioral patterns: for example, users who engage daily and users who engage monthly belong to different user states.
+
+Figure 3: Shallow closeups data analysis. 
+
+within the same trajectory. We define the shallow-closeup indicator 
+
+ISC  
+
+> 𝑢,𝑡 +𝑖
+
+= I𝐴 𝑢,𝑡 +𝑖 = closeup ∧ 𝑑 𝑢,𝑡 +𝑖 < 𝛿 state (𝑢 ) ∧ Ipos   
+
+> 𝑢,𝑡 +𝑖
+
+= 0 ,
+
+where 𝛿 state (𝑢 ) is a user-state-specific dwell-time threshold. We choose 𝛿 state (𝑢 ) using the offline framework in Section 3 to balance label coverage and purity. The actionability curves in Figure 3b show distinct inflection points for different user segments: for core users, downstream action probability rises sharply around 
+
+1s, while for non-core users the transition occurs closer to 0.5s. We therefore use 𝛿 core = 1s and 𝛿 non -core = 0.5s . As shown in Section 5, this state-specific design performs better than a uniform threshold. Negative rewards for a predicted trajectory ˆS can be defined as 
+
+Rneg ( ˆS) = −𝜆 SC 
+
+> 𝑛 𝑢,𝑡
+
+∑︁ 
+
+> 𝑖 =1
+
+ISC 
+
+> 𝑢,𝑡,𝑖
+
+with 𝜆 SC > 0 to be the strength of the penalty. The overall surrogate reward in Definition 2.2 becomes a combination of positive and negative rewards: R( ˆS) = Rpos ( ˆS) + Rneg ( ˆS) where Rpos represents positive downstream rewards discussed in other sections. 
+
+4.1.3 Rewards for Use Case Adoption. Beyond rewards for deeper sessions and revisitation, we introduce a downstream reward for use case adoption, which captures whether a recommended item helps a user engage with content outside their established interest space. This reward is motivated by the observation that long-term retention on Pinterest depends not only on reinforcing existing preferences, but also on helping users build connections to new use cases over time. Specifically, for a user 𝑢 , we represent historical interests with precomputed interest cluster embeddings {𝑐 𝑢, 1, . . . , 𝑐 𝑢,𝐾 } and a can-didate item 𝑥 with its embedding 𝑒 𝑥 . We define 𝑥 as a new use case if its similarity to every existing cluster is low: new (𝑢, 𝑥 ) =
+
+I max 1≤𝑖 ≤𝐾 cos (𝑒 𝑥 , 𝑐 𝑢,𝑖 ) < 𝜂  where 𝜂 is a tunable threshold and 
+
+I is the indicator function. The use case adoption reward is then defined as a conjunctive signal: 
+
+RUCA  
+
+> 𝑢,𝑥
+
+=
+
+(
+
+1 if engaged (𝑢, 𝑥 ) ∧ new (𝑢, 𝑥 )
+
+0 otherwise A training example is positive only when the item is both en-gaged and identified as a new use case, and negative otherwise. In this way, the reward encourages the model to surface content that is novel and capable of eliciting meaningful user action, providing a proxy for expanding user intent while remaining aligned with long-term engagement objectives. 
+
+## 4.2 Rewards Derivation Infrastructure 
+
+Deriving downstream reward (DR) labels from large-scale user inter-action logs poses two main challenges: (i) the combinatorial space of reward definitions, and (ii) the need to quickly iterate on new la-bels without incurring additional engineering effort or training cost. We address these challenges by evolving from a pre-aggregated downstream rewards table (DRv1) with labels generated ahead of training, to a DRv2 infrastructure which stores user engagement as reusable daily sequences and derives labels on demand inside a Ray-based dataloader [ ? ]. The initial DRv1 implementation precomputed DR labels and stored them in a table, where each row corresponded to a single impression or closeup event for a user and contained pre-aggregated 
+
+𝑛 -hop rewards computed by Spark workflows that repeatedly self-joined engagement logs along Pin to Pin (P2P) trajectories. Any change in the reward definition such as attribution window, hop discounting, and action filters required recomputing the full DRv1 table and backfilling all dependent training datasets across Pinterest, extending iteration cycles to weeks for a single new label variant. To remove this bottleneck, DRv2 represents user behavior as daily engagement sequences and moves reward computation into the dataloader. A unified DRv2 table stores an ordered sequence of engagement events with aligned arrays of per event attributes such as content identifiers, action types, timestamps, surface identifiers, etc. These sequences are produced once by Pinterest’s pre-existing user sequence platform and reused across teams and surfaces. When constructing a training dataset for a surface, we join that surface’s recommendation log with the DRv2 table on (𝑢, dt ), so that each training example is paired with the subsequent engagement tra-jectory of the same user on that day across all surfaces. Inside the Ray dataloader, we then compute DR labels on the fly by applying a configurable user-defined function (UDF) to each batch: for every training example, the UDF scans its attached engagement sequence and derives the requested labels. Overall, this Ray-based framework optimizes DR label derivation by replacing the Spark self-joins and table recomputation in DRv1 with on-demand computation in the dataloader, while defining reward variants over shared DRv2 engagement sequences. This yields a roughly 10 × reduction in idea-to-experiment time from 
+
+> 5Derek Wang et al.
+
+Figure 4: DRv2 table structure illustration: per-user daily event sequences with aligned attribute arrays 
+
+∼3 weeks to ∼2 days, keeps incremental training cost within 5% of baseline step time since UDF execution overlaps with data I/O, and makes it practical to rapidly explore complex reward objectives, including multi-day cross-surface and revisitation-based signals. 
+
+## 4.3 Balance of Immediate and Downstream Rewards 
+
+Our objective is to improve long-term outcomes without degrading immediate user experience. When a downstream reward is imple-mented as an auxiliary to a multi-head recommendation model, we score item 𝑥 by linearly combining immediate-engagement and downstream-reward predictions: 𝑠 (𝑥 ) = Í𝑁 𝑖 =1 𝑤 𝑖 𝑝 𝑖 (𝑥 ), where 
+
+𝑝 𝑖 (𝑥 ) is the prediction of head 𝑖 and 𝑤 𝑖 is its serving weight. Un-like DT4IER [ 30 ], which learns these weights end-to-end, we tune 
+
+{𝑤 𝑖 } outside the ranker using HyperOPT [ 3, 4]. This decouples weight search from model training, making it easier to add new re-ward heads and enforce product constraints. In practice, we choose weights to keep immediate engagement neutral while improving retention related metrics. For negative reward heads (Section 4.1.2), the corresponding weight is negative, so a higher predicted prob-ability lowers the ranking score. Other downstream rewards can also be integrated through training-time reweighting. 
+
+## 5 Experiments 
+
+We use online A/B experiments on real-world Pinterest engagement data to answer the following research questions: 
+
+• RQ1: How does our proposed downstream rewards learn-ing framework help improve short-term and long-term user engagements and retentions under industry settings? 
+
+• RQ2: How much improvement does each downstream re-wards design bring respectively? 
+
+• RQ3: How effective are our proposed downstream rewards under different surfaces at Pinterest? 
+
+## 5.1 Experiment Setups 
+
+The datasets we use for training and offline evaluation are similar to the ones from [ 46 ]. All the experiment results are based on Pinterest data, and we do not evaluate our Downstream Rewards methods on public data given the lack of related action signals required for deriving all the kinds of rewards proposed by this paper. Besides, the evaluation of public dataset is limited given they do not necessarily reflect the actual online engagement patterns. The Homefeed online experiments receive 1.5% of total traffic for 3–4 weeks. To measure the success of our proposed Downstream rewards modeling frameworks, here are the metrics we use for evaluation: 
+
+• Successful Sessions (SS) : Number of user sessions on Pinterest with one or more of the following actions: save, search, closeup, create, download, click out etc. This mea-sures the volume of meaningful user engagement journey when they explore Pinterest app or website. 
+
+• Total Time Spent : Total time spent in app or across differ-ent surfaces at Pinterest. 
+
+• DAU, WAU and MAU : Daily, weekly and monthly active users, which are common metrics for evaluating recommen-dation quality as well as user retentions. 
+
+• Immediate Action Rates : Improvement of engagement rates for important actions such as save, closeups, down-loads etc. measure the direct user activities. We view these metrics as outcomes that are directionally aligned with the downstream reward signals introduced in Section 2. For ex-ample, an increase in Successful Sessions is consistent with a larger number of user trajectories S𝑢,𝑡 that contain meaningful down-stream engagements. Similarly, higher Total Time Spent indicate deeper engagement trajectories, which can provide a useful signal for longer-horizon activity. In addition, these metrics help us assess whether improvements in downstream reward optimization transfer to broader retention impacts. In internal analyses, Successful Sessions show positive cor-relation with retention-related metrics such as WAU and active days in the last 14 days, with Pearson correlation tests having 𝑝 < 0.01 .Moreover, improvements in Successful Sessions , Total Time Spent ,and immediate action rates can be interpreted as supportive ev-idence that the proposed framework improves user engagement quality, while DAU/WAU/MAU provide a complementary view of the gains are reflected in longer-horizon user activity. All the met-rics shown below are statistically significant in online experiments. 
+
+## 5.2 Experiment Results on Homefeed 
+
+Table 3 shows results of different downstream rewards over long-term user retention and engagement gains at Homefeed of Pinterest. 
+
+5.2.1 Experiment for Deeper Session Engagement Rewards. In the online A/B test for deeper session rewards, the experiment groups for adding the rewards based on downloads and screenshots action showed gains on metrics aligned with long-term engagement and retention. Site-wide SS increase by +0.36% across all users. We also observe improvements in depth and duration of engagement: total time spent in app increases by +0.10% and overall screenshots by 
+
++0.7% and overall downloads by +0.7% . For deeper session rewards on save actions, we also observed +0.16% SS gains in online experi-ments which indicates the effectiveness of this downstream reward on different action signals. WAU increased positively by +0.1% indi-cating that rewarding recommendations that lead to deeper session engagement also introduce positive user retention. 
+
+5.2.2 Experiment for Negative Rewards. We deploy the shallow closeup negative reward on Homefeed as an additional head in the Pinnability [ 46 ] ranking model with a negative utility weight. We first use the offline framework to analyze seven candidate treat-ments formed by three duration thresholds ( < 0.5s, < 1s, < 2s) 
+
+> 6Long-term User Engagement Optimization through Model-agnostic Downstream Rewards Learning
+
+## Successful Sessions Total Time Spent Downstream Rewards Core Users Non-core Users Core Users Non-core Users Rewards for deeper sessions +0.24% +0.48% +0.09% +0.10% 
+
+Negative rewards +0.16% +0.16% +0.46% +0.24% 
+
+Rewards for use case adoption +0.10% +0.10% +0.16% +0.11% Table 3: Experiment results on Homefeed based on different user states with statistically significant relative lifts. 
+
+and two label definitions (duration-only vs. duration with no down-stream action). The offline analysis results demonstrate that very short thresholds produce too few labels for reliable online impact, while long thresholds introduce noise and weaken revisitation prediction. Based on this analysis, we launch an initial online ex-periment with a uniform threshold ( 𝛿 = 1s). Although aggregate Homefeed metrics improve, extended measurement shows negative retention and engagement trends for non-core users due to hetero-geneity of different user activities. Additional cross surface analysis shows that the treatment increases transitions from Homefeed to P2P, but also reduces engagement from other surfaces, indicating cross-surface cannibalization and a mismatch between a single threshold and heterogeneous user behavior. We then conduct an offline analysis by user state and find that the effective threshold differs across segments. This motivates a second launch with thresholds ( 𝛿 core = 1s, 𝛿 non -core = 0.5s) optimized for different user states, followed by utility weight tuning using the HyperOPT. In a month-long experiment, this configuration improves both engagement and retention-related outcomes: SS increase by +0.16% , unsuccessful sessions decrease by −0.40% , total time spent increases by +0.35% , and time spent on Homefeed and Related Pins increases by +0.2% and +0.5% , respectively. Longer sessions also increase, while hide and report rates decrease. Unlike the initial launch, DAU/WAU trends remain positive for both core and non-core users. These results show that negative rewards are effective to increase session depth of different users. 
+
+5.2.3 Experiment for Use Case Adoption. We evaluate the use case adoption reward via a live A/B experiment on homefeed. The re-ward is implemented by upweighting training examples where the engaged item qualifies as a new use case. Concretely, the positive sample weight is doubled for Pins that are both engaged and satisfy 
+
+RUCA  
+
+> 𝑢,𝑥
+
+= 1, applied across top impactful heads. The cosine similarity threshold 𝜏 is tuned across {0.5, 0.6, 0.7}, with 𝜏 = 0.6 yielding the best balance between label volume and downstream performance. We observe consistent gains across both engagement and use case adoption metrics. Homefeed saves improve by +0.42% and Pin clicks by +0.32% , while SS increase by +0.1% and time spent by +0.15% . Notably, use case adoption propensity on Homefeed improves by +0.18% , and the proportion of weekly active users en-gaging with two or more use cases increases by +0.18% , directly val-idating that the reward encourages users to explore content beyond their established interest space. We also observe improvements in deeper actions such as Pin downloads ( +1.28% ) and screenshots (+1.02% ), suggesting that surfacing new use case content drives not only broader exploration but also deeper intent signals. 
+
+## 5.3 Scaling to Ranking Models in Other Surfaces 
+
+A user’s journey on Pinterest is inherently non-linear. Users may start on Homefeed, refine intent through Search, continue explo-ration via Related Pins from a closeup, and later engage with No-tifications in subsequent sessions, often traversing multiple sur-faces within a single session. This behavior motivates extending downstream reward optimization beyond the entry surface, so that ranking models across surfaces are jointly optimized for the full cross-surface user trajectory. After launching downstream rewards in the Homefeed ranking model, we extended the same frame-work to Search, Related Pins, and Notifications. In experiments on these surfaces, control models optimize only immediate engage-ment predictions. Test models optimize both immediate engage-ment and downstream rewards that capture longer-horizon utility. All experiments receive traffic volume similar to the experiments on Homefeed. We evaluate deeper-session engagement signals as downstream rewards for these ranking models. 
+
+Surface Metric Lift 
+
+Search Search Fulfillment Rate +0.25% 
+
+Related Pins Successful Sessions +0.15% 
+
+Notifications Successful Sessions +0.14% Table 4: Online A/B results from extending deeper-session engagement downstream rewards to the ranking models on additional surfaces. Each row compares a test group whose ranker includes downstream reward heads against a control group whose ranker only predicts immediate engagement. 
+
+Table 4 summarizes the results. On Related Pins, adding down-stream reward heads to the P2P ranking model leads to a +0.15% 
+
+increase in session frequency, indicating that users return to the app more often when the P2P ranker is optimized for cross surface, long-horizon value rather than only the next click. Besides we have also observed WAU gains after the launch. On Search, the same approach produced a +0.25% increase in search fulfillment rate [? ], defined as the proportion of searches that result in a user engage-ment action of significance (e.g., a click, save etc). For Notifications, in addition for SS gains, we obtain about +0.11% WAU gains after in-corporating the downstream rewards signal. This shows optimizing each ranker on different surfaces for downstream rewards captures complementary parts of the same non-linear user trajectory. In addition, to verify that the negative reward generalizes beyond the entry surface, we deploy a separate shallow-closeup penalty on the P2P ranker in addition to Homefeed. Because P2P closeup durations are characteristically longer than Homefeed closeups, the offline actionability analysis yields a higher optimal threshold of 
+
+> 7Derek Wang et al.
+
+𝛿 P2P = 2s (duration-only, without the no positive action condition similar to Homefeed). In a month-long A/B test, the P2P deployment produces +0.14% SS, and +0.70% sessions longer than 5 minutes. These results show that downstream rewards can be adopted across distinct ranking models and applications with minimal re-engineering, and doing so optimizes the users journey holistically rather than greedily optimizing each surface in isolation. The sim-plicity of adoption, combined with consistent gains on both engage-ment (session frequency, SS) and surface specific quality metrics (search fulfillment rate), makes downstream rewards a practical lever for industrial recommender systems composed of multiple interacting ranking models. 
+
+## 6 Related Works 6.1 General Recommendation Systems 
+
+Traditional machine learning algorithms such as gradient boosting [ 9, 11 , 28 ] are strong tabular based methods for recommendations. However, they usually suffer from heavy feature engineering re-quirements, and they cannot process unstructured modalities such as text and images efficiently. Besides, it is hard to easily adapt these methods for modeling long sequences which are common in modern recommendation tasks. Deep recommendation models, including Wide & Deep [ 12 ], DeepFM [ 22 ], DCN [ 41 ], and DCNv2 [ 42 ], improved large-scale ranking by learning feature interactions directly from data. Multi-task objectives further learn multiple user action signals jointly [ 2, 21 , 29 , 31 , 38 , 56 ]. However, these methods are still primarily optimized for short-horizon engagement targets, such as clicks and other immediate actions, rather than long-term user retention. In recent years, more complex recommendation paradigm [ 1, 19 ]became popular in different industries. This type of multi-stage recommendation system consists of different components including retrieval, ranking, re-ranking and blending. Each components have different responsibility and advantages. For instance, retrieval mod-els are usually efficient and can filter billions of items to thousands of top relevant candidates, while re-ranking and blending algo-rithms can help fulfill different business objectives such as adding diversity on topics etc. With the rise of Large Language Models [ 34 ], large scale generative ranking algorithms [ 25 , 26 , 40 , 51 , 59 ]have sought to unify multiple components of the ranking pipeline within a single, billion-parameter model trained on web-scale data. While these methods have shown promising online results, these ap-proaches are computational heavy and lack the flexibility required for deployment in different specific use cases such as home page recommendations or related items recommendations. Moreover, optimizing user retention remains challenging in the end-to-end generative ranking framework. 
+
+## 6.2 User Retention Optimization 
+
+Prior work on retention optimization in recommendation systems spans several directions. Contextual bandit and reinforcement learn-ing (RL) methods [ 5, 23 , 32 , 43 , 45 , 47 – 49 , 52 , 54 , 60 ] optimize cu-mulative rewards to identify actions with long-term user value. However, these approaches typically require carefully designed re-ward functions and high-quality feedback data. Moreover, different applications impose different objectives and system constraints, making it difficult to standardize reward design within a single RL framework. Other works use sequence based modeling to improve user retention [ 15 , 30 , 57 , 58 ]. Related approaches also construct item graphs to infer user interest clusters for sequential recom-mendation [ 6, 14 , 17 , 39 , 53 ]. In contrast, our model-agnostic down-stream reward formulation uses supervised signals from observed trajectories as a practical surrogate for the long-horizon rewards. This avoids REINFORCE-style policy gradient optimization, which is often difficult to train and deploy across surfaces. In addition, Sec-tion 4.1.3 uses pre-extracted user-interest clusters from upstream services, without requiring additional graph construction or joint training for sequence modeling. Similar ideas appear in [8, 36]. Recent work has studied retention through causal and explicit return signal modeling [ 16 , 55 ]. Examples include predicting fu-ture return probability [ 44 ], adding survey based return intent into ranking models [ ? ], and using revisitation of saved content as an auxiliary retention target [ 24 ]. Our work is complementary to these approaches: rather than relying on a single proxy, we present a unified framework for discovering, comparing, and combining heterogeneous downstream rewards, motivated by the observation that no single signal fully captures long-term user value on a visual content discovery platform. Closest to our setting, [ 43 ] identifies user behavior patterns associated with long-term experience, but its reward concepts, such as “high-quality consumption” and “re-peated consumption” defined by time spent and revisitation of the same item, do not transfer directly to Pinterest, where content is predominantly visual, user intent is often inspiration driven, and actions like save and download are especially informative. Reward design at Netflix [ 37 ] also targets long-term satisfaction, but is de-veloped for a bandit-feedback setting with a specific proxy reward. In contrast, our downstream reward framework is more general and can be more easily adapted to other recommendation settings. 
+
+## 7 Conclusions 
+
+In this paper, we presented a model-agnostic downstream reward framework for optimizing long-term user engagement and retention in large scale recommendation systems. Guided by offline analysis on real-world Pinterest interaction data, we developed downstream rewards that capture deeper session engagement, negative engage-ment patterns, and use-case adoption beyond a user’s established interests. We further described an efficient infrastructure for large scale reward-label generation and a practical serving strategy that balances immediate engagement with downstream value. Online A/B experiments show that these rewards consistently improve engagement and retention related metrics, and the framework has been deployed across multiple surfaces at Pinterest. Promising di-rections for future work include more sophisticated session-level reward design such as revisitation and tighter integration of these rewards into ranking models beyond auxiliary prediction signals. 
+
+## References      
+
+> [1] Parag Agrawal. 2024. Building a Large-Scale Recommendation System: People You May Know. https://www.linkedin.com/blog/engineering/recommendations/ building-a-large-scale-recommendation-system-people-you-may-know [2] Ting Bai, Yudong Xiao, Bin Wu, Guojun Yang, Hongyong Yu, and Jian-Yun Nie. 2022. A contrastive sharing model for multi-task recommendation. In Proceedings of the ACM web conference 2022 . 3239–3247. [3] James Bergstra, Brent Komer, Chris Eliasmith, Dan Yamins, and David D Cox. 2015. Hyperopt: a python library for model selection and hyperparameter 8
+
+Long-term User Engagement Optimization through Model-agnostic Downstream Rewards Learning 
+
+optimization. Computational Science & Discovery 8, 1 (2015), 014008. [4] James Bergstra, Daniel Yamins, and David Cox. 2013. Making a science of model search: Hyperparameter optimization in hundreds of dimensions for vision architectures. In International conference on machine learning . PMLR, 115–123. [5] Qingpeng Cai, Shuchang Liu, Xueliang Wang, Tianyou Zuo, Wentao Xie, Bin Yang, Dong Zheng, Peng Jiang, and Kun Gai. 2023. Reinforcing user retention in a billion scale short video recommender system. In Companion Proceedings of the ACM Web Conference 2023 . 421–426. [6] Yukuo Cen, Jianwei Zhang, Xu Zou, Chang Zhou, Hongxia Yang, and Jie Tang. 2020. Controllable multi-interest framework for recommendation. In Proceedings of the 26th ACM SIGKDD international conference on knowledge discovery & data mining . 2942–2951. [7] Allison JB Chaney, Brandon M Stewart, and Barbara E Engelhardt. 2018. How algorithmic confounding in recommendation systems increases homogeneity and decreases utility. In Proceedings of the 12th ACM conference on recommender systems . 224–232. [8] Jianxin Chang, Chenbin Zhang, Zhiyi Fu, Xiaoxue Zang, Lin Guan, Jing Lu, Yiqun Hui, Dewei Leng, Yanan Niu, Yang Song, et al . 2023. TWIN: TWo-stage interest network for lifelong user behavior modeling in CTR prediction at kuaishou. In 
+
+Proceedings of the 29th ACM SIGKDD Conference on Knowledge Discovery and Data Mining . 3785–3794. [9] Tianqi Chen and Carlos Guestrin. 2016. Xgboost: A scalable tree boosting system. In Proceedings of the 22nd acm sigkdd international conference on knowledge discovery and data mining . 785–794. [10] Xiaocong Chen, Siyu Wang, Julian McAuley, Dietmar Jannach, and Lina Yao. 2024. On the opportunities and challenges of offline reinforcement learning for recommender systems. ACM Transactions on Information Systems 42, 6 (2024), 1–26. [11] Chen Cheng, Fen Xia, Tong Zhang, Irwin King, and Michael R Lyu. 2014. Gradient boosting factorization machines. In Proceedings of the 8th ACM Conference on Recommender systems . 265–272. [12] Heng-Tze Cheng, Levent Koc, Jeremiah Harmsen, Tal Shaked, Tushar Chandra, Hrishi Aradhye, Glen Anderson, Greg Corrado, Wei Chai, Mustafa Ispir, et al .2016. Wide & deep learning for recommender systems. In Proceedings of the 1st workshop on deep learning for recommender systems . 7–10. [13] Konstantina Christakopoulou, Can Xu, Sai Zhang, Sriraj Badam, Trevor Potter, Daniel Li, Hao Wan, Xinyang Yi, Ya Le, Chris Berg, et al . 2022. Reward shaping for user satisfaction in a REINFORCE recommender. arXiv preprint arXiv:2209.15166 
+
+(2022). [14] Xiao Chunjing, Ranhao Guo, Zhang Yongwang, and Xiaoming Wu. 2025. Learn-ing Multi-interest Embedding with Dynamic Graph Cluster for Sequention Rec-ommendation. In Conference on Uncertainty in Artificial Intelligence . PMLR, 4652– 4662. [15] Robin Devooght and Hugues Bersini. 2017. Long and short-term recommenda-tions with recurrent neural networks. In Proceedings of the 25th conference on user modeling, adaptation and personalization . 13–21. [16] Shuyang Du, James Lee, and Farzin Ghaffarizadeh. 2019. Improve user retention with causal learning. In The 2019 ACM SIGKDD Workshop on Causal Discovery .PMLR, 34–49. [17] Yingpeng Du, Ziyan Wang, Zhu Sun, Yining Ma, Hongzhi Liu, and Jie Zhang. 2024. Disentangled multi-interest representation learning for sequential rec-ommendation. In Proceedings of the 30th ACM SIGKDD conference on knowledge discovery and data mining . 677–688. [18] Huizhong Duan, Emre Kiciman, and ChengXiang Zhai. 2012. Click patterns: An empirical representation of complex query intents. In Proceedings of the 21st ACM international conference on Information and knowledge management . 1035–1044. [19] Ariel Evnine, Stratis Ioannidis, Dimitris Kalimeris, Shankar Kalyanaraman, Wei-wei Li, Israel Nir, Wei Sun, and Udi Weinsberg. 2024. Achieving a better tradeoff in multi-stage recommender systems through personalization. In Proceedings of the 30th ACM SIGKDD Conference on Knowledge Discovery and Data Mining .4939–4950. [20] Jerome H Friedman. 2001. Greedy function approximation: a gradient boosting machine. Annals of Statistics 29, 5 (2001), 1189–1232. [21] Xudong Gong, Qinlin Feng, Yuan Zhang, Jiangling Qin, Weijie Ding, Biao Li, Peng Jiang, and Kun Gai. 2022. Real-time short video recommendation on mobile devices. In Proceedings of the 31st ACM international conference on information & knowledge management . 3103–3112. [22] Huifeng Guo, Ruiming Tang, Yunming Ye, Zhenguo Li, and Xiuqiang He. 2017. DeepFM: a factorization-machine based neural network for CTR prediction. In 
+
+Proceedings of the 26th International Joint Conference on Artificial Intelligence .1725–1731. [23] Jianhua Han, Yong Yu, Feng Liu, Ruiming Tang, and Yuzhou Zhang. 2019. Op-timizing ranking algorithm in recommender system via deep reinforcement learning. In 2019 international conference on artificial intelligence and advanced manufacturing (AIAM) . IEEE, 22–26. [24] Weijie Jiang, Armando Ordorica, Jaewon Yang, Olafur Gudmundsson, Yucheng Tu, and Huizhong Duan. 2026. Save, Revisit, Retain: A Scalable Framework for Enhancing User Retention in Large-Scale Recommender Systems. In Proceedings of the AAAI Conference on Artificial Intelligence , Vol. 40. 39996–40005. [25] Yangqin Jiang, Xubin Ren, Lianghao Xia, Da Luo, Kangyi Lin, and Chao Huang. 2025. Recgpt: A foundation model for sequential recommendation. In Proceedings of the 2025 Conference on Empirical Methods in Natural Language Processing .10140–10154. [26] Clark Mingxuan Ju, Liam Collins, Leonardo Neves, Bhuvesh Kumar, Louis Yufeng Wang, Tong Zhao, and Neil Shah. 2025. Generative Recommendation with Seman-tic IDs: A Practitioner’s Handbook. In Proceedings of the 34th ACM International Conference on Information and Knowledge Management . 6420–6425. [27] Komal Kapoor, Mingxuan Sun, Jaideep Srivastava, and Tao Ye. 2014. A hazard based approach to user return time prediction. In Proceedings of the 20th ACM SIGKDD international conference on Knowledge discovery and data mining . 1719– 1728. [28] Guolin Ke, Qi Meng, Thomas Finley, Taifeng Wang, Wei Chen, Weidong Ma, Qiwei Ye, and Tie-Yan Liu. 2017. Lightgbm: A highly efficient gradient boosting decision tree. Advances in neural information processing systems 30 (2017). [29] Qi Liu, Zhilong Zhou, Gangwei Jiang, Tiezheng Ge, and Defu Lian. 2023. Deep task-specific bottom representation network for multi-task recommendation. In Proceedings of the 32nd ACM International Conference on Information and Knowledge Management . 1637–1646. [30] Ziru Liu, Shuchang Liu, Zijian Zhang, Qingpeng Cai, Xiangyu Zhao, Kesen Zhao, Lantao Hu, Peng Jiang, and Kun Gai. 2024. Sequential recommendation for optimizing both immediate feedback and long-term retention. In Proceedings of the 47th International ACM SIGIR Conference on Research and Development in Information Retrieval . 1872–1882. [31] Ziru Liu, Jiejie Tian, Qingpeng Cai, Xiangyu Zhao, Jingtong Gao, Shuchang Liu, Dayou Chen, Tonghao He, Dong Zheng, Peng Jiang, et al . 2023. Multi-task recommendations with reinforcement learning. In Proceedings of the ACM web conference 2023 . 1273–1282. [32] Changhua Pei, Xinru Yang, Qing Cui, Xiao Lin, Fei Sun, Peng Jiang, Wenwu Ou, and Yongfeng Zhang. 2019. Value-aware recommendation based on reinforce-ment profit maximization. In The World Wide Web Conference . 3123–3129. [33] Paul Resnick and Hal R Varian. 1997. Recommender systems. Commun. ACM 40, 3 (1997), 56–58. [34] John Schulman, Barret Zoph, Christina Kim, Jacob Hilton, Jacob Menick, Jiayi Weng, Juan Felipe Ceron Uribe, Liam Fedus, Luke Metz, Michael Pokorny, et al .2022. Introducing chatgpt. OpenAI blog (2022). [35] David Sculley, Gary Holt, Daniel Golovin, Eugene Davydov, Todd Phillips, Diet-mar Ebner, Vinay Chaudhary, Michael Young, Jean-Francois Crespo, and Dan Dennison. 2015. Hidden technical debt in machine learning systems. Advances in neural information processing systems 28 (2015). [36] Zihua Si, Lin Guan, ZhongXiang Sun, Xiaoxue Zang, Jing Lu, Yiqun Hui, Xingchao Cao, Zeyu Yang, Yichen Zheng, Dewei Leng, et al . 2024. Twin v2: Scaling ultra-long user behavior sequence modeling for enhanced ctr predic-tion at kuaishou. In Proceedings of the 33rd ACM International Conference on Information and Knowledge Management . 4890–4897. [37] Gary Tang, Jiangwei Pan, Henry Wang, and Justin Basilico. 2023. Reward in-novation for long-term member satisfaction. In Proceedings of the 17th ACM Conference on Recommender Systems . 396–399. [38] Hongyan Tang, Junning Liu, Ming Zhao, and Xudong Gong. 2020. Progressive layered extraction (ple): A novel multi-task learning (mtl) model for personalized recommendations. In Proceedings of the 14th ACM conference on recommender systems . 269–278. [39] Yu Tian, Jianxin Chang, Yanan Niu, Yang Song, and Chenliang Li. 2022. When multi-level meets multi-interest: A multi-grained neural model for sequential recommendation. In Proceedings of the 45th international ACM SIGIR conference on research and development in information retrieval . 1632–1641. [40] Chunqi Wang, Bingchao Wu, Zheng Chen, Lei Shen, Bing Wang, and Xiaoyi Zeng. 2025. Scaling transformers for discriminative recommendation via generative pretraining. In Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining V. 2 . 2893–2903. [41] Ruoxi Wang, Bin Fu, Gang Fu, and Mingliang Wang. 2017. Deep & cross network for ad click predictions. In Proceedings of the ADKDD’17 . 1–7. [42] Ruoxi Wang, Rakesh Shivanna, Derek Cheng, Sagar Jain, Dong Lin, Lichan Hong, and Ed Chi. 2021. Dcn v2: Improved deep & cross network and practical lessons for web-scale learning to rank systems. In Proceedings of the web conference 2021 .1785–1797. [43] Yuyan Wang, Mohit Sharma, Can Xu, Sriraj Badam, Qian Sun, Lee Richardson, Lisa Chung, Ed H Chi, and Minmin Chen. 2022. Surrogate for long-term user experience in recommender systems. In Proceedings of the 28th ACM SIGKDD conference on knowledge discovery and data mining . 4100–4109. [44] Yuyan Wang, Jing Zhong, Yuxin Cui, Zhaohui Guo, Chuanqi Wei, Yanchen Wang, and Zellux Wang. 2025. Not All Impressions Are Created Equal: Psychology-Informed Retention Optimization for Short-Form Video Recommendation. In 
+
+Proceedings of the Nineteenth ACM Conference on Recommender Systems . 1022– 1025. [45] Qingyun Wu, Hongning Wang, Liangjie Hong, and Yue Shi. 2017. Returning is believing: Optimizing long-term user engagement in recommender systems. 9Derek Wang et al. 
+
+In Proceedings of the 2017 ACM on Conference on Information and Knowledge Management . 1927–1936. [46] Xue Xia, Pong Eksombatchai, Nikil Pancha, Dhruvil Deven Badani, Po-Wei Wang, Neng Gu, Saurabh Vishwas Joshi, Nazanin Farahpour, Zhiyuan Zhang, and Andrew Zhai. 2023. Transact: Transformer-based realtime user action model for recommendation at pinterest. In Proceedings of the 29th ACM SIGKDD Conference on Knowledge Discovery and Data Mining . 5249–5259. [47] Ruiyang Xu, Jalaj Bhandari, Dmytro Korenkevych, Fan Liu, Yuchen He, Alex Nikulkov, and Zheqing Zhu. 2023. Optimizing long-term value for auction-based recommender systems via on-policy reinforcement learning. In Proceedings of the 17th ACM Conference on Recommender Systems . 955–962. [48] Wanqi Xue, Qingpeng Cai, Zhenghai Xue, Shuo Sun, Shuchang Liu, Dong Zheng, Peng Jiang, Kun Gai, and Bo An. 2023. Prefrec: Recommender systems with human preferences for reinforcing long-term user engagement. In Proceedings of the 29th ACM SIGKDD Conference on Knowledge Discovery and Data Mining .2874–2884. [49] Zhenghai Xue, Qingpeng Cai, Bin Yang, Lantao Hu, Peng Jiang, Kun Gai, and Bo An. 2025. AURO: Reinforcement learning for adaptive user retention optimization in recommender systems. In Proceedings of the ACM on Web Conference 2025 .391–401. [50] Hyunsik Yoo, Ruizhong Qiu, Charlie Xu, Fei Wang, and Hanghang Tong. 2025. Generalizable recommender system during temporal popularity distribution shifts. In Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining V. 1 . 1833–1843. [51] Jiaqi Zhai, Lucy Liao, Xing Liu, Yueming Wang, Rui Li, Xuan Cao, Leon Gao, Zhaojie Gong, Fangda Gu, Jiayuan He, et al . 2024. Actions Speak Louder than Words: Trillion-Parameter Sequential Transducers for Generative Recommenda-tions. In International Conference on Machine Learning . PMLR, 58484–58509. [52] Qihua Zhang, Junning Liu, Yuzhuo Dai, Yiyan Qi, Yifan Yuan, Kunlun Zheng, Fan Huang, and Xianfeng Tan. 2022. Multi-task fusion via reinforcement learning for long-term user satisfaction in recommender systems. In Proceedings of the 28th ACM SIGKDD conference on knowledge discovery and data mining . 4510–4520. [53] Shengyu Zhang, Lingxiao Yang, Dong Yao, Yujie Lu, Fuli Feng, Zhou Zhao, Tat-Seng Chua, and Fei Wu. 2022. Re4: Learning to re-contrast, re-attend, re-construct for multi-interest recommendation. In Proceedings of the ACM web conference 2022 . 2216–2226. [54] Xiao Zhang, Haonan Jia, Hanjing Su, Wenhan Wang, Jun Xu, and Ji-Rong Wen. 2021. Counterfactual reward modification for streaming recommendation with delayed feedback. In Proceedings of the 44th international ACM SIGIR conference on research and development in information retrieval . 41–50. [55] Yang Zhang, Dong Wang, Qiang Li, Yue Shen, Ziqi Liu, Xiaodong Zeng, Zhiqiang Zhang, Jinjie Gu, and Derek F Wong. 2021. User Retention: A Causal Approach with Triple Task Modeling.. In IJCAI . 3399–3405. [56] Zijian Zhang, Shuchang Liu, Jiaao Yu, Qingpeng Cai, Xiangyu Zhao, Chunxu Zhang, Ziru Liu, Qidong Liu, Hongwei Zhao, Lantao Hu, et al . 2024. M3oe: Multi-domain multi-task mixture-of experts recommendation framework. In 
+
+Proceedings of the 47th International ACM SIGIR Conference on Research and Development in Information Retrieval . 893–902. [57] Kesen Zhao, Lixin Zou, Xiangyu Zhao, Maolin Wang, and Dawei Yin. 2023. User retention-oriented recommendation with decision transformer. In Proceedings of the ACM Web Conference 2023 . 1141–1149. [58] Yifei Zhao, Yu-Hang Zhou, Mingdong Ou, Huan Xu, and Nan Li. 2020. Maxi-mizing cumulative user engagement in sequential recommendation: An online optimization perspective. In Proceedings of the 26th ACM SIGKDD international conference on knowledge discovery & data mining . 2784–2792. [59] Jie Zhu, Zhifang Fan, Xiaoxie Zhu, Yuchen Jiang, Hangyu Wang, Xintian Han, Haoran Ding, Xinmin Wang, Wenlin Zhao, Zhen Gong, et al . 2025. Rankmixer: Scaling up ranking models in industrial recommenders. In Proceedings of the 34th ACM International Conference on Information and Knowledge Management .6309–6316. [60] Lixin Zou, Long Xia, Zhuoye Ding, Jiaxing Song, Weidong Liu, and Dawei Yin. 2019. Reinforcement learning to optimize long-term user engagement in recommender systems. In Proceedings of the 25th ACM SIGKDD international conference on knowledge discovery & data mining . 2810–2818. 10

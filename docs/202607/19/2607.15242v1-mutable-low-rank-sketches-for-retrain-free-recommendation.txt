@@ -1,0 +1,254 @@
+Title: Mutable Low-Rank Sketches for Retrain-Free Recommendation
+
+URL Source: https://arxiv.org/pdf/2607.15242v1
+
+Published Time: Fri, 17 Jul 2026 01:31:00 GMT
+
+Number of Pages: 6
+
+Markdown Content:
+# Mutable Low-Rank Sketches for Retrain-Free Recommendation 
+
+# Hector J. Garcia 
+
+University of Michigan Ann Arbor, MI, USA hjgarcia@umich.edu 
+
+# Nick Clayton 
+
+Criteo Ann Arbor, MI, USA n.clayton@criteo.com 
+
+## Abstract 
+
+A common bottleneck in two-stage recommendation is embedding staleness: when a user rates a new item, their embedding remains fixed until the next retrain cycle. We propose mutable sketches ,which store each user’s preferences in a KP-tree (a sparse segment tree with sum aggregation), fit a low-rank projection once, and recompute embeddings on-the-fly as ratings arrive. We prove that each new observation monotonically tightens the prediction error envelope (Theorem 1), a guarantee that FunkSVD and eALS lack. On KuaiRec, the mutable sketch achieves 0.810 RMSE at 1.8% data read vs. ALS 0.822 at 100%, with 8 × faster per-batch updates. A new user receives personalized recommendations in <1 ms after their first rating, with no model retraining required. A comparison of sampling strategies across density regimes shows that the KP-tree’s norm-proportional sampling provides 40–130% better item coverage on sparse data ( <1% density), while uniform sampling suffices on dense matrices. 
+
+## 1 Introduction 
+
+In two-stage recommendation [ 5 , 12 ], user embeddings typically cannot update until the model retrains — hours for neural methods, minutes for ALS [ 18 ]. Even incremental methods such as eALS [ 13 ]and FunkSVD [ 18 ] modify the factorization directly, coupling data freshness to model recomputation. In production feature stores, this decomposition is standard: user features are updated continuously while the model remains fixed [ 20 ]. We apply the same principle to collaborative filtering: each user’s preference vector lives in a KP-tree [ 17 , 24 ] — struc-turally a sparse segment tree with sum aggregation — and embed-dings are recomputed by projecting through a fixed low-rank basis fitted once from a sublinear sketch. When a user rates a new item, a logarithmic-time tree insert changes the stored preference vector, and the user’s embedding is recomputed by projecting through the fixed basis — no gradient computation, no model parameters touched. Each insert also keeps the sampling distribution consis-tent by propagating through internal sums, so the sketch can be rebuilt from the current state at any time without reconstructing auxiliary structures — a property that dense segment trees share but Fenwick trees and hash-map-based alternatives do not support with logarithmic-time weighted sampling. Prior KP-tree work [ 1, 3 , 4, 24 ] used the structure for static sketch construction only; we exploit its mutation capability. Our contributions are: 
+
+• Mutable sketches: user-side embedding updates in 𝑂 (log 𝑛 )
+
+per rating with no gradient computation — retrain-free be-tween drift-triggered refits (§2.1, §4). 
+
+• Monotonic improvement: a proof that each new obser-vation tightens the projected-error envelope (Theorem 1), a guarantee FunkSVD and eALS lack (§2.2). 
+
+• Consistent sampling under mutation: the sampling dis-tribution remains valid after every insert, enabling immedi-ate sketch patches and near-free drift signals (§2.3, §4). 
+
+• Evaluation across density regimes: six datasets spanning six orders of magnitude in density, locating the crossover (∼5%) below which norm-proportional sampling beats uni-form (§3). Randomized matrix sketching [ 9 , 19 ] produces static low-rank approximations; streaming extensions [ 27 ] handle sliding windows but cannot incorporate arbitrary updates without full rebuilds. Sar-war et al. [ 22 ] and Brand [ 2] update the thin SVD via rank-one perturbation with periodic re-orthogonalization to control numer-ical drift; eALS [ 13 ] uses element-wise factor updates per rating. All three modify the factorization itself, coupling data freshness to model recomputation. Streaming recommenders such as RMFX [ 6 ]use pairwise BPR [ 21 ] over a fixed-size reservoir with SGD updates; dynamic-embedding methods (AutoEmb [ 29 ], DESS [ 11 ]) optimize embedding dimension allocation rather than update latency. All of these approaches pay gradient or solver cost per update, whether on explicit ratings or implicit feedback [ 15 ]. Our approach is or-thogonal: hold the model fixed and update only the data structure, eliminating gradient computation on the user side entirely. A parallel line of systems work accelerates freshness at other layers of the serving stack. Ekko [ 23 ] disseminates trained model updates across geo-distributed inference clusters in seconds via peer-to-peer synchronization; LiveUpdate [ 28 ] refreshes embedding tables on idle inference-node CPUs, exploiting the low-rank struc-ture of embedding-table gradients (LoRA-style) to reach minute-scale freshness with negligible serving impact. Both accelerate 
+
+model freshness — how quickly new parameters reach serving. We target the layer upstream of both: data freshness, where a new rating changes the served embedding with no parameters trained or shipped at all. The distinction from LiveUpdate is instructive: both exploit low-rank structure, but LiveUpdate uses it to compress gradient updates, while we use it to project fresh data through a fixed basis — no gradients anywhere in the update path. The three layers compose rather than compete. 
+
+## 2 Mutable Sketches via KP-Trees 
+
+The key idea is to decouple data freshness from model freshness. We store each user’s preference vector in a data structure that supports efficient sampling and point updates, fit a low-rank projec-tion 𝑉 𝑘 once from a small sketch, and recompute user embeddings on-the-fly by projecting through the fixed 𝑉 𝑘 whenever the data changes. The projection never degrades as observations accumulate (Theorem 1). arXiv:2607.15242v1 [cs.LG] 16 Jul 2026 Hector J. Garcia and Nick Clayton 
+
+## 2.1 Sketch Construction and Serving 
+
+Definition 1 (KP-Tree). Given a ∈ R𝑛 , the KP-tree is a binary tree of depth ⌈log 2 𝑛 ⌉ where leaf 𝑗 stores |𝑎 𝑗 | and each internal node stores the sum of its children. It supports Sample (draw 𝑗 ∝ | 𝑎 𝑗 |), 
+
+Query (look up 𝑎 𝑗 ), and Update (modify 𝑎 𝑗 and propagate sums) — all in 𝑂 (log 𝑛 ).
+
+To build the sketch, sample 𝑟 rows (users) proportional to row norms; for each, sample 𝑐 columns proportional to entry magni-tudes. Extract values at the union of sampled columns to form an 
+
+𝑟 × |C| sketch 𝑆 , then fit truncated SVD: 𝑆 ≈ 𝑈 𝑘 Σ𝑘 𝑉 𝑇 𝑘 , producing item embeddings (rows of 𝑉 𝑘 ). Total cost: 𝑂 (𝑚 + 𝑟𝑐 log 𝑛 ) where 
+
+𝑚 is the number of users (rows), independent of the number of non-zero entries (nnz) in the rating matrix. At serving time, for user 𝑖 , read their preference values over the sketch’s column set from the KP-tree, center, and project: u𝑖 =
+
+(a𝑖 − ¯c)𝑉 𝑘 ∈ R𝑘 . This embedding is used for ANN retrieval (e.g., FAISS [ 16 ]) or direct prediction via ˆ𝑎 𝑖 𝑗 = u𝑖 𝑉 𝑇 𝑘 + ¯𝑐 𝑗 , where ¯𝑐 𝑗 is the per-item mean rating over the sketch columns, correcting for item popularity bias. When user 𝑖 rates item 𝑗 , insert 𝑎 𝑖 𝑗 into their KP-tree in 𝑂 (log 𝑛 ). The next query reads the updated tree, producing a better projection through the same 𝑉 𝑘 — no model parameters change. 
+
+## 2.2 Monotonic Improvement Guarantee 
+
+Theorem 1 (Shrinking projected-error envelope). Let 𝑉 𝑘 be a fixed orthonormal basis, 𝑃 = 𝑉 𝑘 𝑉 𝑇 𝑘 , and a∗ a user’s true preference vector. Let a(𝑡 ) be the observed version at time 𝑡 (unobserved entries zero). If a(𝑡 +1) sets one unobserved entry 𝑗 to its true value 𝑎 ∗ 
+
+> 𝑗
+
+, then: 
+
+∥𝑃 a(𝑡 +1) − 𝑃 a∗ ∥ ≤√︃ ∥a(𝑡 ) − a∗ ∥2 − ( 𝑎 ∗ 
+
+> 𝑗
+
+)2 < ∥a(𝑡 ) − a∗ ∥.
+
+Proof. Let e(𝑡 ) = a(𝑡 ) − a∗ denote the error at time 𝑡 . Since entry 𝑗 is unobserved at time 𝑡 , we have 𝑒 (𝑡 ) 
+
+> 𝑗
+
+= −𝑎 ∗ 
+
+> 𝑗
+
+. At time 𝑡 +1,entry 𝑗 is set to 𝑎 ∗ 
+
+> 𝑗
+
+, so 𝑒 (𝑡 +1) 
+
+> 𝑗
+
+= 0 and 𝑒 (𝑡 +1) 
+
+> 𝑖
+
+= 𝑒 (𝑡 ) 
+
+> 𝑖
+
+for 𝑖 ≠ 𝑗 . That is, 
+
+e(𝑡 +1) equals e(𝑡 ) with component 𝑗 zeroed out, giving ∥e(𝑡 +1) ∥2 =
+
+∥e(𝑡 ) ∥2 − ( 𝑎 ∗ 
+
+> 𝑗
+
+)2. Since 𝑃 = 𝑉 𝑘 𝑉 𝑇 𝑘 is an orthogonal projection, ∥𝑃 x∥ ≤ ∥x∥ for all x. Applying this to x = e(𝑡 +1) yields the result. (Note: we assume the observed rating equals the true preference. With zero-mean observation noise of variance 𝜎 2, the squared bound holds in expectation with an additive 𝜎 2 term: E∥𝑃 e(𝑡 +1) ∥2 ≤ ∥ e(𝑡 ) ∥2 −(𝑎 ∗ 
+
+> 𝑗
+
+)2 + 𝜎 2, which is monotone whenever the signal exceeds the noise variance.) □
+
+The common incremental baselines lack this property. FunkSVD offers no monotonicity guarantee (SGD on new batches can over-write base-data signal), eALS stagnates without item-factor updates, and Brand’s rank-one perturbation [ 2] accumulates numerical drift over many updates. The mutable sketch sidesteps these failure modes because it does not modify the factorization — only the data changes. 
+
+## 2.3 Consistent Sampling Under Mutation 
+
+Any key-value store can serve the projection step — reading a user’s preferences and multiplying by 𝑉 𝑘 — following the feature-store pattern common in production systems [ 20 ]. The KP-tree’s contribution is to the sketch construction step, where 𝑉 𝑘 is built or rebuilt by sampling rows proportional to norms and columns proportional to entry magnitudes (Section 2.1). A key-value store would require scanning all users to compute norms and maintain-ing per-user alias tables for weighted column sampling, both at cost proportional to the total number of ratings and both invalidated by each new insert. The KP-tree avoids this by providing norm-proportional sampling in 𝑂 (log 𝑛 ) with consistency maintained after each update. As we show experimentally (Section 3.4), this advantage is density-dependent: norm-proportional sampling out-performs uniform sampling below ∼5% density, a regime that covers many production workloads. On denser data, uniform sampling suffices and the KP-tree’s sampling capability offers no benefit, though its 𝑂 (log 𝑛 ) point queries remain useful for embedding computation. 
+
+## 3 Experimental Evaluation 
+
+We evaluate primarily on KuaiRec [ 7 ] (4.7M interactions, 1.4K users, 3.3K items, 99.6% dense — a fully-observed dataset), with four sparse benchmarks: Amazon Electronics 2023 [ 14 ] (5M ratings, 3.3M users, 672K items, 0.0002% dense), Amazon Video Games 2023 [ 14 ] (4.6M ratings, 2.8M users, 137K items, 0.001% dense), Amazon Music 2023 [ 14 ] (128K ratings, 101K users, 71K items, 0.002% dense), and Book-Crossing [ 30 ] (247K ratings, 3.7K users, 186K items, 0.048% dense). All experiments use rank 𝑘 =10 , sketch size 200 ×100 . We report RMSE on a held-out test set throughout: static experiments use an 80/20 random split; streaming experiments train on 60% of the data and stream the remaining 40% in equal-sized batches. Most experiments run on a single-core laptop; ML-25M [ 10 ] and Goodreads Comics [ 26 ] experiments run on a 32-vCPU ARM server with 256 GB RAM. Table 1 summarizes asymptotic costs. 
+
+Table 1: Time complexity per operation. 𝑇 : iterations; 𝑏 : batch size; 𝑟 ×𝑐 : sketch rows and columns; nnz: non-zeros.                                              
+
+> Method Fit / Retrain Online update ALS 𝑂 (𝑇 ·nnz ·𝑘 )Full refit eALS 𝑂 (𝑇 ·nnz ·𝑘 )𝑂 (𝑘 2· | 𝑅 𝑢 | ) /user FunkSVD 𝑂 (𝑇 ·nnz ·𝑘 )𝑂 (𝑏 ·𝑘 ·𝑇 )
+> Ours 𝑂 (𝑚 +𝑟𝑐 log 𝑛 )𝑂 (𝑏 log 𝑛 )
+
+## 3.1 Static Accuracy 
+
+We first ask how the sketch compares to full-data baselines when all ratings are available at training time. On KuaiRec (Table 2), the mutable sketch achieves 0.810 RMSE while reading 1.8% of the matrix, compared to 0.822 for ALS at 100%. On sparser benchmarks the gap widens: Amazon Music (0.002% dense) yields 1.029 RMSE, competitive with mean baselines while reading <1% of a matrix too large for full SVD. Amazon Video Games (0.001% dense) yields 1.562 RMSE with norm-proportional sampling. In these regimes most full-data methods either exceed memory (Full SVD) or overfit (ALS achieves 4.62 on Amazon Music). On ML-1M (4.2% dense), the gap is larger (Table 3), reflecting sparser sampling coverage. Increasing the sketch size from 200 ×100 (2% data) to 800 ×200 (10.8%) narrows Mutable Low-Rank Sketches for Retrain-Free Recommendation 
+
+the gap from 0.113 to 0.085, illustrating the accuracy-data tradeoff at moderate density. 
+
+Table 2: KuaiRec (80/20 split). All baselines read 100% of the matrix.        
+
+> Method RMSE Full SVD 0.8037 ALS [18] 0.8216 eALS [13] 0.8240 FunkSVD [18] 0.8037 Item Mean 0.8556 Mutable sketch + bias (ours, 1.8% data) 0.8099
+
+Table 3: ML-1M (80/20 split, rank=10). All baselines read 100%.           
+
+> Method RMSE Data ALS [18] 0.863 100% Ours ( 800 ×200 )0.948 10.8% Ours ( 200 ×100 )0.976 2.0% Item Mean 0.979 100%
+
+## 3.2 Online Updates 
+
+Static accuracy matters less if the model cannot incorporate new ratings without a full retrain. We hold out 40% of the training ratings and stream them in 30 equal-sized batches ( ∼50K ratings each on KuaiRec), measuring test RMSE after each batch (Table 4, Figure 1). All methods start from the same 60% base data and receive identical streaming input. 
+
+Table 4: Online update summary on KuaiRec (30 streaming batches).               
+
+> Ours FunkSVD eALS Final RMSE 0.818 ↓0.809 ↓0.828 ↓
+> Avg batch 90ms 200ms 730ms Monotonic? Yes No No Obs.-to-serve 2.5ms 200ms 730ms
+
+The sketch’s RMSE improves from 0.823 to 0.818 over 30 batches (Figure 1), consistent with Theorem 1. FunkSVD starts slightly worse (0.827) but converges steadily, crossing the sketch around batch 12 and reaching 0.809 by batch 30. eALS converges from 0.828 at batch 0 to 0.828 at batch 30 after re-solving affected user factors with each batch. Per-batch latency is 90 ms for the sketch vs. 200 ms for FunkSVD and 730 ms for eALS. End-to-end observation-to-serve latency is 2.5 ms P95. 
+
+## 3.3 Cold-Start Latency 
+
+A key operational concern is how quickly a brand-new user re-ceives personalized recommendations. With the mutable sketch, a new user’s KP-tree can be created, their ratings inserted, and their 
+
+0 5 10 15 20 25 30 
+
+0.81 
+
+0.81 
+
+0.82 
+
+0.82 
+
+0.83 
+
+0.83 
+
+Batch RMSE   
+
+> Ours FunkSVD eALS
+
+Figure 1: Online convergence on KuaiRec (30 streaming batches). The sketch improves from 0.823 to 0.818; FunkSVD converges from 0.827 to 0.809, crossing the sketch around batch 12; eALS remains flat at 0.828. Table 5: Cold-start: time to first personalized recommenda-tion (measured on ML-10M scale, single core).                 
+
+> Ratings P50 (ms) P95 (ms) RMSE 10.49 1.36 0.873 30.66 2.48 0.874 10 0.75 2.48 0.865 50 5.06 9.75 0.863
+> eALS per-user solve: ∼5 ms. ALS requires full retrain ( ∼36 s).
+
+embedding computed via the existing 𝑉 𝑘 in a single serving call — no model retrain required (Table 5, Figure 2). With a single rating, the sketch serves a personalized recommen-dation in 0.49 ms P50, and RMSE (0.873) is within 0.06 of full-data ALS (0.822) — the projection through 𝑉 𝑘 leverages the latent struc-ture learned from all other users. Latency scales with rating count but remains sub-10 ms even at 50 ratings. 
+
+10 −1 10 0 10 1 10 2 10 3
+
+> Ours (1 rating)
+> Ours (10 ratings)
+> FunkSVD batch
+> eALS solve
+> −0.71
+> −0.29
+> 5.3
+> 6.59
+
+Latency (ms, log scale) 
+
+Figure 2: Cold-start latency vs. per-batch update cost of in-cremental methods (log scale, comparable scope). 
+
+## 3.4 Sampling Strategy and Density 
+
+The KP-tree’s norm-proportional sampling maintains 𝑂 (log 𝑛 ) con-sistency under mutation. We compare it against uniform random sampling across density regimes (Table 6). On sparse data, norm-proportional sampling concentrates on signal-carrying rows, yield-ing 40–130% more sketch columns (e.g., 591 vs. 262 on Amazon Music). On dense data, uniform coverage is already representative. Bias correction (subtracting per-item means ¯𝑐 𝑗 ) helps on moderately sparse datasets like Goodreads Comics (0.930 →0.844) and Amazon Music (1.087 →1.060), but can hurt on extremely sparse data where the column means are poorly estimated. Hector J. Garcia and Nick Clayton 
+
+Table 6: Norm-proportional vs. uniform sampling with and without bias correction (mean RMSE; Goodreads Comics and ML-25M from EC2 run).                                    
+
+> Dataset Density NormProp +Bias Uniform +Bias Amazon Electronics 0.0002% 1.407 1.498 1.680 1.709 Amazon Video Games 0.001% 1.485 1.562 1.729 1.747 Amazon Music 0.002% 1.087 1.060 1.152 1.354 Goodreads Comics 0.018% 0.930 0.844 1.049 0.984 ML-25M 0.048% 0.944 0.897 0.999 0.955 KuaiRec 99.6% 0.821 0.818 0.819 0.815
+
+A density sweep on KuaiRec subsamples (Figure 3) places the crossover at roughly 5–10% density: norm-proportional sampling helps below this; the methods converge at 10–20%; uniform wins above 50%. Since many production systems operate well below 1% density, the KP-tree’s ability to maintain a consistent sampling dis-tribution under mutation has practical value beyond its theoretical motivation.       
+
+> 0.1% 0.5% 1% 5% 10% 50% 100%
+
+0.8
+
+1
+
+1.2
+
+1.4
+
+Density RMSE  NormProp 
+
+> Uniform
+
+Figure 3: Density sweep on KuaiRec subsamples (bias-corrected, 3 trials). Norm-proportional wins below ∼5%; they converge at 10–20%; uniform wins above 50%. 
+
+## 4 Discussion 
+
+The mutable sketch has clear limitations. Accuracy depends on the sketch covering enough items; the approach works well when the item space is compact relative to the sketch size (KuaiRec: 3.3K items, 99% coverage) but degrades on large catalogs (Amazon Video Games: 137K items, <1% coverage). The fixed 𝑉 𝑘 accumulates staleness as the data distribution shifts, but the rate is density-dependent. On ultra-sparse data (Amazon Music, ∼1.3 ratings/user), 
+
+𝑉 𝑘 never goes stale: the sketch holds at 1.05 RMSE over 30 streaming batches while ALS degrades from 1.50 to 1.93 — periodic refit is indistinguishable from no refit because ALS cannot learn a better low-rank space from so few observations. On denser data (ML-1M), accuracy without refit plateaus ∼0.08 RMSE above periodic refit after 30 batches; refitting every 10 batches closes the gap at ∼13 s per refit. A hybrid strategy — continuous tree updates (milliseconds) with periodic SVD refit (seconds) — captures most of ALS’s accuracy on dense datasets and exceeds it on sparse ones. To trigger refits only when warranted, the KP-tree exposes two signals at negligible cost: norm divergence — total variation between the current and snapshot sampling distributions, 𝑂 (1) per tree root — and projection residuals — ∥a𝑖 −𝑉 𝑘 𝑉 𝑇 𝑘 a𝑖 ∥/∥ a𝑖 ∥, the fraction of user signal outside 𝑉 𝑘 .A three-tier controller monitors these: (1) tree-only updates when both signals are small, (2) a warm sketch patch — extract fresh values from updated trees for stale sketch rows, then re-run SVD on the patched sketch, skipping the distributed sampling phase — when residuals grow, or (3) a full 𝑉 𝑘 rebuild when norm divergence is large. On both Amazon Music and ML-1M, the controller stays on Tier 1 throughout (norm divergence reaches only 0.012–0.035), achieving 2.7–5.4 × speedup over periodic ALS by correctly avoiding unnecessary refits; multi-backend implementation details are in [ 8]. The formulation is pure collaborative filtering; non-ID features enter via the downstream ranker. Jointly encoding side features in the sketch is future work. We validated serving latency on ML-10M (72K users, 10K items) using a ConcurrentHashMap-backed serving prototype on a single core (Table 8). KP-tree memory scales as 𝑂 (𝑟 𝑖 log 𝑛 ) per user with 
+
+𝑟 𝑖 ratings; at 100M users with 50 ratings each, this totals ∼1 TB partitioned across cluster nodes, reducible via tiered storage since user trees are independent. A related body of systems-ML work observes that tree-based sampling structures, while asymptotically optimal, are poorly suited to GPU workloads: tree traversals require pointer chasing across non-contiguous memory, and concurrent updates to shared inter-nal nodes create thread contention that destroys parallelism. The prevailing alternative is to use Walker’s Alias Method [ 25 ] ( 𝑂 (1)
+
+sampling from a flat table), accept intentionally stale sampling probabilities for a fixed number of steps, and periodically rebuild the table using dense tensor operations. Our consistency experi-ment (Table 7) quantifies the cost of this staleness assumption: on Amazon Music (0.002% dense), sampling from stale distributions after streaming updates degrades RMSE by 0.32; on KuaiRec (99.6% dense), the cost is zero. This suggests that the alias-table approach is appropriate for dense or GPU-oriented workloads, while the KP-tree’s consistent sampling is more valuable for sparse, CPU-based serving — the regime we target. Our serving measurements (Ta-ble 8) are single-core CPU; we do not claim GPU compatibility. The same regime distinction applies to inference-side update systems: LiveUpdate [ 28 ] targets dense DLRM embedding tables of tens of terabytes on GPU inference clusters with terabytes of RAM per node, where LoRA gradient steps on idle CPUs are cheap relative to the serving fleet. We target the opposite corner — sparse rating matrices served from a single CPU core, where even one gradi-ent step per update would dominate the sub-millisecond budget. These are different production niches, and the two mechanisms could compose: a mutable sketch for the sparse long tail alongside a LiveUpdate-style pipeline for the dense head. The mutable sketch targets a different point in the latency-accuracy tradeoff than neural embeddings: sub-millisecond cold-start and monotonic safety, at the cost of initial accuracy below full-data methods on sparse matrices. It is weakest when maximum accuracy is required, when non-ID features are needed at retrieval, or when the pipeline is GPU-oriented. The low rank ( 𝑘 =10 ) of the sketch embedding is itself an advantage for retrieval: it avoids the curse of dimensionality that degrades tree-based and exact nearest-neighbor indices beyond ∼20 dimensions, and keeps ANN index sizes small. 
+
+## 5 Conclusion 
+
+We presented mutable sketches for recommendation that is retrain-free between drift-triggered refits: user-side updates never touch Mutable Low-Rank Sketches for Retrain-Free Recommendation 
+
+Table 7: Fresh vs. stale sampling after streaming updates (mean RMSE, bias-corrected, 5 trials). 
+
+Dataset Fresh Stale Gap Amazon Music (0.002%) 0.914 1.234 0.320 KuaiRec (99.6%) 0.818 0.818 0.000 
+
+the model, and the model is refit only when cheap drift signals warrant it. The KP-tree’s ability to maintain a consistent sampling distribution under mutation enables instant embedding updates, immediate sketch patches, and a monotonic improvement guar-antee. On KuaiRec, the sketch achieves competitive accuracy at 1.8% data read with 8 × faster updates than eALS; a new user gets personalized recommendations in <1 ms. The sampling advantage is density-dependent: valuable on sparse data typical of production systems, and unnecessary on dense research benchmarks. Code, datasets, and experiment scripts are available upon request. 
+
+Table 8: Serving latency on ML-10M (single core, 10K itera-tions). 
+
+Component P95 User embedding computation 2.45 ms FAISS retrieval (top-10, Flat index) 0.020 ms End-to-end ∼2.5 ms 
+
+P50: 0.71 ms. Mean: 1.08 ms. Throughput: 927 QPS. 
+
+## References 
+
+[1] Juan Miguel Arrazola, Alain Delgado, Bhaskar Roy Bardhan, and Seth Lloyd. 2020. Quantum-inspired algorithms in practice. Quantum 4 (2020), 307. [2] Matthew Brand. 2006. Fast low-rank modifications of the thin singular value decomposition. Linear Algebra Appl. 415, 1 (2006), 20–30. [3] Natalie Chepurko, Kenneth L. Clarkson, Lior Horesh, Hongyuan Lin, and David P. Woodruff. 2022. Quantum-inspired algorithms from randomized numerical linear algebra. In Proc. 39th International Conference on Machine Learning (ICML) . 3879– 3900. [4] Nai-Hui Chia, András Gilyén, Tongyang Li, Han-Hsuan Lin, Ewin Tang, and Chunhao Wang. 2020. Sampling-based sublinear low-rank matrix arithmetic framework for dequantizing quantum machine learning. In Proc. 52nd ACM Symposium on Theory of Computing (STOC) . 387–400. [5] Paul Covington, Jay Adams, and Emre Sargin. 2016. Deep neural networks for YouTube recommendations. In Proc. 10th ACM Conference on Recommender Systems (RecSys) . 191–198. [6] Ernesto Diaz-Aviles, Lucas Drumond, Lars Schmidt-Thieme, and Wolfgang Nejdl. 2012. Real-time top-n recommendation in social streams. In Proc. 6th ACM Conference on Recommender Systems (RecSys) . 59–66. [7] Chongming Gao, Shijun Li, Wenqiang Lei, Jiawei Chen, Biao Li, Peng Jiang, Xiangnan He, Jiaxin Mao, and Tat-Seng Chua. 2022. KuaiRec: A fully-observed dataset and insights for evaluating recommender systems. In Proc. 31st ACM CIKM . 540–550. [8] H. Garcia. 2026. Multi-backend storage for KP-tree recommendation: Spark, Flink, and JVM implementations . Technical Report. University of Michigan. [9] Nathan Halko, Per-Gunnar Martinsson, and Joel A. Tropp. 2011. Finding structure with randomness: Probabilistic algorithms for constructing approximate matrix decompositions. SIAM Rev. 53, 2 (2011), 217–288. [10] F. Maxwell Harper and Joseph A. Konstan. 2015. The MovieLens datasets: History and context. ACM Transactions on Interactive Intelligent Systems 5, 4 (2015), 19:1– 19:19. [11] Bowei He, Xu He, Renrui Zhang, Yingxue Zhang, Ruiming Tang, and Chen Ma. 2023. Dynamic embedding size search with minimum regret for streaming recommender system. In Proc. 32nd ACM International Conference on Information and Knowledge Management (CIKM) .[12] Xiangnan He, Lizi Liao, Hanwang Zhang, Liqiang Nie, Xia Hu, and Tat-Seng Chua. 2017. Neural collaborative filtering. In Proc. 26th International Conference on World Wide Web . 173–182. [13] Xiangnan He, Hanwang Zhang, Min-Yen Kan, and Tat-Seng Chua. 2016. Fast matrix factorization for online recommendation with implicit feedback. In Proc. 39th International ACM SIGIR Conference . 549–558. [14] Yupeng Hou, Jiacheng Zhang, Zhankui Lin, Hongzhi Lu, Ruobing Xie, Julian McAuley, and Wayne Xin Zhao. 2024. Bridging language and items for retrieval and recommendation. arXiv preprint arXiv:2403.03952 (2024). [15] Yifan Hu, Yehuda Koren, and Chris Volinsky. 2008. Collaborative filtering for implicit feedback datasets. In Proc. IEEE International Conference on Data Mining (ICDM) . 263–272. [16] Jeff Johnson, Matthijs Douze, and Hervé Jégou. 2019. Billion-scale similarity search with GPUs. IEEE Transactions on Big Data 7, 3 (2019), 535–547. [17] Iordanis Kerenidis and Anupam Prakash. 2016. Recommendation systems. arXiv preprint arXiv:1603.08675 (2016). [18] Yehuda Koren, Robert Bell, and Chris Volinsky. 2009. Matrix factorization tech-niques for recommender systems. Computer 42, 8 (2009), 30–37. [19] Edo Liberty. 2013. Simple and deterministic matrix sketching. In Proc. 19th ACM SIGKDD . 581–588. [20] Zhuoran Liu, Leqi Zou, Xuan Zou, Caihua Wang, Biao Zhang, Da Tang, Bolin Zhu, Yijie Zhu, Peng Wu, Ke Wang, and Youlong He. 2022. Monolith: Real time recommendation system with collisionless embedding table. arXiv preprint arXiv:2209.07663 (2022). [21] Steffen Rendle, Christoph Freudenthaler, Zeno Gantner, and Lars Schmidt-Thieme. 2009. BPR: Bayesian personalized ranking from implicit feedback. In 
+
+Proc. 25th Conference on Uncertainty in Artificial Intelligence (UAI) . 452–461. [22] Badrul Sarwar, George Karypis, Joseph Konstan, and John Riedl. 2002. Incremen-tal singular value decomposition algorithms for highly scalable recommender systems. In Proc. 5th International Conference on Computer and Information Sci-ence .[23] Chijun Sima, Yao Fu, Man-Kit Sit, Liyi Guo, Xuri Gong, Feng Lin, Junyu Wu, Yongsheng Li, Haidong Rong, Pierre-Louis Aublin, and Luo Mai. 2022. Ekko: A Large-Scale Deep Learning Recommender System with Low-Latency Model Up-date. In 16th USENIX Symposium on Operating Systems Design and Implementation (OSDI 22) .[24] Ewin Tang. 2019. A quantum-inspired classical algorithm for recommendation systems. In Proc. 51st ACM Symposium on Theory of Computing (STOC) .[25] Alastair J. Walker. 1977. An efficient method for generating discrete random variables with general distributions. ACM Trans. Math. Software 3, 3 (1977), 253–256. Hector J. Garcia and Nick Clayton 
+
+[26] Mengting Wan and Julian McAuley. 2018. Item recommendation on monotonic behavior chains. In Proc. 12th ACM Conference on Recommender Systems (RecSys) .86–94. [27] Rui Yin, Wei Wen, Ke Li, Hanchen Wei, Tao Zhang, Yin Huang, and Dingming Li. 2024. Optimal matrix sketching over sliding windows. Proc. VLDB Endowment 
+
+17, 9 (2024), 2149–2161. [28] Wenjun Yu, Sitian Chen, Cheng Chen, and Amelie Chi Zhou. 2025. Near-Zero-Overhead Freshness for Recommendation Systems via Inference-Side Model Updates. arXiv preprint arXiv:2512.12295 (2025). To appear in IEEE HPCA 2026. [29] Xiangyu Zhao, Haochen Liu, Wenqi Fan, Hui Liu, Jiliang Tang, and Chong Wang. 2021. AutoEmb: Automated embedding dimensionality search in streaming recommendations. In Proc. 21st IEEE International Conference on Data Mining (ICDM) . 896–905. [30] Cai-Nicolas Ziegler, Sean M. McNee, Joseph A. Konstan, and Georg Lausen. 2005. Improving recommendation lists through topic diversification. In Proc. 14th International Conference on World Wide Web (WWW) . 22–32.

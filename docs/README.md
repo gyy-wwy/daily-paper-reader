@@ -6,73 +6,56 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-10 ~ 2026-07-19
-- 运行时间：2026-07-19 05:02:31 UTC
+- 最新运行日期：2026-07-19
+- 运行时间：2026-07-19 20:59:08 UTC
 - 运行状态：成功
-- 本次总论文数：17
+- 本次总论文数：12
 - 精读区：6
-- 速读区：11
+- 速读区：6
 
 ### 今日简报（AI）
-1) 本期日报聚焦LLM在推荐系统中的应用，精读两篇9.0分论文：候选生成与内容发现，速读覆盖评估方法、主观偏好建模及多模态嵌入。  
-2) 最值得关注的方向是LLM无训练候选生成（面向长尾租赁市场）和智能体驱动的电视内容推荐，两者均展现了零样本/少样本场景下的实用潜力。  
-3) 若想跟进，可优先精读那两篇高分论文，并从速读中学习严格评估框架与群体偏好建模技巧。
-- 详情：[/20260710-20260719/README](/20260710-20260719/README)
+今日精读两篇均获9.0分，聚焦推荐系统解耦与用户长期参与优化。最值得关注正交解耦访问习惯（OrDA）与模型无关的长期参与优化方向。普通读者可进一步关注规范对齐及递归推理在推荐中的新探索。
+- 详情：[/202607/19/README](/202607/19/README)
 
 ### 精读区论文标签
-1. [Serving the Long Tail: Training-Free LLM Candidate Generation for Vacation Rental Marketplaces](/20260710-20260719/2607.09877v1-serving-the-long-tail-training-free-llm-candidate-generation-for-vacation-rental-marketplaces)  
+1. [OrDA: Orthogonal Disentanglement of Access Habits Framework for Homepage Marketing Block Recommendations](/202607/19/2607.13420v1-orda-orthogonal-disentanglement-of-access-habits-framework-for-homepage-marketing-block-recommendations)  
    标签：评分：9.0/10、query:rec-sys
-   evidence：无需训练的LLM候选生成用于度假租赁市场的冷启动
-2. [An LLM-powered Agentic Recommendation System for Connected TV Content Discovery](/20260710-20260719/2607.09988v1-an-llm-powered-agentic-recommendation-system-for-connected-tv-content-discovery)  
+   evidence：将用户兴趣与访问习惯正交解耦，消除伪正向点击偏差
+2. [Long-term User Engagement Optimization through Model-agnostic Downstream Rewards Learning](/202607/19/2607.14192v1-long-term-user-engagement-optimization-through-model-agnostic-downstream-rewards-learning)  
    标签：评分：9.0/10、query:rec-sys
-   evidence：基于LLM的智能体推荐系统用于电视内容发现
-3. [Tokenizing Numerical and Embedding Features for LLM RecSys](/20260710-20260719/2607.10016v1-tokenizing-numerical-and-embedding-features-for-llm-recsys)  
-   标签：评分：9.0/10、query:rec-sys
-   evidence：将数值和嵌入特征集成到LLM推荐系统中的软令牌融合框架
-4. [RecRec: Recursive Refinement for Sequential Recommendation](/20260710-20260719/2607.10541v1-recrec-recursive-refinement-for-sequential-recommendation)  
-   标签：评分：9.0/10、query:rec-sys
-   evidence：递归精炼的序列推荐
-5. [Learning to Forget: Satiation-Aware Long-Sequence Transducers for Mitigating Post-Purchase Redundancy](/20260710-20260719/2607.12714v1-learning-to-forget-satiation-aware-long-sequence-transducers-for-mitigating-post-purchase-redundancy)  
-   标签：评分：9.0/10、query:rec-sys
-   evidence：显式建模序列推荐中的意图生命周期和购买后饱和
-6. [ViHoRec: A Quality-Controlled Vietnamese Hotel Recommendation Dataset and Cold-Start Benchmark](/20260710-20260719/2607.12946v1-vihorec-a-quality-controlled-vietnamese-hotel-recommendation-dataset-and-cold-start-benchmark)  
-   标签：评分：9.0/10、query:rec-sys
-   evidence：酒店推荐中的冷启动基准数据集
+   evidence：推荐系统中基于强化学习的长期用户参与优化
+3. [MMRM: A Multiplex Multimodal Representation Model for Product Ranking in E-commerce Search](/202607/19/2607.11030v1-mmrm-a-multiplex-multimodal-representation-model-for-product-ranking-in-e-commerce-search)  
+   标签：评分：8.0/10、query:rec-sys
+   evidence：利用多模态大语言模型进行电商商品排序
+4. [SISA-Rec: A Semantically Integrated Sequential Recommender with Contrastive Alignment](/202607/19/2607.11168v1-sisa-rec-a-semantically-integrated-sequential-recommender-with-contrastive-alignment)  
+   标签：评分：8.0/10、query:rec-sys
+   evidence：序列推荐，通过语义集成解决冷启动问题
+5. [Proximity Features: Privacy-Compliant Cold-Start Personalization at Airbnb](/202607/19/2607.12246v1-proximity-features-privacy-compliant-cold-start-personalization-at-airbnb)  
+   标签：评分：8.0/10、query:rec-sys
+   evidence：Airbnb上的隐私合规冷启动个性化推荐
+6. [Mutable Low-Rank Sketches for Retrain-Free Recommendation](/202607/19/2607.15242v1-mutable-low-rank-sketches-for-retrain-free-recommendation)  
+   标签：评分：8.0/10、query:rec-sys
+   evidence：通过免重训练为新用户生成推荐，直接解决冷启动问题
 
 ### 速读区论文标签
-1. [RouteRec: Strict Evaluation of Recommender-Agent Selection and Aggregation](/20260710-20260719/2607.09908v1-routerec-strict-evaluation-of-recommender-agent-selection-and-aggregation)  
-   标签：评分：8.0/10、query:rec-sys
-   evidence：评估包含LLM重排序器在内的异质推荐代理选择
-2. [Consensus vs. Dissent: Dynamic LLM Modeling of Subjective Preferences in Group Recommenders](/20260710-20260719/2607.10235v1-consensus-vs-dissent-dynamic-llm-modeling-of-subjective-preferences-in-group-recommenders)  
-   标签：评分：8.0/10、query:rec-sys
-   evidence：利用LLM建模群体推荐中的主观偏好
-3. [Stream-aware Side Adaptation for Large Pre-trained Multimodal Embedding Models in Sequential Recommendation](/20260710-20260719/2607.10909v1-stream-aware-side-adaptation-for-large-pre-trained-multimodal-embedding-models-in-sequential-recommendation)  
-   标签：评分：8.0/10、query:rec-sys
-   evidence：使用预训练多模态嵌入的序列推荐
-4. [ZoRRO: A Zero-Weight Personalized Recommender System for Scalable News Recommendation](/20260710-20260719/2607.10910v1-zorro-a-zero-weight-personalized-recommender-system-for-scalable-news-recommendation)  
-   标签：评分：8.0/10、query:rec-sys
-   evidence：无训练的个人化新闻推荐系统
-5. [From Raw IDs to Semantic Planning: How Recommender Systems Utilize Information at Scale](/20260710-20260719/2607.09540v3-from-raw-ids-to-semantic-planning-how-recommender-systems-utilize-information-at-scale)  
+1. [Normative Alignment of Recommender Systems via Internal Label Shift](/202607/19/2607.10915v1-normative-alignment-of-recommender-systems-via-internal-label-shift)  
    标签：评分：7.0/10、query:rec-sys
-   evidence：从综述角度回顾推荐系统发展，涉及语义规划和大语言模型
-6. [Tool-Adaptive LLM Reranker](/20260710-20260719/2607.10555v1-tool-adaptive-llm-reranker)  
+   evidence：将推荐系统输出与利益相关者指定的分布对齐
+2. [RecRec: Latent Interests Recursive Reasoning for Sequential Recommendation](/202607/19/2607.12945v1-recrec-latent-interests-recursive-reasoning-for-sequential-recommendation)  
    标签：评分：7.0/10、query:rec-sys
-   evidence：将LLM重排序形式化为马尔可夫决策过程并采用强化学习
-7. [Prompt Generation Technical Report](/20260710-20260719/2607.11326v1-prompt-generation-technical-report)  
-   标签：评分：7.0/10、query:rec-sys
-   evidence：基于LLM的提示生成框架，用于推荐系统中的生成式检索
-8. [User Preference Induction with LLMs for Offline Top-N Recommendation Evaluation](/20260710-20260719/2607.11354v1-user-preference-induction-with-llms-for-offline-top-n-recommendation-evaluation)  
-   标签：评分：7.0/10、query:rec-sys
-   evidence：使用LLM扩展离线推荐评估的相关性判断
-9. [Where Reasoning Matters: Rethinking Latent Reasoning in Semantic ID-based Generative Recommendation](/20260710-20260719/2607.12425v1-where-reasoning-matters-rethinking-latent-reasoning-in-semantic-id-based-generative-recommendation)  
+   evidence：序列推荐中的潜在兴趣递归推理，适用于会话推荐
+3. [NGM-RAG: Neural Graph Matching based Retrieval-Augmented Generation](/202607/19/2607.11159v1-ngm-rag-neural-graph-matching-based-retrieval-augmented-generation)  
    标签：评分：6.0/10、query:rec-sys
-   evidence：基于语义ID的生成式推荐及潜在推理
-10. [TMallGS: Scaling Unified Feature and Sequence Modeling for Generative E-commerce Search](/20260710-20260719/2607.13398v1-tmallgs-scaling-unified-feature-and-sequence-modeling-for-generative-e-commerce-search)  
+   evidence：基于神经图匹配的检索增强生成，结合图与LLM
+4. [Where Reasoning Matters: Rethinking Latent Reasoning in Semantic ID-based Generative Recommendation](/202607/19/2607.12425v1-where-reasoning-matters-rethinking-latent-reasoning-in-semantic-id-based-generative-recommendation)  
    标签：评分：6.0/10、query:rec-sys
-   evidence：将类LLM的Transformer架构应用于电商搜索排序，采用异构分词策略
-11. [Deep-learning Causal Retrieval Optimization for Efficient e-commerce Distribution in Pinterest](/20260710-20260719/2607.14161v1-deep-learning-causal-retrieval-optimization-for-efficient-e-commerce-distribution-in-pinterest)  
+   evidence：基于语义ID的生成式推荐中的潜在推理
+5. [Can We Steer the Black-Box? Towards Controllability-Centric Evaluation of Recommender Systems with Collaborative Agents](/202607/19/2607.13418v2-can-we-steer-the-black-box-towards-controllability-centric-evaluation-of-recommender-systems-with-collaborative-agents)  
    标签：评分：6.0/10、query:rec-sys
-   evidence：用于推荐的因果检索优化，类似于强化学习
+   evidence：评估推荐系统的可控性，与意图感知的引导相关
+6. [Optimal and Efficient Contextual Combinatorial Semi-bandits with General Function Approximation](/202607/19/2607.13686v1-optimal-and-efficient-contextual-combinatorial-semi-bandits-with-general-function-approximation)  
+   标签：评分：6.0/10、query:rec-sys
+   evidence：面向强化学习的上下文组合半多臂老虎机算法
 
 
 <div class="dpr-home-promo-card">

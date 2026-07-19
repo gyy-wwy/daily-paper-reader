@@ -1,0 +1,413 @@
+Title: Proximity Features: Privacy-Compliant Cold-Start Personalization at Airbnb
+
+URL Source: https://arxiv.org/pdf/2607.12246v1
+
+Published Time: Wed, 15 Jul 2026 11:58:50 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Proximity Features: Privacy-Compliant Cold-Start Personalization at Airbnb 
+
+# Wei Jiang 
+
+Airbnb Inc. San Francisco, USA wei.jiang@airbnb.com 
+
+# Bin Xu 
+
+Airbnb Inc. San Francisco, USA b.xu@airbnb.com 
+
+# Hui Gao 
+
+Airbnb Inc. San Francisco, USA hui.gao@airbnb.com 
+
+# Bharathi Thangamani 
+
+Airbnb Inc. San Francisco, USA bharathi.thangamani@airbnb.com 
+
+# Weiwei Guo 
+
+Airbnb Inc. San Francisco, USA weiwei.guo@airbnb.com 
+
+# Sundar Srinivasavaradhan 
+
+Airbnb Inc. San Francisco, USA sundara.srinivasavaradhan@airbnb.com 
+
+# Tracy Yu 
+
+Airbnb Inc. San Francisco, USA tracy.yu@airbnb.com 
+
+# Huiji Gao 
+
+Airbnb Inc. San Francisco, USA huiji.gao@airbnb.com 
+
+# Michael Kinoti 
+
+Airbnb Inc. San Francisco, USA michael.kinoti@airbnb.com 
+
+## Abstract 
+
+Personalization in two-sided marketplaces relies heavily on user-level features, yet for platforms with infrequent, high-consideration purchases, a large fraction of users lack sufficient history for effec-tive recommendation, spanning both paid and organic channels. At Airbnb, a substantial share of search requests comes from logged-out or first-time users, with this challenge especially pronounced on paid-channel landing pages, leaving traditional user-level fea-tures unavailable for a large fraction of traffic. Privacy regulations and increasing restrictions on third-party cookies further limit identifier-based tracking for non-essential use cases. This paper introduces Proximity Features , a privacy-compliant feature system that groups users by geographic proximity using geo-IP data and an adaptive clustering algorithm, producing aggregated user-level signals for groups of approximately 1,000 nearby users—without requiring a persistent individual identifier at inference time. Pri-vacy is preserved by design: the pipeline operates on consented, aggregated data only within consent-gated privacy controls. The system is deployed in production at Airbnb, serving mul-tiple surfaces including marketing landing pages and destination recommendation, with engagement emails integration under way. Online A/B experiments demonstrate statistically significant lifts in bookings, with the largest gains observed among users with absent or stale history. 
+
+## CCS Concepts 
+
+• Information systems → Recommender systems ; Personalization ;
+
+Search personalization ; • Security and privacy → Privacy protec-tions .
+
+## Keywords 
+
+cold-start personalization, geo-IP features, privacy-preserving ma-chine learning, two-sided marketplace, recommendation systems, marketing personalization 
+
+## 1 Introduction 
+
+Two-sided marketplaces such as Airbnb depend on personalization to match supply with demand effectively. Machine learning models powering search ranking, recommendation, and marketing rely on rich user-level features tied to individual identifiers. However, a substantial portion of marketplace traffic lacks the history needed to compute these features—a challenge known as the cold-start problem . Throughout this paper, user is used as a general term encompassing logged-in, logged-out, anonymous users, etc. At Airbnb, the cold-start problem is pervasive across both paid and organic channels. On paid-channel landing pages (e.g., Google, Meta), the majority of users are logged out and many are first-time users with no prior Airbnb history. Standard user_id and cookie-based visitor_id features are either unavailable (for logged-out users) or too sparse to be useful (for first-time or low-activity users). Throughout this paper, cold-start refers to both cases: users for whom individual identifiers are inaccessible and users with insuffi-cient behavioral history. Compounding this challenge, evolving privacy regulations im-pose additional constraints. Under the General Data Protection Regulation (GDPR) [ 22 ], cookie-tracking requires explicit consent for non-essential use cases such as marketing personalization. With increasing restrictions on third-party cookies, identifier-based ap-proaches face further erosion for anonymous users. Any feature system targeting cold-start users in this environment must work 
+
+without individual tracking .This paper addresses both challenges simultaneously with Prox-imity Features , a feature system that leverages aggregated geo-IP signals from a local group of nearby users. The key insight is that users from the same geographic area exhibit correlated travel preferences—they tend to search for and book similar destinations, prefer similar price ranges, and share demographic characteristics. By grouping approximately 1,000 users into a proximity bucket us-ing an adaptive clustering algorithm over geo-IP coordinates, Prox-imity Features constructs rich user-level features immediately avail-able for any user whose IP address can be geolocated—regardless of arXiv:2607.12246v1 [cs.LG] 14 Jul 2026 TSMO ’26, August 9, 2026, Jeju, South Korea Jiang et al. 
+
+login state or prior history. Crucially, the system requires no user-level identifier at inference time, making it applicable to anonymous users for whom traditional personalization is otherwise unavailable. The contributions of this paper are as follows: (1) New features via proximity key. Proximity Features in-troduces a proximity key —a compact identifier for a local geographic group of ∼1,000 users—that serves as a privacy-safe analog to user_id in ML feature pipelines, enabling a new class of aggregated user-level features accessible across search ranking, recommendation, and marketing surfaces without requiring a persistent individual identifier at infer-ence time. (2) Cold-start resolution via group aggregation. An adaptive geo-IP clustering algorithm constructs proximity buckets at fine granularity in dense areas and coarser granularity in sparse areas, aggregating user-level signals from nearby users to fill the feature gap for users with absent or stale history. (3) Privacy-by-design without ID-based tracking. The sys-tem operates entirely on aggregated, consented geo-IP data. No user_id or cookie-based visitor_id is required at in-ference time, making it resilient to third-party cookie depre-cation and designed to operate within consent-gated, aggre-gated processing and deletion controls. The paper presents the core clustering algorithm and production-scale system design (Section 2), followed by empirical results from A/B experiments across multiple surfaces (Section 4). 
+
+## 2 System Design 
+
+Figure 1 provides an overview of the Proximity Features system. Each component is described below. 
+
+## 2.1 Geo-IP Data Source 
+
+Geo-IP databases [ 19 ] map IP addresses to latitude/longitude co-ordinates. A regularly updated geo-IP data source covers the vast majority of Airbnb’s global traffic. In our internal analysis, city-level agreement is approximately 80%. Most IP addresses map to a single, stable latitude/longitude pair, while approximately 15% map to different coordinates on different days due to ISP address reassignment. Importantly, coordinates from the geo-IP database are aggregated around the center of population rather than precise street-level locations—they cannot be used to identify specific addresses or households, even though they include more than two decimal places of precision. As a result, multiple IP addresses naturally map to the same latitude/longitude pair, typically representing a city center. This property is foundational to the privacy design described in Section 2.6. As a data quality measure, bot traffic is filtered prior to clustering. Automated crawlers can account for a disproportionate share of requests at certain IP addresses, skewing user counts and distorting bucket sizes. Removing known-bot traffic ensures that the adaptive clustering algorithm operates on a representative distribution of human traffic. 
+
+## 2.2 Proximity Key 
+
+A proximity key uniquely identifies a geographic bucket of users. It is constructed from three components: key = base64  ⌊lat × 𝑠 ⌋, ⌊lng × 𝑠 ⌋, ℎ (ip ) mod 𝑏  (1) where 𝑠 is the proximity scalar controlling geographic tile size, 
+
+𝑏 is the number of IP hash buckets within that tile, and ℎ is a deterministic hash function ( xxhash64 [ 7] is used for consistency between offline and online paths). The key is base64-encoded for compact storage and transmission. For dense locations (Phase 1 of the clustering algorithm), 𝑠 corre-sponds to the native precision of the geo-IP coordinates and 𝑏 > 1
+
+provides sub-location granularity via IP hashing. For sparse loca-tions (Phase 2), 𝑠 is set to a coarser quantization factor and 𝑏 = 1.The scalar 𝑠 and bucket count 𝑏 are determined per tile by the adaptive clustering algorithm described next. The proximity key serves as a privacy-safe analog to user_id :it identifies a local geographic area rather than an individual, is small and precise for densely populated areas, and coarser for sparse regions. For example, in a dense urban area, an IP address maps to a key encoding a fine-grained tile with multiple IP hash buckets: base64("lat:4071,lng:-7401,bucket:2") . In a sparse ru-ral area, the same structure encodes a coarser tile with a single bucket: base64("lat:39,lng:-105,bucket:0") . Any ML model that currently conditions on user_id can condition on the proximity key instead to serve anonymous and cold-start users. 
+
+## 2.3 Adaptive Clustering Algorithm 
+
+Proximity bucketing is motivated by the following constrained spa-tial partitioning objective. Let L = {( 𝑙 𝑖 , 𝑔 𝑖 , 𝑛 𝑖 )} 𝑁 𝑖 =1 be the set of 𝑁 
+
+distinct latitude/longitude pairs with their associated user counts. A spatially contiguous partition P = {𝐵 1, . . . , 𝐵 𝑚 } of L is sought that maximizes the number of buckets 𝑚 —preserving the finest ge-ographic granularity—subject to a minimum bucket size constraint: 
+
+max  
+
+> | P |
+
+s.t. ∑︁    
+
+> 𝑖 :(𝑙 𝑖 ,𝑔 𝑖 ,𝑛 𝑖 ) ∈ 𝐵 𝑗
+
+𝑛 𝑖 ≥ 𝑇 ∀ 𝐵 𝑗 ∈ P (2) where 𝑇 is the target bucket size. The spatial contiguity require-ment ensures that each bucket corresponds to a geographic neigh-borhood; maximizing 𝑚 preserves the finest granularity possible. The threshold 𝑇 ≈ 1,000 ensures each bucket aggregates over suf-ficiently many users, serving a dual objective: it is intended to provide a 𝑘 -anonymity-like privacy property [ 21 ], and it provides enough observations for stable estimation of user-level features (e.g., destination distributions). Because the algorithm is greedy, 
+
+𝑇 is a target rather than a strict guarantee—some buckets may be smaller, particularly in low-traffic regions assigned at the coarsest resolution. The challenge is that user density varies by orders of magnitude: a single coordinate near a major airport may correspond to tens of thousands of users, while rural coordinates may have only a hand-ful. Solving Equation 2 exactly is NP-hard [ 11 ]; it is an instance of the bin covering problem [ 2]. Rather than pursuing theoretical approximation guarantees, a greedy two-phase heuristic is pro-posed that exploits the structure of geo-IP data for computational efficiency and practical effectiveness (Algorithm 1). Proximity Features: Privacy-Compliant Cold-Start Personalization at Airbnb TSMO ’26, August 9, 2026, Jeju, South Korea 
+
+Offline Pipeline 
+
+Site Visit Logs Geo-IP Database 
+
+Consent Filter 
+
+Adaptive Clustering 
+
+> Algorithm 1
+
+Proximity Records   
+
+> (ip →key mapping)
+
+Feature Platform 
+
+> (daily aggregation)
+
+Distributed KV Store   
+
+> (key →features)
+> bootstrap
+> daily refresh
+
+Online Serving 
+
+User Request 
+
+> (client_ip )
+
+Engagement Emails 
+
+> (user_id )
+
+Serving API   
+
+> (ip or user_id →proximity key)
+
+Feature Fetch   
+
+> (key →features)
+
+ML Models 
+
+> Search | Marketing | Recommendation
+> offline training
+> on-the-fly key
+> if absent
+
+Geo-IP 
+
+> Lookup
+> new IPs
+
+Figure 1: System architecture. Offline: the adaptive clustering algorithm runs once at bootstrap to establish the proximity key partition; the IP-to-key mapping, coordinate-to-scalar mapping, and tile-to-bucket-count mapping are refreshed daily, and features are aggregated over stable keys and stored in a distributed KV store. Online: a user’s IP is mapped to a proximity key via a serving API (with on-the-fly computation for unseen IPs), and features are fetched for model scoring. Engagement emails pass a user ID to the same API, which internally resolves it to an IP. 
+
+Phase 1: Dense locations (refinement). For latitude/longitude pairs with ≥ 𝑇 unique users and ≥ 𝑛 min  
+
+> ip
+
+unique IP addresses, the location is refined by subdividing using IP hash buckets. The number of buckets is set to 𝑏 = ⌈𝑛 users /𝑇 ⌉, targeting buckets of approximately 
+
+𝑇 users each. These locations retain the original (full-precision) latitude/longitude as their tile coordinates, with the IP bucket index providing sub-tile granularity. This phase maximizes geographic granularity for dense locations by retaining native coordinate pre-cision; the target of approximately 𝑇 users per bucket is best-effort, as hash-based assignment does not guarantee perfectly uniform distribution. 
+
+Phase 2: Sparse locations (coarsening). For the remaining loca-tions, a multi-pass coarsening procedure is applied, analogous to adaptive mesh refinement [ 4], where resolution is reduced until sufficient mass accumulates in each cell. The algorithm iterates over decreasing scalar values 𝑠 = 10 𝑒 for 𝑒 ∈ { 𝑒 max , 𝑒 max − 1, . . . , 𝑒 min }.At each pass, all remaining coordinates are quantized by 𝑠 and the number of unique users per quantized tile is computed. When the fraction of qualifying tiles (those with 𝑛 𝑣 ≥ 𝑇 ) meets the ratio threshold 𝜌 , they are assigned at this scalar level, and their con-stituent coordinates are removed from subsequent passes. This continues until all coordinates are assigned or the minimum scalar 
+
+𝑒 min is reached. The result is an adaptive resolution map: urban centers receive fine-grained tiles (high 𝑠 ), while rural areas are grouped into coarser tiles (low 𝑠 ). No IP bucketing is applied for sparse locations ( 𝑏 = 1). The greedy fine-to-coarse strategy ensures that each assigned tile satisfies the bucket size constraint at the finest resolution possi-ble, capturing the same design tradeoff as Equation 2: maximizing geographic granularity subject to bucket-size constraints. 
+
+Complexity. Each pass requires a single group-by aggregation over the remaining data. With 𝑘 passes ( 𝑘 ≤ 𝑒 max −𝑒 min +1, typically 
+
+≤ 10 ), the total cost is 𝑂 (𝑘𝑁 ) where 𝑁 is the number of distinct lati-tude/longitude pairs. Because coordinates from the geo-IP database are pre-aggregated around population centers, 𝑁 is orders of mag-nitude smaller than the number of raw IP addresses—substantially cheaper than general spatial clustering algorithms [3, 9]. 
+
+Parameter selection. The algorithm is governed by a small set of parameters: target bucket size 𝑇 , minimum IP count 𝑛 min  
+
+> ip
+
+, scalar range [𝑒 min , 𝑒 max ], and ratio threshold 𝜌 . Exact production settings are omitted because they were tuned on proprietary traffic distri-butions and are tightly coupled to Airbnb-specific site visit volume. Illustrative values such as 𝑇 ≈ 1,000 and 𝑛 min  
+
+> ip
+
+= 100 are provided only to convey the operating regime, not as universal or production defaults. A grid of candidate values was evaluated using offline des-tination prediction accuracy (Recall@ 𝑘 ), selecting the combination that maximized predictive signal while maintaining the bucket size target. This empirical tuning is part of the greedy design: rather than solving the partitioning problem exactly, the heuristic is pa-rameterized and values are selected that perform best in practice. 
+
+Key stability. Proximity records are stable at multiple levels. Lati-tude/longitude coordinates from the geo-IP database are inherently stable, as they are anchored to population centers rather than in-dividual addresses. The IP-to-coordinate mapping is also mostly stable: the majority of IP addresses resolve to the same coordinates TSMO ’26, August 9, 2026, Jeju, South Korea Jiang et al. 
+
+Algorithm 1: Adaptive Proximity Clustering 
+
+Input: Set of (lat, lng, ip) tuples from consented site visits; target bucket size 𝑇 ; minimum IP count 𝑛 min  
+
+> ip
+
+; scalar range [𝑒 min , 𝑒 max ];ratio threshold 𝜌 
+
+Output: Proximity key assignment for each (lat, lng) pair 
+
+// Phase 1: Dense locations — zoom in via IP hash buckets  
+
+> 1
+
+foreach unique (lat, lng) pair do  
+
+> 2
+
+𝑛 𝑣 ← number of unique users at (lat, lng);  
+
+> 3
+
+𝑛 ip ← number of unique IP addresses at (lat, lng);  
+
+> 4
+
+if 𝑛 𝑣 ≥ 𝑇 and 𝑛 ip ≥ 𝑛 min  
+
+> ip
+
+then  
+
+> 5
+
+𝑏 ← ⌈ 𝑛 𝑣 /𝑇 ⌉; 
+
+> 6
+
+Assign each user to bucket (lat , lng , ℎ (ip ) mod 𝑏 ); 
+
+> 7
+
+Mark (lat, lng) as assigned ;
+
+// Phase 2: Sparse locations — zoom out via multi-pass coarsening  
+
+> 8
+
+𝑅 ← all unassigned (lat, lng) pairs;  
+
+> 9
+
+for 𝑒 ← 𝑒 max to 𝑒 min do  
+
+> 10
+
+𝑠 ← 10 𝑒 ; 
+
+> 11
+
+Quantize each (𝑙𝑎𝑡, 𝑙𝑛𝑔 ) ∈ 𝑅 to tile (⌊ 𝑙𝑎𝑡 · 𝑠 ⌋, ⌊𝑙𝑛𝑔 · 𝑠 ⌋) ; 
+
+> 12
+
+Compute 𝑛 𝑣 per quantized tile;  
+
+> 13
+
+𝑟 ← fraction of tiles with 𝑛 𝑣 ≥ 𝑇 ; 
+
+> 14
+
+if 𝑟 ≥ 𝜌 or 𝑒 = 𝑒 min then  
+
+> 15
+
+foreach tile with 𝑛 𝑣 ≥ 𝑇 (or all remaining tiles if 𝑒 = 𝑒 min ) do  
+
+> 16
+
+Assign all (lat, lng) in tile with scalar 𝑠 and 𝑏 = 1; 
+
+> 17
+
+𝑅 ← 𝑅 \ assigned pairs;  
+
+> 18
+
+if 𝑅 = ∅ then break ;over time, with only a small fraction shifting due to ISP address reassignment. Together, these properties mean that proximity keys change infrequently—the same key assignment can serve produc-tion traffic for years without re-clustering. The key partition used throughout this paper was bootstrapped on 2023 site visit data and has remained in production without re-clustering since. The daily batch pipeline handles incremental changes (new IPs, occasional coordinate shifts, etc.) by refreshing the IP-to-key mapping, the coordinate-to-scalar mapping, and the tile-to-bucket-count map-ping. Features, by contrast, are refreshed daily, reflecting evolving user signals over the stable key partition. This decoupling of keys and features minimizes maintenance overhead while keeping sig-nals fresh. Proximity keys are also robust to IP address reassignment. Since proximity features represent aggregate group signals rather than individual behavior, geographic consistency at the group level is what matters—not per-IP stability. An IP that shifts from a suburban area to a nearby city center is reassigned to the corresponding proximity bucket; its signals enrich both buckets over time. The only failure case would be a gross misassignment (e.g., an IP in Los Angeles resolving to New York), which is rare and mitigated by the geo-IP data quality checks described above. 
+
+## 2.4 Feature Computation 
+
+Features are computed daily over each proximity bucket and stored in a distributed key-value store. They fall into three categories: 
+
+short-term engagement (7/28/56-day windows: top destinations, room types, median price, search parameters); long-term booking patterns (28/90/365-day windows: booked destinations, listing attributes, travel party characteristics); and demographics (birth decade distribution, bucket size, geographic metadata). Short-term features additionally capture search intent signals: typical values for party size, trip duration, listing prices, and travel distance. Long-term features include travel party attributes such as the fraction of bookings involving pets, families, or groups—signals otherwise unavailable for cold-start users. Multiple aggregation windows are retained rather than collapsed into a single value, allowing downstream models to select the time horizon most pre-dictive for their task, as validated by the offline recall results in Section 4. 
+
+## 2.5 Serving 
+
+Proximity features support both online and offline consumption via a unified serving API. For real-time surfaces, the client_ip of the visiting user, as sourced from the CDN, is resolved to a proximity key—first via a daily batch mapping, falling back to on-the-fly key computation for unseen IPs—and the corresponding features are fetched from the KV store. The API is a soft dependency : models proceed with a degraded feature vector if the lookup exceeds a 60ms timeout. For batch channels (e.g., engagement emails), callers pass a user_id ; the API resolves it to a recent IP and follows the same flow. Proximity Features: Privacy-Compliant Cold-Start Personalization at Airbnb TSMO ’26, August 9, 2026, Jeju, South Korea 
+
+For unseen IPs, the on-the-fly algorithm computes a proximity key in real time without requiring a full re-clustering: (1) the IP is geolocated to (lat, lng); (2) the proximity scalar 𝑠 for that coordinate is fetched from the KV store; (3) if no scalar exists, a default of 
+
+𝑠 =1 is used; (4) the quantized geo tile is computed; (5) the bucket count 𝑏 for that tile is fetched from the KV store; and (6) the key is computed as: base64  ⌊lat ·𝑠 ⌋, ⌊lng ·𝑠 ⌋, ℎ (ip ) mod 𝑏 .
+
+This mirrors the offline key construction (Equation 1) exactly, en-suring new IPs always receive a valid, consistent proximity key. If the bucket count lookup misses, the API returns no proximity key and the model proceeds via the soft dependency mechanism; this occurs in fewer than 0.5% of requests in practice. 
+
+## 2.6 Privacy Design 
+
+Proximity Features achieve privacy through layered obfuscation, beginning with data selection. The input dataset for the clustering algorithm excludes users who did not provide consent, respecting user choice from the outset. At the geolocation layer, the latitude and longitude coordinates from the geo-IP database are already aggregated around popula-tion centers—they cannot identify specific addresses or households, even though they include more than two decimal places of preci-sion. As a result, multiple IP addresses naturally map to the same latitude/longitude pair, typically representing a city center. Note that users connecting via VPN are assigned to the proximity bucket of the VPN exit node rather than their physical location; this reflects a deliberate user choice and is consistent with the system’s privacy-respecting design. Building on this inherent coarseness, the adaptive clustering algorithm applies additional aggregation to form local groups tar-geting approximately 1,000 users. All modeling is performed at this group level: the features associated with a proximity key reflect the collective patterns of the group, not the actions of any individual. This ensures that individual user behavior is masked within the aggregate, avoiding individual tracking entirely. Beyond the algorithmic design, the system enforces operational safeguards: 
+
+• No persistent individual identifier at inference. The real-time serving path requires only client_ip —no persistent user ID or cookie-based ID is needed. (Offline callers may pass a user_id , which the API resolves to an IP internally.) 
+
+• Consent-gated pipeline. Both the clustering input data and the feature computation pipeline are integrated with a consent management framework, ensuring only consented data is used throughout. 
+
+• Privacy and data-governance controls. PII tables have short retention windows, and non-PII tables undergo reg-ular selective deletion in accordance with data governance policies. 
+
+## 3 Applications 
+
+Proximity Features are designed as a reusable feature layer that can be integrated into any ML model receiving user traffic. Two launched applications and one offline use case are described below. 
+
+## 3.1 Marketing Landing Pages 
+
+The term Marketing Landing Pages refers to pages where users arrive from external channels such as paid advertising (e.g., Google and Meta ads) and organic search, landing on customized pages displaying personalized listing recommendations. These pages have the highest cold-start rate across Airbnb surfaces, and the listing recommender operated with severely sparse feature vectors for the majority of traffic prior to proximity features. By incorporating proximity features, the model gains access to the booking and browsing patterns of nearby users, enabling mean-ingful personalization even for completely anonymous traffic. This application was launched across two marketing-entry surfaces in December 2024 and January 2025. For external presentation, these two separate experiments are grouped under the label Marketing Landing Pages because they share a similar cold-start listing recom-mendation setting. The A/B results in Table 2 report aggregate lift across both surfaces. 
+
+## 3.2 Destination Recommendation 
+
+The Airbnb homepage features a destination suggestion module (AutoSuggest) that recommends travel destinations as users interact with the search bar. This module is powered by a destination intent model that predicts which destinations a user is likely to book. The baseline model (V1) relied on 15 features derived from user search and booking history. For logged-out or first-time users, these features were empty, and the model fell back to a static list of glob-ally popular destinations—the same recommendations regardless of the user’s location or context. The updated model (V2) incorporates 26 features (13 new, 2 removed), including proximity features such as the most-booked destinations and most-viewed locations by nearby users. With these signals, the model replaces generic recommendations with location-aware suggestions. For example, a user from Seoul now sees desti-nations popular among nearby travelers (e.g., Jeju Island, Osaka) rather than a global default list. Figure 2 illustrates this effect for two logged-out users. Sepa-rately, architectural improvements made V2 37% smaller than V1 in parameter count, reducing inference latency; this is orthogonal to the proximity feature contribution. This application was launched in March 2026. 
+
+## 3.3 Engagement Emails 
+
+Beyond real-time surfaces, proximity features are being integrated into offline batch use cases. In engagement email campaigns, Airbnb sends personalized listing and destination recommendations to users. The serving infrastructure is in place: each recipient’s 
+
+user_id can be passed to the same serving API, which internally resolves it to the most recently logged IP address and retrieves the corresponding proximity key and features (Section 2). Experiment integration is currently underway to validate the lift for users with limited booking history. 
+
+## 4 Experiments 
+
+Proximity Features are evaluated through both offline metrics and online A/B experiments across production surfaces. TSMO ’26, August 9, 2026, Jeju, South Korea Jiang et al.  
+
+> User Before
+> (no proximity features)
+> After
+> (with proximity features)
+> Logged-out
+> from Tokyo
+> 1. Paris 2. Barcelona 3. London 4. Rome
+> 1. Tokyo 2. Osaka 3. Fukuoka 4. Sapporo 5. Kyoto
+> Logged-out
+> from San Jose
+> 1. Paris 2. Barcelona 3. London 4. Rome
+> 1. San Diego 2. Las Vegas 3. Big Bear Lake 4. Los Angeles 5. Joshua Tree
+
+Figure 2: Qualitative comparison of destination suggestions for logged-out users. Without proximity features, the model returns a static global list; with them, suggestions reflect local travel patterns. Table 1: Recall@ 𝑘 (%) for destination prediction using prox-imity features on low-activity users across different aggre-gation windows. No comparative baseline is included; the evaluation isolates proximity feature signal in the cold-start setting. 
+
+Feature R@1 R@3 R@5 Booked geos (365d) 12.06 22.88 29.14 Booked geos (90d) 11.91 22.20 28.25 Viewed geos (28d) 11.90 22.96 29.31 Viewed geos (7d) 11.81 23.12 30.03 
+
+## 4.1 Offline Evaluation 
+
+To assess the predictive signal of proximity features in isolation, the top-𝑘 destinations are extracted from proximity feature histograms (booked and viewed geos at various time windows) and Recall@ 𝑘 
+
+is measured against actual bookings in a subsequent 90-day period. 
+
+Setup. User–feature snapshots are sampled from a 90-day ob-servation period. Each feature has its own aggregation window (e.g., 7-day, 28-day, or 365-day), reflecting different time horizons. Booking labels are sourced from the subsequent 90 days. Results are reported for low-activity users—those with limited booking history—the primary target population for proximity features. Table 1 shows that proximity features alone achieve Recall@5 of approximately 29–30% for geo-level destination prediction among low-activity users, indicating strong geographic signal. Notably, short-term viewed-geo features (7-day window) perform compara-bly to long-term booked-geo features (365-day window), suggesting that recent browsing activity within a proximity bucket carries sub-stantial predictive value. In an offline ablation for the Destination Intent Model V2 (Sec-tion 3), adding proximity features yielded an approximately 2% relative improvement in Top-3 accuracy. 
+
+## 4.2 Online A/B Experiments 
+
+Results are reported from production A/B experiments, each com-paring a model with proximity features (treatment) against the same 
+
+Table 2: Online A/B experiment results across production surfaces. 
+
+Surface Metric Lift Marketing Landing Pages Global Bookings +0.011% Marketing Landing Pages First-time Bookers +2.0% Marketing Landing Pages Searchers w/ Dates +0.054% AutoSuggest Global Bookings +0.16% AutoSuggest First-time Bookings +0.33% model without them (control). All experiments ran for sufficient duration to reach statistical significance at the 95% confidence level. Notably, the results below span December 2024 through March 2026, all using the same proximity key assignment, empirically validating the temporal stability of the key partition. Table 2 summarizes the results. On marketing landing pages, proximity features produced a +0.011% lift in global bookings and increased first-time bookers by +2.0%, confirming effectiveness for the cold-start population. Searchers with dates—a key engagement metric indicating users progressing further in the booking funnel— increased by +0.054%. On AutoSuggest, the Destination Intent Model V2 with proximity features achieved a +0.16% lift in global bookings and +0.33% in first-time bookings. This represents the largest booking lift from proximity features across all production applications to date. 
+
+## 4.3 Analysis 
+
+The following analysis focuses on the AutoSuggest experiment, which provides the richest cohort-level breakdown. Three cohorts reflect booking history at assignment time: Never-Booked (no prior bookings, reported separately from assignment-date New-Guest users; users may still book during the experiment), Active (booked within the past year), and Dormant (booked previously but not within the past year). New-Guest is an assignment-date booking-event cohort for users who also have no prior bookings and whose first-ever booking occurs on the assignment date. 
+
+Cohort effects. The directionally largest booking lifts were ob-served among Never-Booked and Dormant user cohorts (Figure 3). The three largest cohorts (Never-Booked, Active, Dormant) show consistent positive directional lifts (+0.15–0.33%) in global book-ings, though individually below the 95% significance threshold due to limited subgroup power. Even Active users benefit direc-tionally, as infrequent booking behavior keeps individual history sparse. The New-Guest cohort ( <1% of experiment traffic, −0.04% ,
+
+𝑝 = 0.78 ) is the smallest and shows a near-zero, non-significant result, consistent with insufficient power rather than a true nega-tive effect. Separately, the +0.33% first-time bookings lift (Table 2) is an experiment-level outcome metric capturing first-ever book-ings among users with no prior bookings at assignment, whether reported as assignment-date New-Guest users or as Never-Booked users who book later in the experiment window. The gains are con-centrated among users with absent or stale history—most clearly Never-Booked and Dormant users—for whom the baseline model could only serve a static list of popular destinations. Proximity Proximity Features: Privacy-Compliant Cold-Start Personalization at Airbnb TSMO ’26, August 9, 2026, Jeju, South Korea               
+
+> Never-Booked Dormant Active New-Guest
+> 0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.33 0.27
+> 0.15
+> −0.04
+> Booking Lift (%)
+> Cohort Traffic Share P-Value Never-Booked 65% 0.17 Dormant 11% 0.11 Active 23% 0.16 New-Guest <1% 0.78
+
+Figure 3: Booking lift by user cohort in the AutoSuggest ex-periment, with traffic share and p-value. The directionally largest gains are among Never-Booked and Dormant users. The New-Guest cohort ( <1% of traffic, 𝑝 = 0.78 ) shows a near-zero non-significant result. 
+
+features fill this gap by providing location-aware signals derived from nearby users, enabling personalized recommendations from the first interaction. These results are consistent with the design hypothesis that proximity features provide the most incremental value where user-level features are absent or stale. 
+
+Impression distribution shift. The treatment arm also surfaced specific international destinations (e.g., Kuala Lumpur, Seoul, Jeju Island, Dubai) that the baseline model rarely recommended. This indicates that proximity features enable the model to produce more diverse, location-relevant recommendations rather than falling back to generic defaults. The shift also reflects a reduction in popularity bias [ 1 ]: rather than defaulting to globally popular destinations, the model surfaces destinations that are locally relevant to the user’s geographic context. This is a direct consequence of replacing a static global prior with group-level signals derived from nearby users. 
+
+## 5 Related Work 
+
+Spatial indexing and geo bucketing. Geohash [ 17 ], Google S2 [ 12 ], and Uber H3 [ 5] provide hierarchical spatial indexing at fixed reso-lutions. While computationally efficient, fixed-resolution schemes cannot adapt to the extreme variation in user density across ge-ographies: a single cell may contain millions of users in a city center and only a handful in a rural area. KD-trees [ 3 ] offer adap-tive partitioning but require 𝑂 (𝑛 log 𝑛 ) construction and are de-signed for point queries rather than group-level feature aggregation. Quadtrees [ 10 ] recursively subdivide space into cells of varying size, and the Phase 2 coarsening is similar in spirit—but operates on a discrete set of power-of-ten scalars rather than recursive bisection. The approach also draws on the principle of adaptive mesh refine-ment [ 4 ]—adjusting resolution to local density—while operating on a discrete geographic grid with 𝑂 (𝑘𝑁 ) cost. 
+
+Cold-start recommendation. The cold-start problem is well-studied in recommender systems [ 15 , 20 ]. Common approaches include content-based filtering [ 18 ], hybrid models [ 6 ], and demographic-based approaches that leverage user attributes when behavioral data is sparse. In the marketplace setting, Haldar et al .[14] describe Airbnb’s approach to improving deep learning for search ranking, and Grbovic and Cheng [13] address real-time personalization using embeddings. Proximity Features are comple-mentary: they provide a group-level signal layer that can augment any of these approaches when individual-level data is unavailable. 
+
+Privacy-preserving ML. Federated learning [ 16 ] and differential privacy [ 8] enable model training without exposing individual data. Proximity Features take a different approach: rather than modi-fying the training procedure, features are constructed over aggre-gated groups so that individual behavior is masked by design. As discussed in Section 2.3, the target bucket size 𝑇 is motivated by 
+
+𝑘 -anonymity [ 21 ]: each proximity bucket is intended to aggregate 
+
+∼1,000 users, making it difficult to isolate any individual’s contri-bution to the feature vector. 
+
+Geo-IP in industry. IP-based geolocation has been used for coarse personalization (e.g., content localization, ad targeting). Prior work on IP geolocation focuses on the accuracy and relia-bility of country/city-level database mappings [ 19 ], rather than using geo-IP as a basis for aggregating user-level features for ML. Proximity Features extend this line of work by operating at sub-city granularity, dynamically adapting resolution to local user density, and computing rich aggregated user-level features over geographic groups—purpose-built for ML model serving in a two-sided marketplace at production scale. 
+
+## 6 Conclusion 
+
+This paper presented Proximity Features, a privacy-compliant fea-ture system for cold-start personalization in two-sided market-places. The system uses an adaptive geo-IP clustering algorithm to group users into proximity buckets targeting approximately 1,000 individuals, computes aggregated user-level features over these groups, and serves them in real time as a soft dependency for down-stream ML models. Deployed at Airbnb across marketing landing pages and home-page destination recommendation (AutoSuggest), with serving in-frastructure for engagement emails already in place and experiment integration under way, the system produces statistically signifi-cant booking lifts on each online surface. The strongest gains are among Never-Booked and Dormant users—the population where traditional user-level features provide the least signal. The system operates entirely on aggregated, consent-gated data and requires no persistent individual identifier at inference time, making it resilient to increasing restrictions on third-party cookies and designed to operate within evolving privacy regulations. Several limitations are worth noting. In sparse regions, the coars-ening algorithm produces larger buckets at the cost of geographic precision, which may reduce feature relevance for rural users. In our internal analysis, geo-IP accuracy is inherently bounded at ap-proximately 80% city-level agreement, meaning a fraction of users TSMO ’26, August 9, 2026, Jeju, South Korea Jiang et al. 
+
+receive features from a geographically incorrect bucket. These limi-tations are largely inherited from the underlying geo-IP data source and are mitigated by the aggregate nature of the features: individual misassignments have minimal impact on group-level signal quality. Beyond the surfaces described in this paper, Proximity Features function as a reusable feature layer applicable to any model that re-ceives user traffic with cold-start characteristics. From a two-sided marketplace perspective, improved demand-side personalization directly benefits supply by reducing supply-demand mismatch for hosts in high-demand areas. Future directions include hierarchical proximity keys—assigning each IP to multiple keys at different geo-graphic resolutions to provide multi-scale features for different use cases, versioned key partitions to gracefully handle natural shifts in the geo-IP database over time, expanding destination recommenda-tion to additional surfaces such as Nearby Search, integration with marketing attribution models, and real-time proximity key updates to capture intra-day traffic patterns. 
+
+## References 
+
+[1] Himan Abdollahpouri, Robin Burke, and Bamshad Mobasher. 2019. Managing Popularity Bias in Recommender Systems with Personalized Re-ranking. In 
+
+Proceedings of the 32nd International Florida Artificial Intelligence Research Society Conference (FLAIRS) .[2] Susan F. Assmann, David S. Johnson, Daniel J. Kleitman, and Joseph Y.-T. Leung. 1984. On a Dual Version of the One-Dimensional Bin Packing Problem. Journal of Algorithms 5, 4 (1984), 502–525. https://doi.org/10.1016/0196-6774(84)90004-X [3] Jon Louis Bentley. 1975. Multidimensional Binary Search Trees Used for Associa-tive Searching. Commun. ACM 18, 9 (1975), 509–517. https://doi.org/10.1145/ 361002.361007 [4] Marsha J. Berger and Joseph Oliger. 1984. Adaptive Mesh Refinement for Hy-perbolic Partial Differential Equations. J. Comput. Phys. 53, 3 (1984), 484–512. https://doi.org/10.1016/0021-9991(84)90073-1 [5] Isaac Brodsky. 2018. H3: Uber’s Hexagonal Hierarchical Spatial Index. https: //eng.uber.com/h3/. Uber Engineering Blog. [6] Robin Burke. 2002. Hybrid Recommender Systems: Survey and Experiments. 
+
+User Modeling and User-Adapted Interaction 12, 4 (2002), 331–370. https://doi. org/10.1023/A:1021240730564 [7] Yann Collet. 2012. xxHash: Extremely Fast Hash Algorithm. https://github.com/ Cyan4973/xxHash. Accessed: 2026-04-01. [8] Cynthia Dwork, Frank McSherry, Kobbi Nissim, and Adam Smith. 2006. Calibrat-ing Noise to Sensitivity in Private Data Analysis. In Proceedings of the 3rd Theory of Cryptography Conference (TCC) . 265–284. https://doi.org/10.1007/11681878_14 [9] Martin Ester, Hans-Peter Kriegel, Jörg Sander, and Xiaowei Xu. 1996. A Density-Based Algorithm for Discovering Clusters in Large Spatial Databases with Noise. In Proceedings of the 2nd International Conference on Knowledge Discovery and Data Mining (KDD) . 226–231. [10] Raphael A. Finkel and Jon Louis Bentley. 1974. Quad Trees: A Data Structure for Retrieval on Composite Keys. Acta Informatica 4, 1 (1974), 1–9. https: //doi.org/10.1007/BF00288933 [11] Michael R. Garey and David S. Johnson. 1979. Computers and Intractability: A Guide to the Theory of NP-Completeness . W. H. Freeman. [12] Google. 2017. S2 Geometry Library. https://s2geometry.io/. Accessed: 2026-04-01. [13] Mihajlo Grbovic and Haibin Cheng. 2018. Real-time Personalization using Em-beddings for Search Ranking at Airbnb. In Proceedings of the 24th ACM SIGKDD International Conference on Knowledge Discovery and Data Mining . 311–320. https://doi.org/10.1145/3219819.3219885 [14] Malay Haldar, Mustafa Abdool, Prashant Ramanathan, Tao Xu, Sagar Yang, Huizhong Duan, Qing Zhang, Nick Barber, Hemant Jain, and Ankan Saha. 2020. Improving Deep Learning for Airbnb Search. In Proceedings of the 26th ACM SIGKDD International Conference on Knowledge Discovery and Data Mining . 2822– 2830. https://doi.org/10.1145/3394486.3403303 [15] Xuan Nhat Lam, Thuc Vu, Trong Duc Le, and Anh Duc Duong. 2008. Addressing Cold-Start Problem in Recommendation Systems. In Proceedings of the 2nd Inter-national Conference on Ubiquitous Information Management and Communication .208–211. https://doi.org/10.1145/1352793.1352837 [16] Brendan McMahan, Eider Moore, Daniel Ramage, Seth Hampson, and Blaise Agüera y Arcas. 2017. Communication-Efficient Learning of Deep Net-works from Decentralized Data. In Proceedings of the 20th International Conference on Artificial Intelligence and Statistics (AISTATS) . 1273–1282. [17] Gustavo Niemeyer. 2008. Geohash. https://en.wikipedia.org/wiki/Geohash. Ac-cessed: 2026-04-01. [18] Michael J. Pazzani and Daniel Billsus. 2007. Content-Based Recommendation Systems. In The Adaptive Web . Springer, 325–341. https://doi.org/10.1007/978-3-540-72079-9_10 [19] Ingmar Poese, Steve Uhlig, Mohamed Ali Kaafar, Benoit Donnet, and Bamba Gueye. 2011. IP Geolocation Databases: Unreliable? ACM SIGCOMM Computer Communication Review 41, 2 (2011), 53–56. https://doi.org/10.1145/1971162. 1971171 [20] Andrew I. Schein, Alexandrin Popescul, Lyle H. Ungar, and David M. Pennock. 2002. Methods and Metrics for Cold-Start Recommendations. In Proceedings of the 25th Annual International ACM SIGIR Conference on Research and Development in Information Retrieval . 253–260. https://doi.org/10.1145/564376.564421 [21] Latanya Sweeney. 2002. 𝑘 -Anonymity: A Model for Protecting Privacy. Interna-tional Journal of Uncertainty, Fuzziness and Knowledge-Based Systems 10, 5 (2002), 557–570. https://doi.org/10.1142/S0218488502001648 [22] Paul Voigt and Axel von dem Bussche. 2017. The EU General Data Protection Regulation (GDPR): A Practical Guide . Springer. https://doi.org/10.1007/978-3-319-57959-7
