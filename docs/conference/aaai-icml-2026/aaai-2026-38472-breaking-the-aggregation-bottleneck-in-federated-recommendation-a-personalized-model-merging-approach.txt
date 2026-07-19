@@ -1,0 +1,834 @@
+Title: Breaking the Aggregation Bottleneck in Federated Recommendation: A Personalized Model Merging Approach
+
+URL Source: https://ojs.aaai.org/index.php/AAAI/article/download/38472/42434
+
+Number of Pages: 9
+
+Markdown Content:
+# Breaking the Aggregation Bottleneck in Federated Recommendation: A Personalized Model Merging Approach 
+
+## Jundong Chen 1,2 , Honglei Zhang 1,2 , Chunxu Zhang 3, Fangyuan Luo 4, Yidong Li 1,2* 
+
+> 1
+
+Key Laboratory of Big Data & Artificial Intelligence in Transportation, Ministry of Education, China 
+
+> 2
+
+Beijing Jiaotong University, China 
+
+> 3
+
+Jilin University, China 
+
+> 4
+
+Beijing University of Technology, China 
+
+{jundongchen, honglei.zhang, ydli }@bjtu.edu.cn, cxzhang19@mails.jlu.edu.cn, luofangyuan@bjut.edu.cn 
+
+Abstract 
+
+Federated recommendation (FR) facilitates collaborative training by aggregating local models from massive devices, enabling client-specific personalization while ensuring pri-vacy. However, we empirically and theoretically demonstrate that server-side aggregation can undermine client-side per-sonalization, leading to suboptimal performance, i.e. , the ag-gregation bottleneck. This issue stems from the inherent het-erogeneity across numerous clients in FR, which drives the global model to deviate from local optima. To this end, we propose FedEM, which elastically merges the global and lo-cal models to compensate for impaired personalization. Un-like existing personalized federated recommendation (pFR) methods, FedEM (1) investigates the aggregation bottleneck in FR through theoretical insights, rather than relying on heuristic analysis; (2) leverages off-the-shelf local models rather than designing additional mechanisms to boost person-alization. Extensive experiments demonstrate that our method preserves client personalization during collaborative training, outperforming state-of-the-art baselines. 
+
+## Introduction 
+
+Federated recommendation (FR), as an emerging on-device learning paradigm, ensures that clients’ raw data remains local during the training process, thus protecting user pri-vacy (Sun et al. 2024; Yin et al. 2024). Pioneering works in-clude FedMF (Chai et al. 2020) and FedNCF (Perifanis and Efraimidis 2022), which apply matrix factorization and neu-ral collaborative filtering, respectively, within the federated framework. Conceptually, the clients upload locally trained models for global aggregation and then download the aggre-gated model for the next round (Chen et al. 2023). However, due to the varying user preferences in FR, the interaction data from different clients are not independent and identically distributed (Non-IID), which naturally leads to data heterogeneity (Sun et al. 2024). Traditional FR meth-ods fail to address this issue by sharing one same global model across all clients (Zhang et al. 2023b). Hence, per-sonalized federated recommendation (pFR) has been intro-duced to tailor client-specific models. For example, PFe-
+
+> *
+
+Corresponding author (ydli@bjtu.edu.cn). Copyright © 2026, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved. Download      
+
+> (a) Static Replacement
+> (b) Elastic Merging
+> +
+> Download
+> Local model
+> *(1 -ρ)*ρ=
+> +
+> Global model Local model
+> *
+
+1 * 0 = 
+
+> Mer ged model
+> Replaced model
+> Global model
+> Client
+> Client
+
+Figure 1: Traditional FR methods directly replace the local model with the global model, while our FedEM can elasti-cally merge both the global and local models with the weight 
+
+ρ, delicately balancing collaboration and personalization. dRec (Zhang et al. 2023a) enables dual personalization of both local and global components, while FedRAP (Li, Long, and Zhou 2024) trains an extra personalized model locally. Although effective in practice, existing pFR methods suffer from two key limitations: (1) They overlook the degrada-tion of local personalization caused by global aggregation in FR; (2) They rely on heuristically designed personalization mechanisms, which limit their compatibility. For the first limitation, we theoretically reveal that aggre-gation can cause a loss of local information in the global model. This issue is exacerbated by the unique nature of FR tasks, which often involve millions of clients, several orders of magnitude more than typical federated learning scenar-ios. Besides, existing FR methods typically adopt a static replacement scheme, as illustrated in Figure 1(a), where the global model replaces the local one for both training and inference. Such a scheme propagates the impact of aggrega-tion, causing optimization to deviate from the client-specific optimum and ultimately undermining local personalization. We refer to this issue as the aggregation bottleneck. The Fortieth AAAI Conference on Artificial Intelligence (AAAI-26) 
+
+14547 0.15                          
+
+> 0.25
+> 0.35
+> 0.45
+> 0.55
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 00.2 0.4 0.6 0.8 1
+> (b) Group 2 ( τ=99.95%)
+> NDCG@10
+> HR@10
+> 0.05
+> 0.2
+> 0.35
+> 0.5
+> 0.65
+> 0.1
+> 0.3
+> 0.5
+> 0.7
+> 0.9
+> 00.2 0.4 0.6 0.8 1
+> HR@10
+> (a) Group 1 ( τ=99.97%)
+> NDCG@10
+> HR@10
+> 0.15
+> 0.25
+> 0.35
+> 0.45
+> 0.55
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 00.2 0.4 0.6 0.8 1
+> (c) Group 3 ( τ=99.91%)
+> NDCG@10
+> HR@10
+> 0.25
+> 0.4
+> 0.55
+> 0.7
+> 0.85
+> 0.4
+> 0.55
+> 0.7
+> 0.85
+> 1
+> 00.2 0.4 0.6 0.8 1
+> (d) Group 4 ( τ=99.87%)
+> NDCG@10
+> HR@10
+> 0.45
+> 0.55
+> 0.65
+> 0.75
+> 0.85
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> 1
+> 00.2 0.4 0.6 0.8 1
+> NDCG@10
+> (e) Group 5 ( τ=99.82%)
+> NDCG@10
+> HR@10
+
+Figure 2: The performance of different client groups under varying merging weights ρ. The degree of data sparsity τ decreases from group 1 to group 5. Here, ρ = 1 stands for the traditional static replacement scheme. For the second limitation, we explore a simpler and more general solution. Grounded in model merging theory (Zhou et al. 2024; Yang et al. 2024), we aim to compensate for local information loss with the off-the-shelf local model, thereby breaking the aggregation bottleneck. Specifically, we adopt an elastic merging scheme, as illustrated in Figure 1(b), where ρ denotes the weight of the global model parameters, while 1 − ρ stands for the weight of the local ones. We conduct empirical validation based on FedMF. To account for client heterogeneity, we divide the clients into five groups according to privacy-insensitive statistics of their local data, e.g. , data sparsity. For each group, we report the average performance metrics (HR@10 and NDCG@10) un-der different ρ. As shown in Figure 2, we observe that: (1) Static replacement scheme, i.e. , ρ = 1 , yields suboptimal performance, which is consistent with our theoretical analy-sis; (2) Elastic merging scheme effectively enhances model performance. Owing to heterogeneity across clients, each group achieves optimal trade-offs under different merging weights ρ. Given this, we adopt client-specific merging that elastically adjusts to local personalization needs. Taking both limitations into account, we propose a simple yet theoretically guaranteed pFR method called Fed erated recommendation via Elastic Merging ( FedEM ). It merges the aggregated global model with the off-the-shelf local model in a balanced way, effectively absorbing collaborative information while preserving client-specific personalization. To sum up, our main contributions are as follows: • To the best of our knowledge, we are the first to theoreti-cally analyze the aggregation bottleneck in FR scenarios, 
+
+i.e. , the loss of local information caused by global aggre-gation, which further harms local personalization. • Based on model merging, we propose FedEM to bridge the gap between global collaboration and local personal-ization. Unlike existing heuristic methods, our approach is theoretically grounded and empirically validated. • The proposed elastic merging module is model-agnostic and can be seamlessly integrated as a plug-in to enhance FR/pFR methods constrained by aggregation bottleneck. • Extensive experiments demonstrate that FedEM consis-tently outperforms state-of-the-art (SOTA) methods. 
+
+## Related Work 
+
+Personalized Federated Learning 
+
+Federated learning (FL) is a distributed learning paradigm to mitigate privacy issues (Feng et al. 2018; Huang et al. 2024; Feng et al. 2025). Traditional FL methods, such as FedAvg (McMahan et al. 2017), struggle to derive a global model generalized for each client when the local data is Non-IID (Huang et al. 2021). To that end, some personal-ized federated learning (pFL) methods aim to fine-tune the globally aggregated model for each client to obtain the per-sonalized ones (Collins et al. 2021; Fallah, Mokhtari, and Ozdaglar 2020). For instance, FedALA exploits the gen-eral information of global model to enhance the capabil-ity for local models targeting federated vision tasks (Zhang et al. 2023c). Still other methods tend to locally learn a personalized model for each client (Li et al. 2021), e.g. ,pFedMe (T Dinh, Tran, and Nguyen 2020) uses Moreau en-velopes as the client regulation loss to decouple personalized model optimization from the global model learning. Other methods take a global view to boost personalization (Ji et al. 2019; Zhang et al. 2021; Zheng et al. 2025), e.g. , pFed-Graph (Ye et al. 2023) optimizes the collaboration graph to perform weighted aggregation for different clients. 
+
+Personalized Federated Recommendation 
+
+In federated recommendation (FR), there is natural hetero-geneity among clients due to their different preferences, thus necessitating personalization of the local model (Yin et al. 2024). Similar to pFL, personalized federated recommenda-tion (pFR) methods can also be categorized into three re-search lines. (1) Fine-tune the global model (Zhang et al. 2026): PFedRec (Zhang et al. 2023a) personalizes both the score function and global model to alleviate data heterogene-ity. FedCIA (Han et al. 2025) leverages the aggregated item similarity matrix to guide local model training, aiming to achieve global fine-tuning. (2) Learn an additional personal-ized model (Chen et al. 2025): FedRAP (Li, Long, and Zhou 2024) applies an additive model to item embeddings to en-hance personalization. (3) Perform personalized global ag-gregation (Luo, Xiao, and Song 2022; Zhang et al. 2024b): FedFast (Muhammad et al. 2020) performs global aggre-gation by identifying representatives from different clusters based on user profile similarities. GPFedRec (Zhang et al. 2024a) performs graph-guided aggregation to recover inter-client correlations, generating client-specific global models. Unlike the above methods, which follow the traditional static replacement scheme and rely on heuristic personalization mechanisms, FedEM adopts an elastic merging scheme, of-fering a simple yet theoretically grounded solution. During global collaborative training, it leverages the off-the-shelf local model to enhance personalization for each client. 14548 Preliminaries 
+
+Let U denote the set with n users/clients, I the set with m
+
+items. Then Du = {(u, i, r ui |i ∈ I u)} denotes the local interaction dataset of client u, where Iu is for the items ob-served by client u, and each entry rui ∈ { 0, 1} is for the label on item i by client u. The goal of FR is to predict ˆrui 
+
+of client u for each unobserved item i ∈ I \ I u on local devices. Formally, the global optimization objective over n
+
+clients of FR tasks is: 
+
+min (p1,p2,··· ,pn;Ql 
+
+> 1,Ql
+> 2,··· ,Qln
+
+)
+
+> n
+
+X
+
+> u=1
+
+puLu
+
+ pu, Qlu; Du
+
+ , (1) where pu ∈ Rd and Qlu ∈ Rm×d denote local user em-bedding and local item embedding table for client u, respec-tively, d is the dimension of the embedding vector. In this work, we treat item embedding table Q as the intermediate model parameters for uploads and downloads, since it is the standard configuration in embedding-based FRs (Ammad-Ud-Din et al. 2019). The server aggregates local parame-ters Qlu with weight pu to derive global model Qg , e.g. ,
+
+pu = |D u|/ Pnv=1 |D v | in FedAvg (McMahan et al. 2017) and pu = 1 /n in FCF (Ammad-Ud-Din et al. 2019). Lu is the task-specific objective to facilitate local training. In this work, we focus on the typical recommendation task with implicit feedback, where the rating rui of item i
+
+by user u is either 1 or 0, indicating interested versus un-interested interaction, respectively. Therefore, we adopt the binary cross-entropy (BCE) loss (He et al. 2017), which is commonly used in binary-value problems, as the local ob-jective Lu. Formally, the BCE loss is defined as: 
+
+Lu(pu,Qlu; Du) = − X
+
+> (u,i,r ui )∈D u
+
+rui log ˆ rui 
+
++ (1 − rui ) log (1 − ˆrui ) ,
+
+(2) where ˆrui = ϕ(puq⊤ 
+
+> i
+
+) denotes the predicted rating of item i
+
+by user u, where qi ∈ Qlu and ϕ(·) is the Sigmoid function. 
+
+## Methodology 
+
+Motivation 
+
+Aggregation Bottleneck. Most existing FR methods adopt fixed-weight aggregation on the server side to enable collab-orative training across clients. Taking FCF (Ammad-Ud-Din et al. 2019) for example, that is, pu = 1 /n , the global model derived by aggregation in round t can be represented as: 
+
+Qg(t) = 1
+
+n
+
+> n
+
+X
+
+> u=1
+
+Ql(t) 
+
+> u
+
+= 1
+
+n Ql(t) 
+
+> u
+
++ n − 1
+
+n Qg(t) 
+
+> r
+
+,
+
+where Qg(t) 
+
+> r
+
+= 1
+
+n − 1
+
+> n
+
+X 
+
+> v̸=u
+
+Ql(t) 
+
+> v
+
+.
+
+(3) Here, Qg(t) 
+
+> r
+
+denotes the aggregated model over the remain-ing clients except for ego Client u. However, unlike typical FL settings, FR tasks often involve tens of thousands or even millions of clients. Therefore, we have: 
+
+lim 
+
+> n→∞
+
+1
+
+n = 0 , lim 
+
+> n→∞
+
+n − 1
+
+n = 1 , (4) which means Qg(t) ≈ Qg(t) 
+
+> r
+
+, indicating a loss of local in-formation in the global model. At this point, for client u,adopting the static replacement scheme may lead to the ag-gregation bottleneck formally established in Lemma 1. 
+
+Assumption 1 (Smoothness and Convexity) The local objective Lu(Qu) is assumed to be continuously differen-tiable and L-smooth. Moreover, it satisfies an approximate 
+
+μ-strong convexity condition induced by ℓ2 regularization in the BCE loss (Boyd and Vandenberghe 2004; Bottou, Curtis, and Nocedal 2018). Such surrogate assumptions are standard in theoretical analyses of federated optimiza-tion (McMahan et al. 2017; T Dinh, Tran, and Nguyen 2020) and can still provide qualitative insights into the optimization direction under locally non-convex objectives. 
+
+Lemma 1 (Bottleneck of Global Aggregation) Based on Assumption 1, let Q∗ 
+
+> u
+
+denote the local optimal model. Then, following the static replacement scheme, i.e., using the global model Qg(t) for local training, may lead to: 
+
+⟨∇L u(Qg(t)), Qg(t) − Q∗
+
+> u
+
+⟩ ≤ 0, (5) 
+
+which shows that the globally aggregated model can cause training optimization to deviate from the client-specific op-timum, thereby undermining local personalization. This is-sue becomes more pronounced under the high inherent client heterogeneity in FR, leading to a performance bottleneck. 
+
+Framework 
+
+As illustrated in Figure 3, the overall framework of FedEM consists of the following main steps in each round t:1) Elastic Merging: client u merges aggregated global model 
+
+Qg(t−1)  
+
+> u
+
+and off-the-shelf local model Ql(t−1)  
+
+> u
+
+to derive a merged model Qm(t) 
+
+> u
+
+at the beginning of this round t. Here, existing FR methods follow the static replacement scheme and directly discard the local model. 2) Local Training: client u utilizes its own data Du to update the merged model Qm(t) 
+
+> u
+
+and local parameters like p(t−1)  
+
+> u
+
+.Then, client u uploads the updated model Ql(t) 
+
+> u
+
+to the server. 3) Global Aggregation: the server performs aggregation based on the similarity over uploaded {Ql(t)1 , · · · , Ql(t) 
+
+> n
+
+},generating the global model Qg(t) 
+
+> u
+
+for client u.Notably, both Qg(0)  
+
+> u
+
+and Ql(0)  
+
+> u
+
+represent randomly initial-ized models when t = 1 . After T rounds above, each client can get its own personalized model. 
+
+Elastic Merging 
+
+Theoretical Analysis. Existing pFR methods, e.g. , PFe-dRec (Zhang et al. 2023a), FedRAP (Li, Long, and Zhou 2024), and FedCIA (Han et al. 2025), heuristically design additional personalization mechanisms. Although empiri-cally effective, these methods fail to identify the aggregation bottleneck as the underlying cause of insufficient personal-ization in FR, thereby limiting their potential for further im-provement. Additionally, their complexity and limited com-patibility pose challenges for practical deployment. Inspired by the model merging theory (Zhou et al. 2024; Yang et al. 2024), we merge the global model Qg(t) and the 14549 …
+
+> Aggregation Weight Matrix
+
+… 
+
+> Local Models Global Models
+
+Global Aggregation 
+
+Elastic Merging ① Local Training ② 
+
+> ③
+> Inter -Client Similarity Client -Specific Aggregation
+> Local
+
+ρGlobal Merged 1-
+
+ρ 
+
+> ⊙⊙
+
+## + =   
+
+> Local Training
+> Elastic Merging
+> Static Replacement
+> −
+> ⊕Adapter
+
+ρ
+
+> Local Model
+
+Client u
+
+> User Embedding
+
+Optimization   
+
+> ⊙Hadamard Product
+
++Element -wise Addition  
+
+> Element -wise Subtraction −Concatenation ⊕
+
+Server 
+
+> client -specific
+> optimum
+> local
+> model
+
+Figure 3: The framework of FedEM. Unlike the static replacement scheme in existing FR methods, we propose an elastic merging scheme to mitigate the optimization deviation caused by global aggregation, effectively breaking the performance bottleneck. Additionally, the server can perform similarity-based aggregation to further alleviate the aggregation bottleneck. off-the-shelf local model Ql(t) 
+
+> u
+
+to overcome the aggregation bottleneck. For embedding-based FRs, ∀ρ ∈ [0 , 1] ,
+
+f (ρQg(t) + (1 − ρ)Ql(t) 
+
+> u
+
+) = ρf (Qg(t)) + (1 − ρ)f (Ql(t) 
+
+> u
+
+),
+
+(6) where f (Q) denotes the predicted rating, i.e. , pu · Q. Thus, the two models Qg(t) and Ql(t) 
+
+> u
+
+satisfy the model merging conditions in the parameter space (Zhou et al. 2024). We define the merged model as: 
+
+Qm(t+1)  
+
+> u
+
+= ρQg(t) + (1 − ρ)Ql(t) 
+
+> u
+
+, (7) which is used as the initialization for local training in round 
+
+t + 1 . By following the elastic merging scheme, we com-pensate for the loss of local information in the aggregated model. The merged model benefits from global collabora-tive training while mitigating the risk of deviating from the client-specific optimum, thus preserving personalization. 
+
+Lemma 2 (Compensation of Elastic Merging) Under As-sumption 1, the merged model can compensate for the op-timization deviation caused by aggregation, guiding the up-date toward the client-specific optimum, i.e., it satisfies: 
+
+⟨∇L u(Qm(t+1)  
+
+> u
+
+), Qm(t+1)  
+
+> u
+
+− Q∗
+
+> u
+
+⟩≥ (1 − ρ)⟨∇L u(Ql(t) 
+
+> u
+
+), Ql(t) 
+
+> u
+
+− Q∗
+
+> u
+
+⟩ − ρC, (8) 
+
+where C denotes the deviation introduced by global aggre-gation. This deviation can be lower-bounded by both the state of the local model Ql(t) 
+
+> u
+
+and the global-local dis-crepancy Q∆( t) 
+
+> u
+
+= Qg(t) − Ql(t) 
+
+> u
+
+, i.e., it is approximately 
+
+∥∇L u(Qlu)∥(∥Qlu − Q∗
+
+> u
+
+∥ + ∥Q∆ 
+
+> u
+
+∥). The first term on the right-hand side of the inequality, A = ⟨∇L u(Ql(t) 
+
+> u
+
+), Ql(t) 
+
+> u
+
+−
+
+Q∗
+
+> u
+
+⟩ > 0, reflects the preservation of client-specific opti-mization signal. For effective local personalization, the up-date must remain aligned with the client-specific optimum, which requires the left-hand side of the inequality to be pos-itive. To achieve this, we need to adaptively control the merg-ing weight 0 ≤ ρ < AA+C based on the deviation C in each round. Accordingly, we propose the Elastic Merging module, which learns ρ from Ql(t) 
+
+> u
+
+and Q∆( t) 
+
+> u
+
+, ensuring client-wise alignment and mitigating the aggregation bottleneck. 
+
+Practical Implementation. On the client side, we introduce the Elastic Merging (EM) module to dynamically preserve personalized information from the local model during global collaborative training. Furthermore, we utilize the vector 
+
+ρ ∈ Rm for fine-grained merging at the item level. Based on the analysis in Lemma 2, we first compute the global-local model discrepancy Q∆( t−1)  
+
+> u
+
+= Qg(t−1)  
+
+> u
+
+− Ql(t−1)  
+
+> u
+
+,and then concatenate it with the local model Ql(t−1)  
+
+> u
+
+to ob-tain Qcat (t−1)  
+
+> u
+
+= Q∆( t−1)  
+
+> u
+
+⊕ Ql(t−1)  
+
+> u
+
+. We feed Qcat (t−1)  
+
+> u
+
+∈
+
+Rm×2d into the core component of the EM module, i.e. , the adapter, to generate the elastic vector ρ for each client u.Here, we implement the adapter with an L-layer multi-layer perceptron (MLP). Formally, we have: 
+
+ρ = ϕoutput (Θ Lu • (· · · ϕ(Θ 2 
+
+> u
+
+• (ϕ(Θ 1 
+
+> u
+
+• Qcat (t−1)  
+
+> u
+
+)))) , (9) where ϕ(·) and ϕoutput (·) denote the mapping functions for the intermediate and output layers, respectively. Here, we employ ReLU for ϕ and Sigmoid for ϕoutput to ensure that each element of vector ρ is in the range [0 , 1] . Besides, nota-tion • denotes the matrix product operation, and Θiu denotes the parameters of the i-th layer. Then, the merged model can be formulated as: 
+
+Qm(t+1)  
+
+> u
+
+= ρ ⊙ Qg(t−1)  
+
+> u
+
++ ( 1 − ρ) ⊙ Ql(t−1) 
+
+> u
+
+= Ql(t−1)  
+
+> u
+
++ ρ ⊙ Q∆( t−1)  
+
+> u
+
+, (10) where ⊙ denotes the Hadamard product. Hence, by preserv-ing the local information in Ql(t) 
+
+> u
+
+, ρ serves to selectively ab-sorb the collaborative information in Q∆( t) 
+
+> u
+
+, thus preventing the aforementioned aggregation bottleneck. 14550 Specifically, the adapter parameters Θu can be updated using stochastic gradient descent (SGD) as follows: 
+
+Θu = Θ u − β · ∂Lu(p(t−1)  
+
+> u
+
+, Qm(t) 
+
+> u
+
+; Du)
+
+∂Θu
+
+, (11) where β is the learning rate for the adapter. Notably, only the parameters Θu are updated with ρ varied in this step, while other model parameters, i.e. , p(t−1)  
+
+> u
+
+, Ql(t−1)  
+
+> u
+
+and Qg(t−1)  
+
+> u
+
+,are frozen. Unlike other FR methods, Qm(t) 
+
+> u
+
+is utilized to ini-tialize the local model for local training rather than Qg(t−1)  
+
+> u
+
+.
+
+Local Training 
+
+The objective of local training is to update the user embed-ding p(t−1)  
+
+> u
+
+and the item embedding table Qm(t) 
+
+> u
+
+to obtain 
+
+p(t) 
+
+> u
+
+and Ql(t) 
+
+> u
+
+. Note that the adapter Θu is not involved dur-ing this process. Formally, the update can be written as: 
+
+pu = pu − η · ∂Lu
+
+∂pu
+
+, Qlu = Qlu − η · ∂Lu
+
+∂Qlu
+
+, (12) where η is the learning rate for local training. To protect pri-vacy, client u only uploads the trained Ql(t) 
+
+> u
+
+for aggregation. 
+
+Global Aggregation 
+
+As shown in Lemma 1, traditional fixed-weight aggregation is ineffective in FR, and the aggregation bottleneck is further exacerbated by inherent client heterogeneity. In addition to local elastic merging, we further perform global similarity-based aggregation to alleviate the impact of such hetero-geneity. Inspired by the previous work (Ye et al. 2023) in FL, we additionally incorporate client similarity, generating a client-specific weight vector wu = [ wu1, w u2, . . . , w un ] ∈
+
+Rn to conduct tailored aggregation for each client u. Specifi-cally, wu is obtained by minimizing the following objective: 
+
+Lg =
+
+> n
+
+X
+
+> v=1
+
+(( wuv − pv )2 + α(wuv − σ(Qlu, Qlv )) 2),
+
+s.t. 1T wu = 1 and wu > 0,
+
+(13) where pu = |D u|/ Pnv=1 |D v | denotes the aggregation weight used in the backbone FedMF (Chai et al. 2020). Here, 
+
+σ(Qlu, Qlv ) = 1 /(1 + ∥Qlu − Qlv ∥2) denotes the similarity function. This term ensures that the aggregation weight wuv 
+
+increases when the two client models are highly similar. Be-sides, α is a similarity-related hyperparameter. After global aggregation, each client u can download the global model 
+
+Qg(t) 
+
+> u
+
+= Pnv=1 wuv Ql(t) 
+
+> v
+
+to start the next round t + 1 .
+
+## Discussions 
+
+Complexity Analysis 
+
+Given n clients and m items, with embedding dimension d,the computational complexity of the local backbone model is O(( m+1) d). Our proposed EM module is implemented as an L-layer MLP, whose complexity is O(Ld 2). Since m ≫
+
+d > L in practice, the EM module introduces negligible overhead to the local device, making it well-suited for on-device recommendation. 
+
+Privacy Analysis 
+
+FedEM naturally preserves user privacy under the federated paradigm. Moreover, the local merging parameters Θu and 
+
+ρ are not shared with the server, reducing the risk of pri-vacy leakage (Chai et al. 2020). To further enhance privacy, we incorporate local differential privacy (LDP) (Qi, Wang, and Huang 2024) into our method. The privacy budget ε is guaranteed by Su/δ , where δ is the noise strength and Su
+
+denotes the global sensitivity of client u. We upper-bound 
+
+Su by 2puηZ , where Z is the gradient clipping threshold. 
+
+## Experiments 
+
+Experimental Settings 
+
+Datasets. We evaluate our proposed method on four datasets with varying client scale and data sparsity: Filmtrust (Guo, Zhang, and Yorke-Smith 2013), ML-100K (Harper and Konstan 2015), ML-1M (Harper and Konstan 2015), and LastFM-2K (Cantador, Brusilovsky, and Kuflik 2011). 
+
+Evaluation Protocols. We follow the popular leave-one-out 
+
+evaluation (Bayer et al. 2017; He et al. 2017), and report the performance by Hit Ratio (HR@10) and Normalized Dis-counted Cumulative Gain (NDCG@10) (He et al. 2015). 
+
+Compared Baselines. We compare FedEM with SOTA cen-tralized methods, e.g. , MF (Koren, Bell, and Volinsky 2009), NCF (He et al. 2017), LightGCN (He et al. 2020), and federated methods, e.g. , FedMF (Chai et al. 2020), Fed-NCF (Perifanis and Efraimidis 2022), FedFast (Muhammad et al. 2020), PFedRec (Zhang et al. 2023a), CoLR (Nguyen et al. 2024), GPFedRec (Zhang et al. 2024a), FedRAP (Li, Long, and Zhou 2024), FedCIA (Han et al. 2025). 
+
+Implementation Details. For a fair comparison, we set the global round T = 100 , batch size B = 256 , and embedding dimension d = 16 for all methods. For baselines, we adopt the optimal settings for other hyperparameters as reported in their original papers. For our method, we set the learning rate η = β = 0 .1, and local epoch E = 10 with the Adam optimizer. All methods converge under the given settings. 
+
+Overall Performance 
+
+The performance comparison of different methods is sum-marized in Table 1. FedEM outperforms centralized meth-ods on most datasets. As a pFR method, FedEM customizes item embeddings for each client, enabling it to better cap-ture user preferences compared to centralized methods that share the same item embeddings across all clients. FedEM also surpasses other federated methods. Existing pFR meth-ods heuristically design additional personalization mecha-nisms without tackling the aggregation bottleneck, i.e. , the loss of local personalization caused by global aggregation. In contrast, our method effectively and efficiently leverages off-the-shelf personalized information from the local model to bridge this gap. Additionally, on relatively dense datasets such as ML-100K and ML-1M, pFR methods, including Fe-dEM, can surpass centralized methods due to the locally suf-ficient training of personalized models. However, for highly sparse datasets such as LastFM-2K, with a sparsity level of up to 99 .07% , the federated setting severely limits local 14551 Datasets Methods CenRec FedRec Ours MF NCF LightGCN FedMF FedNCF FedFast PFedRec CoLR GPFedRec FedRAP FedCIA FedEM Filmtrust HR@10 0.6936 0.6856 0.7804 0.6577 0.6597 0.6637 0.6756 0.6377 0.6836 0.8024 0.8543 0.8932                                                                                        
+
+> NDCG@10 0.5341 0.5476 0.6475 0.5290 0.5337 0.4951 0.5398 0.5105 0.5425 0.5455 0.6992 0.7701 ML-100K HR@10 0.6585 0.6066 0.8356 0.4889 0.4252 0.4687 0.6882 0.4952 0.7010 0.8897 0.9512 0.9958
+> NDCG@10 0.3781 0.3398 0.5754 0.2721 0.2290 0.2702 0.3913 0.2772 0.4069 0.7950 0.7741 0.9427 ML-1M HR@10 0.6053 0.5897 0.8217 0.4871 0.4230 0.4137 0.6730 0.4533 0.6776 0.8619 0.9012 0.9507
+> NDCG@10 0.3376 0.3325 0.5478 0.2733 0.2285 0.2333 0.3898 0.2475 0.3973 0.7661 0.7890 0.8392 LastFM-2K HR@10 0.8440 0.7904 0.8463 0.5934 0.4996 0.5225 0.7833 0.5335 0.7975 0.6210 0.7108 0.7935 NDCG@10 0.6161 0.6024 0.6890 0.3963 0.3307 0.3239 0.6822 0.3580 0.6690 0.5923 0.6601 0.7151
+
+Table 1: Performance comparison on four datasets, reported by HR@10 and NDCG@10. CenRec and FedRec represent central-ized and federated recommendation methods, respectively. The best FedRec results are bold, and the second ones are underlined. data availability, making it difficult to outperform central-ized methods. Nevertheless, FedEM still achieves superior performance compared to all pFR methods under such chal-lenging scenarios, demonstrating its general applicability. 0           
+
+> 0.25
+> 0.5
+> 0.75
+> 1
+> 020 40 60 80 100
+> Rounds
+> FedMF
+> FedNCF
+> FedFast
+> PFedRec
+> CoLR
+> GPFedRec
+> FedRAP
+> FedCIA
+> FedEM
+> 020 40 60 80 100
+> Rounds
+> HR@10 NDCG@10
+
+Figure 4: Convergence comparison on the ML-1M dataset. We further compare the convergence of different meth-ods, with results on the ML-1M dataset shown in Figure 4. Compared with other methods, FedEM demonstrates a faster convergence in the early stages and achieves more stable and superior performance in the later stages. This is attributed to the elastic merging scheme, which retains the local in-formation from the previous round, thereby enhancing both performance and convergence stability.                                               
+
+> Datasets Metrics FedMF w/ SR FedSim w/ SR FedSim w/ SM FedSim w/ DM FedSim w/ EM Filmtrust HR@10 0.6577 0.7206 0.7774 0.8433 0.8932
+> NDCG@10 0.5290 0.5501 0.5959 0.7051 0.7701 ML-100K HR@10 0.4889 0.6320 0.7190 0.9427 0.9958
+> NDCG@10 0.2721 0.4457 0.5277 0.8175 0.9427 ML-1M HR@10 0.4871 0.6166 0.7219 0.9078 0.9507
+> NDCG@10 0.2733 0.4103 0.5278 0.7839 0.8392 LastFm-2K HR@10 0.5934 0.7258 0.7455 0.7912 0.7935
+> NDCG@10 0.3963 0.6498 0.6633 0.7131 0.7151
+
+Table 2: Ablation study results. The best results are in bold. 
+
+Ablation Study 
+
+Component analysis. Based on the backbone FedMF, we apply similarity-based aggregation on the server side and denote this variant as FedSim. Moreover, to validate the ra-tionality and effectiveness of the EM module, we introduce the following variants: (1) Static Replacement (SR): Replace the local model with the global model for local training. (2) Static Merging (SM): Set a fixed scalar ρ shared across all clients to merge the global and local models. (3) Dynamic Client #404  
+
+> Local
+> Client #12 Client #536
+> Merged  Global
+
+Figure 5: Model visualization of item embeddings on ML-100K. Items interacted with by the user are marked with red 
+
++, while unobserved items are marked with blue ×.Merging (DM): Each client adopts a local adapter to gen-erate a personalized scalar ρ for model merging. (4) Elastic Merging (EM): The adapter generates a vector ρ to perform fine-grained model merging at the item level for each client. From the results in Table 2, we observe that incorporating similarity into global aggregation helps mitigate the nega-tive impact of client heterogeneity on local personalization. Focusing on local strategies, the SR scheme adopted by ex-isting methods directly discards the local model, leading to suboptimal performance. By merging the global and lo-cal models, SM retains some personalized information and achieves better results. However, SM applies the same merg-ing weight to all clients, neglecting client heterogeneity and diverse personalization needs. DM improves upon SM by in-troducing the adapter to generate client-specific weights, en-abling more tailored merging. Building on DM, EM further leverages the embedding-based nature of recommendation models to perform fine-grained merging at the item level. This design allows for a more balanced fusion of collabo-rative information from global aggregation and the off-the-shelf personalized information from local training, offering a more efficient and effective solution. 14552 Datasets Metrics FedMF FedNCF PFedRec GPFedRec FedRAP                                                                                                                                                                                  
+
+> w/o EM w/ EM Improv. w/o EM w/ EM Improv. w/o EM w/ EM Improv. w/o EM w/ EM Improv. w/o EM w/ EM Improv.
+> Filmtrust HR@10 0.6577 0.7804 ↑18 .66% 0.6597 0.7315 ↑10 .88% 0.6756 0.9691 ↑43 .44% 0.6836 0.8723 ↑27 .60% 0.8024 0.8044 ↑0.25%
+> NDCG@10 0.5290 0.6426 ↑21 .47% 0.5337 0.6852 ↑28 .39% 0.5398 0.8544 ↑58 .28% 0.5425 0.6706 ↑23 .61% 0.5455 0.5498 ↑0.79%
+> ML-100K HR@10 0.4889 0.8759 ↑79 .16% 0.4252 0.7529 ↑77 .07% 0.6882 0.9905 ↑43 .93% 0.7010 0.9247 ↑31 .91% 0.8897 0.9735 ↑9.42%
+> NDCG@10 0.2721 0.7533 ↑176 .85% 0.2290 0.7162 ↑212 .75% 0.3913 0.9238 ↑136 .08% 0.4069 0.6938 ↑70 .51% 0.7950 0.8964 ↑12 .75%
+> ML-1M HR@10 0.4871 0.8199 ↑68 .32% 0.4230 0.7606 ↑79 .81% 0.6730 0.9656 ↑43 .48% 0.6776 0.8823 ↑30 .21% 0.8619 0.9538 ↑10 .66%
+> NDCG@10 0.2733 0.6606 ↑141 .71% 0.2285 0.6979 ↑205 .43% 0.3898 0.7978 ↑104 .67% 0.3973 0.6777 ↑70 .58% 0.7661 0.8648 ↑12 .88%
+> LastFM-2K HR@10 0.5934 0.7013 ↑18 .18% 0.4925 0.6564 ↑33 .28% 0.7833 0.8810 ↑12 .47% 0.7975 0.8385 ↑5.14% 0.6210 0.6320 ↑1.77%
+> NDCG@10 0.3963 0.6061 ↑52 .94% 0.3215 0.5445 ↑69 .36% 0.6822 0.8052 ↑18 .03% 0.6690 0.7475 ↑11 .73% 0.5923 0.5869 –
+
+Table 3: Performance improvement by integrating the Elastic Merging (EM) module into existing FR/pFR baselines. “Improv.” indicates the performance gain over the original baselines. 
+
+Model Visualization. We incorporate the EM module into FedMF and perform t-SNE visualization of the local, global, and merged models, as shown in Figure 5. The locally trained model contains rich personalized information, with the preferred items being relatively concentrated. Although global aggregation introduces more diverse collaborative in-formation into the model, it also disrupts user preferences. Using such a global model for local training can harm per-sonalization. In contrast, the EM module performs model merging at the item level, effectively leveraging the off-the-shelf personalized information from the local model while selectively incorporating collaborative information from the global model, leading to better performance. 
+
+Compatibility Study 
+
+Our proposed EM module can be seamlessly integrated as a plug-in into existing FR/pFR methods, aiming to over-come the performance bottleneck caused by global aggre-gation. Specifically, we take FedMF, FedNCF, PFedRec, GPFedRec, and FedRAP as examples, where elastic merg-ing is performed after the client downloads the global model, instead of following static replacement. As shown in Table 3, all methods exhibit significant performance improvements after incorporating the EM module, validating both the lim-itations of the static replacement and the effectiveness of elastic merging. The EM module is lightweight and easily integrable, incurring little to no overhead on local clients and demonstrating good compatibility with existing models. 
+
+Hyperparameter Analysis 
+
+Adapter architecture. In our experiments, we set the em-bedding dimension to d = 16 , and by default, the adapter is implemented as an MLP with three hidden layers, following the structure [32 , 16 , 8, 1] . Additionally, we explore MLPs with varying numbers of hidden layers, and the correspond-ing results are illustrated in Figure 6. When the number of MLP layers L is small, the adapter struggles to effectively balance the local and global models, leading to suboptimal results. As L increases, the model performance does not im-prove significantly, but the adapter becomes more complex. The default structure achieves a good trade-off between per-formance and architectural simplicity. 
+
+Similarity Coefficient. During global aggregation, we find that setting the similarity coefficient α around 1 can ef-fectively alleviate the negative impact of heterogeneity dis-cussed in Lemma 1 and improve overall model performance. 0.7 0.75 0.8 0.85 0.9 0.95 1       
+
+> 1-Layer: [32, 1]
+> 2-Layer: [32, 16, 1]
+> 3-Layer: [32, 16, 8, 1]
+> 4-Layer: [32, 32, 16, 8, 1]
+> 5-Layer: [32, 64, 32, 16, 8, 1]
+> 0.65 0.7 0.75 0.8 0.85 0.9 0.95
+> HR@10 NDCG@10
+> Filmtrust  ML -100K  ML -1M  LastFM -2K
+
+Figure 6: Performance under different adapter architectures. 
+
+Privacy Protection 
+
+We evaluate the performance of privacy-enhanced FedEM by incorporating the LDP strategy. As shown in Table 4, the performance on all datasets slightly degrades with LDP, but remains within an acceptable range and still outperforms other baselines, demonstrating the robustness of our method.                                            
+
+> Datasets Filmtrust ML-100K ML-1M LastFM-2K
+> H@10 N@10 H@10 N@10 H@10 N@10 H@10 N@10
+> w/o LDP 0.8932 0.7701 0.9958 0.9427 0.9507 0.8392 0.7935 0.7151
+> w/ LDP 0.8802 0.7353 0.9936 0.9399 0.9392 0.8193 0.7707 0.6930
+> Degrade ↓1.46% ↓4.52% ↓0.22% ↓0.30% ↓1.21% ↓2.37% ↓2.87% ↓3.09%
+
+Table 4: Performance of applying LDP to our method. H and N are short for HR and NDCG, respectively. 
+
+## Conclusion 
+
+In this work, we experimentally and theoretically identify a performance bottleneck in FR caused by global aggregation. Unlike existing methods that heuristically design personal-ization mechanisms, we address this bottleneck directly with a simple yet effective method called FedEM. Grounded in model merging theory, FedEM exploits the off-the-shelf lo-cal models to compensate for the aggregated global model. It elastically strikes a balance between global collaboration and local personalization, achieving excellent performance and compatibility compared to other SOTA methods. 14553 Acknowledgments 
+
+This work is supported by the Fundamental Research Funds for the Central Universities 2023JBZY031, in part by the National Science Foundation of China under Grant U2268203, 62402031, 62203040, and 62372436, in part by the Beijing Nova Program 20240484620. It is also supported by Beijing Postdoctoral Research Foundation, Q6059000202501. 
+
+## References 
+
+Ammad-Ud-Din, M.; Ivannikova, E.; Khan, S. A.; Oyomno, W.; Fu, Q.; Tan, K. E.; and Flanagan, A. 2019. Federated collaborative filtering for privacy-preserving personalized recommendation system. arXiv preprint arXiv:1901.09888 .Bayer, I.; He, X.; Kanagal, B.; and Rendle, S. 2017. Ageneric coordinate descent framework for learning from im-plicit feedback. In WWW , 1341–1350. Bottou, L.; Curtis, F. E.; and Nocedal, J. 2018. Optimiza-tion methods for large-scale machine learning. SIAM review ,60(2): 223–311. Boyd, S. P.; and Vandenberghe, L. 2004. Convex optimiza-tion . Cambridge university press. Cantador, I.; Brusilovsky, P.; and Kuflik, T. 2011. Second workshop on information heterogeneity and fusion in rec-ommender systems (HetRec2011). In RecSys , 387–388. Chai, D.; Wang, L.; Chen, K.; and Yang, Q. 2020. Secure federated matrix factorization. IEEE Intelligent Systems ,36(5): 11–20. Chen, G.; Zhang, X.; Su, Y.; Lai, Y.; Xiang, J.; Zhang, J.; and Zheng, Y. 2023. Win-win: a privacy-preserving feder-ated framework for dual-target cross-domain recommenda-tion. In AAAI , 4149–4156. Chen, J.; Zhang, H.; Li, H.; Zhang, C.; Li, Z.; and Li, Y. 2025. Beyond Personalization: Federated Recommenda-tion with Calibration via Low-rank Decomposition. arXiv preprint arXiv:2506.09525 .Collins, L.; Hassani, H.; Mokhtari, A.; and Shakkottai, S. 2021. Exploiting shared representations for personalized federated learning. In ICML , 2089–2099. Fallah, A.; Mokhtari, A.; and Ozdaglar, A. 2020. Per-sonalized federated learning with theoretical guarantees: A model-agnostic meta-learning approach. In NeurIPS , 3557– 3568. Feng, J.; Lai, Y.; Sun, H.; and Ren, B. 2025. SADBA: Self-Adaptive Distributed Backdoor Attack Against Feder-ated Learning. In AAAI , 16568–16576. Feng, J.; Yang, L. T.; Zhu, Q.; and Choo, K.-K. R. 2018. Privacy-preserving tensor decomposition over encrypted data in a federated cloud environment. IEEE TDSC , 17(4): 857–868. Guo, G.; Zhang, J.; and Yorke-Smith, N. 2013. A Novel Bayesian Similarity Measure for Recommender Systems. In 
+
+IJCAI , 2619–2625. Han, M.; Li, D.; Xia, J.; Liu, J.; Gu, H.; Zhang, P.; Gu, N.; and Lu, T. 2025. FedCIA: Federated Collaborative Informa-tion Aggregation for Privacy-Preserving Recommendation. In SIGIR , 1687–1696. Harper, F. M.; and Konstan, J. A. 2015. The movielens datasets: History and context. ACM TIIS , 5(4): 1–19. He, X.; Chen, T.; Kan, M.-Y.; and Chen, X. 2015. Trirank: Review-aware explainable recommendation by modeling as-pects. In CIKM , 1661–1670. He, X.; Deng, K.; Wang, X.; Li, Y.; Zhang, Y.; and Wang, M. 2020. Lightgcn: Simplifying and powering graph convo-lution network for recommendation. In SIGIR , 639–648. He, X.; Liao, L.; Zhang, H.; Nie, L.; Hu, X.; and Chua, T.-S. 2017. Neural collaborative filtering. In WWW , 173–182. Huang, W.; Ye, M.; Shi, Z.; Wan, G.; Li, H.; Du, B.; and Yang, Q. 2024. Federated learning for generalization, ro-bustness, fairness: A survey and benchmark. IEEE TPAMI ,46(12): 9387–9406. Huang, Y.; Chu, L.; Zhou, Z.; Wang, L.; Liu, J.; Pei, J.; and Zhang, Y. 2021. Personalized cross-silo federated learning on non-iid data. In AAAI , 7865–7873. Ji, S.; Pan, S.; Long, G.; Li, X.; Jiang, J.; and Huang, Z. 2019. Learning private neural language modeling with at-tentive aggregation. In IJCNN , 1–8. Koren, Y.; Bell, R.; and Volinsky, C. 2009. Matrix factoriza-tion techniques for recommender systems. Computer , 30– 37. Li, T.; Hu, S.; Beirami, A.; and Smith, V. 2021. Ditto: Fair and robust federated learning through personalization. In 
+
+ICML , 6357–6368. Li, Z.; Long, G.; and Zhou, T. 2024. Federated recommen-dation with additive personalization. In ICLR .Luo, S.; Xiao, Y.; and Song, L. 2022. Personalized feder-ated recommendation via joint representation learning, user clustering, and model adaptation. In CIKM , 4289–4293. McMahan, B.; Moore, E.; Ramage, D.; Hampson, S.; and y Arcas, B. A. 2017. Communication-efficient learning of deep networks from decentralized data. In AISTATS , 1273– 1282. Muhammad, K.; Wang, Q.; O’Reilly-Morgan, D.; Tragos, E.; Smyth, B.; Hurley, N.; Geraci, J.; and Lawlor, A. 2020. Fedfast: Going beyond average for faster training of feder-ated recommender systems. In SIGKDD , 1234–1242. Nguyen, N.-H.; Nguyen, T.-A.; Nguyen, T.; Hoang, V. T.; Le, D. D.; and Wong, K.-S. 2024. Towards efficient commu-nication and secure federated recommendation system via low-rank training. In WWW , 3940–3951. Perifanis, V.; and Efraimidis, P. S. 2022. Federated neu-ral collaborative filtering. Knowledge-Based Systems , 242: 108441. Qi, T.; Wang, H.; and Huang, Y. 2024. Towards the Robust-ness of Differentially Private Federated Learning. In AAAI ,19911–19919. Sun, Z.; Xu, Y.; Liu, Y.; He, W.; Kong, L.; Wu, F.; Jiang, Y.; and Cui, L. 2024. A survey on federated recommendation systems. IEEE TNNLS , 36(1): 6–20. T Dinh, C.; Tran, N.; and Nguyen, J. 2020. Personalized fed-erated learning with moreau envelopes. In NeurIPS , 21394– 21405. 14554 Yang, E.; Shen, L.; Guo, G.; Wang, X.; Cao, X.; Zhang, J.; and Tao, D. 2024. Model merging in llms, mllms, and beyond: Methods, theories, applications and opportunities. 
+
+arXiv preprint arXiv:2408.07666 .Ye, R.; Ni, Z.; Wu, F.; Chen, S.; and Wang, Y. 2023. Person-alized federated learning with inferred collaboration graphs. In ICML , 39801–39817. Yin, H.; Qu, L.; Chen, T.; Yuan, W.; Zheng, R.; Long, J.; Xia, X.; Shi, Y.; and Zhang, C. 2024. On-Device Recom-mender Systems: A Comprehensive Survey. arXiv preprint arXiv:2401.11441 .Zhang, C.; Long, G.; Zhou, T.; Yan, P.; Zhang, Z.; Zhang, C.; and Yang, B. 2023a. Dual personalization on federated recommendation. In IJCAI , 4558–4566. Zhang, C.; Long, G.; Zhou, T.; Zhang, Z.; Yan, P.; and Yang, B. 2024a. GPFedRec: Graph-guided personalization for fed-erated recommendation. In SIGKDD , 4131–4142. Zhang, H.; Li, H.; Chen, J.; Cui, S.; Yan, K.; Wuerkaixi, A.; Zhou, X.; Shen, Z.; and Li, Y. 2024b. Beyond Similar-ity: Personalized Federated Recommendation with Compos-ite Aggregation. arXiv preprint arXiv:2406.03933 .Zhang, H.; Li, Z.; Li, H.; Zhou, X.; Zhang, J.; and Li, Y. 2026. Transfr: Transferable federated recommendation with adapter tuning on pre-trained language models. In AAAI .Zhang, H.; Luo, F.; Wu, J.; He, X.; and Li, Y. 2023b. LightFR: Lightweight Federated Recommendation with Privacy-preserving Matrix Factorization. ACM TOIS , 41(4): 1–28. Zhang, J.; Hua, Y.; Wang, H.; Song, T.; Xue, Z.; Ma, R.; and Guan, H. 2023c. Fedala: Adaptive local aggregation for personalized federated learning. In AAAI , 11237–11244. Zhang, M.; Sapra, K.; Fidler, S.; Yeung, S.; and Alvarez, J. M. 2021. Personalized federated learning with first order model optimization. In ICLR .Zheng, H.; Hu, Z.; Yang, L.; Zheng, M.; Xu, A.; and Wang, B. 2025. ConFREE: Conflict-free Client Update Aggrega-tion for Personalized Federated Learning. In AAAI , 22875– 22883. Zhou, Z.; Chen, Z.; Chen, Y.; Zhang, B.; and Yan, J. 2024. On the Emergence of Cross-Task Linearity in Pretraining-Finetuning Paradigm. In ICML .14555

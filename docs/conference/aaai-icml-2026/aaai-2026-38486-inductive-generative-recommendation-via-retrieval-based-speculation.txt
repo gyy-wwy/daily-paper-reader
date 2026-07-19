@@ -1,0 +1,364 @@
+Title: Inductive Generative Recommendation via Retrieval-based Speculation
+
+URL Source: https://ojs.aaai.org/index.php/AAAI/article/download/38486/42448
+
+Number of Pages: 9
+
+Markdown Content:
+# Inductive Generative Recommendation via Retrieval-based Speculation 
+
+# Yijie Ding, Jiacheng Li, Julian McAuley, Yupeng Hou *
+
+University of California, San Diego 
+
+{yid016, j9li, jmcauley, yphou }@ucsd.edu 
+
+Abstract 
+
+Generative recommendation (GR) is an emerging paradigm that tokenizes items into discrete tokens and learns to au-toregressively generate the next tokens as predictions. While this token-generation paradigm is expected to surpass tradi-tional transductive methods, potentially generating new items directly based on semantics, we empirically show that GR models predominantly generate items seen during training and struggle to recommend unseen items. In this paper, we propose SpecGR, a plug-and-play framework that enables GR models to recommend new items in an inductive setting. SpecGR uses a drafter model with inductive capability to pro-pose candidate items, which may include both existing items and new items. The GR model then acts as a verifier , accept-ing or rejecting candidates while retaining its strong ranking capabilities. We further introduce the guided re-drafting tech-nique to make the proposed candidates more aligned with the outputs of generative recommendation models, improving verification efficiency. We consider two variants for drafting: (1) using an auxiliary drafter model for better flexibility, or (2) leveraging the GR model’s own encoder for parameter-efficient self-drafting. Extensive experiments on three real-world datasets demonstrate that SpecGR exhibits both strong inductive recommendation ability and the best overall perfor-mance among the compared methods. 
+
+Code — https://github.com/Jamesding000/SpecGR 
+
+# Introduction 
+
+Generative recommendation (GR) is an emerging paradigm for sequential recommendation tasks (Rajput et al. 2024; Zhai et al. 2024; Zheng et al. 2024). By tokenizing each item into a few discrete tokens (named semantic IDs), mod-els are trained to autoregressively generate the next tokens, which are then parsed as predicted items. Compared to con-ventional sequential recommendation methods (Kang and McAuley 2018; Sun et al. 2019), GR models scale up more easily and achieve better performance (Rajput et al. 2024; Deng et al. 2025), benefiting from the power of scaling laws (Zhang et al. 2023; Zhai et al. 2024). Unlike item ID-based transductive models such as SAS-Rec (Kang and McAuley 2018), which cannot recommend 
+
+> *
+
+Corresponding author. Copyright © 2026, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved. New items are added to the item pool ...                  
+
+> 1 2 3 5
+> =
+> Autoregressive Generation
+> GR Model
+> 1
+> 1
+> 23
+> 23
+> 4
+> ...
+> Given 412335...
+> Purchase History
+> ...
+> 2. Traditional Generative Recommendation
+> Given 1235
+> 1172
+> 3634Purchase History
+> Purchase History
+> ...
+> Drafter
+> ...
+> Veri fi er (GR Model)
+> ...
+> ...
+> logits
+> 1 2 3 5 3 6 3 4
+> 1235=
+> Inductive Drafting & Target-aware Verifying
+> 3. (Ours) Speculative Generative Recommendation
+> 1. Inductive Setting
+> 1 1 7 2
+
+Figure 1: (1 & 2) GR models struggle to generate unseen items in an inductive setting. (3) SpecGR, a draft-then-verify framework, leverages GR models to verify candidates from an inductive drafter, enabling new-item recommendations. new items due to the absence of their IDs in the trained model, GR models are expected to exhibit inductive capa-bilities by capturing semantic correlations and generating semantic tokens for previously unseen items. However, our empirical analysis shows that GR models systematically as-sign higher likelihoods to seen semantic ID sequences than to unseen ones. As shown quantitatively in Table 2, GR yields near-zero recommendation performance on unseen items. We attribute this to the models’ tendency to overfit to the semantic ID patterns present in the training data (Yang et al. 2024), making it unlikely for their outputs to match the semantic IDs of new items (Figure 1). In scenarios where up-to-date recommendations are critical ( e.g., news or short-video platforms), a flexible, on-the-fly inference framework is essential for the practical deployment of GR models. In this work, we aim to develop inductive generative recommendation models that can recommend new items on-the-fly. Achieving this goal is non-trivial. In traditional recommendation systems, inductive recommendation (Wu et al. 2021) is typically achieved by incorporating side in-The Fortieth AAAI Conference on Artificial Intelligence (AAAI-26) 
+
+14675 formation and K-nearest neighbor (KNN) search. Although GR models can also tokenize items with side information into semantic IDs, as previously discussed, they struggle to generate unseen semantic ID patterns through autoregres-sive decoding (Freitag and Al-Onaizan 2017; Rajput et al. 2024). Recent efforts have explored blending GR outputs with items retrieved by non-GR methods (Rajput et al. 2024; Yang et al. 2024). However, these approaches fail to fully exploit the modeling strengths of GR models, resulting in suboptimal performance. To this end, we propose SpecGR (Spec ulative Generative 
+
+Recommendation), an inductive generative recommendation framework that can be integrated with GR models in a plug-and-play manner. We extend the concept of the drafter-verifier framework in the original speculative decoding tech-nique (Leviathan, Kalman, and Matias 2023; Chen et al. 2023; He et al. 2023). Rather than relying on a lightweight homologous model for inference acceleration, we explore the integration of models with different paradigms and ca-pabilities. Specifically, we employ a KNN-based inductive model as the drafter to generate small batches of candidate items, while a GR model with stronger recommendation ca-pabilities serves as the verifier, responsible for accepting or rejecting these candidates. Instead of merely blending out-puts from different models, SpecGR ensures that all final recommendations are ranked based on scores assigned by the GR verifier. In addition, we propose guided re-drafting to improve the quality of candidate items proposed by the drafter model, leveraging the semantic ID prefixes gener-ated by the verifier GR model. Furthermore, to reduce the overhead of maintaining a separate drafter model, we intro-duce SpecGR++ that enables the encoder of the GR model to serve as a drafter. Extensive experiments are conducted on three public datasets. We split the training and evaluation sets chrono-logically using fixed timestamp cut-offs. This setup en-sures that recommendation models are evaluated in a setting where new items appear over time. The experimental results demonstrate that SpecGR significantly improves the ability of GR models to recommend new items and achieves strong overall performance compared to existing methods. 
+
+# Related Work 
+
+Generative recommendation. Traditional sequential rec-ommendation typically assigns a unique learnable embed-ding to each item, leading to optimization challenges due to large item vocabulary size (Hidasi et al. 2016; Kang and McAuley 2018; Sun et al. 2019). Generative recommenda-tion (GR) addresses this by tokenizing items into discrete tokens and predicting the next item via autoregressive next-token generation (Rajput et al. 2024; Zheng et al. 2024; Liu, Hou, and McAuley 2024; Hou et al. 2025b). GR has demon-strated improved memory efficiency (Rajput et al. 2024; Hou et al. 2025a), scalability (Zhai et al. 2024), and promising end-to-end retrieval capabilities to unify retrieval and rank-ing (Deng et al. 2025). Despite these advantages, GR models tend to generate only semantic IDs observed during training, severely limiting their generalizability to unseen items. De-spite a few early attempts (Rajput et al. 2024; Yang et al. 2024), this direction remains largely underexplored. In this work, we focus on developing effective frameworks that ex-tend GR models to inductively recommend new items. 
+
+Cold-start & inductive recommendation. The item cold-start problem refers to the challenge of recommending items with limited interactions (Zhang et al. 2025; Wei et al. 2021; Zhou, Zhang, and Yang 2023). Common approaches use meta-learning that helps models generalize better from lim-ited interactions, via gradient-based optimization (Lee et al. 2019), task adaptation (Lin et al. 2021; Wu and Zhou 2023), or memory-augmented modules (Dong et al. 2020; Zheng et al. 2021). Inductive recommendation particularly tackles the challenge of recommending new items without any asso-ciated interactions. Existing methods leverage side informa-tion like tags or descriptions (Pazzani and Billsus 2007; Zhu et al. 2020; Li et al. 2023), modality representations (Hou et al. 2022, 2023; Sheng et al. 2024), and behavior pat-terns (Wu et al. 2021, 2020). However, for GR models, the unique challenge lies in their intrinsic inability to generate unseen items during autoregressive token generation. Re-cent approaches enhance inductive capability by integrating heuristic candidates (Rajput et al. 2024) or dense retrieval results (Yang et al. 2024) with GR outputs. In this work, we propose a novel framework that converts the role of GR from generation to verification for inductive recommendation. 
+
+Speculative decoding. Large language models (LLMs) (Achiam et al. 2023; Zhao et al. 2023) have revolutionized a wide range of applications, yet suffer from high inference latency due to autoregressive decoding and large model size. Speculative decoding was proposed to accelerate LLM inference by leveraging a lightweight, ho-mologous drafter model to generate future token sequences, which are then verified by a stronger target model, achieving lower latency and lossless performance (Leviathan, Kalman, and Matias 2023; Chen et al. 2023). Subsequent efforts have developed efficient drafting strategies (Cai et al. 2024; He et al. 2023; Elhoushi et al. 2024), improved draft quality to maximize acceptance rate (Xiao et al. 2024; Gloeckle et al. 2024), and applied the framework to diverse domains (Wang et al. 2024; De Bortoli et al. 2025). Recently, Lin et al. (2024) extended speculative decoding to accelerate top-K sequence generation in the GR setting. In this work, rather than focusing on acceleration, we leverage the draft-verify framework to bring inductive capabilities to generative recommendation models. 
+
+# Methodology 
+
+Problem Setup and Formulation 
+
+We follow the inductive sequential recommendation task (Hou et al. 2022; Yuan et al. 2023). The input is a se-quence of items {x1, x 2, . . . , x w} ordered chronologically based on user interaction time. Each item x ∈ I has asso-ciated text features, such as title, description, and category. Here, w denotes the length of the item sequence. The task is to predict the next item of interest. Note that in the inductive setting, the target item may not appear in the training set, 14676 Encoder  
+
+> Auxiliary Draft Model
+> Modality (e.g. Text) -based Item Rep
+> Semantic ID-based Item Rep
+> (from SpecGR++ Encoder)
+> Seq Rep Seq Rep Last Hidden State
+> ...
+> ... Last Hidden State
+> Norm
+> Mean Pooling
+
+OR                
+
+> In Parallel
+> Self-Drafting Drafting with Auxiliary Model
+> Inductive Drafting Target-aware Verifying Guided Re-drafting
+> 1Beam Search
+> Decoder Logits
+> Drafted Candidates
+> Beam Sequences
+> LogSoftmax Unseen Mask
+> Accept (yes) Reject (no) 1358
+> 4632
+> 1321
+> 7123...
+> 34127
+> In-sample Items Unseen Items Semantic IDs
+> Semantic ID Sequence Item Sequence
+> KNN Search KNN Search
+> Drafted Candidates Filter
+> Decoder
+
+Figure 2: Illustration of the proposed SpecGR method, a draft-and-verify framework that iteratively performs drafting and verification until enough items are accepted. (a) Inductive Drafting . The inductive drafter first retrieves a set of candidates that contain new items. We present two drafting methods: using an auxiliary model or the GR’s encoder output (namely, self-drafting) for item retrieval. (b) Target-aware Verifying . The GR model accepts or rejects the candidates based on the likelihood of being the target. (c) Guided Redrafting . If not enough items are accepted, the GR filters the candidate space for the next drafting round based on the generated beam sequences. called new or unseen items in the following sections. In this work, we focus on developing a general inductive recommendation framework for generative recommendation models. Typical GR models like TIGER (Rajput et al. 2024) will tokenize each item xi into a semantic ID pattern, ID i := [⟨ci
+
+> 1
+
+⟩, ⟨ci
+
+> 2
+
+⟩, . . . , ⟨cil ⟩], where l denotes the number of digits of one item’s semantic ID pattern, and ⟨c⟩ denotes one digit of semantic ID. In this way, the input for GR models can be represented as follows by replacing the items in the original item sequence with the corresponding semantic IDs: 
+
+X = [ ⟨bos ⟩, ID 1, ID 2, . . . , ID w, ⟨eos ⟩] , (1) where ⟨bos ⟩ and ⟨eos ⟩ are special tokens indicating the start and ending positions of a semantic ID sequence. Then the GR models are trained to generate K semantic ID pat-terns, which will be further parsed into recommended items with top-K probabilities. In the inductive setting, we as-sume that new items have been assigned semantic ID pat-terns. These new items can be parsed if the outputs of the GR models match the new semantic ID patterns. 
+
+Speculative Generative Recommendation 
+
+We begin by providing an overview of the proposed SpecGR framework, as illustrated in Figure 2. The framework con-sists of four components: (1) Inductive Drafting. Given the same input item sequence as the generative recommenda-tion model, a drafter model with inductive recommendation capabilities proposes a set of candidate items as recommen-dation drafts. (2) Target-aware Verifying. The GR model, acting as a verifier, either accepts or rejects the candidates based on the probability that they could be targets of the input sequence. (3) Guided Re-drafting. If the number of accepted items does not meet the required recommendations 
+
+K, the GR model guides the drafter to re-draft and propose the next set of candidate items. (4) Adaptive Exiting. Once 
+
+K items are accepted, the framework exits and outputs the items, sorted by the scores given by the GR model. This pro-cess selects high-quality, unseen items through drafting and verifying, while maintaining the strong recommendation ca-pabilities of generative recommendation models. 
+
+Inductive Drafting Instead of expecting GR models to di-rectly generate the semantic IDs of unseen items, we employ an inductive drafter model to first propose “recommenda-tion drafts” that may include unseen items. Given the input item sequence X, the drafter model D( ·) performs inductive drafting by recommending a set of δ candidates Q = D( X),where |Q| = δ. Note that in the original speculative decod-ing technique, the drafter model is considered an efficient approximation of the target model (Leviathan, Kalman, and Matias 2023; Chen et al. 2023), functioning as a homolo-gous model to the verifier model. Here, we extend the above restriction in choosing drafter models. We do not require the drafter model to be a GR model but instead an induc-tive model to bring new capabilities to the following verifier model (in our case, the GR model). This approach allows high-quality unseen items to be introduced into the system, which are then verified by the more expressive generative 14677 model and finally included in the recommendations. Hence, the inductive drafter can be any inductive recommendation model, and we will discuss two effective instantiations in the subsequent Drafting Strategies section. 
+
+Target-aware Verifying While inductive drafters excel at recommending unseen items, they are not as effective as GR models in modeling input sequences and providing recom-mendations. Therefore, after obtaining candidates Q from the inductive drafting process, we use the generative model to verify them, rejecting items with low likelihood. 
+
+• Target-aware likelihood for ranking. Given a candidate item as a potential target, we use the GR model as a query-likelihood model (QLM) (Zhuang et al. 2023; Zhuang, Li, and Zuccon 2021; Nogueira, Lin, and Epistemic 2019). The QLM scores the query, i.e., input sequence and the potential target, by measuring the likelihood of the model consecu-tively generating the tokens in the query. Previous studies have demonstrated that generative language models, such as T5 (Raffel et al. 2020), exhibit robust zero-shot query-likelihood ranking performance in document retrieval tasks, without explicit fine-tuning for document ranking (Zhuang et al. 2023). Accordingly, conditioning on the input se-quence X, we adopt the conditional probability of gener-ating the target semantic ID pattern as the verification score. 
+
+• Likelihood score calculation. However, naively apply-ing the QLM for verification would result in low scores for unseen items. This happens because not all digits of seman-tic IDs are derived from item semantics. In addition to the tokens learned purely from item semantics, existing meth-ods usually add an extra digit to avoid conflicts, known as the item identification token (Rajput et al. 2024; Liu, Hou, and McAuley 2024). For unseen items, the probability of generating this identification token lies outside the model-ing distribution and therefore primarily consists of noise. To provide a fair verification score for unseen items, we exclude the identification token and calculate only the proba-bility of other digits. The target-aware verification score can be computed as:                
+
+> V( xt, X ) =
+> 
+> 1
+> l
+> lX
+> i=1
+> log P(cti|ct<i , X ),xt∈ I ,
+> 1
+> l−1
+> l−1X
+> i=1
+> log P(cti|ct<i , X ),xt∈ I ∗\ I .
+
+(2) where V( ·) denotes the verifier model, which takes the input sequence X and the potential target item xt as inputs, outputing the log-likelihood probability scores. l denotes the total number of digits in each semantic ID pattern, where the last digit is assumed to be the item identification token. P (·)
+
+denotes the backbone autoregressive model, which takes se-mantic ID sequences and outputs the likelihood scores. cti
+
+refers to the i-th digit of the semantic ID for the target item 
+
+xt. The set I∗ \ I represents the unseen items. To alleviate the bias caused by varying lengths of seman-tic IDs for unseen and existing items, we normalize the log-likelihood scores by the corresponding number of digits. Af-ter obtaining the likelihood score, we accept the items if 
+
+V( xt, X ) > γ , where γ is a hyperparameter and can be tuned on the validation set. 
+
+Guided Re-drafting If fewer than K items are accepted from the initial batch of drafted candidates, the drafter model D( ·) must generate an additional batch of δ new candidates. Intuitively, since these candidates appear lower in the drafter’s ranking, their expected acceptance proba-bility under the verifier V( ·) is substantially reduced. To counteract this decline in acceptance rate, we introduce the 
+
+guided re-drafting mechanism that steers subsequent can-didate batches toward regions of the item space that better match the verifier’s scoring distribution. Guided re-drafting operates by steering the drafter models using a set of semantic ID prefixes generated by the verifier models (GR models). Specifically, after verifying the j-th batch of recommendation drafts, the verifier model gener-ates a set of beam sequences Bj using beam search, where each sequence is a j-digit semantic ID prefix. In the next draft-verify iteration, the drafter model is guided to propose only candidates Qj whose prefixes match those in Bj :
+
+Qj = xi|xi ∈ D( X), (ci
+
+> 1
+
+, c i
+
+> 2
+
+, . . . , c ij ) ∈ B j , (3) where Bj denotes the set of semantic ID prefixes, with a hyperparameter β as the set size. Guided re-drafting hap-pens along with the beam search decoding process of the GR model. It is important to note that the total number of draft-verify iterations will not exceed l, which corresponds to the maximum length of the semantic IDs, and is also equal to the maximum number of decoding steps. 
+
+Adaptive Exiting SpecGR can adaptively terminate the draft-verify iterations based on the number of candidate items accepted by the verifier (GR) model. When the num-ber of accepted items reaches K, the loop exits, avoiding the need to generate full-length sequences of l. This adaptive ap-proach reduces inference time, as fewer generation steps are required. If, after the final iteration, there are still not enough accepted items, the beam sequences will be appended to the recommendation list until K is reached. As a result, even in the worst case, SpecGR does not incur additional time overhead compared to decoding with beam search. Finally, we rank the recommendation list by using the verification scores of the accepted items, along with the beam scores if items from beam sequences are included. 
+
+Drafting Strategies 
+
+In this section, we present two methods for drafting: by us-ing an auxiliary draft model, and by reusing the encoder of generative recommendation models (namely SpecGR++). 
+
+Auxiliary Draft Model The most straightforward way to draft is to introduce an auxiliary inductive recommendation model. An example is UniSRec (Hou et al. 2022), which uses modality-based item representations for KNN search. When new items are added, their representations can be di-rectly incorporated into the item pool. The model can then retrieve new items if their modality-based representations are similar to the sequence representations. 14678 Self-Drafting via GR Encoder Despite the flexibility of using an auxiliary model as the drafter, issues such as com-munication latency and distribution shift may arise. Thus, we propose SpecGR++ , which reuses the encoder module of the generative recommendation model to function as an inductive drafter model. The general idea is to encode both (1) the semantic IDs of a single item, and (2) the input se-mantic ID sequence of user history, using the same encoder module. Then we apply KNN search to retrieve semantic IDs of both existing and new items. 
+
+• Semantic ID-based item and sequence representa-tions. To derive sequence representations, we use the same input format as our GR model (Equation (1)). To derive item representations, we format the semantic IDs of a sin-gle item xi in the same way as the encoder’s input, i.e., 
+
+[⟨bos ⟩, ID i, ⟨eos ⟩], where ID i represents the semantic ID pattern of item xi. To obtain the item and sequence repre-sentations, we take the last hidden state from the GR encoder and apply mean pooling. 
+
+• Item–sequence contrastive pretraining. Prior work shows that hidden states from generative models are not di-rectly suitable as representations (Ni et al. 2022a,b). To ob-tain strong inductive embeddings, we jointly train the GR encoder with a contrastive objective following (Chen et al. 2020; Hou et al. 2022). Given sequence embeddings sj and next-item embeddings ij , the contrastive loss is: 
+
+LCL = − 1
+
+Bemb 
+
+> Bemb
+
+X
+
+> j=1
+
+log exp( sj · ij /τ )
+
+PBemb  
+
+> j′=1
+
+exp( sj · ij′ /τ ) . (4) We optimize LCL jointly with the next-token generation loss: 
+
+LGen = − 1
+
+Bgen 
+
+> Bgen
+
+X
+
+> b=1
+
+1
+
+LbLbX
+
+> t=1
+
+log P (cb,t | cb,<t , X b). (5) To ensure sufficient in-batch negatives for the contrastive ob-jective, we use a larger embedding batch ( i.e., Bemb > B gen ). The final multi-task loss is expressed as L = λ1LCL + LGen ,where λ1 is a hyperparameter balancing the two tasks. 
+
+• Learning-to-rank fine-tuning. Following Li et al. (2023), to further enhance the ranking ability of the seman-tic ID encoder, we continue to fine-tune the encoder using the cross-entropy loss LCE on a larger batch of negative items (equivalent to LCL in Equation (4) with Bemb = |I| ). To enable efficient large-batch training, the item representa-tions are frozen at the beginning of the fine-tuning phase. The overall loss for fine-tuning can be written as L′ =
+
+λ2LCE + LGen , where λ2 is a hyperparameter. 
+
+# Experiments 
+
+In this section, we present experimental results to answer the following Research Questions ( RQ ). • RQ1: How does SpecGR perform compared with state-of-the-art baselines on overall and seen/unseen subsets? • RQ2: Do all of SpecGR’s designs take effect? • RQ3: How do key hyperparameters affect SpecGR’s per-formance and efficiency? • RQ4: Is SpecGR an effective plug-and-play framework for different drafters and GR backbones? 
+
+Experimental Setup 
+
+Datasets We use three categories, Video Games ( Games ), Office Products ( Office ), and Cell Phones and Accessories (Phones ), from the Amazon Reviews 2023 dataset (Hou et al. 2024) as our experimental datasets. To assess the per-formance of SpecGR in real-world settings, we utilize pre-processed benchmarks 1 that exclude users and items with fewer than five interactions. The data is split into training, validation, and test sets based on predefined timestamp cut-offs. Notably, since the datasets are split by timestamps, the validation and test sets naturally include unseen items. This simulates a more realistic scenario in comparison to the widely-used leave-last-out splitting. 
+
+Compared Methods We report results for two SpecGR variants: SpecGR Aux , which uses UniSRec (Hou et al. 2022) as an auxiliary drafter, and SpecGR++, which uses its own encoder module for drafting. We compare SpecGR against the following state-of-the-art methods: ID-based methods such as SASRec (Kang and McAuley 2018); feature+ID-based methods such as FDSA (Zhang et al. 2019) and S 3-Rec (Zhou et al. 2020); modality-based methods such as UniSRec (Hou et al. 2022) and RecFormer (Li et al. 2023); and generative methods including TIGER, TIGER C (Ra-jput et al. 2024), and LIGER (Yang et al. 2024). Notably, TIGER C employs a heuristic strategy that mixes a fixed pro-portion of unseen items into TIGER’s recommendation list. 
+
+Evaluation Setting We adopt Recall@ K and NDCG@ K
+
+as metrics to evaluate the compared methods, where K ∈{10 , 50 }. In addition, based on whether the target items in the test set are existing items or new items (not shown in the training set), we split our test set into two subsets, named In-Sample and Unseen , respectively. The model checkpoints of all compared methods that have the best overall perfor-mance on the validation set will be evaluated on the test set. 
+
+Implementation Details We use UniSRec (Hou et al. 2022) as the auxiliary drafter model for SpecGR Aux and TIGER (Rajput et al. 2024) as the GR backbone for both SpecGR variants. Input sequences are truncated to a max-imum of 20 items, following Rajput et al. (2024), and the same semantic ID tokenization process is applied. SpecGR++ is trained using a multi-task setup ( λ1 = λ2 =6.0) combining generation and contrastive objectives, fol-lowed by a learning-to-rank fine-tuning phase. We use 
+
+BEmb = 2048 and BGen = 256 . Hyperparameters such as the draft threshold ( γ), beam size ( β), and draft size ( δ) are tuned on validation splits. 
+
+Performance Analysis (RQ1) 
+
+Overall performance. We compare SpecGR with sequen-tial and generative recommendation baselines across three public datasets; results are summarized in Table 1. ID-based and feature-based methods generally show poor per-formance, especially on sparse datasets (e.g., Phones). Modality-based methods, such as UniSRec and Recformer,                                                                                                                                                                  
+
+> 1https://huggingface.co/datasets/McAuley-Lab/Amazon-Reviews-2023/tree/main/benchmark/5core/timestamp w his 14679 Dataset Metric ID-based Feature + ID Modality-based Generative Ours Improv. SASRec ID FDSA S3-Rec SASRec TUniSRec Recformer TIGER TIGER CLIGER SpecGR Aux SpecGR++
+> Games R@10 0.0186 0.0190 0.0195 0.0179 0.0225 0.0243 0.0222 0.0226 0.0139 0.0254 0.0250 +4.53% N@10 0.0093 0.0101 0.0094 0.0091 0.0115 0.0111 0.0114 0.0115 0.0068 0.0128 0.0124 +10.40% R@50 0.0477 0.0496 0.0473 0.0507 0.0621 0.0740 0.0584 0.0611 0.0635 0.0778 0.0717 +5.13% N@50 0.0162 0.0167 0.0154 0.0161 0.0200 0.0218 0.0193 0.0198 0.0172 0.0239 0.0225 +9.72% Office R@10 0.0093 0.0095 0.0100 0.0091 0.0119 0.0126 0.0132 0.0130 0.0059 0.0138 0.0134 +3.99% N@10 0.0047 0.0050 0.0052 0.0048 0.0062 0.0039 0.0071 0.0070 0.0029 0.0072 0.0070 +1.68% R@50 0.0217 0.0224 0.0234 0.0233 0.0322 0.0340 0.0308 0.0312 0.0268 0.0360 0.0332 +5.93% N@50 0.0074 0.0078 0.0080 0.0078 0.0105 0.0106 0.0109 0.0110 0.0072 0.0119 0.0113 +8.76% Phones R@10 0.0052 0.0067 0.0058 0.0072 0.0084 0.0074 0.0090 0.0087 0.0048 0.0099 0.0101 +11.90% N@10 0.0027 0.0035 0.0028 0.0037 0.0045 0.0036 0.0047 0.0046 0.0022 0.0050 0.0052 +10.64% R@50 0.0143 0.0184 0.0151 0.0188 0.0233 0.0236 0.0232 0.0233 0.0226 0.0285 0.0275 +20.64% N@50 0.0047 0.0060 0.0048 0.0062 0.0077 0.0070 0.0078 0.0078 0.0059 0.0090 0.0090 +14.80%
+
+Table 1: Performance comparison of different models. The best and the second-best performance is denoted in bold and un-derlined fonts, respectively. “R@K” is short for “Recall@K” and “N@K” is short for “NDCG@K”. “Improv.” denotes the improvement ratio of SpecGR compared to the best-performing baseline model. 
+
+Model #Params. (M) Games Phones Overall In-Sample 
+
+> (39.7%)
+
+Unseen  
+
+> (60.3%)
+
+Overall In-Sample 
+
+> (31.8%)
+
+Unseen 
+
+> (68.2%)
+
+R@50 N@50 R@50 N@50 R@50 N@50 R@50 N@50 R@50 N@50 R@50 N@50 
+
+UniSRec 2.90 0.0621 0.0200 0.1386 0.0461 0.0118 0.0029 0.0233 0.0077 0.0604 0.0211 0.0060 0.0014 Recformer 233.73 0.0740 0.0218 0.1082 0.0333 0.0514 0.0142 0.0236 0.0070 0.0340 0.0103 0.0188 0.0055 
+
+TIGER 13.26 0.0584 0.0193 0.1472 0.0486 - - 0.0232 0.0078 0.0730 0.0245 - -TIGER C 13.26 0.0611 0.0198 0.1447 0.0482 0.0061 0.0011 0.0233 0.0078 0.0691 0.0238 0.0019 0.0003 LIGER 13.26 0.0635 0.0172 0.0438 0.0160 0.0765 0.0179 0.0226 0.0059 0.0472 0.0107 0.0111 0.0037 
+
+SpecGR Aux 16.16 0.0778 0.0239 0.1485 0.0457 0.0312 0.0096 0.0285 0.0090 0.0748 0.0237 0.0069 0.0021 
+
+SpecGR++ 13.28 0.0717 0.0225 0.1323 0.0439 0.0318 0.0084 0.0275 0.0090 0.0730 0.0246 0.0063 0.0017 Table 2: Model performance breakdown on the “in-sample” and “unseen” subsets. The proportions of the test cases in each subset relative to the entire test data have been labeled. The best and second-best results are bolded and underlined. show improved performance by leveraging powerful text embeddings from Pretrained Language Models (PLMs). Generative recommendation models achieve the best results through autoregressive modeling of fine-grained semantic IDs. Among all models, SpecGR consistently achieves the best overall performance ( e.g., up to +14.8% in NDCG@50, and +20.64% in Recall@50). Notably, SpecGR++ attains both better parameter efficiency and comparable perfor-mance to SpecGR Aux , highlighting the GR encoder’s effec-tiveness in learning robust semantic ID-based representa-tions for inductive recommendation. 
+
+Subset Analysis. Next, we analyze the detailed perfor-mance breakdown on the in-sample and unseen subsets, as shown in Table 2. TIGER achieves strong in-sample performance but fails to generalize inductively on the un-seen subset. SpecGR addresses this limitation by integrating inductive drafting with GR-based verification, greatly im-proving inductive generalization without compromising in-sample quality. Recformer is the best-performing modality-based method. However, its LLM backbone has signifi-cantly larger model size compared to other baselines. While LIGER attains higher performance on unseen items via dense retrieval-based candidate blending, its heuristic com-bination of candidates introduces irrelevant items, yielding a suboptimal trade-off and degraded overall recommenda-tion quality. In contrast, SpecGR employs GR’s target-aware likelihood scores to filter inductive candidates, resulting in strong inductive ability and the best overall performance. 
+
+Ablation Study (RQ2) 
+
+SpecGR Inference Framework. First, we assess the contri-butions of inference components in SpecGR++, as summa-rized in Table 3. Inductive drafting (1.1) and likelihood score adjustment (1.2) substantially enhance inductive generaliza-tion by incorporating meaningful unseen candidates. Guided re-drafting (1.3) boosts recommendation quality when initial drafting provides insufficient accepted candidates. Remov-ing verification-based re-ranking (1.4) and adaptive exiting (1.5) results in performance degradation, confirming the im-portance of these modules in maintaining a balance between in-sample accuracy and inductive capability. 
+
+SpecGR++ Training Paradigm. Next, we analyze training paradigm variants for SpecGR++. Directly using TIGER’s encoder states without dedicated representation learning (2.1) severely limits inductive recommendation. Contrastive pretraining (2.2) significantly improves representation qual-ity, and subsequent fine-tuning (2.3) further refines perfor-mance, validating our two-stage training design. 14680 Variants Games Office Phones R@50 N@50 R@10 N@10 R@50 N@50 R@10 N@10 R@50 N@50 R@10 N@10 
+
+(1.1) w/o inductive drafting 0.0609 0.0202 0.0235 0.0121 0.0306 0.0109 0.0132 0.0070 0.0233 0.0080 0.0092 0.0049 (1.2) w/o likelihood score adjustment 0.0712 0.0221 0.0236 0.0119 0.0331 0.0103 0.0118 0.0057 0.0236 0.0081 0.0092 0.0049 (1.3) w/o guided re-drafting 0.0611 0.0202 0.0235 0.0121 0.0309 0.0110 0.0132 0.0070 0.0264 0.0086 0.0096 0.0050 (1.4) w/o item re-ranking 0.0703 0.0219 0.0239 0.0120 0.0334 0.0113 0.0131 0.0069 0.0264 0.0083 0.0093 0.0047 (1.5) w/o adaptive exiting 0.0694 0.0200 0.0203 0.0095 0.0313 0.0108 0.0126 0.0068 0.0265 0.0086 0.0095 0.0050 (2.1) TIGER for SpecGR++ 0.0582 0.0192 0.0224 0.0114 0.0302 0.0105 0.0127 0.0067 0.0232 0.0078 0.0090 0.0047 (2.2) w/o contrastive pretraining 0.0581 0.0193 0.0221 0.0115 0.0313 0.0108 0.0126 0.0068 0.0234 0.0077 0.0093 0.0050 (2.3) w/o fine-tuning 0.0692 0.0225 0.0222 0.0111 0.0325 0.0110 0.0129 0.0068 0.0259 0.0087 0.0098 0.0051 
+
+SpecGR++ 0.0717 0.0225 0.0250 0.0124 0.0332 0.0113 0.0134 0.0070 0.0275 0.0090 0.0101 0.0052 
+
+Table 3: Ablation study on SpecGR++ inference and training. The best and second-best results are bolded and underlined. 1% 5% 21% 32% 35% 36% 39% 36% 32%31%     
+
+> 0.037 0.034 0.027 0.019 0.00 0.02 0.04
+> 1520 50 100 0.10 0.12 0.14 0.16
+
+Draft Size     
+
+> 1520 50 100
+
+Beam Size    
+
+> -1.0 -1.4 -1.8 -2.2
+
+Threshold 
+
+> In-Sample Recall@50 Unseen Recall@50 Unseen Prop. (%) Time / Instance (s)
+
+Figure 3: Impact of hyperparameters on SpecGR’s perfor-mance and efficiency. (Left, middle): Bars show the propor-tion of unseen items in recommendations. (Right): Bars rep-resent inference latency in seconds. Lines depict the trade-off between in-sample and unseen Recall@50. 
+
+Hyperparameter Analysis (RQ3) 
+
+We analyze how model hyperparameters affect recommen-dation behaviors and performance. We conduct hyperparam-eter analyses of SpecGR++ on the Video Games dataset, with results shown in Figure 3. The base hyperparameters are δ = 50 , γ = −1.6, and β = 50 , with specific parameters adjusted in each plot while keeping others fixed. 
+
+• Draft size ( δ) controls the proportion of unseen items in recommendations, as all unseen items originate from draft-ing. Increasing draft size enhances inductive performance but may degrade in-sample metrics due to the fixed num-ber of accepted candidates. The optimal value is selected via hyperparameter tuning on the validation set. 
+
+• Beam size ( β) controls the search space for guided re-drafting. As shown in Figure 3, increasing beam size im-proves in-sample performance but reduces inductive ability. 
+
+• Threshold ( γ) controls the acceptance rate of drafted candidates, impacting the number of decoding steps needed for K recommendations. As shown in Figure 3, it governs the performance-efficiency trade-off. Lower thresholds de-grade in-sample performance due to overly easy candidate acceptance. We select γ using the elbow criterion that bal-ances marginal performance gain against additional latency. 
+
+Plug-and-Play Framework (RQ4) 
+
+To evaluate SpecGR’s plug-and-play capability, we integrate it with multiple inductive drafters (SemanticKNN, UniS-
+
+GR Drafter U-N@50 O-N@50 
+
+TIGER Baseline – 0.0193 GR Encoder (SpecGR++) 0.0084 0.0225 (+16.6%) 
+
+Semantic-KNN 0.0085 0.0231 (+19.7%) 
+
+UniSRec 0.0096 0.0239 (+23.8%) 
+
+DSI Baseline – 0.0198 GR Encoder (SpecGR++) 0.0061 0.0217 (+9.6%) 
+
+Semantic-KNN 0.0049 0.0217 (+9.6%) 
+
+UniSRec 0.0058 0.0220 (+11.1%) 
+
+Table 4: NDCG@50 on the unseen subset (U-N@50) and overall test set (O-N@50) for different GR backbones and drafter configurations on the Video Games dataset. Rec, and the GR encoder (SpecGR++)) and multiple GR backbones (TIGER and DSI (Tay et al. 2022)). Notably, DSI employs hierarchical K-means tokenization to derive item semantic IDs. As shown in Table 4, both GR back-bones are originally unable to generate unseen items. Inte-grating SpecGR improves overall performance by approxi-mately 15% on average, while enabling strong inductive rec-ommendation. This improvement holds across lightweight retrieval (Semantic-KNN), modality-based models (UniS-Rec), and self-drafting using the GR encoder, demonstrating that SpecGR is robust to different drafting paradigms and input modalities. Thus, SpecGR is model-agnostic to drafter choice and serves as a plug-and-play framework that equips any semantic-ID-based GR model with inductive capability. 
+
+# Conclusion 
+
+In this paper, we propose SpecGR, a plug-and-play frame-work that extends the capability of generative recommen-dation models for inductive recommendation. Our method, inspired by speculative decoding, leverages an inductive model as a drafter to propose candidate items and uses the GR model as a verifier to ensure that only high-quality can-didates are recommended. We further propose two drafting strategies: (1) using an auxiliary model for flexibility, and (2) using the GR model’s own encoder for parameter-efficient self-drafting. Extensive experiments on three public datasets demonstrate strong inductive and overall recommendation performance for SpecGR. 14681 Acknowledgments 
+
+This research was partially supported by the National Sci-ence Foundation (NSF) via the grant number IIS-2432486. 
+
+# References 
+
+Achiam, J.; Adler, S.; Agarwal, S.; Ahmad, L.; Akkaya, I.; Aleman, F. L.; Almeida, D.; Altenschmidt, J.; Altman, S.; Anadkat, S.; et al. 2023. Gpt-4 technical report. arXiv preprint arXiv:2303.08774 .Cai, T.; Li, Y.; Geng, Z.; Peng, H.; Lee, J. D.; Chen, D.; and Dao, T. 2024. Medusa: Simple llm inference acceleration framework with multiple decoding heads. arXiv preprint arXiv:2401.10774 .Chen, C.; Borgeaud, S.; Irving, G.; Lespiau, J.-B.; Sifre, L.; and Jumper, J. 2023. Accelerating large language model decoding with speculative sampling. arXiv preprint arXiv:2302.01318 .Chen, T.; Kornblith, S.; Norouzi, M.; and Hinton, G. 2020. A simple framework for contrastive learning of visual repre-sentations. In ICML , 1597–1607. PMLR. De Bortoli, V.; Galashov, A.; Gretton, A.; and Doucet, A. 2025. Accelerated diffusion models via speculative sam-pling. arXiv preprint arXiv:2501.05370 .Deng, J.; Wang, S.; Cai, K.; Ren, L.; Hu, Q.; Ding, W.; Luo, Q.; and Zhou, G. 2025. Onerec: Unifying retrieve and rank with generative recommender and iterative preference align-ment. arXiv preprint arXiv:2502.18965 .Dong, M.; Yuan, F.; Yao, L.; Xu, X.; and Zhu, L. 2020. Mamo: Memory-augmented meta-optimization for cold-start recommendation. In Proceedings of the 26th ACM SIGKDD international conference on knowledge discovery & data mining , 688–697. Elhoushi, M.; Shrivastava, A.; Liskovich, D.; Hosmer, B.; Wasti, B.; Lai, L.; Mahmoud, A.; Acun, B.; Agarwal, S.; Roman, A.; et al. 2024. Layer skip: Enabling early exit inference and self-speculative decoding. arXiv preprint arXiv:2404.16710 .Freitag, M.; and Al-Onaizan, Y. 2017. Beam search strategies for neural machine translation. arXiv preprint arXiv:1702.01806 .Gloeckle, F.; Idrissi, B. Y.; Rozi` ere, B.; Lopez-Paz, D.; and Synnaeve, G. 2024. Better & faster large lan-guage models via multi-token prediction. arXiv preprint arXiv:2404.19737 .He, Z.; Zhong, Z.; Cai, T.; Lee, J. D.; and He, D. 2023. Rest: Retrieval-based speculative decoding. arXiv preprint arXiv:2311.08252 .Hidasi, B.; Karatzoglou, A.; Baltrunas, L.; and Tikk, D. 2016. Session-based Recommendations with Recurrent Neural Networks. In ICLR .Hou, Y.; He, Z.; McAuley, J.; and Zhao, W. X. 2023. Learn-ing Vector-Quantized Item Representation for Transferable Sequential Recommenders. In WWW .Hou, Y.; Li, J.; He, Z.; Yan, A.; Chen, X.; and McAuley, J. 2024. Bridging language and items for retrieval and recom-mendation. arXiv preprint arXiv:2403.03952 .Hou, Y.; Li, J.; Shin, A.; Jeon, J.; Santhanam, A.; Shao, W.; Hassani, K.; Yao, N.; and McAuley, J. 2025a. Generating long semantic ids in parallel for recommendation. In Pro-ceedings of the 31st ACM SIGKDD Conference on Knowl-edge Discovery and Data Mining V. 2 , 956–966. Hou, Y.; Mu, S.; Zhao, W. X.; Li, Y.; Ding, B.; and Wen, J.-R. 2022. Towards universal sequence representation learn-ing for recommender systems. In SIGKDD .Hou, Y.; Ni, J.; He, Z.; Sachdeva, N.; Kang, W.-C.; Chi, E. H.; McAuley, J.; and Cheng, D. Z. 2025b. ActionPiece: Contextually Tokenizing Action Sequences for Generative Recommendation. arXiv preprint arXiv:2502.13581 .Kang, W.-C.; and McAuley, J. 2018. Self-attentive sequen-tial recommendation. In ICDM .Lee, H.; Im, J.; Jang, S.; Cho, H.; and Chung, S. 2019. Melu: Meta-learned user preference estimator for cold-start recom-mendation. In Proceedings of the 25th ACM SIGKDD Inter-national Conference on Knowledge Discovery & Data Min-ing , 1073–1082. Leviathan, Y.; Kalman, M.; and Matias, Y. 2023. Fast infer-ence from transformers via speculative decoding. In ICML .Li, J.; Wang, M.; Li, J.; Fu, J.; Shen, X.; Shang, J.; and McAuley, J. 2023. Text is all you need: Learning lan-guage representations for sequential recommendation. In 
+
+SIGKDD , 1258–1267. Lin, X.; Wu, J.; Zhou, C.; Pan, S.; Cao, Y.; and Wang, B. 2021. Task-adaptive neural process for user cold-start rec-ommendation. In Proceedings of the Web Conference 2021 ,1306–1316. Lin, X.; Yang, C.; Wang, W.; Li, Y.; Du, C.; Feng, F.; Ng, S.-K.; and Chua, T.-S. 2024. Efficient Inference for Large Language Model-based Generative Recommendation. arXiv preprint arXiv:2410.05165 .Liu, Z.; Hou, Y.; and McAuley, J. 2024. Multi-Behavior Generative Recommendation. In CIKM .Ni, J.; Abrego, G. H.; Constant, N.; Ma, J.; Hall, K.; Cer, D.; and Yang, Y. 2022a. Sentence-T5: Scalable Sentence Encoders from Pre-trained Text-to-Text Models. In Findings of ACL .Ni, J.; Qu, C.; Lu, J.; Dai, Z.; Abrego, G. H.; Ma, J.; Zhao, V.; Luan, Y.; Hall, K.; Chang, M.-W.; et al. 2022b. Large Dual Encoders Are Generalizable Retrievers. In EMNLP .Nogueira, R.; Lin, J.; and Epistemic, A. 2019. From doc2query to docTTTTTquery. Online preprint , 6(2). Pazzani, M. J.; and Billsus, D. 2007. Content-based rec-ommendation systems. In The adaptive web: methods and strategies of web personalization , 325–341. Springer. Raffel, C.; Shazeer, N.; Roberts, A.; Lee, K.; Narang, S.; Matena, M.; Zhou, Y.; Li, W.; and Liu, P. J. 2020. Explor-ing the limits of transfer learning with a unified text-to-text transformer. Journal of machine learning research , 21(140): 1–67. Rajput, S.; Mehta, N.; Singh, A.; Hulikal Keshavan, R.; Vu, T.; Heldt, L.; Hong, L.; Tay, Y.; Tran, V.; Samost, J.; et al. 2024. Recommender systems with generative retrieval. In 
+
+NeurIPS .14682 Sheng, L.; Zhang, A.; Zhang, Y.; Chen, Y.; Wang, X.; and Chua, T.-S. 2024. Language Models Encode Col-laborative Signals in Recommendation. arXiv preprint arXiv:2407.05441 .Sun, F.; Liu, J.; Wu, J.; Pei, C.; Lin, X.; Ou, W.; and Jiang, P. 2019. BERT4Rec: Sequential Recommendation with Bidi-rectional Encoder Representations from Transformer. In 
+
+CIKM .Tay, Y.; Tran, V.; Dehghani, M.; Ni, J.; Bahri, D.; Mehta, H.; Qin, Z.; Hui, K.; Zhao, Z.; Gupta, J.; et al. 2022. Trans-former memory as a differentiable search index. Advances in Neural Information Processing Systems , 35: 21831–21843. Wang, Z.; Wang, Z.; Le, L.; Zheng, H. S.; Mishra, S.; Perot, V.; Zhang, Y.; Mattapalli, A.; Taly, A.; Shang, J.; et al. 2024. Speculative rag: Enhancing retrieval augmented generation through drafting. arXiv preprint arXiv:2407.08223 .Wei, Y.; Wang, X.; Li, Q.; Nie, L.; Li, Y.; Li, X.; and Chua, T.-S. 2021. Contrastive learning for cold-start recommenda-tion. In Proceedings of the 29th ACM International Confer-ence on Multimedia , 5382–5390. Wu, L.; Yang, Y.; Chen, L.; Lian, D.; Hong, R.; and Wang, M. 2020. Learning to transfer graph embeddings for induc-tive graph based recommendation. In SIGIR , 1211–1220. Wu, Q.; Zhang, H.; Gao, X.; Yan, J.; and Zha, H. 2021. Towards open-world recommendation: An inductive model-based collaborative filtering approach. In ICML , 11329– 11339. PMLR. Wu, Z.; and Zhou, X. 2023. M2eu: Meta learning for cold-start recommendation via enhancing user preference estima-tion. In Proceedings of the 46th International ACM SIGIR Conference on Research and Development in Information Retrieval , 1158–1167. Xiao, B.; Shi, C.; Nie, X.; Yang, F.; Deng, X.; Su, L.; Chen, W.; and Cui, B. 2024. Clover: Regressive Lightweight Speculative Decoding with Sequential Knowledge. arXiv preprint arXiv:2405.00263 .Yang, L.; Paischer, F.; Hassani, K.; Li, J.; Shao, S.; Li, Z. G.; He, Y.; Feng, X.; Noorshams, N.; Park, S.; et al. 2024. Uni-fying generative and dense retrieval for sequential recom-mendation. arXiv preprint arXiv:2411.18814 .Yuan, Z.; Yuan, F.; Song, Y.; Li, Y.; Fu, J.; Yang, F.; Pan, Y.; and Ni, Y. 2023. Where to go next for recommender sys-tems? id-vs. modality-based recommender models revisited. In SIGIR , 2639–2649. Zhai, J.; Liao, L.; Liu, X.; Wang, Y.; Li, R.; Cao, X.; Gao, L.; Gong, Z.; Gu, F.; He, M.; et al. 2024. Actions speak louder than words: Trillion-parameter sequential transducers for generative recommendations. In ICML .Zhang, G.; Hou, Y.; Lu, H.; Chen, Y.; Zhao, W. X.; and Wen, J.-R. 2023. Scaling Law of Large Sequential Recommenda-tion Models. arXiv preprint arXiv:2311.11351 .Zhang, T.; Zhao, P.; Liu, Y.; Sheng, V. S.; Xu, J.; Wang, D.; Liu, G.; Zhou, X.; et al. 2019. Feature-level deeper self-attention network for sequential recommendation. In IJCAI .Zhang, W.; Bei, Y.; Yang, L.; Zou, H. P.; Zhou, P.; Liu, A.; Li, Y.; Chen, H.; Wang, J.; Wang, Y.; et al. 2025. Cold-Start Recommendation towards the Era of Large Language Models (LLMs): A Comprehensive Survey and Roadmap. 
+
+arXiv preprint arXiv:2501.01945 .Zhao, W. X.; Zhou, K.; Li, J.; Tang, T.; Wang, X.; Hou, Y.; Min, Y.; Zhang, B.; Zhang, J.; Dong, Z.; et al. 2023. A survey of large language models. arXiv preprint arXiv:2303.18223 .Zheng, B.; Hou, Y.; Lu, H.; Chen, Y.; Zhao, W. X.; and Wen, J.-R. 2024. Adapting Large Language Models by Integrating Collaborative Semantics for Recommendation. In ICDE .Zheng, Y.; Liu, S.; Li, Z.; and Wu, S. 2021. Cold-start sequential recommendation via meta learner. In Proceed-ings of the AAAI Conference on Artificial Intelligence , vol-ume 35, 4706–4713. Zhou, K.; Wang, H.; Zhao, W. X.; Zhu, Y.; Wang, S.; Zhang, F.; Wang, Z.; and Wen, J.-R. 2020. S3-rec: Self-supervised learning for sequential recommendation with mutual infor-mation maximization. In CIKM , 1893–1902. Zhou, Z.; Zhang, L.; and Yang, N. 2023. Contrastive col-laborative filtering for cold-start item recommendation. In 
+
+Proceedings of the ACM Web Conference 2023 , 928–937. Zhu, Z.; Sefati, S.; Saadatpanah, P.; and Caverlee, J. 2020. Recommendation for new users and new items via random-ized training and mixture-of-experts transformation. In Pro-ceedings of the 43rd International ACM SIGIR Conference on Research and Development in Information Retrieval ,1121–1130. Zhuang, S.; Li, H.; and Zuccon, G. 2021. Deep query like-lihood model for information retrieval. In Advances in In-formation Retrieval: 43rd European Conference on IR Re-search, ECIR 2021, Virtual Event, March 28–April 1, 2021, Proceedings, Part II 43 , 463–470. Springer. Zhuang, S.; Liu, B.; Koopman, B.; and Zuccon, G. 2023. Open-source large language models are strong zero-shot query likelihood models for document ranking. arXiv preprint arXiv:2310.13243 .14683

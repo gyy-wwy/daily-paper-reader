@@ -1,0 +1,558 @@
+Title: Task-Aware Meta-Learning on Heterogeneous Knowledge Graph for POI Recommendation
+
+URL Source: https://ojs.aaai.org/index.php/AAAI/article/download/38615/42577
+
+Number of Pages: 8
+
+Markdown Content:
+# Task-Aware Meta-Learning on Heterogeneous Knowledge Graph for POI Recommendation 
+
+# Jingyuan Wang 1, Zhichun Wang *1,2 , Tong Lu 1,Yiming Guan 1 
+
+> 1
+
+School of Artificial Intelligence, Beijing Normal University, Beijing, China  
+
+> 2
+
+Engineering Research Center of Intelligent Technology and Educational Application, Ministry of Education, Beijing, China 202321081040@mail.bnu.edu.cn, zcwang@bnu.edu.cn 
+
+Abstract 
+
+Point-of-Interest (POI) recommendation plays a pivotal role in location-based services by guiding users to discover new and relevant places. While graph-based methods have shown promising results, effectively modeling the diversity and dy-namics of user preferences remains a key challenge. Ad-dressing this requires richer representations of both POIs and user interests, as well as more adaptive learning strategies. In this work, we propose TMHKG, a Task-aware Meta-learning framework with a Heterogeneous Knowledge Graph for POI recommendation. To enhance representation learning, TMHKG constructs a dual-view POI knowledge graph that integrates geographical proximity and user-aware category transitions, and models users’ evolving interests from se-quential visit histories. On top of enriched features, TMHKG adopts a task-aware meta-learning paradigm, treating each user’s recommendation task as a separate meta-task. A gener-alizable recommendation policy is first learned from diverse training tasks and then quickly adapted to each user’s unique behavior, enabling highly personalized predictions. Exten-sive experiments on two real-world datasets demonstrate that TMHKG consistently outperforms state-of-the-art baselines, highlighting its effectiveness in capturing complex user-POI interactions. 
+
+Code — https://github.com/kg-bnu/TMHKG 
+
+# Introduction 
+
+With the widespread adoption of smart devices and the pro-liferation of location-based services, user interaction data has undergone a significant transformation, evolving from simple sequential records into intricate and complex graphs. This evolution underscores the increasing demand for ad-vanced Point-of-Interest (POI) recommendation systems, which play a crucial role in helping individuals discover new places and personalize their experiences in a dynamic envi-ronment. To meet this demand, Graph Neural Networks (GNNs) have emerged as a powerful paradigm, prized for their inher-ent ability to model complex structural dependencies within user-POI interaction graphs (Shu et al. 2022; Zhang and Ma 
+
+> *
+
+Corresponding author. Copyright © 2026, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved. 
+
+2024; Song et al. 2025). While these models have proven ef-fective, their common reliance on uniform aggregation rules can pose challenges in capturing the full spectrum of in-dividual user preferences. Such an approach, while power-ful for general patterns, may not fully adapt to the unique ways different users weigh temporal and categorical factors in their decision-making. This observation suggests that the challenge may lie not only in the model architecture but also in the underlying training paradigm, which typically learns a single, static set of parameters for all users. This has led to a growing interest in meta-learning for its capacity to facil-itate rapid adaptation. While its application has often been centered on addressing the cold-start problem (Mandal et al. 2022), we see a broader opportunity. By focusing primarily on new users, the full potential of meta-learning to person-alize for the vast diversity across all user behaviors may not be fully realized (Li et al. 2025). To explore this opportunity, we advocate for a paradigm shift and reframe personalized recommendation as a meta-learning problem where each user is treated as a unique task. To this end, we propose a novel framework, Task-aware Meta-learning on Heterogeneous Knowledge Graph (TMHKG), designed to learn a highly adaptive model that can quickly personalize to diverse and dynamic user pref-erences. Instead of learning a single static model, TMHKG learns a highly generalizable meta-model and rapidly adapts it to each user’s specific behavioral patterns. Our main con-tributions are summarized as follows: • We propose TMHKG, a novel framework that reframes personalized recommendation as an adaptive learning problem to address user diversity. To our knowledge, this is one of the first efforts to systematically apply a task-aware meta-learning paradigm to knowledge graph-enhanced recommendation. • We design a dual-graph learning architecture that syn-ergistically models user behavior. It captures dynamic preferences via an attribute-enriched interaction graph and enriches POI semantics using a knowledge graph enhanced with novel category-transition and spatial-proximity relations. • We introduce a memory-aware task sampling strategy to effectively train the model on diverse user behaviors, and through extensive experiments on two real-world The Fortieth AAAI Conference on Artificial Intelligence (AAAI-26) 
+
+15833 datasets, we demonstrate that TMHKG significantly out-performs state-of-the-art methods in personalized recom-mendation. 
+
+# Related Work 
+
+Graph-based POI Recommendation 
+
+GNNs are central to modern POI recommendation for mod-eling structural dependencies. To better encode spatial and temporal contexts, many studies enhance interaction graphs with geographic and temporal attributes. STGN (Zhao et al. 2020) employs temporal gating mechanisms to filter sequen-tial context during propagation. STP-UDGAT (Lim et al. 2020) further combines spatial and temporal information as attention inputs, allowing fine-grained modeling of user preference evolution. Substantial efforts have been made to improve GNN expressiveness and robustness. STGCN (Han et al. 2020) integrates spatio-temporal gating with GCNs for joint modeling of sequential trajectories, while SGL (Proco-pio, Tripodi, and Navigli 2021) introduces contrastive learn-ing to strengthen representation robustness. Hybrid mod-els that combine sequence modeling and graph aggregation have also shown effectiveness. For example, STAMP (Liu et al. 2018) incorporates short-term sequences into graph-based preferences, while GETNext (Yang, Liu, and Zhao 2022) combines graph contraction with global context learn-ing via a Transformer to capture long-range dependencies. Despite their progress, these methods generally rely on uni-form aggregation rules. This ”one-size-fits-all” approach in-herently limits their flexibility in modeling the nuanced pref-erences of individual users, which motivates our work to ex-plore a more adaptive paradigm. 
+
+Meta-learning based POI Recommendation 
+
+Meta-learning offers a powerful paradigm for build-ing adaptive recommendation models. In the context of POI recommendation, its application has frequently cen-tered on addressing the cold-start problem. For example, MFNP (Sun et al. 2021) incorporates region-specific user preferences through meta-learning-based adaptive fusion, and MetaKG (Du et al. 2022) introduces meta-learners to alleviate the cold-start issue. More recently, Hyper-MAN (Wang et al. 2025) combines hypergraph modeling with meta-learning to handle cold-start situations. While these methods have shown promise, their primary focus on cold-start scenarios means the broader challenge of model-ing the substantial behavioral diversity across all users re-mains less explored. This focus can limit their ability to ef-fectively capture the unique preferences of individual users, regardless of their activity level. 
+
+# Methodology 
+
+We now present the proposed TMHKG framework, which integrates task-aware meta-learning with heterogeneous in-teraction and knowledge graph modeling to improve person-alized POI recommendation, particularly under diverse and dynamic user preferences. As shown in Figure 1, the model consists of four tightly coupled components: (1) Interaction Graph Learning . We construct an attribute-enriched het-erogeneous interaction graph to capture user–POI inter-actions, where edges encode temporal, spatial, and fre-quency attributes. We then learn user and POI represen-tations over this graph using an edge-aware propagation 
+
+mechanism; (2) Knowledge Graph Learning . We enhance the POI knowledge graph with category-transition edges 
+
+and spatial-proximity edges to model semantic and spa-tial relations among POIs, and apply a relation-aware propagation scheme for representation learning; (3) Meta-Learning Optimization . We adopt a meta-learning opti-mization paradigm that leverages the sampled tasks to train the model in a way that enhances its adaptability and gen-eralization, particularly for cold-start users and unseen sce-narios; (4) Memory-Aware Task Sampling . To improve the diversity and effectiveness of meta-learning tasks, we design a memory-aware task selection strategy that considers both structural heterogeneity and user behavior entropy, dynami-cally sampling informative and representative tasks. We now detail each component. 
+
+Interaction Graph Learning 
+
+To capture users’ structural preferences under rich contex-tual information, we construct a lightweight heterogeneous interaction graph based on attribute-aware edges and com-plement it with a trajectory encoder that models sequential user behavior. The final user representation is generated via a residual fusion mechanism. 
+
+Graph Construction. We define the interaction graph as 
+
+Gint = ( V, E ), V = U ∪ P , where U and P denote the sets of users and POIs, respectively. An edge (u, p ) ∈ E ex-ists if user u has visited POI p, and is associated with the following behavioral attributes: temporal attribute τup (dis-cretized time slot), spatial attribute dup (bucketed geospatial distance), and frequency attribute fup (normalized check-in frequency). These attributes are encoded into embedding vectors and concatenated into an edge representation: 
+
+aup = [ eτup ∥ edup ∥ fup ] (1) 
+
+Edge-aware GNN Propagation. We adopt an edge-aware attention-based GNN for user and POI representation learn-ing. At each GNN layer l, the message aggregation and node representation update are performed as follows: 
+
+h(l+1)  
+
+> i
+
+= ReLU 
+
+W0h(l) 
+
+> i
+
++ X 
+
+> j∈N (i)
+
+g(aij ) · αij · Wh (l)
+
+> j
+
+
+
+(2) where h(l) 
+
+> i
+
+is the representation of node i at layer l, g(aij ) = 
+
+sigmoid (w⊤ 
+
+> g
+
+aij ) is the edge-level gate that modulates the intensity of propagation based on edge attributes, and αij is the attention coefficient computed as: 
+
+αij =exp 
+
+
+
+LeakyReLU (a⊤[Wh (l) 
+
+> i
+
+∥ Wh (l) 
+
+> j
+
+]) 
+
+P  
+
+> k∈N (i)
+
+exp 
+
+
+
+LeakyReLU (a⊤[Wh (l) 
+
+> i
+
+∥ Wh (l) 
+
+> k
+
+]) 
+
+
+
+(3) where a and W denote the trainable attention parameters and transformation matrix, respectively. g(aij ) controls the 15834 𝒚 ෝ 𝒖,𝒑 = 𝑴𝑳𝑷([𝒉 𝒖 ∥ 𝒉 𝒑 ∥ 𝒉 𝒖 ⨀𝒉 𝒑 ])     
+
+> Interaction Graph Learning Knowledge Graph Learning Memory-aware Task Sampling
+> Interaction Graph Construction
+> Users POIs
+> …
+> 𝒉 𝒖 𝒆𝒗𝒐
+> Edge-Aware Propagation
+> …
+> Interest Evolution Path Encoder
+> LLL…L
+> 𝒉 𝒖 𝒊𝒏𝒕 𝒉 𝒑 𝒊𝒏𝒕
+> 𝒉 𝒖
+> Knowledge Graph Construction
+> POIs
+> POI Tags and Entities
+> Relation-Aware Propagation
+> 𝒉 𝒑 𝒌𝒈
+> 𝒉 𝒑 𝒊𝒏𝒕
+> 𝒉 𝒑
+> …Task
+> Behavioral Entropy Structural Diversity
+> Memory-aware Adjustment Meta-learning Optimization Informativeness Score
+> Predict
+> Inner loop
+> Outer loop
+
+𝑺 𝒖 𝑸 𝒖 
+
+𝜽 𝜽′ 𝜽 𝒑𝒓𝒆𝒅 …𝜽 𝒐𝒕𝒉𝒆𝒓 
+
+> …Task
+
+Figure 1: The overall framework of our proposed TMHKG model. contribution of each edge based on the edge attributes, while 
+
+αij captures the relative importance of neighboring nodes through the attention mechanism. After L layers, we fuse all layers to obtain the final structural representation: 
+
+hint  
+
+> i
+
+= 1
+
+L
+
+> L
+
+X
+
+> l=1
+
+h(l) 
+
+> i
+
+(4) 
+
+Interest Evolution Path Encoder. Given a user’s check-in sequence Su = [ p1, p 2, . . . , p n], we first obtain POI em-beddings from the interaction graph and use a single-layer LSTM encodes the sequence: 
+
+[z1, . . . , zn] = LSTM ([ hint  
+
+> p1
+
+, . . . , hint  
+
+> pn
+
+]) , ∀pi ∈ Su (5) We apply attention pooling to extract trajectory-level seman-tics: 
+
+αi = exp( q⊤ tanh( Wazi)) 
+
+Pnj=1 exp( q⊤ tanh( Wazj )) , hevo  
+
+> u
+
+=
+
+> n
+
+X
+
+> i=1
+
+αi · zi
+
+(6) where q is a trainable query vector, and Wa is a trainable projection matrix. The attention pooling allows the model to focus on the most important parts of the user’s trajectory. 
+
+User Representation Fusion. To adaptively integrate structural and sequential signals, we introduce a residual fu-sion mechanism: 
+
+λu = sigmoid  MLP ([ hint  
+
+> u
+
+∥ hevo  
+
+> u
+
+])  (7) where λu ∈ (0 , 1) is the trajectory importance score pre-dicted by a shallow MLP. The final user representation is: 
+
+hu = hint  
+
+> u
+
++ λu · hevo  
+
+> u
+
+(8) 
+
+Knowledge Graph Learning 
+
+To enhance POI semantics with structured side information, we construct a knowledge graph that connects POI nodes with various semantic entities and relations derived from metadata and textual tags. We treat it as an independent, complementary source of structural knowledge and learn POI representations through a relation-aware message prop-agation mechanism. 
+
+Relation-aware Graph Propagation. Inspired by the re-lation projection idea in TransR (Lin et al. 2015) and its graph-based adaptations, we design a lightweight propa-gation scheme that distinguishes different edge semantics by projecting node embeddings into relation-specific spaces during message passing. Formally, given a knowledge graph 
+
+GKG = ( V, E) with relation types r ∈ R , and a relation-specific projection matrix Mr for each relation, we intro-duce a virtual self-loop relation rself to preserve node iden-tity features during propagation. The augmented relation set is defined as R′ = R ∪ { rself }, and each node i is associated with a self-loop edge (i, r self , i ).The hidden representation of node i at layer l+1 is com-puted as: 
+
+h(l+1)  
+
+> i
+
+= ReLU 
+
+ X
+
+> r∈R ′
+
+X 
+
+> j∈N r(i)
+
+1
+
+ci,r 
+
+· Wr · Mr h(l)
+
+> j
+
+ (9) where Nr (i) denotes the set of neighbors of node i under relation r (including i itself when r = rself ), Wr ∈ Rd×d
+
+is a learnable transformation matrix, and Mr projects the input embedding into the semantic space of relation r. The normalization constant ci,r is set to the cardinality of the neighbor set, i.e., |N r (i)|.
+
+Behavior-augmented Relation Extensions. To further in-fuse the KG with user-driven semantics, we introduce two 15835 novel relation types: (1) category transition edges , built from co-occurrence patterns in user trajectories, capturing proba-bilistic transitions between semantic types of POIs, and (2) 
+
+spatial proximity edges , connecting POIs within a fixed ge-ographic radius, weighted by an exponential distance-decay function. These new relations are seamlessly incorporated into the propagation process by treating them as additional relations in the knowledge graph. Each relation type has its own learnable projection matrix Mr and transformation ma-trix Wr , allowing the model to adapt and enhance POI rep-resentations with user-centric semantics. These extensions provide additional behavioral and spatial inductive biases to better capture complex user preferences in the POI space. 
+
+POI Representation Fusion. After independently encod-ing POI representations from the interaction graph and the knowledge graph, we fuse the two views to obtain a unified POI representation that captures both behavioral and seman-tic information with a gated fusion mechanism. 
+
+Task Formulation and Meta-learning Optimization 
+
+To capture diverse and evolving user preferences, we formulate POI recommendation as a meta-learning prob-lem, inspired by the Model-Agnostic Meta-Learning (MAML) (Finn, Abbeel, and Levine 2017) framework, where each user is treated as a distinct task. The goal is to learn a generalizable model that can be efficiently adapted to user-specific behavior via limited interaction data, following MAML’s principle of optimizing for fast adaptation. 
+
+Task Definition. For each user u, we define a meta-task 
+
+Tu = ( Su, Qu), where Su denotes the support set (few-shot historical check-ins) and Qu is the query set used for meta-evaluation. The model is trained to maximize ranking performance on Qu after adapting on Su.
+
+Scoring Function and Training Objectives To estimate the affinity between users and POIs, we employ a learnable matching network that captures high-order interactions be-tween heterogeneous embeddings. Given a user representa-tion hu ∈ Rd and a POI representation hp ∈ Rd, both ob-tained via multi-source fusion modules, we define the pre-diction score as: 
+
+ˆyu,p = MLP ([ hu ∥ hp ∥ hu ⊙ hp]) (10) Here, [·∥·∥· ] denotes vector concatenation, and ⊙ is element-wise multiplication. To optimize the model, we adopt a multi-task learning ob-jective that integrates recommendation accuracy and repre-sentation consistency. For each user task Tu = ( Su, Qu), the main goal is to rank observed POIs higher than unobserved ones. We adopt a Bayesian Personalized Ranking (BPR) loss over the query set: 
+
+L(u) 
+
+> rank
+
+= − X
+
+> (p+,p −)∈Q u
+
+log σ  ˆyu,p + − ˆyu,p −
+
+ (11) where σ(·) is the sigmoid function. To encourage semantic alignment between trajectory-based and structure-based user representations, we minimize their cosine distance: 
+
+L(u) 
+
+> align
+
+= 1 − hint  
+
+> u
+
+· hevo 
+
+> u
+
+∥hint  
+
+> u
+
+∥2 · ∥ hevo  
+
+> u
+
+∥2
+
+(12) To promote representational coherence across the inter-action and knowledge views of POIs, we apply a cosine similarity-based alignment loss: 
+
+Lpoi-align = X
+
+> p∈P batch
+
+"
+
+1 − hint  
+
+> p
+
+· hkg 
+
+> p
+
+∥hint  
+
+> p
+
+∥2 · ∥ hkg  
+
+> p
+
+∥2
+
+#
+
+(13) The overall loss for each task Tu is formulated as a weighted sum: 
+
+L(u) = L(u) 
+
+> rank
+
++ β(α · L (u) 
+
+> align
+
++ (1 − α) · L poi-align ) (14) where α and β are two hyperparameters to control the con-sistency loss. 
+
+Parameter Grouping. We partition all trainable parameters 
+
+θ into the following groups: 
+
+θ = {θint-graph , θ kg-graph , θ iepe , θ user-fuse , θ fuse , θ pred } (15) where θint-graph and θkg-graph include all learnable parame-ters from the interaction graph and the knowledge graph encoders, respectively (e.g., relation projection matrices, at-tention weights, and edge gates). θiepe corresponds to the parameters of the Interest Evolution Path Encoder, θuser-fuse 
+
+controls the residual-style user representation fusion, θfuse 
+
+handles the POI-level fusion between interaction- and KG-based embeddings, and θpred is the user–POI scoring mod-ule. 
+
+Inner-loop Adaptation. For each task Tu, we perform task-specific adaptation on a subset of parameters using the sup-port set Su. The adapted parameter group is defined as: 
+
+θadapt = {θint-graph , θ user-fuse , θ pred } (16) These parameters are updated via one or more gradient steps: 
+
+θ′ 
+
+> u
+
+= θadapt − rinner ∇θadapt LSu (θ) (17) where rinner is the inner-loop learning rate and LSu is the loss computed on the support set. 
+
+Outer-loop Optimization. After adaptation, the updated pa-rameters θ′ 
+
+> u
+
+are used to evaluate the loss on the query set Qu,and the meta-objective is aggregated over a batch of tasks B:
+
+Lmeta = X
+
+> u∈B
+
+LQu (θ′
+
+> u
+
+) (18) All parameters in θ are then updated using the outer-loop learning rate router :
+
+θ ← θ − router ∇θ Lmeta (19) This meta-learning framework enables the model to ac-quire globally transferable knowledge while retaining the flexibility to quickly personalize representations for diverse user behaviors. 
+
+Memory-aware Task Sampling 
+
+To enhance the robustness and diversity of meta-training, we propose a memory-aware task sampling strategy that priori-tizes structurally distinct and behaviorally diverse user tasks. Unlike uniform sampling, our method computes an informa-tiveness score for each candidate task and samples from a soft distribution derived from these scores. 15836 Task Scoring. Each user task Tu is assigned a composite score su that integrates two signals: structural distinctive-ness and behavioral entropy. For structural diversity, we measure how different a user’s interaction-graph-based embedding zgraph  
+
+> u
+
+is from the mean embedding of previously selected tasks. Let H denote the set of already selected tasks in the current episode. The struc-tural score is defined as: 
+
+sstruct  
+
+> u
+
+= hgraph  
+
+> u
+
+− ¯h 2 , ¯h = 1
+
+|H| 
+
+X
+
+> v∈H
+
+hgraph  
+
+> v
+
+(20) This formulation reduces computational overhead by avoid-ing pairwise comparisons and emphasizing deviation from the overall task distribution. For behavioral entropy, we compute the uncertainty of a user’s check-in distribution over POI categories. Let puc de-note the proportion of user u’s check-ins in category c, then: 
+
+sentropy  
+
+> u
+
+= − X
+
+> c
+
+puc log puc (21) The final score is computed as a combination of the two min-max-normalized metrics: 
+
+su = sstruct −norm u + sentropy −norm u (22) 
+
+Memory-aware Adjustment. To reduce selection redun-dancy, we apply a penalty to frequently chosen tasks. Let freq (u) denote the number of times task u has been selected so far. The adjusted score is computed as: 
+
+˜su = su
+
+1 + log(1 + freq (u)) (23) We select meta-training tasks from the candidate pool by sampling according to the adjusted scores. This sampling strategy encourages task diversity while allowing moder-ately informative tasks to be selected, improving general-ization during meta-learning. 
+
+# Experiment 
+
+To comprehensively evaluate the effectiveness of our pro-posed TMHKG framework, we conduct extensive experi-ments on two real-world POI recommendation datasets. Our goal is to investigate whether TMHKG can effectively lever-age heterogeneous interaction and knowledge graphs, along with a task-aware meta-learning strategy, to improve the ac-curacy and adaptability of personalized POI recommenda-tion. To this end, we formulate the following research ques-tions: • RQ1 : How does TMHKG perform compared to state-of-the-art POI recommendation models? • RQ2 : How do the main components of TMHKG con-tribute to the overall performance? • RQ3 : How do different hyperparameter settings impact the performance of TMHKG? • RQ4 : Can TMHKG effectively address the cold-start problem? 
+
+Experiment Settings 
+
+Datasets. We use two public datasets to evaluate the effec-tiveness of TMHKG: Yelp and NYCRestaurant. The two datasets are publicly accessible and vary in size and spar-sity, making our experiments more convincing. Yelp : This dataset provides real-world data related to businesses in-cluding reviews, photos, check-ins, and attributes like hours, parking availability, and ambience. NYCRestaurant : This dataset includes check-in, tip, and tag data of restaurant venues in NYC collected from Foursquare from 24 Octo-ber 2011 to 20 February 2012. In our experiment, we pre-process the three datasets by filtering out the inactive users and unpopular POIs. Specifically, we filter out those users who have fewer than 10 check-in POIs and those POIs that are visited by fewer than 10 users. Then, 3:1:1 of each pro-cessed dataset is selected as the training, validation, and test-ing datasets. Furthermore, following the knowledge graph construction methodology employed in the knowledge graph learning module, we construct a knowledge graph based on POI metadata and Freebase. The statistics of two datasets are described in Table 1. Yelp Foursquare 
+
+Gint 
+
+#Users 30,887 3,112 #POIs 18,995 3,298 #Check-ins 860,888 27,149 
+
+Gkg 
+
+#Entities 47,487 5,629 #Relations 32 5#Triplets 95,864 10,331 Table 1: Dataset statistics. 
+
+Baselines. To demonstrate the effectiveness of our proposed TMHKG framework, we compare it with three categories of representative POI recommendation methods: knowledge graph-based methods (KGIN, KGAT), behavior evolution-based methods (GETNext, STGCN), and meta-learning-based methods (MetaKG, HyperMAN). The detailed de-scriptions are as follows: KGIN (Wang et al. 2021) is a knowledge graph-enhanced recommendation method that integrates multi-hop semantic relations among entities into user and item representations via high-order graph convo-lution and cross-neighbor propagation; KGAT (Wang et al. 2019) introduces a graph attention mechanism to model the varying importance of different knowledge relations, en-abling more interpretable and discriminative interest repre-sentations; GETNext (Yang, Liu, and Zhao 2022) constructs a spatio-temporal-semantic heterogeneous graph based on user mobility trajectories and learns preference evolution paths by modeling multi-type relations; STGCN (Han et al. 2020) captures spatio-temporal dependencies in user mo-bility trajectories to model sequential POI visiting behav-iors; MetaKG (Du et al. 2022) employs collaborative-aware and knowledge-aware meta-learners to capture user pref-erences and knowledge associations, effectively addressing cold-start issues; HyperMAN (Wang et al. 2025) combines meta-learning with high-order structural modeling, enhanc-15837 ing the model’s transferability and adaptability across user-specific tasks through multi-task training and structural con-trastive signals, and constructs a task-aware recommenda-tion model on multi-relational hypergraphs. 
+
+Evaluation metrics. We choose Recall@K and NDCG@K 
+
+as the evaluation metrics. Recall@K measures the propor-tion of relevant POIs that are present in the top k recom-mended items for a given user. The Normalized Discounted Cumulative Gain (NDCG) penalizes irrelevant items ranked higher and rewards relevant items placed at top positions. Both metrics range from 0 to 1, where a value closer to 1 in-dicates that the recommendation system is effectively rank-ing relevant POIs higher in the list. 
+
+Parameter Settings and Implementation. We implement our TMHKG and all baselines in Pytorch and carefully tune the key parameters. For a fair comparison, we fix the em-bedding size to 64 for all models, and the embedding pa-rameters are initialized with the Xavier method (Glorot and Bengio 2010). We optimize our method with Adam (Adam et al. 2014) and set the batch size to 4096. A grid search is conducted to confirm the optimal settings. We tune the learning rate η among {0.0001 , 0.0003 , 0.001 , 0.003 }. The best settings for hyperparameters in all comparison methods are researched by either empirical study or by following the original papers. 
+
+Performance Comparison (RQ1) 
+
+We report the empirical results of all methods in Ta-ble 2. The improvements and statistical significance test are performed between TMHKG and the strongest base-lines highlighted with an underline. Analyzing such per-formance comparison, we have the following observations: (1) Superior Performance Across All Metrics. The pro-posed method achieves the best performance across all eval-uation metrics, demonstrating the overall effectiveness of the framework. On the two real-world datasets, Yelp and NYCRestaurant, our method consistently outperforms rep-resentative baselines in terms of Recall@k and NDCG@k. Notably, on the NDCG@20 metric, our method improves by 5.77% and 4.77% compared to the best-performing base-lines on Yelp and NYCRestaurant, respectively, highlighting its advantage in personalized ranking quality; (2) Effective Modeling of Dynamic User Interests. Our method exhibits significant advantages in capturing the dynamic evolution of user interests, outperforming behavior-evolution modeling approaches. While models such as GETNext and STGCN leverage user trajectories to model interest evolution, most existing methods fail to consider the synergy between knowledge structures and preference dynamics. In contrast, our method integrates interest-path modeling, knowledge graph propagation, and task-level adaptive mechanisms to effectively capture latent evolutionary trends in users’ spa-tiotemporal behavior sequences, thereby achieving stronger preference representation capabilities; (3) Superiority Over Knowledge-Enhanced and Meta-Learning-Based Meth-ods. The incorporation of knowledge graphs and task mod-eling mechanisms yields substantial improvements over ex-isting knowledge-enhanced and meta-learning-based recom-mendation methods. For instance, while KGIN and KGAT can model knowledge graph structures, they lack personal-ized task modeling, resulting in limited performance. Hy-perMAN incorporates meta-learning but does not explicitly model interest evolution paths, leading to constrained in-terpretability and stability in recommendations. In compar-ison, our method leverages fine-grained knowledge struc-ture modeling and task-driven representation optimization, achieving consistently superior results across multiple eval-uation metrics. 
+
+Ablation Study(RQ2) 
+
+To validate the contribution of each component, we conduct an ablation study with five variants:(1) w/o IEPE removes the Interest Evolution Path Encoder to assess dynamic pref-erence modeling;(2) w/o KG omits the knowledge graph en-tirely;(3) w/o KG+ uses the original KG without our pro-posed relational enhancements;(4) w/o Sampling replaces our memory-aware sampling with a random strategy;(5) w/o RCL removes the representation consistency loss. The results of our ablation study, presented in Table 3, demonstrate the integral contribution of each component to TMHKG’s performance. The full model consistently outper-forms all variants. The most significant performance degra-dation is observed when removing the knowledge graph en-tirely, which causes Recall@10 on Yelp to plummet from 0.0901 to 0.0664. This underscores the critical role of exter-nal semantic knowledge. Similarly, removing the dynamic interest modeling or the adaptive task sampling also leads to substantial drops in performance, highlighting the ne-cessity of modeling user evolution and employing an ef-fective meta-training strategy. Furthermore, using the base knowledge graph without our structural enhancements or re-moving the consistency loss results in a noticeable, albeit smaller, decline in performance. This confirms the value of our behavior-aware edge enhancements and the regulariza-tion effect of the alignment loss. In conclusion, each com-ponent of the proposed model plays a crucial role in per-formance improvement, collectively supporting the recom-mendation system’s accuracy, personalization, and general-ization capabilities. 
+
+Parameter Analysis (RQ3) 
+
+Here we investigate the effect of different settings of the L,
+
+L′, α, and β parameters in our framework. Specifically, we conduct experiments on the Yelp dataset, keeping all other parameters fixed at their optimal values while varying one parameter at a time. As shown in Figure 2, the performance initially improves as the parameters increases, reaches a peak, and then declines. For the number of GNN layers, L(interaction) and 
+
+L′(knowledge), performance peaks at a moderate depth. Too few layers result in insufficient feature propagation, while too many lead to overfitting. The hyperparameters α and 
+
+β control the consistency loss. α balances the user and POI alignment objectives, while β balances the overall con-sistency loss against the main ranking task. For both, ex-treme values hurt performance by either under-regularizing or overpowering the primary ranking objective. Our results 15838 Dataset Yelp NYCRestraunt 
+
+Model R@5 R@10 R@20 N@5 N@10 N@20 R@5 R@10 R@20 N@5 N@10 N@20 
+
+KGIN 0.0459 0.0756 0.1269 0.0506 0.0617 0.0847 0.0432 0.0817 0.0915 0.0568 0.0604 0.0792 KGAT 0.0485 0.0798 0.1291 0.0549 0.0642 0.0891 0.0457 0.0821 0.1092 0.0515 0.0595 0.0799 STGN 0.0518 0.0844 0.1328 0.0564 0.0836 0.0956 0.0492 0.0820 0.1108 0.0564 0.0789 0.0900 GETN 0.0524 0.0859 0.1304 0.0584 0.0821 0.0970 0.0510 0.0816 0.1169 0.0565 0.0807 0.0902 MetaK 0.0517 0.0839 0.1326 0.0566 0.0825 0.0945 0.0507 0.0818 0.1141 0.0543 0.0785 0.0899 Hyper 0.0519 0.0841 0.1348 0.0584 0.0827 0.0961 0.0511 0.0819 0.1154 0.0550 0.0794 0.0901 
+
+Ours 0.0564 0.0901 0.1416 0.0614 0.0879 0.1026 0.0537 0.0863 0.1225 0.0599 0.0852 0.0945 
+
+Imprv. +7 .63% +4 .89% +5 .05% +5 .14% +5 .15% +5 .77% +5 .09% +5 .12% +4 .79% +5 .46% +5 .57% +4 .77% 
+
+Table 2: Performance comparison in Recall@k and NDCG@k on two datasets. Model Yelp NYCRestaurant R@10 N@10 R@10 N@10 w/o IEPE 0.0815 0.0839 0.0849 0.0782 w/o KG 0.0664 0.0681 0.0645 0.0632 w/o KG+ 0.0881 0.0837 0.0842 0.0828 w/o Sampling 0.0783 0.0768 0.0736 0.0697 w/o RCL 0.0884 0.0872 0.0855 0.0831 Full Model 0.0901 0.0879 0.0863 0.0852 
+
+Table 3: Effect of ablation study. show that optimal performance is achieved when these com-ponents are properly balanced. 1 2 3 4 5            
+
+> 0.065
+> 0.070
+> 0.075
+> 0.080
+> 0.085
+> 0.090
+> R@10 N@10
+> (a) L12345
+> 0.050
+> 0.055
+> 0.060
+> 0.065
+> 0.070
+> 0.075
+> 0.080
+> 0.085
+> 0.090
+> R@10 N@10 (b) L′0.0 0.2 0.4 0.6 0.8 1.0
+> 0.084
+> 0.085
+> 0.086
+> 0.087
+> 0.088
+> 0.089
+> 0.090 R@10 N@10
+> (c) α0.001 0.010 0.100 1.000
+> 0.085
+> 0.086
+> 0.087
+> 0.088
+> 0.089
+> 0.090 R@10 N@10 (d) β
+
+Figure 2: Effect of L, L′, α and β.
+
+Cold-start Scenarios Analysis (RQ4) 
+
+To investigate the ability of TMHKG to handle cold-start scenarios, we design a dedicated experiment focusing on the user cold-start (UC) setting. Specifically, we conduct exper-iments on both the Yelp and NYCRestaurant datasets, where we simulate the UC condition by selecting users with very few historical interactions as the cold-start users. For each dataset, we sort all users by their number of interactions and designate the bottom 20% of users as cold-start users. These users are entirely excluded from the training set and only used for evaluation, while the remaining users are used for training and validation.We compare TMHKG with two rep-resentative baselines: GETNext and HyperMAN. Both base-lines are trained and evaluated under the same cold-start data splits. As shown in Table 4, TMHKG consistently achieves su-perior performance compared to the baselines in the UC set-ting on both datasets. This result demonstrates the effective-ness of our task-aware meta-learning strategy and memory-aware task sampling mechanism in improving model adapt-ability and generalization to users with sparse historical data. Model Yelp NYCRestaurant R@10 N@10 R@10 N@10 GETNext 0.0411 0.0402 0.0362 0.0324 HyperMAN 0.0566 0.0532 0.0489 0.0488 Ours 0.0820 0.0812 0.0790 0.0707 
+
+Table 4: Performance under user cold-start setting. 
+
+# Conclusion 
+
+In this paper, we proposed TMHKG, a task-aware meta-learning framework for personalized POI recommendation. Our framework learns to adapt to individual users by syn-ergistically modeling dynamic preferences from interaction graphs and rich semantics from an enhanced knowledge graph, guided by a memory-aware task sampling strategy. Extensive experiments demonstrate that TMHKG signifi-cantly outperforms state-of-the-art methods by effectively addressing the challenge of user preference diversity. Future work will focus on exploring additional context signals and further optimizing the task adaptation process. 15839 Acknowledgements 
+
+This work was supported by the National Natural Science Foundation of China (No. 62276026). 
+
+# References 
+
+Adam, K. D. B. J.; et al. 2014. A method for stochastic optimization. arXiv preprint arXiv:1412.6980 , 1412(6). Du, Y.; Zhu, X.; Chen, L.; Fang, Z.; and Gao, Y. 2022. Metakg: Meta-learning on knowledge graph for cold-start recommendation. IEEE Transactions on knowledge and data engineering , 35(10): 9850–9863. Finn, C.; Abbeel, P.; and Levine, S. 2017. Model-agnostic meta-learning for fast adaptation of deep networks. In In-ternational conference on machine learning , 1126–1135. PMLR. Glorot, X.; and Bengio, Y. 2010. Understanding the diffi-culty of training deep feedforward neural networks. In Pro-ceedings of the thirteenth international conference on arti-ficial intelligence and statistics , 249–256. JMLR Workshop and Conference Proceedings. Han, H.; Zhang, M.; Hou, M.; Zhang, F.; Wang, Z.; Chen, E.; Wang, H.; Ma, J.; and Liu, Q. 2020. STGCN: a spatial-temporal aware graph learning method for POI recommen-dation. In 2020 IEEE International Conference on Data Mining (ICDM) , 1052–1057. IEEE. Li, H.; Wan, H.; Chen, Y.; Ye, D.; Gel, Y.; and Jiang, H. 2025. TMetaNet: Topological Meta-Learning Frame-work for Dynamic Link Prediction. arXiv preprint arXiv:2506.00453 .Lim, N.; Hooi, B.; Ng, S.-K.; Wang, X.; Goh, Y. L.; Weng, R.; and Varadarajan, J. 2020. STP-UDGAT: Spatial-temporal-preference user dimensional graph attention net-work for next POI recommendation. In Proceedings of the 29th ACM international conference on information & knowledge management , 845–854. Lin, Y.; Liu, Z.; Sun, M.; Liu, Y.; and Zhu, X. 2015. Learn-ing entity and relation embeddings for knowledge graph completion. In Proceedings of the AAAI conference on arti-ficial intelligence , volume 29. Liu, Q.; Zeng, Y.; Mokhosi, R.; and Zhang, H. 2018. STAMP: short-term attention/memory priority model for session-based recommendation. In Proceedings of the 24th ACM SIGKDD international conference on knowledge dis-covery & data mining , 1831–1839. Mandal, D.; Medya, S.; Uzzi, B.; and Aggarwal, C. 2022. Metalearning with graph neural networks: Methods and ap-plications. ACM SIGKDD Explorations Newsletter , 23(2): 13–22. Procopio, L.; Tripodi, R.; and Navigli, R. 2021. SGL: Speaking the graph languages of semantic parsing via mul-tilingual translation. In Proceedings of the 2021 Confer-ence of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies ,325–337. Shu, T.; Shi, L.; Zhu, C.; and Liu, X. 2022. A graph neural network framework based on preference-aware graph dif-fusion for recommendation. Frontiers in Psychiatry , 13: 1012980. Song, X.; Liu, Z.; Meng, L.; Chu, D.; Yu, J.; and Sheng, Q. Z. 2025. Accurate POI recommendation for random groups with improved graph neural networks and a multi-negotiation model. Scientific Reports , 15(1): 7531. Sun, H.; Xu, J.; Zheng, K.; Zhao, P.; Chao, P.; and Zhou, X. 2021. MFNP: A meta-optimized model for few-shot next POI recommendation. In IJCAI , volume 2021, 3017–3023. Wang, J.; Zhang, T.; Zhang, L.; Bai, Y.; Li, X.; and Jin, J. 2025. HyperMAN: Hypergraph-enhanced Meta-learning Adaptive Network for Next POI Recommendation. arXiv preprint arXiv:2503.22049 .Wang, X.; He, X.; Cao, Y.; Liu, M.; and Chua, T.-S. 2019. Kgat: Knowledge graph attention network for recommen-dation. In Proceedings of the 25th ACM SIGKDD interna-tional conference on knowledge discovery & data mining ,950–958. Wang, X.; Huang, T.; Wang, D.; Yuan, Y.; Liu, Z.; He, X.; and Chua, T.-S. 2021. Learning intents behind interactions with knowledge graph for recommendation. In Proceedings of the web conference 2021 , 878–887. Yang, S.; Liu, J.; and Zhao, K. 2022. GETNext: Trajectory flow map enhanced transformer for next POI recommenda-tion. In Proceedings of the 45th International ACM SIGIR Conference on research and development in information re-trieval , 1144–1153. Zhang, J.; and Ma, W. 2024. Hybrid structural graph atten-tion network for POI recommendation. Expert Systems with Applications , 248: 123436. Zhao, P.; Luo, A.; Liu, Y.; Xu, J.; Li, Z.; Zhuang, F.; Sheng, V. S.; and Zhou, X. 2020. Where to go next: A spatio-temporal gated network for next poi recommendation. IEEE Transactions on Knowledge and Data Engineering , 34(5): 2512–2524. 15840

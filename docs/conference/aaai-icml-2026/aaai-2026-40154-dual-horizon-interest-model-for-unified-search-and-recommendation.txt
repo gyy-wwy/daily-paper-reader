@@ -1,0 +1,560 @@
+Title: Dual-Horizon Interest Model for Unified Search and Recommendation
+
+URL Source: https://ojs.aaai.org/index.php/AAAI/article/download/40154/44115
+
+Number of Pages: 9
+
+Markdown Content:
+# Dual-Horizon Interest Model for Unified Search and Recommendation 
+
+# Wenhao Zhu 1, Yuxin Li 1, Shuo Wang 1, Hao Wang 1*,
+
+> 1
+
+School of Computer Science, Wuhan University, China 
+
+{zhuwenhao, liyuxuxin, wangshuo.ws, wanghao.cs }@whu.edu.cn 
+
+Abstract 
+
+Search and recommendation are pivotal for information ac-cess and are increasingly unified to exploit shared user-item interactions. Both tasks suffer from data sparsity, which joint modeling can mitigate by integrating behavioral data with or without explicit queries. However, existing unified frame-works rarely distinguish between users’ long- and short-term interests, despite their divergent temporal dynamics in search and recommendation. In this work, we propose a novel model, DHIM, which explicitly disentangles and integrates users’ long- and short-term interests across both the search and recommendation scenarios. First, long- and short-term interests are independently extracted from search and rec-ommendation using a unified extraction strategy. These in-terests are then adaptively integrated via a cross-scenario fu-sion module. A self-supervised contrastive loss supervises the learning of both interest types within and across scenarios. The resulting representations are fed into downstream search and recommendation models for prediction. Extensive exper-iments on two public benchmarks demonstrate that our ap-proach consistently outperforms single-scenario and state-of-the-art joint models, achieving superior accuracy and gener-alizability. To our knowledge, this is the first work to incor-porate explicit dual-horizon interest modeling into a unified search and recommendation framework with self-supervised contrastive learning. 
+
+# Introduction 
+
+In modern society, search and recommendation (S&R) con-stitute the primary means of information access. Contempo-rary platforms increasingly integrate both, exploiting shared user-item interactions to address explicit queries and infer implicit preferences. For example, short video services such as YouTube and TikTok embed S&R within a single appli-cation, enabling seamless transitions between active query-ing and passive browsing. Nonetheless, both paradigms suf-fer from data sparsity. A unified modeling framework that jointly leverages user behaviors from both scenarios can mit-igate this issue by refining item ranking when queries are present and generating personalized recommendations oth-erwise, thereby enhancing overall performance. 
+
+> *
+
+Corresponding author. Copyright © 2026, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved. 
+
+Many studies have explored joint modeling of S&R. Some methods optimize S&R models by a joint training loss (Za-mani and Croft 2018, 2020). Some others leverage search data to enhance recommendation performance (Wu et al. 2019; Si et al. 2022, 2023a,b; He et al. 2022). Recent work has developed unified S&R frameworks that jointly model the two tasks to exploit their intrinsic correlations and achieve mutual benefits (Yao et al. 2021; Zhao et al. 2022; Xie et al. 2024; Shi et al. 2024). For example, USER (Yao et al. 2021) unifies S&R behaviors into a heteroge-neous sequence and applies a joint encoder to model their interdependencies. UnifiedSSR (Xie et al. 2024) uses a dual-branch encoder for query and interaction histories, aug-mented by a self-supervised session module to model dy-namic user intent. UniSAR (Shi et al. 2024) models search-recommendation transitions via masked transformers, aligns them contrastively, and fuses them with cross-attention. While prior studies (Guo et al. 2019; Shen et al. 2022; Zheng et al. 2022; Ou et al. 2025) demonstrate that explic-itly modeling users’ long- and short-term interests enhances performance in standalone recommendation or search tasks, no joint S&R framework has yet effectively modeled these dual-horizon preferences. User interests are inherently dy-namic rather than static, which underscores the necessity of modeling short-term preferences to achieve accurate and timely personalization. Indeed, user behavior in S&R is driven by a combina-tion of relatively stable long-term interests and dynamically changing short-term interests. For instance, a consumer who consistently prefers electronic products may temporarily fo-cus on cars when planning a purchase. Likewise, a user who receives recommendations for a specific travel destination may later initiate related searches, showing how interest cues can propagate between scenarios. These phenomena reveal that user intent in search or recommendation cannot be ade-quately captured by modeling either long-term or short-term interests in isolation. Instead, a unified modeling framework that adaptively integrates and transfers user interests across both scenarios is essential for enhancing relevance, person-alization, and contextual responsiveness. Accordingly, we present DHIM, a unified S&R model de-signed to explicitly capture long- and short-term interests. The model infers user interests by encoding behavioral se-quences from both search and recommendation contexts, The Fortieth AAAI Conference on Artificial Intelligence (AAAI-26) 
+
+29159 and introduces a cross-scenario fusion mechanism to en-rich the representation of user preferences. The framework consists of four main modules: (1) a Cross-Scenario Behav-ioral Fusion Module that employs dual encoders and cross-attention to capture both intra- and inter-scenario behavioral dependencies, following the behavior transition design from UniSAR (Shi et al. 2024); (2) a Dual-Horizon Interest En-coder that separates long- and short-term interests within each scenario; (3) a Cross-Scenario Dual-Horizon Interest Fusion Module that aligns and integrates corresponding in-terests across domains, enabling mutual reinforcement; and (4) a Self-Supervised Contrastive Learning that imposes within- and cross-scenario constraints to enhance the quality and consistency of interest representations. Finally, predic-tion is performed using the Progressive Layered Extraction (Tang et al. 2020) (PLE) multi-task learning framework. The major contributions of the paper are as follows: • To the best of our knowledge, this is the first work to explicitly model both long- and short-term user interests for S&R within a unified framework. • We introduce a self-supervised contrastive learning strat-egy for both intra- and inter-scenario interest modeling. Specifically, we construct proxy signals for long- and short-term interests and formulate contrastive objectives that encourage accurate disentanglement within each sce-nario and effective alignment across scenarios. • Experimental results on two public datasets demonstrate that our model outperforms traditional single-scenario and existing joint S&R approaches, and achieves state-of-the-art performance. 
+
+# Related Work 
+
+Sequential Recommendation 
+
+Sequential recommendation aims to predict users’ next in-teractions by modeling temporal dependencies in behavior sequences. Compared to static preference models, it better captures evolving interests. Early approaches used Markov chains (Rendle, Freudenthaler, and Schmidt-Thieme 2010), while later methods employed deep neural networks, espe-cially Transformers (Kang and McAuley 2018; Sun et al. 2019; Shin et al. 2024), for improved long-range modeling. To mitigate data sparsity and noise, self-supervised learning (Chen et al. 2022; Zheng et al. 2022; Wang et al. 2023; Ou et al. 2025) and denoising strategies (Yuan et al. 2021) have been introduced. Recent work also explores leveraging large language models (Ye et al. 2025) and auxiliary signals like user search behaviors to enhance sequential modeling. 
+
+Personalized Search 
+
+Personalized search systems tailor results to individual users by integrating the current query with user-specific signals such as historical behaviors and contextual information, rather than returning identical results for all users. Early methods relied on heuristic rules and hand-crafted features (Dou, Song, and Wen 2007; Wang et al. 2013); supervised models then leveraged labeled relevance data to improve ranking accuracy (White et al. 2013). Recent neural ap-proaches capture high-dimensional representations of im-plicit intent from queries and clicks (Ge et al. 2018; Lu et al. 2019; Ma et al. 2020; Zhou, Dou, and Wen 2020; Zhou et al. 2021; Bai, Dou, and Wen 2024), with further gains from adversarial learning (Lu et al. 2019), contrastive learn-ing (Zhou et al. 2021; Dai et al. 2023) and large language models (Tang et al. 2025). Despite these advances, person-alized search and recommendation remain siloed; our work jointly models S&R tasks within a unified framework. 
+
+Search-enhanced Recommendation 
+
+Recent research treats user-initiated searches as explicit signals to strengthen recommendation. IV4Rec (Si et al. 2022) and its extension IV4Rec++ (Si et al. 2023a) use search actions as instrumental variables to decompose rec-ommendation embeddings into causal and non-causal com-ponents. SESRec (Si et al. 2023b) applies co-attention to align and segment S&R behaviors, then refines recommen-dation interests via attention over the disentangled segments. Query-SeqRec (He et al. 2022) incorporates query–item co-occurrence into a sequential recommendation framework to better capture user intent. These models leverage search data to improve recommendation performance but overlook the opportunity to integrate S&R for complementary gains across both tasks. 
+
+Unified Search and Recommendation 
+
+Several recent studies have explored unified modeling of S&R. USER (Yao et al. 2021) merges behaviors into a unified sequence and applies a shared encoder to capture user interests. SRJGraph (Zhao et al. 2022) constructs a user–item graph with query attributes and applies intent-aware aggregation. UnifiedSSR (Xie et al. 2024) adopts dual branches for query and interaction histories with a self-supervised session module. UniSAR (Shi et al. 2024) ex-tracts transition features via masked transformers, aligns them with contrastive learning, and fuses them using cross-attention. However, none of these methods explicitly disen-tangle dual-horizon interest for S&R within a unified frame-work. In contrast, our method disentangles dual-horizon in-terest in both tasks, fuses them across scenarios, and aligns them via contrastive learning. 
+
+# Preliminaries 
+
+Let U, I, and Q denote the sets of users, items, and queries, respectively. The user subscript u is omitted for clarity when its meaning is evident from context. Each user 
+
+u ∈ U is associated with an ordered interaction history: 
+
+ST = (x1, b 1), (x2, b 2), · · · , (xT , b T ), where T is the to-tal number of interactions and bt ∈ { 0, 1} indicates whether the t-th interaction is a search ( bt = 0 ) or a recommendation (bt = 1 ). The behavior xt is defined as: 
+
+xt =
+
+it, bt = 1 ,
+
+⟨qt, C t⟩, bt = 0 , (1) where it ∈ I is the item clicked in a recommendation interaction; qt ∈ Q is the user’s t-th search query and 29160 R Behavior  S Behavior 
+
+Embedding 
+
+Cross-Scenario Behavior Fusion 
+
+Dual-Horizon 
+
+Interest Encoder 
+
+Dual-Horizon 
+
+Interest Encoder 
+
+Cross-Scenario Dual-Horizon Interest Fusion 
+
+Prediction Layer Decoder 
+
+Encoder 
+
+Fusion Gate 
+
+Encoder  Attention Pooling 
+
+Encoder 
+
+GRU  Attention Pooling 
+
+Encoder  User  Item  Query Figure 1: The architecture of the proposed DHIM. 
+
+Ct = {it, 1, · · · , i t,N t } ⊆ I denotes the set of items clicked in response to qt.All interactions are collected into the unified dataset D =
+
+DR ∪ D S , where DR = {(u, S T , i T +1 , y T +1 )k}NR 
+
+> k=1
+
+and 
+
+DS = {(u, S T , i T +1 , y T +1 )k}NS
+
+> k=1
+
+, with yT +1 denoting the ground-truth preference scores for the next item iT +1 in rec-ommendation and search contexts, respectively. Here, NS
+
+and NR denote the total number of interactions from recom-mendation and search scenarios, respectively. To unify the input structure across both tasks, we introduce a learnable query embedding eq = qϕ ∈ Rd for recommendation. We aim to learn a unified model fΘ that maps 
+
+(u, S T , q, i T +1 ) 7 → ˆyT +1 , (2) by minimizing the prediction error over D, thus enabling accurate next-item preference estimation in both tasks. 
+
+# Our Method 
+
+Overall Framework 
+
+Figure 1 depicts the framework. Raw inputs are first em-bedded into low-dimensional vectors. The Cross-Scenario Behavior Fusion module, designed based on UniSAR (Shi et al. 2024), integrates intra- and inter-scenario features from S&R behaviors. Dual-Horizon Interest Encoders extract dual-horizon interest independently for each scenario. The Cross-Scenario Dual-Horizon Interest Fusion module fuses matching interests from both scenarios into unified horizon-specific embeddings, which are subsequently decoded into scenario-specific representations. Self-supervised learning ensures intra- and inter-scenario consistency of these inter-ests. Adaptive gating and attention fuse and aggregate these interests conditioned on candidate items. Finally, a PLE-based prediction layer produces outputs for both S&R tasks. 
+
+Embedding Layer 
+
+We define embedding tables EU , EI , and EW for users, items, and query words, respectively. Here, W is the set composed of all the words included in the queries. For a query q = {w1, w 2, · · · , w |q|} ⊆ W, we rep-resent it by averaging (i.e., MEAN) the embeddings of its constituent words, based on the observation that query terms typically exhibit weak sequential dependencies: eq =
+
+MEAN (ew1 , e w2 , · · · , e w|q| ).To distinguish search from recommendation, the behavior embedding ext ∈ Rd is eit for recommendation and eqt +mean( Cqt ) for search, where Cqt denotes the set of item embeddings clicked under query qt.
+
+Query-Item Contrastive Alignment. To enhance seman-tic relevance in the search scenario, we employ a bidirec-tional contrastive learning strategy to align queries and their clicked items in a shared latent space. Given each interac-tion ⟨q, C q ⟩, we treat (q, C q ) as positive pairs and randomly sample negative items Ineg and negative queries Qneg . The contrastive loss is defined as: 
+
+LQ = BiCL  eq , C q , I neg , Q neg ; τ1
+
+
+
+= −
+
+" X
+
+> i∈Cq
+
+log exp  sim( eq , e i)/τ 1
+
+P 
+
+> i−∈Ineg
+
+exp  sim( eq , e i− )/τ 1
+
+
+
++ X
+
+> i∈Cq
+
+log exp  sim( eq , e i)/τ 1
+
+P 
+
+> q−∈Qneg
+
+exp  sim( eq− , e i)/τ 1
+
+#
+
+,
+
+(3) where τ1 is a learnable temperature parameter, and sim (a, b ) = tanh( a⊤W b ) measures similarity in the latent space via a learnable projection matrix W .29161 Cross-Scenario Behavior Fusion Module 
+
+We denote the S&R behavior embeddings as Es ∈ RNs×d
+
+and Er ∈ RNr ×d, and the global sequence of user behav-iors across both scenarios as Eg ∈ R(Nr +Ns)×d, each with learnable positional encodings. Independent transformer (Vaswani et al. 2017) en-coders produce intra-scenario representations, Ht 
+
+> intra
+
+=Transformers t
+
+ Et
+
+, t ∈ {r, s }. Subsequently, a trans-former is applied to the global embedding Eg , employing a binary mask Mij = I(bi̸ = bj ) to restrict attention across different scenarios, yielding the cross-scenario fea-tures: (Hr
+
+> inter
+
+, H s
+
+> inter
+
+) = Transformers g
+
+ Eg , M .Scenario-specific multi-head cross-attention (MCA) inte-grates intra- and inter-scenario representations, followed by a position-wise feedforward network (FFN): 
+
+Ht = FFN t
+
+ MCA t(Ht
+
+> intra
+
+, H t
+
+> inter
+
+, H t
+
+> inter
+
+), (4) where t ∈ { s, r } and Q = Ht
+
+> intra
+
+, K = V = Ht
+
+> inter
+
+.Following (Shi et al. 2024), we align intra- and inter-scenario representations via a bidirectional contrastive loss. Here, hr 
+
+> intra
+
+denotes the mean of recommendation-scenario behavior embeddings, and hr 
+
+> inter
+
+denotes the mean of cross-scenario behavior embeddings. Positive pairs are constructed from (hr
+
+> intra
+
+, h r
+
+> inter
+
+) of the same user, while negative samples set Hr− 
+
+> inter
+
+and Hr− 
+
+> intra
+
+are randomly sampled from other users in the same batch. The contrastive loss is defined as: 
+
+Lr 
+
+> Align
+
+= BiCL  hr
+
+> intra
+
+, h r
+
+> inter
+
+, Hr−
+
+> inter
+
+, Hr−
+
+> intra
+
+; τ2
+
+, (5) where τ2 is a learnable temperature parameter. Similarly, the contrastive alignment loss for search is de-fined, and the overall behavior alignment loss is: 
+
+LAlign = Ls 
+
+> Align
+
++ Lr
+
+> Align
+
+. (6) 
+
+Dual-Horizon Interest Encoder 
+
+After obtaining the final behavior representations in the recommendation and search scenarios, we denote them as: 
+
+Ht = [ h1, h 2, · · · , h Nt ] ∈ RNt×d, t ∈ { s, r }.As both scenarios share the same architecture for long-and short-term interest encoders, we illustrate the design based on the recommendation scenario. 
+
+Long-Term Interest Encoder. The embedding eu is com-monly used to represent the user’s relatively stable prefer-ences. To align it with item representations, we project eu
+
+into a latent query vector qℓ as the long-term query for long-term interest modeling. Meanwhile, each historical behavior representation hj is mapped into the same latent space, re-sulting in the projected vector vj , enabling semantic align-ment with qℓ.We then compute attention weights between the projected behavior features vj and the long-term query qℓ using an interaction-based fusion mechanism: 
+
+αj = MLP (vj || qℓ || (vj − qℓ) || (vj ⊙ qℓ)) , (7) where || denotes concatenation, ⊙ denotes the element-wise product, and MLP stands for multilayer perceptron. After softmax normalization, the long-term interest repre-sentation is given by: 
+
+urℓ =
+
+> Nr
+
+X
+
+> j=1
+
+aj hj ∈ Rd, aj = softmax (αj ). (8) 
+
+Short-Term Interest Encoder. Unlike long-term inter-est extraction, short-term interest focuses on recent behav-ior patterns. Previous work (Zheng et al. 2022) employed two separate RNNs to extract short-term interests, whereas we simplify this by encoding the user’s behavior sequence with a single GRU. The hidden state at each timestep captures the user’s transient interest: {o1, o 2, · · · , o Nr } =
+
+GRU ({h1, h 2, · · · , h Nr }). The final hidden state oNr ∈ Rd
+
+representing the user’s most recent interest, is directly used as the short-term query vector qs.Each hidden state oj is first projected into the latent space and denoted as ˜oj . We compute attention weights with re-spect to the query qs via an interaction-based mechanism: 
+
+βj = MLP (˜ oj ∥ qs ∥ (˜ oj − qs) ∥ (˜ oj ⊙ qs)) . (9) After softmax normalization, the short-term interest rep-resentation is given by: 
+
+urs =
+
+> Nr
+
+X
+
+> j=1
+
+bj ˜oj ∈ Rd, bj = softmax (βj ). (10) Through the above procedures, we obtain the user’s long-and short-term interest representations in the recommenda-tion and search scenarios: urℓ , u rs, u sℓ , and uss, respectively. 
+
+Cross-Scenario Dual-Horizon Interest Fusion 
+
+We assume that search and recommendation yield comple-mentary long- and short-term interest representations. After encoding each scenario’s interests into a shared latent space, we fuse them via two lightweight gating networks: 
+
+μt = σ Gt( urt , u st , u rt − ust , u rt ⊙ ust ), (11) 
+
+ut = μt urt + (1 − μt) ust , (12) where t ∈ { ℓ, s }, Gℓ, G s are MLP-based gates, and σ is the sigmoid function. Decoding to each scenario’s original space is performed by separate decoders, yielding the fol-lowing reconstructed embeddings: ˆurℓ , ˆurs, ˆusℓ , and ˆuss.
+
+Self-Supervised Contrastive Learning 
+
+To better capture users’ long- and short-term interests, we introduce two complementary self-supervised tasks. Intra-scenario contrast encourages alignment with the correspond-ing interest proxy and separation from mismatched ones. Inter-scenario alignment encourages consistency between semantically similar interests across scenarios. Together, they provide auxiliary supervision to enhance the general-izability of learned representations. 
+
+Intra-Scenario Contrastive Objectives. Inspired by prior work (Zheng et al. 2022; Shen et al. 2022), we for-malize two proxy representations per scenario. For recom-mendation, let prℓ denote the mean embedding over the com-plete behavior sequence (long-term) and prs the mean over 29162 the most recent K interactions (short-term). Likewise, for search, we define psℓ and pss analogously. For the recommendation scenario: sim (ˆ urℓ , p rℓ ) > sim (ˆ urℓ , p rs),
+
+sim (prℓ , ˆurℓ ) > sim (prℓ , ˆurs),
+
+sim (ˆ urs, p rs) > sim (ˆ urs, p rℓ ),
+
+sim (prs, ˆurs) > sim (prs, ˆurℓ ).
+
+(13) 
+
+Inter-Scenario Contrastive Objectives. To promote cross-scenario consistency, we impose alignment constraints that draw embeddings of the same interest category closer while pushing apart those of different categories. Specifi-cally, we project the search-side embeddings into the rec-ommendation space via a shared matrix Ws ∈ Rd×d, and apply pairwise similarity constraints to align corresponding interests and separate mismatched ones: sim  Ws ˆusℓ , ˆurℓ
+
+ > sim  Ws ˆusℓ , ˆurs
+
+,
+
+sim  ˆurℓ , W s ˆusℓ
+
+ > sim  ˆurℓ , W s ˆuss
+
+,
+
+sim  Ws ˆuss, ˆurs
+
+ > sim  Ws ˆuss, ˆurℓ
+
+,
+
+sim  ˆurs, W s ˆuss
+
+ > sim  ˆurs, W s ˆusℓ
+
+.
+
+(14) These constraints enable bidirectional alignment between search and recommendation, ensuring semantic consistency of long- and short-term interests across scenarios and im-proving cross-task generalization. 
+
+Contrastive Loss. We employ a triplet loss to optimize contrastive objectives: 
+
+Ltri (a, p, q ) = max ( d(a, p ) − d(a, q ) + m, 0) , (15) where d(·, ·) denotes the Euclidean distance and m is a pre-defined margin. The total contrastive loss is formulated as: 
+
+Ltintra  
+
+> con
+
+= Ltri (ˆ utℓ, p tℓ, p ts) + Ltri (ptℓ, ˆutℓ, ˆuts)+ Ltri (ˆ uts, p ts, p tℓ) + Ltri (pts, ˆuts, ˆutℓ) (16) 
+
+Linter con = Ltri (ˆ urℓ , ˆusℓ , ˆuss) + Ltri (ˆ usℓ , ˆurℓ , ˆurs)+ Ltri (ˆ urs, ˆuss, ˆusℓ ) + Ltri (ˆ uss, ˆurs, ˆurℓ ), (17) 
+
+Lcon = Lrintra  
+
+> con
+
++ Lsintra  
+
+> con
+
++ γ · L inter con , (18) where t ∈ { s, r }, γ is a weighting factor controlling the in-fluence of inter-scenario alignment. 
+
+Prediction and Training 
+
+Long-Short Interest Adaptive Fusion. Given the candi-date item ei, to decouple its relevance to the long- and short-term user preferences, we compress the behavior sequence 
+
+Ht, t ∈ { s, r } using a GRU, and obtain the final hidden state hft as a global user representation. A gating network, implemented as an MLP followed by a sigmoid activation, produces the fusion weight: 
+
+αt = σ(MLP (hft ∥ ei ∥ ˆutℓ ∥ ˆuts)) , (19) 
+
+uti = αt ˆutℓ + (1 − αt)ˆ uts. (20) To capture item-specific global signals, we apply target-conditioned attention to independently aggregate each sce-nario’s historical behaviors, producing hr , h s ∈ Rd. The final fused representations for ei are then given by ˆeri =
+
+hr || uri and ˆesi = hs || usi .
+
+Prediction Layer via PLE We use the PLE architecture to share low-level features and learn task-specific representa-tions for S&R. The input x = concat  eu, e i, e q , ˆeri , ˆesi
+
+ ∈
+
+Rdh , where for recommendation without a query we set 
+
+eq = qϕ as a learnable embedding. The PLE module com-prises shared and task-specific experts, with a gating net-work routing the input x to expert outputs and task-specific MLPs generating the final predictions ˆyR and ˆyS .
+
+Training Objective. We adopt the binary cross-entropy loss to train for click prediction tasks in both scenarios: 
+
+Lt 
+
+> Click
+
+= − 1
+
+|D t|
+
+X
+
+> (u,i,q )∈D t
+
+h
+
+ytu,i,q log ˆ ytu,i,q 
+
++ (1 − ytu,i,q ) log(1 − ˆytu,i,q )
+
+i
+
+,
+
+(21) where t ∈ { S, R }, DS and DR denote the training data in search and recommendation scenarios, respectively. 
+
+Overall Loss. The training objective combines multiple loss components from different tasks and scenarios: 
+
+Lt = Lt 
+
+> Click
+
++ αLt 
+
+> Align
+
++ βLt 
+
+> con
+
++ κLt
+
+> Q
+
+, (22) where t ∈ { S, R }, α, β, κ are hyperparameters controlling the contributions of each component. The overall training objective jointly optimizes the final loss of S&R. Specifically, the total loss is computed as: 
+
+Ltotal = LR + λ1LS + λ2∥θ∥22, (23) where λ1 controls the trade-off between S&R, θ denotes the parameters of DHIM, and λ2 controls the L2 regularization. 
+
+# Experiments 
+
+Experiment Setup 
+
+Datasets. The experiments were conducted on two pub-licly available datasets. The KuaiSAR (Sun et al. 2023) dataset contains real-world user behaviors from both search and recommendation scenarios and is the only publicly available dataset with authentic cross-scenario S&R inter-actions. The Amazon (McAuley et al. 2015) dataset is a semisynthetic benchmark based on the “Kindle Store” sub-set of the five-core Amazon data, with search behaviors gen-erated following prior work (Shi et al. 2024). 
+
+Baselines. We benchmark our approach against state-of-the-art methods in three categories: (1) Sequential rec-ommendation models without search data, including DIN (Zhou et al. 2018), FMLPRec (Zhou et al. 2022) and BSARec (Shin et al. 2024); (2) Personalized search mod-els without recommendation data, including AEM (Ai et al. 2019), ZAM (Ai et al. 2019) and MAI (Bai, Dou, and Wen 2024); and (3) Joint S&R models, including SESRec (Si et al. 2023b), UnifiedSSR (Xie et al. 2024) and UniSAR (Shi et al. 2024). 29163 Method KuaiSAR Amazon HR@1 HR@5 HR@10 NDCG@5 NDCG@10 HR@1 HR@5 HR@10 NDCG@5 NDCG@10 
+
+Recommendation Task 
+
+DIN 0.1663 0.4553 0.6161 0.3145 0.3665 0.2369 0.5114 0.6419 0.3798 0.4221 FMLP-Rec 0.1346 0.4268 0.6125 0.2827 0.3427 0.2594 0.5859 0.7147 0.4308 0.4726 BASRec 0.1053 0.3538 0.5313 0.2307 0.2879 0.2130 0.5444 0.6945 0.3848 0.4334 SESRec †
+
+0.1781 0.4843 0.6505 0.3356 0.3893 0.2975 0.5906 0.7118 0.4516 0.4909 UnifiedSSR †
+
+0.1226 0.3979 0.5849 0.2620 0.3225 0.2121 0.5221 0.6704 0.3730 0.4210 UniSAR †
+
+0.1824 0.4898 0.6568 0.3404 0.3944 0.3056 0.5947 0.7150 0.4574 0.4964 
+
+DHIM †
+
+0.2030 ⋆
+
+0.5217 ⋆
+
+0.6811 ⋆
+
+0.3677 ⋆
+
+0.4193 ⋆
+
+0.3080 0.6060 ⋆
+
+0.7270 ⋆
+
+0.4651 ⋆
+
+0.5044 ⋆
+
+Personalized Search Task 
+
+AEM 0.2520 0.5987 0.7332 0.4328 0.4764 0.3331 0.7124 0.8312 0.5330 0.5719 ZAM 0.2941 0.6210 0.7399 0.4658 0.5045 0.3324 0.7128 0.8326 0.5331 0.5723 MAI 0.4465 0.7256 0.8180 0.5969 0.6269 0.3676 0.7484 0.8671 0.5697 0.6085 UnifiedSSR †
+
+0.4210 0.7337 0.8321 0.5883 0.6203 0.4276 0.8154 0.9085 ⋆
+
+0.6363 0.6667 UniSAR †
+
+0.4269 0.7394 0.8327 0.5964 0.6267 0.5265 0.8179 0.8957 0.6846 0.7100 
+
+DHIM †
+
+0.4550 0.7441 0.8420 ⋆
+
+0.6118 ⋆
+
+0.6422 ⋆
+
+0.5282 0.8227 ⋆
+
+0.9021 0.6875 0.7134 ⋆
+
+Table 1: Performance of DHIM and state-of-the-art baselines on KuaiSAR and Amazon datasets. Bold indicates the best result; underline, the second best. †: joint modeling of S&R. ⋆: significant improvement over second best ( p < 0.01 ). 
+
+Metrics. Consistent with prior studies (Zhou et al. 2022; Si et al. 2023b; Shi et al. 2024), we evaluate performance using Hit Ratio (HR) and Normalized Discounted Cumula-tive Gain (NDCG). Specifically, we report HR@1,@5, and @10, as well as NDCG@5 and @10. We pair the ground-truth item with 99 randomly sampled negative items from the user’s non-interacted pool. In UniSAR’s evaluation, the positive example is always fixed in the first position, causing any tied scores to favor it. To eliminate this positional bias, we randomize the ordering of positive and negative candi-dates at test time, thereby ensuring impartial tie resolution. 
+
+Implementation Details. All baseline hyperparameters are tuned following the original papers. The embedding di-mension d is 64 and the maximum length for S&R is set to 30 for both datasets. The PLE framework uses 4 shared and 4 task-specific experts. The batch size is set as 1024. The short-term window size K is 2 for search and 4 for recom-mendation. The coefficient γ is fixed at 0.001, with α and 
+
+β both set to 0.01. The hyperparameters κ and λ1 are tuned over {0.001 , 0.01 , 0.1} and {0.01 , 0.1}, respectively. 
+
+Main Results 
+
+We conduct experiments on two S&R datasets, and the re-sults in Table ?? show the following: On the recommendation task, our model achieves the best performance across all metrics and datasets. Our proposed model outperforms the strongest unified baseline UniSAR on both datasets, particularly on the KuaiSAR dataset, where it improves HR@1 by 2.06% and NDCG@10 by 2.49%. These improvements stem from enhanced user interest mod-eling; specifically, our method builds upon UniSAR by in-troducing dual-horizon interest representations across both search and recommendation scenarios, enabling finer tem-poral alignment. On the personalized search task, our model generally out-performs baselines on both datasets. Specifically, our model achieves improvements of 0.85% in HR@1 and 1.53% in NDCG@10 over UniSAR. Notably, our HR@10 on Ama-zon is marginally lower than UnifiedSSR. However, these differences are minimal and do not diminish the overall ad-vantage of our model across most metrics and datasets. Furthermore, joint training on search and recommenda-tion consistently outperforms task-specific models, high-lighting the benefit of cross-task integration. The perfor-mance gain is largely due to the mitigation of data spar-sity, as joint modeling enables shared representation learn-ing from complementary signals across tasks. These results demonstrate that our unified approach, aug-mented by dual-horizon interest modeling, effectively cap-tures cross-task user preferences and attains state-of-the-art performance. 
+
+Ablation Study 
+
+Table 2 shows that each component contributes to the joint performance on KuaiSAR, where “w/o” indicates the model without the corresponding component. 
+
+Impact of Dual-Horizon Interest Modules We first eval-uate the contributions of long- and short-term interest repre-sentations in both recommendation and search branches. Re-moving either long- or short-term interests from either sce-nario consistently leads to performance degradation. Specif-ically, excluding long-term interest in the recommendation branch ( w/o rec-long ) results in a significant drop in rec-ommendation performance (NDCG@5: 0.3677 → 0.3437), 29164 Model Variant Recommendation Search Overall NDCG@5 NDCG@10 NDCG@5 NDCG@10 NDCG@5 NDCG@10 
+
+Full Model 0.3677 0.4193 0.6118 0.6422 0.3820 0.4324 
+
+w/o rec-long 0.3437 0.3969 0.6092 0.6399 0.3593 0.4111 w/o rec-short 0.3513 0.4016 0.6129 0.6423 0.3666 0.4157 w/o src-long 0.3472 0.4001 0.5936 0.6243 0.3616 0.4132 w/o src-short 0.3415 0.3932 0.6094 0.6402 0.3572 0.4077 w/o CSF 0.3376 0.3913 0.6105 0.6378 0.3536 0.4058 w/o Lrintra  
+
+> con
+
+0.3597 0.4113 0.6106 0.6401 0.3744 0.4247 w/o Lsintra  
+
+> con
+
+0.3282 0.3818 0.6107 0.6402 0.3448 0.3969 w/o Linter con 0.3475 0.4008 0.6060 0.6359 0.3627 0.4146 w/o LQ 0.3534 0.4045 0.5954 0.6268 0.3676 0.4175 w/o PLE 0.3375 0.3907 0.6031 0.6348 0.3531 0.4050 only Rec/Src 0.3062 0.3584 0.5366 0.5719 0.3197 0.3709 Table 2: Ablation study on the KuaiSAR dataset reporting NDCG@5 and NDCG@10 for two tasks and overall performance. confirming their importance in capturing stable user pref-erences. Similarly, removing short-term interest ( w/o rec-short ) in recommendation also impairs recommendation ac-curacy. Notably, excluding short-term interests from the rec-ommendation branch yields a modest gain in search, which may result from reduced interference of short-term noise in the search encoder; however, the overall NDCG@5 still de-creases from 0.3820 to 0.3666, indicating that isolated im-provements cannot offset the overall performance loss. For the search branch, removing either long-term or short-term components also decreases both search and recommenda-tion performance, demonstrating the mutual influence and necessity of dual-granularity interest modeling across tasks. Furthermore, disabling the Cross-Scene Dual-Horizon Inter-est Fusion (CSF) module, which integrates these interests across scenarios, consistently degrades both tasks, under-scoring the importance of inter-scenario interest interaction. 
+
+Effect of Interest Alignment Modules To ensure coher-ent interest representations both within and across scenarios, we introduce intra-scenario and inter-scenario contrastive losses. First, the intra-scenario losses encourage separation of long- and short-term interests within each task domain. Ablating the search or recommendation intra-scenario loss degrades performance, highlighting their roles in filtering intra-domain noise and stabilizing preference encoding. Be-yond within-task alignment, the inter-scenario loss Linter con 
+
+aligns semantically related interests across recommenda-tion and search. Excluding this loss ( w/o Linter con ) decreases search NDCG@5 to 0.6060 and recommendation NDCG@5 to 0.3475, resulting in a decrease in overall NDCG@5 from 0.3820 to 0.3627. This confirms that cross-task contrastive alignment is critical for leveraging shared user signals and achieving robust joint modeling. Together, intra- and inter-scenario contrastive objectives synergize to produce disen-tangled, yet interoperable, interest representations that drive superior performance. 
+
+Effect of Multi-Task Learning Framework The PLE framework is introduced to disentangle shared and task-specific representations, thereby mitigating negative trans-fer and enabling precise parameter allocation. When PLE is ablated ( w/o PLE ), the expert-based architecture is re-placed by two independent MLPs for S&R. Consequently, recommendation NDCG@5 declines from 0.3677 to 0.3375 and search NDCG@5 from 0.6118 to 0.6031, leading to a reduction in overall NDCG@5 from 0.3820 to 0.3531. This decline highlights that simple parameter sharing can-not capture the distinct yet related patterns required by each task. Further, when the model is restricted to a single sce-nario ( only Rec/Src ), each task is predicted by its own ded-icated MLP, and all performance metrics suffer pronounced declines. Such degradation underscores the complementary nature of search and recommendation signals: search bene-fits from the stable, long-term patterns captured by the rec-ommendation branch, while recommendation leverages the explicit, query-driven preferences revealed in search. These findings validate the imperative of a unified framework that jointly models both tasks, allowing the two to reinforce one another and achieve superior collective performance. Additionally, the query-item alignment loss ( LQ) aligns query embeddings with clicked item representations. Its re-moval leads to evident drops in both search and recom-mendation, indicating its necessity for modeling query–item consistency and ensuring fine-grained supervision. 
+
+# Conclusion 
+
+In this paper, we propose DHIM, a unified S&R model that explicitly captures users’ long- and short-term inter-ests across scenarios. Dual-Horizon Interest Encoders ex-tract scenario-specific interests, which are then fused by the Cross-Scenario Interest Fusion module into unified em-beddings and decoded into scenario-specific representations. We incorporate self-supervised contrastive learning to en-hance long- and short-term interest representations across and within scenarios. The model is jointly trained on search and recommendation tasks via the PLE multi-task frame-work, effectively leveraging diverse interest signals. Experi-ments on two public datasets confirm its effectiveness, with ablations highlighting each module’s contribution. 29165 Acknowledgments 
+
+The authors would like to acknowledge the support from National Natural Science Foundation of China (No. 62441229), National Key R&D Program of China (No. 2024YFE0111800), and State Key Laboratory of Cognitive Intelligence of China (Open Project iED2023-004). 
+
+# References 
+
+Ai, Q.; Hill, D. N.; Vishwanathan, S. V. N.; and Croft, W. B. 2019. A Zero Attention Model for Personalized Product Search. In CIKM, 2019 , 379–388. Bai, Y.; Dou, Z.; and Wen, J.-R. 2024. Learning Dynamic Multi-attribute Interest for Personalized Product Search. In Al-Onaizan, Y.; Bansal, M.; and Chen, Y.-N., eds., EMNLP-Finding, 2024 , 2984–2993. Chen, Y.; Liu, Z.; Li, J.; McAuley, J.; and Xiong, C. 2022. Intent Contrastive Learning for Sequential Recommenda-tion. In WWW, 2022 , 2172–2182. Dai, S.; Liu, J.; Dou, Z.; Wang, H.; Liu, L.; Long, B.; and Wen, J.-R. 2023. Contrastive Learning for User Sequence Representation in Personalized Product Search. In KDD, 2023 , 380–389. Dou, Z.; Song, R.; and Wen, J.-R. 2007. A large-scale eval-uation and analysis of personalized search strategies. In 
+
+WWW, 2007 , 581–590. Ge, S.; Dou, Z.; Jiang, Z.; Nie, J.-Y.; and Wen, J.-R. 2018. Personalizing Search Results Using Hierarchical RNN with Query-aware Attention. In CIKM, 2018 , 347–356. Guo, Y.; Cheng, Z.; Nie, L.; Wang, Y.; Ma, J.; and Kankan-halli, M. 2019. Attentive Long Short-Term Preference Mod-eling for Personalized Product Search. ACM Trans. Inf. Syst. , 37(2). He, Z.; Zhao, H.; Wang, Z.; Lin, Z.; Kale, A.; and Mcauley, J. 2022. Query-Aware Sequential Recommendation. In 
+
+CIKM, 2022 , 4019–4023. Kang, W.-C.; and McAuley, J. 2018. Self-attentive sequen-tial recommendation. In ICDM, 2018 , 197–206. IEEE. Lu, S.; Dou, Z.; Jun, X.; Nie, J.-Y.; and Wen, J.-R. 2019. PS-GAN: A Minimax Game for Personalized Search with Lim-ited and Noisy Click Data. In SIGIR, 2019 , 555–564. Ma, Z.; Dou, Z.; Bian, G.; and Wen, J.-R. 2020. PSTIE: Time Information Enhanced Personalized Search. In CIKM, 2020 , 1075–1084. McAuley, J.; Targett, C.; Shi, Q.; and van den Hengel, A. 2015. Image-Based Recommendations on Styles and Sub-stitutes. In SIGIR, 2015 , 43–52. Ou, Z.; Zhang, X.; Zhu, Y.; Lyu, S.; Liu, J.; and Ao, T. 2025. LS-TGNN: Long and Short-Term Temporal Graph Neu-ral Network for Session-Based Recommendation. 39(12): 12426–12434. Rendle, S.; Freudenthaler, C.; and Schmidt-Thieme, L. 2010. Factorizing personalized markov chains for next-basket recommendation. In WWW, 2010 , 811–820. Shen, Q.; Wen, H.; Zhang, J.; and Rao, Q. 2022. Hierarchi-cally Fusing Long and Short-Term User Interests for Click-Through Rate Prediction in Product Search. In CIKM, 2022 ,1767–1776. Shi, T.; Si, Z.; Xu, J.; Zhang, X.; Zang, X.; Zheng, K.; Leng, D.; Niu, Y.; and Song, Y. 2024. UniSAR: Modeling User Transition Behaviors between Search and Recommendation. In SIGIR, 2024 , 1029–1039. Shin, Y.; Choi, J.; Wi, H.; and Park, N. 2024. An atten-tive inductive bias for sequential recommendation beyond the self-attention. In AAAI, 2024 .Si, Z.; Han, X.; Zhang, X.; Xu, J.; Yin, Y.; Song, Y.; and Wen, J.-R. 2022. A Model-Agnostic Causal Learn-ing Framework for Recommendation using Search Data. In 
+
+WWW, 2022 , 224–233. Si, Z.; Sun, Z.; Zhang, X.; Xu, J.; Song, Y.; Zang, X.; and Wen, J.-R. 2023a. Enhancing Recommendation with Search Data in a Causal Learning Manner. ACM Trans. Inf. Syst. ,41(4). Si, Z.; Sun, Z.; Zhang, X.; Xu, J.; Zang, X.; Song, Y.; Gai, K.; and Wen, J.-R. 2023b. When Search Meets Recom-mendation: Learning Disentangled Search Representation for Recommendation. In SIGIR, 2023 , 1313–1323. Sun, F.; Liu, J.; Wu, J.; Pei, C.; Lin, X.; Ou, W.; and Jiang, P. 2019. BERT4Rec: Sequential Recommendation with Bidi-rectional Encoder Representations from Transformer. In 
+
+CIKM, 2019 , 1441–1450. Sun, Z.; Si, Z.; Zang, X.; Leng, D.; Niu, Y.; Song, Y.; Zhang, X.; and Xu, J. 2023. KuaiSAR: A Unified Search And Rec-ommendation Dataset. In CIKM, 2023 , 5407–5411. Tang, H.; Liu, J.; Zhao, M.; and Gong, X. 2020. Progres-sive Layered Extraction (PLE): A Novel Multi-Task Learn-ing (MTL) Model for Personalized Recommendations. In 
+
+RecSys, 2020 , 269–278. Tang, T.; Tian, Z.; Zhu, Z.; Wang, C.; Hu, H.; Tang, G.; Liu, L.; and Xu, S. 2025. LREF: A Novel LLM-based Rele-vance Framework for E-commerce Search. In WWW ,2025 ,468–475. Vaswani, A.; Shazeer, N.; Parmar, N.; Uszkoreit, J.; Jones, L.; Gomez, A. N.; Kaiser, L.; and Polosukhin, I. 2017. At-tention is all you need. In NIPS, 2017 , 6000–6010. Wang, C.; Ma, W.; Chen, C.; Zhang, M.; Liu, Y.; and Ma, S. 2023. Sequential Recommendation with Multiple Contrast Signals. ACM Trans. Inf. Syst. , 41(1). Wang, H.; He, X.; Chang, M.-W.; Song, Y.; White, R. W.; and Chu, W. 2013. Personalized ranking model adaptation for web search. In SIGIR, 2013 , 323–332. White, R. W.; Chu, W.; Hassan, A.; He, X.; Song, Y.; and Wang, H. 2013. Enhancing personalized search by mining and modeling task behavior. In WWW, 2013 , 1411–1420. Wu, C.; Wu, F.; An, M.; Qi, T.; Huang, J.; Huang, Y.; and Xie, X. 2019. Neural News Recommendation with Hetero-geneous User Behavior. In Inui, K.; Jiang, J.; Ng, V.; and Wan, X., eds., EMNLP-IJCNLP, 2019 , 4874–4883. 29166 Xie, J.; Liu, S.; Cong, G.; and Chen, Z. 2024. UnifiedSSR: A Unified Framework of Sequential Search and Recommen-dation. In WWW, 2024 , 3410–3419. Yao, J.; Dou, Z.; Xie, R.; Lu, Y.; Wang, Z.; and Wen, J.-R. 2021. USER: A Unified Information Search and Recom-mendation Model based on Integrated Behavior Sequence. In CIKM, 2021 , 2373–2382. Ye, Y.; Zheng, Z.; Shen, Y.; Wang, T.; Zhang, H.; Zhu, P.; Yu, R.; Zhang, K.; and Xiong, H. 2025. Harnessing multi-modal large language models for multimodal sequential rec-ommendation. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 39, 13069–13077. Yuan, J.; Song, Z.; Sun, M.; Wang, X.; and Zhao, W. X. 2021. Dual sparse attention network for session-based rec-ommendation. In AAAI, 2021 , volume 35, 4635–4643. Zamani, H.; and Croft, W. B. 2018. Joint Modeling and Optimization of Search and Recommendation. In Biennial Conference on Design of Experimental Search & Informa-tion Retrieval Systems .Zamani, H.; and Croft, W. B. 2020. Learning a Joint Search and Recommendation Model from User-Item Interactions. In WSDM, 2020 , 717–725. Zhao, K.; Zheng, Y.; Zhuang, T.; Li, X.; and Zeng, X. 2022. Joint Learning of E-commerce Search and Recommendation with a Unified Graph Neural Network. In WSDM, 2022 ,1461–1469. Zheng, Y.; Gao, C.; Chang, J.; Niu, Y.; Song, Y.; Jin, D.; and Li, Y. 2022. Disentangling long and short-term interests for recommendation. In WWW, 2022 , 2256–2267. Zhou, G.; Zhu, X.; Song, C.; Fan, Y.; Zhu, H.; Ma, X.; Yan, Y.; Jin, J.; Li, H.; and Gai, K. 2018. Deep Interest Net-work for Click-Through Rate Prediction. In KDD, 2018 ,1059–1068. Zhou, K.; Yu, H.; Zhao, W. X.; and Wen, J.-R. 2022. Filter-enhanced MLP is All You Need for Sequential Recommen-dation. In WWW, 2022 , 2388–2399. Zhou, Y.; Dou, Z.; and Wen, J.-R. 2020. Encoding History with Context-aware Representation Learning for Personal-ized Search. In SIGIR, 2020 , 1111–1120. Zhou, Y.; Dou, Z.; Zhu, Y.; and Wen, J. 2021. PSSL: Self-supervised Learning for Personalized Search with Con-trastive Sampling. In Demartini, G.; Zuccon, G.; Culpepper, J. S.; Huang, Z.; and Tong, H., eds., CIKM, 2021 , 2749– 2758. 29167

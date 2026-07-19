@@ -1,0 +1,675 @@
+Title: Multi-graph Fusion Cross-model Contrastive Learning for Recommendation
+
+URL Source: https://ojs.aaai.org/index.php/AAAI/article/download/38580/42542
+
+Number of Pages: 9
+
+Markdown Content:
+# Multi-graph Fusion Cross-model Contrastive Learning for Recommendation 
+
+## Shengjun Ma 1,2 , Yuhai Zhao 1,2* , Fenglong Ma 3, Baoyin Liu 1,2 , Zhengkui Wang 4, Wen Shan 5
+
+> 1
+
+School of Computer Science and Engineering, Northeastern University, China 
+
+> 2
+
+Key Laboratory of Intelligent Computing in Medical Image of Ministry of Education, Northeastern University, China 
+
+> 3
+
+College of Information Sciences and Technology, Pennsylvania State University, USA 
+
+> 4
+
+InfoComm Technology Cluster, Singapore Institute of Technology, Singapore 
+
+> 5
+
+Singapore University of Social Sciences, Singapore masj1@mails.neu.edu.cn, zhaoyuhai@mail.neu.edu.cn, liubaoyiny@gmail.com fenglong@psu.edu, zhengkui.wang@singaporetech.edu.sg, viviensw@suss.edu.sg 
+
+Abstract 
+
+Knowledge Graph (KG)-supported Graph Neural Network models are becoming crucial in recommendation systems due to their ability to mitigate the data sparsity challenge. How-ever, these models remain suboptimal because they over-look the representation differences between the inherent user-item Bipartite Graph (BG) and the external head-relation-tail KG, leading to semantic misalignment. Moreover, they indiscriminately incorporate various types of relations from the KG, which may introduce noise information into the model, ultimately degrading recommendation performance. To address these challenges, we propose an end-to-end model named Multi-graph Fusion Cross-model Contrastive Learn-ing (MFCCL). To uncover users’ interest in items and ex-plore the associations between items, we first construct a user-interest graph by integrating information from both the BG and KG, and an item-association graph derived from the BG. We devise a multi-graph representation learning mod-ule that incorporates rich semantics into user and item repre-sentations in parallel. Simultaneously, a classical collabora-tive filtering module is introduced to fully leverage user-item collaborative signals. Additionally, we design a novel free data-augmentation cross-model contrastive learning to facil-itate the exchange of complementary information between different models. Empirical evaluations on three widely used benchmarks demonstrate that our MFCCL method achieved significant improvements over the baselines. 
+
+## Introduction 
+
+Recommendation systems provide suggestions for items that are most relevant to a particular user, helping people filter content in the era of data explosion and readily available computing power networks (Zhang et al. 2025). They are used in a variety of areas such as e-commerce, social media, and many more (Zheng et al. 2023). To accurately predict users’ preferences, Collaborative Filtering (CF) learns the likelihood of new interactions based on either user similar-ity or item similarity, and is extensively researched based on user-item historical interaction (Wu et al. 2023). CF has proven effective in predicting user preferences when there is abundant interaction data (Wu et al. 2023). 
+
+> *
+
+Corresponding author Copyright © 2026, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved. U1 
+
+> U2U3
+> A1
+> A2
+> A3T1
+> T2
+> T3
+> L1
+> L2
+> L3
+
+(a) Knowledge Graph (KG) (b) Bipartite Graph (KG) 0 10 20 30 40 50 60 Dimensions 
+
+> 0.05
+> 0.00
+> 0.05 Values
+> BG KG
+
+(c) Embedding Difference 
+
+Figure 1: Representation Difference. As shown in (a), KG relations are diverse and abundant, BG interactions are sparse and singular in (b). In (c), item embeddings from the KG (red) and BG (blue) show significant representation dif-ferences, based on CKE results on the Last-FM dataset. Side information, such as item attributes and user profiles, can essentially enhance CF (Wang et al. 2019a). Knowledge Graph (KG) is regarded as valuable auxiliary information and has shown great potential in improving recommenda-tion performance. Most existing KG-aware methods adopt the classic two-stage approach, which first generates em-beddings of the items through a KG-specific encoder and then treats them as prior information to supplement item representation (Cao et al. 2019). For example, CKE (Zhang et al. 2016) leverages TransR (Lin et al. 2015) to encode a KG as part of item representations. However, these meth-ods overlooked the differences in representation between the inherent Bipartite Graph (BG) and the external KG, which can lead to semantic misalignment, as shown in Figure 1. Recently, some end-to-end models based on Graph Neural Network (GNN) (Wang et al. 2023) have been developed to effectively integrate high-order neighbors into represen-The Fortieth AAAI Conference on Artificial Intelligence (AAAI-26) 
+
+15519 tations, which combines the BG and the KG to form a larger Collaborative Knowledge Graph (CKG) and complex mod-eling of users and items (Wang et al. 2019b). For example, KGIN (Wang et al. 2021) explored user intents and relational path-aware aggregation. However, the diverse and complex relations in the KG may introduce noise, which not only ex-pands the parameter in representation learning but also leads to optimization challenges during training. Contrastive Learning (CL) has been increasingly utilized due to its remarkable ability to leverage unsupervised sig-nals to alleviate the data sparsity issue (Zhang et al. 2023). Besides the classic CL methods like SGL (Wu et al. 2021) and XSimGCL (Yu et al. 2024), some KG-supported CL-based recommendation models, such as KGCL (Yang et al. 2022) and KGRec (Yang et al. 2023), have been proposed, achieving strong performance. KGCL employs graph con-trastive learning on the KG to mitigate issues related to noise and long-tail distributions. By unifying generative and contrastive learning, KGRec aims to distill meaningful re-lational patterns from the KG. However, CL-based methods that rely on data augmentation often introduce noise, leading to sub-optimal model accuracy (Wang et al. 2025b). To solve the above problems, we explore a multi-graph representation fusion that alleviates the representation gap between the KG and the BG, and design a cross-model CL that avoids the noise introduction through free data-augmentation, and propose a Multi-graph Fusion Cross-model Contrastive Learning model (MFCCL). To minimize CKG training costs and KG relational complexity, we first construct a User-interest Graph (UiG) based on the BG and the KG, and an Item-association Graph (IaG) based on the BG. The UiG connects users from the BG with item at-tributes from the KG, revealing users’ preferences for spe-cific features, while the IaG captures item co-occurrence re-lationships, uncovering intrinsic item-to-item associations. Secondly, we devise a multi-graph representation learning module that individually embeds informative signals into the learned representations of users and items, leveraging the BG and the UiG for users, the KG and the IaG for items. This module ensures that each graph contributes dis-tinct insights, promoting consistency in user and item repre-sentations: users acquire attribute-level semantics from the UiG, while items do so from the KG. In parallel, a classi-cal CF module is introduced to fully leverage user-item col-laborative signals. Finally, to reduce the effect of noise, a novel free data-augmentation cross-model CL is designed to encourage the exchange of complementary knowledge be-tween models. Experimental results on three widely used benchmarks demonstrate that our MFCCL significantly out-performs SOTA methods. We performed further analyses to validate the effectiveness of the proposed MFCCL. The con-tributions of this work are summarized as follows: • We develop a multi-graph representation fusion that miti-gates the representation gap between the BG and the KG, and introduce a free data-augmentation cross-model CL approach to enhance representation consistency. • We propose a new end-to-end model, MFCCL, which achieves enhanced representation learning and effective contrastive training within a GNN framework. • We conduct extensive experiments on three cutting-edge datasets to demonstrate the effectiveness of MFCCL and compare the performance to baselines. 
+
+## Preliminaries 
+
+Bipartite Graph (BG): We typically have historical user-item interactions (e.g., views, purchases, and clicks) in a rec-ommendation scenario. Let U be a set of users and I be a set of items and let O+ = {(u, i )|u ∈ U , i ∈ I} be a set of im-plicit feedback, where each (u, i ) pair indicates that user u
+
+has interacted with item i before. Generally, we also view interaction records as a Gbg = {(u, i )|u ∈ U , i ∈ I} .
+
+Knowledge Graph (KG): A KG is made up of two main components: entities and relations. Any object can be an entity, and a relation defines the relationship between the entities. Let V be a set of entities, and R be a set of rela-tions. Commonly, a KG is organized in the form of subject-relation-object triple facts. Let Gkg = {(h, r, t )|h, t ∈V, r ∈ R} , where each triplet (h, r, t ) describes that there is a relation r from head entity h to tail entity t.
+
+Connecting BG and KG: Given both the Gbg and the Gkg ,we build a set of item-entity connection C = {(i, v )|i ∈I, v ∈ V} , where (i, v ) indicates that the item i in the Gbg 
+
+can be aligned with the entity v in the Gkg . As mentioned, the set of items is typically a subset of the set of entities, i.e., 
+
+I ⊂ V . With the alignment between the BG items and the KG entities, items can be profiled by the KG. 
+
+Task Formulation: We now formulate the task to be ad-dressed in this work. Given the Gbg and the Gkg , our task is to learn a function that can forecast how likely a user would interact with an item. 
+
+## Methodology 
+
+We present the proposed MFCCL in this section. The overall workflow of MFCCL is shown in Figure 2. It consists of four key components: (1) multi-graph generation, (2) multi-graph representation fusion, (3) collaborative filtering, and (4) cross-model contrastive learning. 
+
+Multi-graph Generation 
+
+To reduce training costs on the CKG and minimize the im-pact of complex relations within the KG, we explicitly con-struct two auxiliary graphs: IaG and UiG. 
+
+Item-association Graph: The association between items not only reflects the relationship between them but also re-veals users’ intrinsic preference (Wang et al. 2025a). Al-though previous GNN-based CF methods can implicitly cap-ture the association between items using multiple convolu-tional layers, the large number of high-order neighbors in-troduces a significant amount of noise during the multi-layer propagation process (Wang et al. 2019d). Hence, we explic-itly build an IaG to capture relationships between items and users’ purchasing habits. First, a item co-occurrence matrix 
+
+Aco is calculated based on the Gbg via the equation. 
+
+Aco = G⊤ 
+
+> bg
+
+Gbg (1) 15520 Figure 2: Overall Framework of MFCCL. Then, the similarity score between each pair of items in the matrix Aco is computed, as shown in the following formula. 
+
+wi,j = Ai,j co 
+
+Deg (i) − A i,i co 
+
+s
+
+Deg (i)
+
+Deg (j) (2) where wi,j represents the similarity score between items i
+
+and j, Deg (i) represents the degree of item i in the Gbg , and 
+
+Ai,j co represents the value at the i-th row and the j-th column in the Aco . Here, based on the similarity scores, k most sim-ilar items are selected for each item. These k selected items are then used as the neighbors of the original item in the graph Gia . The adjacency matrix of the Gia is defined as; 
+
+Ai,j ia =
+
+1, if wi,j ∈ top-k (wi, :)0, otherwise (3) 
+
+User-interest Graph: In practice, a user tends to interact with an item when its attributes align with the user’s prefer-ences. Therefore, the alignment between a user’s preferences and an item’s attributes significantly influences the probabil-ity of interaction (Wu et al. 2018). Hence, we explicitly build a UiG to capture the user’s interest in the item’s attributes. We initialize a matrix Aua , where each element Ai,j ua mea-sures the interest of user i in attribute j of items. In this context, the users are drawn from the BG, and the attributes of items are derived from the KG. The idea is that if an at-tribute occurs in most items clicked by a user, then it is likely that the user is interested in the attribute. To mitigate the im-pact of random behaviors and maintain a strong interest, we prune infrequent elements. The adjacency matrix of a Gui 
+
+defined as ( where c is the pruning threshold); 
+
+Ai,j ui =
+
+1, if Ai,j ua > c 
+
+0, otherwise (4) 
+
+Multi-graph Representation Fusion 
+
+We employ a two-tower architecture (Yang et al. 2020) for its scalability and ability to capture user/item semantics, learning representations from multiple graphs. 
+
+Item Representation Learning: Besides the items’ in-fluential attributes, another reason a user interacts with an item is the association between items, as mentioned by the beer-diaper phenomenon. We perform representation learn-ing and fusion for items in three steps. 
+
+(1) Representation learning based on the KG: In our ex-periments, we observed that the relations in the KG do not consistently improve the performance of representation learning. To enhance model efficiency while preserving rela-tional semantics, we introduce a virtual relation mechanism that replaces real relations with a fixed set of virtual relations 
+
+(they are called virtual relations to indicate that they are generated) . The virtual relations are initialized in the same vector space as entities to enable joint optimization during training. Specifically, the representation learning of item i
+
+based on the Gkg is given by the following equation; 
+
+ei(l) 
+
+> kg
+
+= X
+
+> 0≤p≤P
+
+β(p, i )ep ⊙ 1
+
+N ikg 
+
+X 
+
+> t∈N ikg
+
+e(l) 
+
+> t
+
+(5) where e(l) 
+
+> t
+
+∈ Rd is the embedding of the attribute t at layer l;
+
+N ikg represents the set of relations and attributes associated with item i in the Gkg , i.e. N ikg = {(r, t )|(i, r, t ) ∈ G kg } ;
+
+⊙ represents the dot product of embeddings; ep ∈ Rd is the embedding of the virtual relation p and P is a hyperparam-eter representing the number of the virtual relations; ei(l) 
+
+> kg
+
+is the representation embedding of the item i at layer l based on the Gkg ; and β(p, i ) is attention score between the virtual relation p and item i, and defined as follows; 
+
+β(p, i ) = exp (e⊤ 
+
+> p
+
+eil 
+
+> kg
+
+)
+
+P
+
+> 0≤p≤P
+
+exp (e⊤ 
+
+> p
+
+eil 
+
+> kg
+
+) (6) 
+
+(2) Representation learning based on the IaG: The associ-ation between items not only reveals their similarity but also 15521 provides essential signals for CF. We adopt the lightweight aggregation approach from LightGCN (He et al. 2020) to learn item representations from the Gia by the equation; 
+
+ei(l) 
+
+> ia
+
+= 1
+
+r
+
+N iia N jia 
+
+X 
+
+> j∈N iia
+
+ej(l) 
+
+> ia
+
+(7) where ei(l) 
+
+> ia
+
+represents the embedding of item i based on the 
+
+Gia at layer l; N iia represents the set of first-order neigh-bors of item i. As a result, the item embeddings incorporate shared features from similar items. 
+
+(3) Fusion of item representations: Although item repre-sentations can be obtained from the Gkg and the Gia , respec-tively, each representation only captures partial information about the item, leading to limitations in the final embedding. The two embeddings are fused through an attention mecha-nism, formulated as; 
+
+ei(l+1)  
+
+> mg
+
+= att (ei(l) 
+
+> kg
+
+)ei(l) 
+
+> kg
+
++ att (ei(l) 
+
+> ia
+
+)ei(l) 
+
+> ia
+
+(8) where ei(l+1)  
+
+> mg
+
+is the embedding of the item i at layer l + 1 in the multi-graph representation phase; and att (·) represents the attention score and can be calculated as; 
+
+att (ei(l) 
+
+> ∗
+
+) = sof tmax (W∗
+
+h
+
+ei(l) 
+
+> ∗
+
+, e i(l)
+
+> mg
+
+i
+
+) (9) where ∗ represents kg or ia , W∗ are the trainable weight matrices to distill information from the Gkg and the Gia .
+
+User Representation Learning: Besides the user’s long-term historical purchasing habit, another reason a user in-teracts with an item is a few of the item’s attributes that are well-suited to the user’s short-term preference. We perform representation learning and fusion for users in three steps. 
+
+(1) Representation learning oriented to habit: Capturing user long-term habits from the Gbg to learn user representa-tions is a highly efficient and widely used technique. Bor-rowing a simple and efficient aggregation from LightGCN, the aggregation process is shown in the following equation; 
+
+eu(l) 
+
+> bg
+
+= 1
+
+r
+
+N ubg N ibg 
+
+X 
+
+> i∈N ubg
+
+ei(l) 
+
+> bg
+
+(10) where ei(l) 
+
+> bg
+
+∈ Rd is the representation of the item i of the neighbors of the user u at layer l; N ∗ 
+
+> bg
+
+represents the set of the first-order neighbors of the user u or the item i in the 
+
+Gbg ; and eu(l) 
+
+> bg
+
+is the user u representation oriented to habit. 
+
+(2) Representation learning oriented to preference: For short-term preferences of users towards item attributes, we explicitly build the Gui that connects users to item attributes, aiming to capture users’ preferences for item attributes ef-fectively. The aggregation of the preference representation is defined in the following equation. 
+
+eu(l) 
+
+> ui
+
+= 1
+
+q
+
+|N uui | N iui 
+
+X 
+
+> i∈N uui
+
+ei(l) 
+
+> ui
+
+(11) where ei(l) 
+
+> ui
+
+∈ Rd is the representation of the item i (item means attribute) of the neighbors of the user u at layer l; N ∗
+
+> ui
+
+represents the set of the first-order neighbors of the user u or the item i in the Gui , and eu(l) 
+
+> ui
+
+is the user u representation oriented to preference. 
+
+(3) Fusion of user representations: As item representa-tions, we calculate the fusion weights for the two embed-dings of a user based on the attention mechanism and then perform a weighted fusion as the following equation; 
+
+eu(l+1)  
+
+> mg
+
+= att (eu(l) 
+
+> bg
+
+)eu(l) 
+
+> bg
+
++ att (eu(l) 
+
+> ui
+
+)eu(l) 
+
+> ui
+
+(12) where eu(l+1)  
+
+> mg
+
+is the embedding of the user u at layer l + 1 in the multi-graph representation phase; and att (·) represents the attention score and can be calculated as; 
+
+att (eu(l) 
+
+> ∗
+
+) = sof tmax (W∗
+
+h
+
+eu(l) 
+
+> ∗
+
+, e u(l)
+
+> mg
+
+i
+
+) (13) where ∗ represents bg or ui , W∗ are the trainable weight matrices to distill information from the Gbg and the Gui .
+
+Collaborative Filtering 
+
+The BG-based CF representation learning has become a widely accepted technique for effectively capturing collabo-rative signals. We leverage the core of LightGCN as the CF model, and the user aggregation is defined as; 
+
+eu(l+1)  
+
+> cf
+
+= 1
+
+r
+
+N ubg N ibg 
+
+X 
+
+> i∈N ubg
+
+ei(l) 
+
+> cf
+
+(14) where eu(l) 
+
+> cf
+
+∈ Rd and ei(l) 
+
+> cf
+
+∈ Rd represent the embedding of the user u and the item i at layer l, respectively. The aggre-gation process of items is similar to that of users. Notably, in this CF representation learning, the ID embedding of users and items based on the BG is initialized independently of the ID embeddings used in the multi-graph fusion representation learning. To distinguish, we denote the embedding of items and users in multi-graph representation learning as e∗ 
+
+> mg
+
+and in CF as e∗ 
+
+> cf
+
+, respectively. 
+
+Cross-model Contrastive Learning 
+
+Instead of generating augmented views, we construct con-trastive pairs using two types of representations: one from the multi-graph representation module and the other from the CF module. For each item or user, the embeddings cor-responding to the same ID from the two modules are treated as positive pairs, while those with different IDs are consid-ered negative pairs. During the multi-layer propagation pro-cess, different layers capture different information because of neighbors at different hops. Therefore, we first sum the information from all layers to obtain the final representation embedding. The aggregation processes for the multi-graph representation and the CF representation are calculated as; 
+
+eu 
+
+> ∗
+
+= X
+
+> 0≤l≤L
+
+eu(l) 
+
+> ∗
+
+, ei 
+
+> ∗
+
+= X
+
+> 0≤l≤L
+
+ei(l) 
+
+> ∗
+
+(15) where, ∗ represents mg or cf . We then utilize the InfoNCE (Gutmann and Hyv¨ arinen 2010) to maximize the similarity 15522 between positive pairs while minimizing the similarity be-tween negative pairs. 
+
+Lcl = Inf oN CE (i) + Inf oN CE (u) (16) 
+
+Inf oN CE (∗) = X
+
+> ∗∈B
+
+−log exp ( e∗⊤  
+
+> cf e∗
+> mg
+> τ
+
+)
+
+P
+
+> j∈B
+
+exp ( e∗⊤  
+
+> cf ejmg
+> τ
+
+)
+
+(17) where Inf oN CE (·) is the loss function; ∗ represents u or 
+
+i; τ is the temperature parameter, B is the batch size, and Lcl 
+
+refers to the cross-model contrastive loss. 
+
+Model Optimization 
+
+Without loss of generality, we use the BPR loss (Rendle et al. 2009) to measure the recommendation. The BPR optimizes item rankings for users by maximizing the probability that interacted items are ranked higher than those that were not interacted with, reflecting user preferences. The following formula represents the calculation. 
+
+Lbpr = X
+
+> u,i,j ∈O
+
+−logσ (yui − yuj ) (18) where, O = {(u, i, j )|(u, i ) ∈ O +, (u, j ) ∈ O −} represents the training data, with O+ denotes positive pairs and O−
+
+denotes negative pairs. σ(·) represents the sigmoid function, and yui and yuj are predictions defined as follow; 
+
+yui = a ∗ eumg 
+
+> ⊤
+
+eimg + (1 − a) ∗ eucf 
+
+> ⊤
+
+eicf (19) where a is a parameter that harmonizes the two representa-tions. The model is trained by jointly optimizing BPR and cross-model contrastive loss. 
+
+L = Lbpr + λ1Lcl + λ2 ∥ Θ ∥22 (20) where Θ = {e(0)  
+
+> u
+
+, e (0)  
+
+> i
+
+, e (0)  
+
+> p
+
+, W kg , W ia , W bg , W ui |u ∈U, i ∈ I , 1 ≤ p ≤ P } is the set of model parameters; λ1
+
+and λ2 are two hyperparameters to control the independence loss and L2 regularization term, respectively. 
+
+Model Analysis 
+
+The UiG and IaG are constructed offline, incurring no run-time cost during training or inference. The main computa-tional cost of MFCCL arises from the aggregation schemes in the multi-graph fusion and CF modules. The per-epoch time complexity is O(L(3 |U | +( P +2) |I|)d), where L, |U |,
+
+|I|, P and d denote the number of layers, users, items, vir-tual relations and embedding size, respectively. This com-plexity is comparable to other SOTA methods like KGCL and KGRec under the same settings. 
+
+## Experiments 
+
+We design experiments to answer the following questions: • RQ1 : How does MFCCL perform, compared to the SOTA KG-supported recommendation models? • RQ2 : How do different graph components of multi-graph representation affect MFCCL? • RQ3 : How does the cross-model contrastive learning module in MFCCL affect performance? 
+
+Experimental Settings 
+
+Datasets Description: We evaluated our MFCCL on three public benchmarks: Alibaba-iFashion, Yelp2018, and Last-FM. We follow the data processing protocols used in previ-ous works(Yang et al. 2023). The statistics of these datasets are summarized in Table 1. Alibaba-iFashion Last-FM Yelp2018 Bipartite Graph #Users 114,737 23,566 45,919 #Items 30,040 48,123 45,538 #Interactions 1,781,093 3,034,796 1,185,068 #Density 5.2 e−4 2.7 e−3 5.7 e−4
+
+Knowledge Graph #Entities 59,156 58,266 90,961 #Relations 51 9 42 #Triplets 279,155 464,567 1,853,704 Table 1: The Statistics of Datasets. 
+
+Evaluation Metrics: In the evaluation phase, we employ the all-ranking strategy. For each user, all items that they have not interacted with before are considered negative, while the relevant items in the testing set are treated as pos-itive. All these items are ranked based on the predictions from the recommendation model. To evaluate top-K recom-mendations, we adopt the metrics: recall@K and ndcg@K, with K set to 20 by default, and we present the mean of mul-tiple independent experiments. 
+
+Alternative Baselines: We compared MFCCL with the methods, traditional CF models (BPR (Rendle et al. 2009), NFM (He and Chua 2017)), GNN-based CF methods (GC-MC (Van Den Berg, Thomas, and Welling 2017), Light-GCN (He et al. 2020)), GCL-based methods (SGL (Wu et al. 2021), SimGCL (Yu et al. 2022), XSimGCL (Yu et al. 2024)), KG-supported methods ( CKE (Zhang et al. 2016), KTUP (Cao et al. 2019), KGCN (Wang et al. 2019b), KGAT (Wang et al. 2019c), KGIN (Wang et al. 2021)), and methods KG-supported and CL-based (KGCL (Yang et al. 2022), KGRec (Yang et al. 2023)). 
+
+Parameter Settings: We implemented the proposed MFCCL using PyTorch. For a fair comparison, the embed-ding size is fixed to 64 for all models. We optimize all mod-els with the Adam optimizer, where the batch size is fixed at 1024. We use the Xavier initializer to initialize model pa-rameters. We apply a grid search for hyper-parameters: the learning rate is tuned in {1e−3, 5e−4, 1e−4}, the number of GNN layers L is tuned in {2, 3} for GNN-based models, and the edges dropout ratio is tuned in {0.3, 0.5}. We set k to 10 in the Equation 3, the pruning threshold c to 2 in the Equa-tion 4. The number of virtual relations P in the Equation 5 is tuned in {1, · · · , 23}. The temperature value in the InfoNCE is in the range of {0.1, · · · , 0.5}. The harmonizing parame-ter for two representations a in the Equation 19 is tuned in 
+
+{0.1, · · · , 0.8}. The coefficient of L2 regularization is set to 0.0001, and the coefficient for cross-model contrastive learn-ing is equal to {1e−3, · · · , 1e−5} in the objective function. 15523 Performance Comparison (RQ1) 
+
+The overall performance comparison results are presented in Table 2, where the best evaluation results within the baseline methods are indicated with an underline, and the best results among all methods are highlighted in bold. Model Alibaba-iFashion Last-FM Yelp2018 recall ndcg recall ndcg recall ndcg NFM 0.1095 0.0670 0.0673 0.0538 0.0418 0.0258 BPR 0.0822 0.0501 0.0690 0.0585 0.0568 0.0462 GC-MC 0.0845 0.0502 0.0709 0.0631 0.0688 0.0453 LightGCN 0.1091 0.0682 0.0699 0.0617 0.0686 0.0446 SGL 0.1126 0.0538 0.0816 0.0725 0.0675 0.0555 SimGCL 0.1151 0.0567 0.0802 0.0718 0.0721 0.0601 XSimGCL 0.1196 0.0586 0.0884 0.0791 0.0723 0.0604                          
+
+> CKE 0.0835 0.0512 0.0845 0.0718 0.0653 0.0423 KTUP 0.0976 0.0634 0.0865 0.0671 0.0672 0.0411 KGCN 0.0983 0.0633 0.0879 0.0694 0.0532 0.0338 KGAT 0.1030 0.0627 0.0870 0.0743 0.0705 0.0463 KGIN 0.1147 0.0716 0.0978 0.0848 0.0705 0.0451 KGCL 0.1146 0.0719 0.0905 0.0769 0.0756 0.0441 KGRec 0.1188 0.0743 0.0943 0.0810 0.0745 0.0478 MFCCL 0.1288 0.0832 0.1025 0.0978 0.0774 0.0501
+
+Table 2: Overall Performance Comparison. 
+
+MFCCL achieves consistently good performance on nearly all metrics across all datasets. In particular, it out-performs the well-established baselines (underlined) in Re-call@20 by 4.04%, 4.81%, and 2.38% on Alibaba-iFashion, Last-FM, and Yelp2018, respectively, demonstrating its ef-fectiveness. These gains are attributed to two key com-ponents: (1) the multi-graph representation module, which enables users to capture both long-term habits and short-term preferences, and items to model intrinsic attributes and inter-item relationships; and (2) the cross-model CL mod-ule, which effectively combines multi-graph semantic infor-mation with structural signal from CF, enhancing the robust-ness of representations against noise. Traditional factoriza-tion models , such as NFM and BPR, performed poorly due to their reliance on linear and quadratic interactions, which are insufficient to capture complex high-order dependencies. 
+
+GNN-based CF models , including GC-MC and LightGCN, show noticeable improvements over factorization methods, but still suffer from the sparsity of the BG, limiting their effectiveness. Classical CL-based models , such as SGL and XSimGCL, achieved strong performance by applying simple augmentations on graph structure or embedding di-mensions based on LightGCN, leading to significant gains over their base model. KG-supported models , such as the two-stage KTUP and the end-to-end KGIN, delivered com-petitive results, showing that incorporating KGs can sub-stantially enhance recommendation performance. Finally, 
+
+KG-supported CL-based models , including KGCL and KGRec, demonstrated stable performance, offering more advantages over methods based solely on KG or CL. 
+
+Multi-graph Representation Effects (RQ2) 
+
+Since multi-graph representation learning is the core of MFCCL, we conducted comprehensive ablation studies to evaluate its effectiveness. As shown in Table 3, we compared several model variants against the MFCCL, reporting rela-tive performance drops. Specifically, MFCCL-uig removes the UiG and MFCCL-ubg excludes the BG for user rep-resentation; MFCCL-iag omits the IaG and MFCCL-ikg 
+
+removes the KG for item representation; and MFCCL-vr 
+
+replaces the proposed virtual relations with the original re-lations in the KG. The ablation results in Table 3 show that removing any graph component, whether on the user side (UiG or BG) or item side (IaG or KG), leads to consistent performance drops (1.26%–8.90% relative reduction), confirming that each graph captures complementary information. On the user side, the BG proves most critical, serving as the back-bone of user representation, while the UiG offers supple-mentary behavioral signals. On the item side, the KG and IaG show comparable impact, indicating that both structured knowledge and co-occurrence patterns contribute distinct yet equally important insights for item representation. Our virtual relations significantly boost item representation, im-proving ndcg@20 by 7.21% (Alibaba-iFashion) and 8.28% (Last-FM) over original KG relations. 
+
+Cross-model Contrastive Learning Effects (RQ3) 
+
+We conduct ablation studies to assess the impact of the proposed cross-model contrastive learning (CMC) mod-ule. Specifically, we compare the MFCCL with a variant (MFCCL-cmc ) that removes the CMC module, and analyze how varying its loss coefficient affects overall performance. The ablation study demonstrates the critical importance of the CMC module in MFCCL. Experimental results show in Table 3 that removing CMC leads to significant perfor-mance drops (13.85%-22.29% across metrics), confirming its essential role in effectively aligning multi-graph seman-tics with CF structures for users and items. This alignment is crucial for maintaining the model’s recommendation ac-curacy and robustness. To further evaluate the effect of the CMC module, we study both its loss magnitude and training dynamics (Figure 3). On the left, setting the contrastive loss coefficient to 0.0001 yields the best Recall@20 across all datasets. On the right, we observe that MFCCL converges faster than the variant on the Last-FM dataset, reaching early stopping at epoch 100. Moreover, as training, MFCCL shows a more rapid and consistent increase in Recall, high-lighting the CMC module’s effectiveness. 
+
+Hyperparameter Sensitivity Analysis 
+
+We examine the robustness of MFCCL of key three hyper-parameters: the number of the virtual relations P , the har-monization parameter α, and temperature parameter τ .A moderate P enhances performance by simplifying KG and facilitating feature fusion, while an excessive P leads to performance degradation, as shown in Figure 4 (a). This confirms the effectiveness of the virtual relations we de-signed, while also highlighting the intrinsic challenges in 15524 Alibaba-iFashion Last-FM recall@20 recall@40 ndcg@20 ndcg@40 recall@20 recall@40 ndcg@20 ndcg@40 MFCCL-vr 0.1232 4.35% 0.1765 2.16% 0.0772 7.21% 0.0952 3.35% 0.1010 1.46% 0.1327 1.56% 0.0897 8.28% 0.0999 1.87% 
+
+MFCCL-uig 0.1276 0.93% 0.1781 1.28% 0.0807 3.00% 0.0972 1.32% 0.1019 0.59% 0.1345 0.22% 0.0904 7.57% 0.1009 0.88% 
+
+MFCCL-ubg 0.1264 1.86% 0.1779 1.39% 0.0816 1.92% 0.0968 1.73% 0.1011 1.37% 0.1327 1.56% 0.0891 8.90% 0.0994 2.36% 
+
+MFCCL-iag 0.1260 2.17% 0.1777 1.50% 0.0814 2.16% 0.0967 1.83% 0.1012 1.27% 0.1328 1.48% 0.0892 8.79% 0.0994 2.36% 
+
+MFCCL-ikg 0.1262 2.02% 0.1778 1.44% 0.0815 2.04% 0.0969 1.63% 0.1012 1.27% 0.1331 1.26% 0.0892 8.79% 0.0995 2.26% 
+
+MFCCL-cmc 0.1094 15.06% 0.1515 16.02% 0.0673 19.11% 0.0766 22.23% 0.0883 13.85% 0.1155 14.32% 0.0760 22.29% 0.0897 11.89% 
+
+MFCCL 0.1288 0.1804 0.0832 0.0985 0.1025 0.1348 0.0978 0.1018 
+
+Table 3: Ablation Performance Comparison on MFCCL’s Graph Components. 0.001 0.0001 1e-05    
+
+> 0.06
+> 0.08
+> 0.10
+> 0.12
+> recall@20
+> Alibaba-iFashion Last-FM 0100 200 300
+> 0.0
+> 2.5
+> 5.0
+> 7.5
+> 10.0
+> loss
+> ×10 2
+> MFCCL_Loss Variant_Loss
+> 46810 recall@20
+> MFCCL_Recall Variant_Recall
+
+Figure 3: Ablation Performance of the CMC Module (Left: 
+
+λ1 weight for the CL, Right: training dynamics across epochs on Last-FM). KG relation modeling. A systematic comparison of virtual relation generation strategies is crucial for the next step. On the Last-FM, α = 0.2 in Figure 4 (b) yields the best perfor-mance, suggesting an optimal balance between the multi-graph semantic information and the CF structural signal. Meanwhile, τ = 0.2 in Figure 4 (c) provides the optimal tem-perature setting, as smaller values lead to over-concentration on hard negatives, while larger values dilute the contrastive signal. These results align with prior CL studies. 
+
+## Related Work 
+
+Our proposed method is closely related to four lines of research: collaborative filtering (CF), graph neural net-works (GNN), contrastive learning (CL), and Knowledge Graph (KG)-enhanced recommendation. Traditional CF methods (Wu et al. 2023; Baltrunas, Ludwig, and Ricci 2011; Rendle 2010) capture user-item interactions via la-tent embeddings, while recent GNN-based models (Wang et al. 2019d; He et al. 2020; Mao et al. 2021) model high-order connectivity on user-item graphs through simplified yet effective architectures. CL has been applied to enhance graph-based recommenders (Wu et al. 2021; Yu et al. 2022; Wei et al. 2022) by generating contrastive views via data augmentation or selective edge/node dropping. KG pro-vide auxiliary semantics to improve recommendation accu-racy (Zhang et al. 2016; Yang et al. 2023, 2022), where both embedding propagation and contrastive denoising strategies are adopted. 0 1 2 4 8    
+
+> 0.09
+> 0.10
+> 0.11
+> 0.12
+> 0.13
+> recall@20
+> Alibaba-iFashion Last-FM 01248
+> 0.070
+> 0.075
+> 0.080
+> 0.085
+> 0.090
+> 0.095
+> ndcg@20
+> Alibaba-iFashion Last-FM
+
+(a) Number of the virtual relations P .0.1 0.2 0.4 0.6 0.8  
+
+> 0.080
+> 0.085
+> 0.090
+> 0.095
+> 0.100
+> 0.105 recall@20 ndcg@20
+
+(b) Harmonization parameter α.0.1 0.2 0.3 0.4 0.5   
+
+> 0.080
+> 0.085
+> 0.090
+> 0.095
+> 0.100
+> 0.105 recall@20 ndcg@20
+
+(c) Temperature parameter τ .
+
+Figure 4: Hyperparameter Sensitivity Analysis. 
+
+## Conclusion 
+
+In this paper, we tackled the representation incompatibil-ity issue in KG-supported GNN-based recommendation sys-tems by proposing a novel framework, MFCCL. MFCCL explicitly constructs a UiG and an IaG to leverage both the BG and the KG, and integrates their representations via a multi-graph fusion module. It further employs a cross-model CL mechanism to align user and item representations from different sources, enabling complementary learning. Exten-sive experiments on three cutting-edge datasets show that MFCCL consistently outperforms SOTA methods. Ablation studies confirm the importance of multi-graph representa-tion learning for modeling preferences and associations, and highlight the effectiveness of cross-model CL in improving robustness and alignment. In future work, we will leverage computing power networks to incorporate LLMs for gener-ating richer side information. This approach aims to allevi-ate data sparsity and enhance representation quality through advanced NLP techniques. 15525 Acknowledgments 
+
+This research acknowledges the generous support provided by the National Natural Science Foundation of China under Grant No. 62432003, and the Singapore Institute of Tech-nology Ignition Grant under Grant No. R-IE3-A405-0005. 
+
+## References 
+
+Baltrunas, L.; Ludwig, B.; and Ricci, F. 2011. Matrix fac-torization techniques for context aware recommendation. In Mobasher, B.; Burke, R. D.; Jannach, D.; and Adomavicius, G., eds., ACM Conference on Recommender Systems , 301– 304. ACM. Cao, Y.; Wang, X.; He, X.; Hu, Z.; and Chua, T. 2019. Unify-ing Knowledge Graph Learning and Recommendation: To-wards a Better Understanding of User Preferences. In Pro-ceedings of the ACM on Web Conference 2019 , 151–161. ACM. Gutmann, M.; and Hyv¨ arinen, A. 2010. Noise-contrastive estimation: A new estimation principle for unnormalized statistical models. In AISTATS 2010, Chia Laguna Resort, Sardinia, Italy, May 13-15, 2010 , volume 9 of JMLR Pro-ceedings , 297–304. JMLR.org. He, X.; and Chua, T. 2017. Neural Factorization Machines for Sparse Predictive Analytics. In Kando, N.; Sakai, T.; Joho, H.; Li, H.; de Vries, A. P.; and White, R. W., eds., 
+
+Proceedings of the 40th International SIGIR Conference on Research and Development in Information Retrieval , 355– 364. ACM. He, X.; Deng, K.; Wang, X.; Li, Y.; Zhang, Y.; and Wang, M. 2020. LightGCN: Simplifying and Powering Graph Convo-lution Network for Recommendation. In Proceedings of the 43rd International ACM SIGIR conference on research and development in Information Retrieval , 639–648. ACM. Lin, Y.; Liu, Z.; Sun, M.; Liu, Y.; and Zhu, X. 2015. Learn-ing Entity and Relation Embeddings for Knowledge Graph Completion. In Proceedings of the Twenty-Ninth AAAI Con-ference on Artificial Intelligence , 2181–2187. AAAI Press. Mao, K.; Zhu, J.; Xiao, X.; Lu, B.; Wang, Z.; and He, X. 2021. UltraGCN: Ultra Simplification of Graph Convolu-tional Networks for Recommendation. In CIKM ’21 , 1253– 1262. ACM. Rendle, S. 2010. Factorization Machines. In The 10th IEEE International Conference on Data Mining , 995–1000. IEEE Computer Society. Rendle, S.; Freudenthaler, C.; Gantner, Z.; and Schmidt-Thieme, L. 2009. BPR: Bayesian Personalized Ranking from Implicit Feedback. In Conference on Uncertainty in Artificial Intelligence . AUAI Press. Van Den Berg, R.; Thomas, N. K.; and Welling, M. 2017. Graph convolutional matrix completion. arXiv preprint arXiv:1706.02263 , 2(8): 9. Wang, H.; Zhao, M.; Xie, X.; Li, W.; and Guo, M. 2019a. Knowledge Graph Convolutional Networks for Recom-mender Systems. In The World Wide Web Conference , 3307– 3313. ACM. Wang, H.; Zhao, M.; Xie, X.; Li, W.; and Guo, M. 2019b. Knowledge Graph Convolutional Networks for Recom-mender Systems. In The World Wide Web Conference , 3307– 3313. ACM. Wang, Q.; Lin, D.; Lin, W.; and Wu, Z. 2025a. FROG: Effective Friend Recommendation in Online Games via Modality-aware User Preferences. In International ACM SI-GIR Conference on Research and Development in Informa-tion Retrieval , 2822–2826. ACM. Wang, X.; He, X.; Cao, Y.; Liu, M.; and Chua, T.-S. 2019c. Kgat: Knowledge graph attention network for recommenda-tion. In Proceedings of the 25th ACM SIGKDD , 950–958. Wang, X.; He, X.; Wang, M.; Feng, F.; and Chua, T. 2019d. Neural Graph Collaborative Filtering. In SIGIR 2019 , 165– 174. ACM. Wang, X.; Huang, T.; Wang, D.; Yuan, Y.; Liu, Z.; He, X.; and Chua, T.-S. 2021. Learning intents behind interactions with knowledge graph for recommendation. In Proceedings of the web conference 2021 , 878–887. Wang, Y.; Zhao, Y.; Wang, D. Z.; and Li, L. 2023. GA-LOPA: Graph Transport Learning with Optimal Plan Align-ment. Advances in Neural Information Processing Systems ,36: 9117–9130. Wang, Y.; Zhao, Y.; Wang, Z.; Li, L.; Wang, J.; Li, F.; Huang, M.; Pan, S.; and Wang, X. 2025b. Equivalence is All: A Unified View for Self-supervised Graph Learning. In Forty-second International Conference on Machine Learning .Wei, C.; Liang, J.; Liu, D.; and Wang, F. 2022. Contrastive Graph Structure Learning via Information Bottleneck for Recommendation. In Koyejo, S.; Mohamed, S.; Agarwal, A.; Belgrave, D.; Cho, K.; and Oh, A., eds., Advances in Neural Information Processing Systems 35: Annual Confer-ence on Neural Information Processing Systems .Wu, J.; Wang, X.; Feng, F.; He, X.; Chen, L.; Lian, J.; and Xie, X. 2021. Self-supervised Graph Learning for Recom-mendation. In ACM SIGIR Conference on Research and De-velopment in Information Retrieval , 726–735. ACM. Wu, L.; He, X.; Wang, X.; Zhang, K.; and Wang, M. 2023. A Survey on Accuracy-Oriented Neural Recommendation: From Collaborative Filtering to Information-Rich Recom-mendation. IEEE Transactions on Knowledge and Data En-gineering , 35(5): 4425–4445. Wu, P.; Tu, Y.; Yang, Z.; Jatowt, A.; and Odagaki, M. 2018. Deep Modeling of the Evolution of User Preferences and Item Attributes in Dynamic Social Networks. In Proceed-ings of the ACM on Web Conference 2018 , 115–116. ACM. Yang, J.; Yi, X.; Cheng, D. Z.; Hong, L.; Li, Y.; Wang, S. X.; Xu, T.; and Chi, E. H. 2020. Mixed Negative Sampling for Learning Two-tower Neural Networks in Recommenda-tions. In Companion of The 2020 Web Conference , 441–447. ACM / IW3C2. Yang, Y.; Huang, C.; Xia, L.; and Huang, C. 2023. Knowl-edge Graph Self-Supervised Rationalization for Recommen-dation. In KDD 2023 , 3046–3056. ACM. Yang, Y.; Huang, C.; Xia, L.; and Li, C. 2022. Knowledge graph contrastive learning for recommendation. In Proceed-ings of the 45th international ACM SIGIR conference on 15526 research and development in information retrieval , 1434– 1443. Yu, J.; Xia, X.; Chen, T.; Cui, L.; Hung, N. Q. V.; and Yin, H. 2024. XSimGCL: Towards Extremely Simple Graph Con-trastive Learning for Recommendation. IEEE Transactions on Knowledge and Data Engineering , 36(2): 913–926. Yu, J.; Yin, H.; Xia, X.; Chen, T.; Cui, L.; and Nguyen, Q. V. H. 2022. Are Graph Augmentations Necessary?: Simple Graph Contrastive Learning for Recommendation. In SIGIR ’22 , 1294–1303. ACM. Zhang, C.; Huang, C.; Tian, Y.; Wen, Q.; Ouyang, Z.; Li, Y.; Ye, Y.; and Zhang, C. 2023. When Sparsity Meets Con-trastive Models: Less Graph Data Can Bring Better Class-Balanced Representations. In Proceedings of the 40th Inter-national Conference on Machine Learning , volume 202 of 
+
+Proceedings of Machine Learning Research , 41133–41150. PMLR. Zhang, F.; Yuan, N. J.; Lian, D.; Xie, X.; and Ma, W. 2016. Collaborative Knowledge Base Embedding for Rec-ommender Systems. In Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discov-ery and Data Mining , 353–362. ACM. Zhang, X.; Xu, B.; Li, C.; He, B.; Lin, H.; Ma, C.; and Ma, F. 2025. A Survey on Side Information-Driven Session-Based Recommendation: From a Data-Centric Perspective. IEEE Transactions on Knowledge and Data Engineering , 37(8): 4411–4431. Zheng, J.; Gu, H.; Song, C.; Lin, D.; Yi, L.; and Chen, C. 2023. Dual Interests-Aligned Graph Auto-Encoders for Cross-domain Recommendation in WeChat. In Proceedings of the 32nd ACM International Conference on Information and Knowledge Management , 4988–4994. 15527

@@ -1,0 +1,596 @@
+Title: PARS: Partial-Label-Learning-inspired Recommender Systems
+
+URL Source: https://ojs.aaai.org/index.php/AAAI/article/download/40002/43963
+
+Number of Pages: 9
+
+Markdown Content:
+# PARS: Partial-Label-Learning-Inspired Recommender Systems 
+
+## Shanshan Ye, Kezhi Lu, Guangquan Zhang, Jie Lu 
+
+Australian Artificial Intelligence Institute (AAII), University of Technology Sydney, Ultimo, NSW 2007, Australia 
+
+{shanshan.ye@student, kezhi.lu-1@student, guangquan.zhang, jie.lu }@uts.edu.au 
+
+Abstract 
+
+> Recommender systems are widely required and deployed to address real-world problems. In this paper, we study a new yet challenging real-world setting for recommender systems, where only user browsing histories are available without any explicit feedback. No item acquisition information, e.g., pur-chasing or rating, is given. By assuming that user browsing sequences are likely to contain the items to acquire, we draw an analogy to the setting of partial label learning in weakly supervised learning. This enables us to train reliable rec-ommender systems only using browsing histories. We term the proposed method as Partial Acquisition Recommender System (PARS). Empirical results on real-world benchmark datasets show the effectiveness of the proposed method. Sur-prisingly, we also show that the proposed method even sur-passes some baselines using item acquisition information.
+
+## Introduction 
+
+Recommender systems (RS) have become essential to our modern lives, significantly reshaping how individuals ac-quire products, services, and content. Fundamentally, these systems act as information filtering tools, designed to pro-vide personalised products or services, helping to address the growing problem of information overload (Resnick and Varian 1997). RS have various applications (Lu et al. 2015), e.g., from prominent digital commerce such as Amazon and Alibaba to powerful media streaming platforms like Netflix and YouTube (Roy and Dutta 2022). Their pervasive impact highlights their substantial market value and critical role in improving user engagement, increasing sales, and enhanc-ing satisfaction, establishing them as a foundational element of modern e-commerce and digital content delivery. To achieve satisfactory application performances, RS need to capture user interests precisely (Claypool et al. 2001; Lu et al. 2024, 2025). Traditionally, RS rely heavily on ex-plicit acquisition feedback (Liang, Pan, and Ming 2021), such as preferences, ratings, purchasing information, etc., to build effective recommendation models. However, in real-world settings, due to data accessibility (Huang et al. 2024b) or privacy factors (Dwork 2006), there are plenty of cases where explicit acquisition feedback is unavailable (N´ u˜ nez-Valdez et al. 2018). For example, users may browse product 
+
+> Copyright © 2026, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved.
+
+pages, read articles, or watch video clips online without ex-plicitly indicating a preference, leaving a rating, or making a purchase. For these situations where only browsing histories are available without any explicit acquisition information, it is demanding and important to build effective RS. Although the aim of building RS based solely on brows-ing histories is compelling and appealing, it is infeasible to achieve it without any assumptions or constraints. For ex-ample, if users randomly browse products that they are not interested in, it is impossible to learn any useful item acqui-sition information from such browsing data. To tackle this issue, we make a crucial and realistic assumption: users are more likely to browse products that interest them, i.e., the majority of browsing histories contain items that the users would like to acquire. We will discuss the assumption later to show it is weak. If this hidden item acquisition informa-tion can be effectively extracted from the browsing histories, it becomes feasible to build accurate and robust RS without relying on explicit feedback. To understand why the latent item acquisition informa-tion can be extracted, we draw an analogy of the proposed setting to a weakly supervised learning setting termed as par-tial label learning (Xu, Lv, and Geng 2019). In partial label learning, each instance has been assigned a set consisting of multiple labels while the set contains the true label. The goal is to learn a classifier that can predict true labels and generalize to unseen instances. It has been proven that ef-fective learning is feasible for this setting (Cour, Sapp, and Taskar 2011). Later studies have extended the setting where the majority of label sets contain the true labels (Xu et al. 2023). It is intuitive that the weak supervision information, i.e., the majority of label sets contain true labels, can be ex-ploited to build a reliable classifier. In our setting, we have an analogy that the majority of user browsing histories con-tain the items to acquire, making it feasible to extract item acquisition information to build reliable RS. In this paper, we propose Partial Acquisition Recom-mender Systems (PARS), a novel framework that, for the first time, enables reliable RS only exploiting browsing his-tories. The key innovation of PARS lies in its ability to learn conversion probabilities (or item purchase probabili-ties) from browsing to transaction without directly giving supervision of item acquisition. As shown in Figure 1, PARS introduces a partial label learning module combined with a The Fortieth AAAI Conference on Artificial Intelligence (AAAI-26)      
+
+> 27800 View sequence
+> t1 … …
+> User
+> I1
+> Embedding
+> Look-up
+> Encoder
+> (Transformer)
+> Self-supervised Learning
+> Partial Acquisition Learning
+> I1
+> I2 I3
+> I4 I5
+> I6
+> I7 I8
+> …
+> Updating
+> Disambiguated
+> Labels
+> Acquisition
+> prediction
+> I4 I6
+> Partial Candidates
+> I9
+> I10
+> Progressively
+> Self-learning
+> t2
+> t3
+> t4
+> tk
+> I2
+> I3
+> I4
+> … …
+> Ik
+> Time
+> … …
+> … …
+
+Figure 1: Illustration of the proposed PARS framework. The self-supervised learning part continuously updates the item em-beddings. The partial label learning part is used to update the pseudo conversion probabilities gradually. self-learning mechanism that iteratively refines conversion probability estimates for items in user browsing sequences. Specifically, a masked self-learning part is used in the self-supervised learning part to capture temporal dynamics and contextual patterns in user browsing sequences. The partial label learning part ensures that initial noisy estimates are gradually refined as the model exploits the weakly item ac-quisition information that the majority of user browsing se-quences contain the items to acquire. This approach repre-sents a paradigm shift from supervised to unsupervised RS, making PARS particularly suitable for real-world scenarios where conversion feedback is unavailable. Empirical results on popular real-world benchmark datasets consistently show the effectiveness of PARS. Since PARS is the first methodology to enable building RS only using browsing histories, there is no straightforward base-line. A related topic is conversion rate (CVR) prediction (Wen et al. 2019), which aims to estimate the probability that a user will complete a purchase after being exposed to an item. However, CVR needs the supervision of direct item acquisition labels in the training data. We show that PARS, without using any direct item acquisition information, will outperform CVR methods which use item acquisition infor-mation during the training phase. Our work also has interesting implications. Firstly, it tack-les a specific form of cold-start problem, where RS struggle to make predictions for new users with no acquisition data but do have early browsing histories (Rajendran and Sundar-raj 2021). By utilizing only browsing histories, our method can produce meaningful recommendations. Secondly, our approach introduces a novel privacy-preserving mechanism. Instead of collecting and storing sensitive item acquisition data such as purchase records or explicit ratings, it relies solely on user browsing histories, which are generally less privacy-intrusive and can still yield strong recommendation performance. As a result, this capability fosters greater user trust and expands their applicability to a wider range of real-world contexts where explicit item purchase information is either limited by policy or considered ethically inappropriate (Ye, Lu, and Zhang 2025). In summary, our main contributions are as follows: (1) we formalize the problem of building RS using only browsing histories; (2) we propose a principled framework to recover acquisition information under realistic assumptions; and (3) we empirically validate our approach through comprehen-sive experiments, showing its robustness and real-world ap-plicability. 
+
+## Related Work 
+
+In this section, we review relevant literature in three key ar-eas: conversion rate prediction, self-supervised learning for sequential recommendation (SR), and partial label learning. 
+
+Conversion Rate Prediction Conversion rate (CVR) pre-diction (Wen et al. 2019) aims to estimate the probability that a user will complete a purchase after being exposed to an item. CVR faces two fundamental challenges: sample se-lection bias, e.g., (Ma et al. 2018b,a; Wen et al. 2020; Wang et al. 2022; Su et al. 2024; Huang et al. 2024a), and data sparsity, e.g., (Guo et al. 2017; Zhu et al. 2023; Ouyang et al. 2023), as conversion labels are only observed for purchased items. Despite their success, all existing CVR methods share a fundamental requirement: they require explicit conversion labels during training. This requirement is frequently vio-lated in practice due to delayed conversions, cross-device purchases, and privacy constraints, etc. Our work challenges this requirement by proposing a method that can learn pur-chase patterns without any explicit conversion labels. 
+
+Self-Supervised Learning for Sequential Recommender Systems Our study involves user browsing sequences (Ye and Lu 2023). Therefore it is closely related to sequential RS (Wang et al. 2019), which aim to predict users’ future in-teractions based on their historical behavior sequences. Re-cent advances have shown that self-supervised learning (Gui et al. 2024) can significantly improve representation learning without requiring explicit item acquisition labels. Inspired by masked language modeling in NLP, masked sequence modeling has been proposed to SR (Kang and McAuley 2018; Sun et al. 2019). Another line of work em-ploys contrastive learning to enhance sequence representa-tions (Xie et al. 2022; Liu et al. 2021). Since our setting does not have any access to explicit item acquisition information, we employ masked sequence mod-eling to help learn robust item embeddings. 
+
+Partial Label Learning Partial label learning (PLL) (Xu, Lv, and Geng 2019) is a specific weakly supervised classifi-cation problem (Zhou 2018; Ye and Lu 2024). In PLL, each 27801 training instance is associated with a set of candidate labels, one of which is correct. This paradigm naturally handles la-bel ambiguity in real-world applications. Early PLL approaches can be categorized into two strategies: averaging-based methods (Cour, Sapp, and Taskar 2011) that treat all candidate labels equally, and disambiguation-based methods that iteratively refine label confidences (Zhang, Zhou, and Liu 2016). Theoretical anal-yses have been provided to show the learnability, consis-tency, and generalization of PLL algorithms (Cour, Sapp, and Taskar 2011; Lv et al. 2020; Feng et al. 2020; Xu et al. 2021). Existing PLL methods are primarily designed for multi-class classification with balanced datasets. We are the first to introduce it to the community of RS. 
+
+## Proposed Method 
+
+In this section, we first setup the research problem. Then, we discuss the assumption enabling the idea of partial label learning (PLL) to extract item acquisition information. To learn user and item embeddings to estimate item acquisition probabilities, we design a transformer-based framework and employ masked language modeling and PLL to help learn semantic embeddings in an unsupervised manner. 
+
+Problem Formulation Let U = {u1, u 2, ..., u n} denote the set of n users, and I = {i1, i 2, ..., i m} denote the set of m items. Each user u ∈ U is associated with a ses-sion consisting of a sequence of interacted items Su =n
+
+iu 
+
+> 1
+
+, i u 
+
+> 2
+
+, ..., i u
+
+> |S u|
+
+o
+
+, where iut ∈ I represents the t-th item in user u’s interaction sequence. Let L = max |S u| u ∈ U 
+
+representing the maximum sequence length. We padd all the sequence to the length of L, i.e., Su = {iu 
+
+> 1
+
+, i u 
+
+> 2
+
+, ..., i uL} , ∀u ∈U.We aim to learn which items users are likely to pur-chase based only on the observed interaction sequences 
+
+{S u|u ∈ U} . This setting is quite realistic in many e-commerce scenarios where purchase signals are delayed, missing, or privacy-protected. Given a user u with interac-tion sequence Su, our goal is to predict an acquisition vector 
+
+ˆpu ∈ RL where ˆpu,i represents the probability that user u
+
+will purchase item i, i ∈ { 1, 2, . . . , L }. The learning prob-lem can be formulated as 
+
+fθ : Su 7 → ˆpu (1) where θ represents the parameters of model f . We term the problem as Partial Acquisition Recommender Systems (PARS) learning. 
+
+An Analogy to Partial Label Learning We introduce the setting of PLL and then draw an analogy of PARS to PLL. We misuse notation slightly to set up PLL for easy comparison. Specifically, let X be the instance space and 
+
+Y the label set of multiple classes. Given training data 
+
+{(xi, Si)|1 ≤ i ≤ n}, where xi represents an instance, Si aset of L possible labels, n the size of instances, PLL aims to learn a multi-class classifier f : X → Y . It has been proven that if the majority of the label set S contains true labels, a reliable classifier f can be learned (Xu et al. 2023). 0 10 20 30 40 50 60 70 80 90 100     
+
+> Threshold Percentile (%)
+> 60%
+> 70%
+> 80%
+> 90%
+> 100%
+> Proportion of Sequences Exceeding Threshold
+> 100.0% 100.0% 99.3% 97.0% 92.5% 83.5% 100.0% 100.0% 99.2% 95.0% 84.9% 68.5%
+> YooChoose RetailRocket
+
+Figure 2: The vertical axis shows the percentage of se-quences that contain at least one either positive or pseudo positive acquisition label. The horizontal axis represents dif-ferent ways to calculate the threshold for pseudo positvie ac-quisition labels. x% means the threshold equals the average value of the smallest x% of the predicted scores of the items with true positive acquisition labels. Note 100 % means the threshold equals the average value of all the predicted scores of the items with true positive acquisition labels. We can see that PARS and PLL have very similar set-tings, where users in PARS correspond to instances in PLL; an item sequence that contains items the user may purchase corresponds to a label set that contains the possible labels for an instance; both settings have to exploit the underly-ing true acquisition/label information from the interaction sequence/label set. However, in PLL, it is required that the majority of label sets should at least contain one true label; while in PARS, it is not clear if the majority of sequences will contain at least one item purchased or not, because PARS study real-world applications where data distribution cannot be controlled. If we assume that the majority of sequences contain at least one item purchased , we can adapt the methodologies designed for PLL for PARS. It looks like the assumption is strong. However, in the next subsection, we will show that the popular benchmark datasets in RS used in the paper im-plicitly satisfy the assumption. 
+
+The Assumption is Weak In this paper, we study the three popular datasets in RS, i.e., YooChoose 1, RetailRocket 2, and Taobao 3. More details about the dataset are presented in the supplementary material. All the three dataset have the ground-truth item acquisi-tion labels. Note that for PARS, we do not use the labels to train the model. We found that Taobao has 75.45% of the interaction sequences containing at least one item marked as purchased. However, YooChoose and RetailRocket have less than 50%, i.e., YooChoose has 20.98% and RetailRocket has 5.57%. It seems the assumption does not hold that the majority of sequences contain at least one item purchased. However, we argue that in real-world scenarios, the browsed item sequences are likely to contain the item the user would like to purchase, even though the transactions have not been 
+
+> 1
+
+https://www.kaggle.com/chadgostopp/recsys-challenge-2015 
+
+> 2
+
+https://www.kaggle.com/retailrocket/ecommerce-dataset 
+
+> 3
+
+https://tianchi.aliyun.com/dataset/649?lang=en-us 27802 made, e.g., the users may purchase the items on other plat-forms or at a later time. To verify the above argument, we have checked the pre-dicted item acquisition probabilities ˆpu for the training data and found that many items have predicted acquisition prob-abilities higher than those with positive ground-truth item acquisition labels. We can assign pseudo positive acquisi-tion labels to the items. As shown in Figure 2, we can see that the vast majority of items have at least one either posi-tive or pseudo positive acquisition label, making our above assumption implicitly hold true. Therefore, the methodolo-gies designed for PLL can be borrowed to address PARS. In the following, we will show how to learn user and item embeddings and how to use the PLL philosophy for PARS. 
+
+Transformer-based User Embedding To obtain user em-beddings capturing item and sequential information, we use the following item and position embedding 
+
+et = Zitem (iut ) + Zpos (t) (2) where Zitem ∈ Rd×m is the item embedding matrix (with an additional token embedding for masking), Zpos ∈ Rd×L is the positional embedding matrix, and d is the dimension of the embedding, Z(x) represents the x-th column of Z.We further employ a multi-layer Transformer encoder to enhance the expressive power of the embeddings, i.e., 
+
+H(l) = TransformerLayer (l)(H(l−1) ), l = 1 , ..., N (3) where H(0) = [ e1, e2, ..., eL], N is the number of Trans-former layers, and each layer consists of multi-head self-attention and feed-forward networks with residual connec-tions and layer normalization. To obtain a global representation of the user’s sequence, we employ the average pooling over the non-padding part of 
+
+H(N ), i.e., 
+
+gu = 1
+
+PLt=1 (1 − mt)
+
+> L
+
+X
+
+> t=1
+
+(1 − mt) · H(N ) 
+
+> t
+
+(4) where H(N ) 
+
+> t
+
+is the t-th hidden state from the final Trans-former layer (the t-th column of H(N )), and mt ∈ { 0, 1} is the indicator for padding. We then project the global representation to obtain the fi-nal user embedding for user u, i.e., 
+
+zu = LayerNorm (Wg gu + bg ) (5) where Wg ∈ Rd×d is a projection matrix, bg is a bias vec-tor, and LayerNorm (·) represents a normalization layer. 
+
+Masked Language Modeling for Semantic Embeddings 
+
+To learn semantic embeddings, we employ the masked lan-guage modeling (MLM) (Devlin et al. 2019). During train-ing, we randomly mask a subset of items in each sequence and train the model to predict the masked items. For a sequence Su, we randomly select positions M ⊂ {1, 2, ..., L } to mask with probability pmask . The masked se-quence ˜Su is created by replacing items at positions in M
+
+with a special [MASK] token. MLM learns semantic embedding by minimizing the dis-tance between the predicted masked items and the ground truth. The objective is computed as 
+
+LMLM = − 1
+
+|M| 
+
+X
+
+> t∈M
+
+log p
+
+
+
+iut ˜H(N )
+
+> t
+
+
+
+(6) where ˜H(N ) 
+
+> t
+
+is the hidden representation at position t from the masked sequence, and 
+
+p
+
+
+
+i| ˜H(N )
+
+> t
+
+
+
+=exp 
+
+
+
+w⊤ 
+
+> i
+
+˜H(N )
+
+> t
+
+Pmj=1 exp 
+
+
+
+w⊤ 
+
+> j
+
+˜H(N )
+
+> t
+
+ (7) with wi being the i-th row of the MLM prediction head 
+
+WMLM ∈ Rm×d.
+
+Partial Label Learning for Purchase Prediction Since we lack explicit item acquisition labels during the model training phase, we use the idea of partial label learning to predict the item acquisition probability. We maintain a partial label matrix ¯P =[¯ p1, ¯p2, . . . , ¯pn] ∈ [0 , 1] m×n where ¯pu,i indicates the probability that user u will purchase item i. We initialize partial labels ¯P by uniformly distributing probability mass across all items observed in each user’s interaction sequence. Specifically, for each user u with interaction sequence Su = {iu 
+
+> 1
+
+, i u 
+
+> 2
+
+, . . . , i uL}, we set 
+
+¯p(0)  
+
+> u,i
+
+=
+
+( 1 
+
+> |U u|
+
+, if i ∈ U u
+
+0, otherwise (8) where Uu = {i | i ∈ S u} represents the set of unique items in user u’s interaction sequence. Given a partial label matrix ¯P, PLL uses the following objective computed using cross-entropy between the model predictions ˆpu and the partial labels ¯P to update ˆpu, i.e., 
+
+LPLL = − 1
+
+n
+
+> n
+
+X
+
+> u=1
+> m
+
+X
+
+> i=1
+
+¯pu,i · log(ˆ pu,i + ϵ) (9) where ϵ is a small constant (i.e., 10 −10 ) for numerical stabil-ity, ˆp(t) 
+
+> u
+
+= softmax  Z⊤
+
+> item
+
+zu
+
+, Zitem ∈ Rd×m contains the item embeddings of all items. PLL alternatively updates the partial labels ¯P and the model predictions ˆpu. Given the current model predictions 
+
+ˆp(t) 
+
+> u
+
+. The partial labels ¯P are then refined through a two-step process. In the first step, 
+
+˜p(t+1)  
+
+> u,i
+
+=
+
+(
+
+ˆp(t) 
+
+> u,i
+
+if ¯p(t) 
+
+> u,i
+
+> 00 otherwise . (10) Note that ˜p(t+1)  
+
+> u
+
+is further normalized to maintain a valid probability distribution. In the second step, to ensure stable training, we employ the momentum method, i.e., 
+
+¯p(t+1)  
+
+> u,i
+
+= α · ˜p(t+1)  
+
+> u,i
+
++ (1 − α) · ¯p(t) 
+
+> u,i
+
+(11) where α ∈ [0 , 1] is the momentum coefficient that controls the trade-off between historical and current predictions. 27803 Algorithm 1: Partial Acquisition Recommender Systems 
+
+Require: User sequences {S u}, number of epochs T , learn-ing rate η, MLM weight λ
+
+Ensure: Trained model parameters θ 
+
+> 1:
+
+Initialize model parameters θ randomly  
+
+> 2:
+
+Initialize partial labels Y(0)  
+
+> 3:
+
+for epoch = 1 to T do  
+
+> 4:
+
+for each batch of sequences do  
+
+> 5:
+
+// Masked Language Modeling  
+
+> 6:
+
+Create masked sequences  
+
+> 7:
+
+Compute sequence representations H 
+
+> 8:
+
+Compute LMLM using masked positions  
+
+> 9:
+
+// Partial Label Learning  
+
+> 10:
+
+Compute user embedding zu 
+
+> 11:
+
+Compute prediction scores ˆpu 
+
+> 12:
+
+Update partial labels ¯P 
+
+> 13:
+
+Compute LPLL using updated partial labels  
+
+> 14:
+
+// Parameter Update  
+
+> 15:
+
+L = LPLL + λ · L MLM  
+
+> 16:
+
+θ = θ − η · ∇ θ L 
+
+> 17:
+
+end for  
+
+> 18:
+
+end for  
+
+> 19:
+
+return θ
+
+Partial Acquisition Recommender Systems Optimiz-ing the objectives of MLM and PLL will enable the Transformer-based user embedding framework to learn meaningful user and item embeddings. Specifically, MLM will help capture sequential information. With the assump-tion that the majority of sequences contain at least one item to purchase, PLL will help extract reliable item acquisition information, i.e., ˆpu,i will be large if the user u is likely to purchase the item i and ˆpu,i will be small in the other way. We therefore build the objective of Partial Acquisition Rec-ommender Systems (PARS) as follows: 
+
+L = LPLL + λ · L MLM (12) where λ is a hyperparameter controlling the weight of the MLM objective. The complete training procedure is sum-marized in Algorithm 1. At the inference phase, given a user’s interaction sequence 
+
+Sunew , we can use the trained Transformer encoder to obtain the user embedding zunew . We then can calculate ˆpunew =
+
+z⊤ 
+
+> unew
+
+Zitem . PARS ranks the items according to ˆpunew to gen-erate purchase recommendations. The key advantage of our approach is that it can learn meaningful purchase patterns through self-supervision and partial label learning, without requiring explicit item acqui-sition labels during training. This makes it applicable to a wide range of real-world scenarios where obtaining com-plete item acquisition labels is challenging or impossible. 
+
+## Experiments 
+
+Datasets To comprehensively evaluate our proposed method, we conduct extensive experiments on three large-scale public datasets, i.e., YooChoose, RetailRocket, and Taobao, collected from real-world e-commerce platforms.                 
+
+> Dataset #Users #Items #Interactions Avg. Length
+> YooChoose 417,370 39,299 6,197,045 14.85 RetailRocket 116,679 112,574 620,338 5.32 Taobao 213,374 68,777 3,563,298 16.70
+
+Table 1: Statistics of the experimental datasets. These datasets represent diverse user behaviors and purchase patterns across different platforms and regions. Table 1 summarizes the statistics of the three datasets af-ter preprocessing (e.g., removing items with fewer than 5 interactions; more details can be found in the supplementary materials). The datasets vary significantly in scale and char-acteristics, with YooChoose having the most sessions but fewer items, RetailRocket being more sparse with shorter se-quences, and Taobao containing rich user behavior patterns with longer interaction sequences. 
+
+Evaluation Metrics We adopt a comprehensive set of evaluation metrics, i.e., AUC, HR@k (Hit Rate@k), NDCG@k (Normalized Discounted Cumulative Gain@k), precision@k, recall@k, F1@k, to assess the performance of our method from multiple perspectives. The definitions are postponed in the supplementary materials. We evaluate all metrics with k ∈ { 1, 3, 5} to assess performance at different recommendation list lengths. 
+
+Baseline Methods Note that PARS is the first method-ology to enable building recommender systems only using browsing histories; there is no straightforward baseline. We compare PARS against ten state-of-the-art CVR baseline methods that using item acquisition labels. • DeepFM (Guo et al. 2017): Combines factorization ma-chines with deep neural networks to capture both low-order and high-order feature interactions. • ESMM (Ma et al. 2018b): Entire Space Multi-Task Model addresses sample selection bias by modeling CVR over entire exposure space rather than clicked samples. • MMoE (Ma et al. 2018a): Multi-gate Mixture-of-Experts learns task-specific and shared representations through a gating mechanism for multi-task learning. • BERT4Rec (Sun et al. 2019): Bidirectional Encoders from Transformer for SR that uses bidirectional self-attention to model user behavior sequences and employs Cloze task for pre-training to capture contextual informa-tion from both directions. • ESM 2 (Wen et al. 2020): Entire Space Multi-task Mod-eling with field-level calibration to handle task conflicts and improve CVR prediction. • ESCM 2 (Wang et al. 2022): Entire Space Counterfactual Multi-task Modeling that employs counterfactual risk minimization to address selection bias and data sparsity. • DCMT (Zhu et al. 2023): Disentangled Causal Multi-Task learning that separately models CVR in click and non-click spaces to reduce gradient conflicts. • CL4CVR (Ouyang et al. 2023): Contrastive Learning for CVR prediction that leverages self-supervised learning to improve representation learning. 27804 Dataset Method AUC HR@K NDCG@K Precision@K Recall@K F1@K @1 @3 @5 @3 @5 @3 @5 @1 @3 @5 @1 @3 @5 YooChoose 
+
+DeepFM 0.6964 0.5379 0.8334 0.9085 0.5438 0.6053 0.4768 0.4140 0.1693 0.4381 0.6299 0.2407 0.4193 0.4599 ESMM 0.5970 0.5016 0.8164 0.9017 0.5226 0.5881 0.4605 0.4045 0.1611 0.4247 0.6181 0.2273 0.4060 0.4501 MMOE 0.6724 0.4870 0.8108 0.8994 0.5132 0.5767 0.4555 0.3982 0.1547 0.4188 0.6083 0.2191 0.4008 0.4429 BERT4Rec 0.5786 0.4066 0.7332 0.8741 0.4325 0.5049 0.3875 0.3690 0.1289 0.3590 0.5641 0.1822 0.3412 0.4104 ESM2 0.6945 0.5070 0.8280 0.9065 0.5334 0.5968 0.4721 0.4119 0.1616 0.4359 0.6282 0.2284 0.4163 0.4583 ESCM 2-DR 0.6327 0.4926 0.8199 0.9054 0.5193 0.5867 0.4610 0.4067 0.1557 0.4238 0.6214 0.2210 0.4058 0.4529 ESCM 2-IPS 0.6621 0.5063 0.8282 0.9096 0.5287 0.5943 0.4670 0.4094 0.1598 0.4325 0.6268 0.2271 0.4125 0.4562 DCMT 0.6687 0.4944 0.8211 0.9023 0.5226 0.5866 0.4640 0.4060 0.1556 0.4288 0.6194 0.2213 0.4094 0.4519 CL4CVR 0.6635 0.5006 0.8278 0.9102 0.5269 0.5935 0.4653 0.4091 0.1606 0.4341 0.6279 0.2270 0.4122 0.4564 DDPO 0.6838 0.5026 0.8274 0.9063 0.5244 0.5890 0.4617 0.4043 0.1614 0.4289 0.6211 0.2277 0.4082 0.4511 NISE 0.5946 0.5012 0.8256 0.9116 0.5260 0.5909 0.4616 0.4045 0.1624 0.4329 0.6235 0.2283 0.4095 0.4516 EVI 0.6597 0.4888 0.8177 0.9044 0.5177 0.5826 0.4595 0.4028 0.1545 0.4241 0.6170 0.2191 0.4052 0.4489 
+
+PARS (Ours) 0.9398 0.6173 0.8530 0.9204 0.5903 0.6285 0.4868 0.4170 0.2278 0.4761 0.6393 0.3066 0.4395 0.4645 RetailRocket 
+
+DeepFM 0.5061 0.2965 0.6852 0.8499 0.4702 0.5512 0.2884 0.2344 0.1980 0.5934 0.7847 0.2231 0.3647 0.3407 ESMM 0.5188 0.3207 0.7146 0.8707 0.4978 0.5769 0.2987 0.2385 0.2242 0.6184 0.8039 0.2492 0.3791 0.3477 MMOE 0.5166 0.3063 0.7023 0.8503 0.4813 0.5584 0.2899 0.2336 0.2121 0.6048 0.7846 0.2365 0.3691 0.3402 BERT4Rec 0.5103 0.3156 0.7244 0.8664 0.4996 0.5732 0.2994 0.2363 0.2198 0.6289 0.8011 0.2452 0.3828 0.3454 ESM2 0.5487 0.3650 0.7376 0.8792 0.5311 0.6040 0.3085 0.2427 0.2612 0.6453 0.8160 0.2884 0.3929 0.3532 ESCM 2-DR 0.5156 0.3207 0.7027 0.8562 0.4936 0.5723 0.2934 0.2340 0.2193 0.6077 0.7893 0.2455 0.3717 0.3410 ESCM 2-IPS 0.5217 0.3041 0.6891 0.8537 0.4762 0.5581 0.2874 0.2350 0.2084 0.5961 0.7873 0.2331 0.3647 0.3418 DCMT 0.5246 0.3271 0.6976 0.8677 0.4917 0.5753 0.2921 0.2373 0.2290 0.6047 0.8011 0.2549 0.3707 0.3459 CL4CVR 0.5179 0.3131 0.6937 0.8541 0.4850 0.5659 0.2914 0.2352 0.2203 0.6018 0.7909 0.2444 0.3693 0.3427 DDPO 0.5468 0.3764 0.7350 0.8796 0.5357 0.6078 0.3061 0.2393 0.2777 0.6425 0.8127 0.3037 0.3907 0.3498 NISE 0.5265 0.3296 0.7095 0.8673 0.4988 0.5789 0.2956 0.2390 0.2287 0.6169 0.8043 0.2545 0.3760 0.3482 EVI 0.5079 0.3271 0.7091 0.8562 0.4955 0.5723 0.2934 0.2354 0.2306 0.6108 0.7910 0.2556 0.3729 0.3426 
+
+PARS (Ours) 0.9718 0.7835 0.9145 0.9507 0.8076 0.8379 0.3902 0.2687 0.6194 0.8286 0.9030 0.6647 0.5016 0.3914 Taobao 
+
+DeepFM 0.5303 0.1305 0.2999 0.4261 0.1983 0.2519 0.1089 0.0983 0.1010 0.2497 0.3736 0.1097 0.1461 0.1508 ESMM 0.5043 0.1088 0.2838 0.4152 0.1823 0.2376 0.1023 0.0952 0.0847 0.2366 0.3640 0.0918 0.1377 0.1464 MMOE 0.5044 0.1068 0.2777 0.4097 0.1781 0.2333 0.1003 0.0941 0.0824 0.2317 0.3591 0.0896 0.1349 0.1445 BERT4Rec 0.5039 0.1020 0.2767 0.4168 0.1758 0.2350 0.1004 0.0964 0.0783 0.2303 0.3670 0.0853 0.1347 0.1480 ESM2 0.5282 0.1289 0.3036 0.4304 0.1999 0.2543 0.1103 0.0994 0.0993 0.2529 0.3779 0.1080 0.1479 0.1525 ESCM 2-DR 0.5127 0.1109 0.2853 0.4192 0.1831 0.2401 0.1030 0.0965 0.0850 0.2371 0.3677 0.0925 0.1384 0.1482 ESCM 2-IPS 0.5128 0.1148 0.2893 0.4218 0.1876 0.2436 0.1050 0.0971 0.0893 0.2413 0.3700 0.0968 0.1409 0.1492 DCMT 0.5093 0.1102 0.2857 0.4122 0.1833 0.2368 0.1033 0.0947 0.0847 0.2370 0.3605 0.0922 0.1386 0.1454 CL4CVR 0.5106 0.1112 0.2884 0.4197 0.1852 0.2411 0.1048 0.0970 0.0851 0.2403 0.3684 0.0927 0.1405 0.1489 DDPO 0.5626 0.1378 0.3262 0.4536 0.2154 0.2705 0.1186 0.1051 0.1073 0.2739 0.4007 0.1162 0.1595 0.1614 NISE 0.5068 0.1096 0.2889 0.4182 0.1848 0.2400 0.1050 0.0969 0.0841 0.2405 0.3679 0.0916 0.1408 0.1486 EVI 0.5061 0.1081 0.2784 0.4095 0.1789 0.2339 0.1006 0.0942 0.0837 0.2320 0.3583 0.0909 0.1353 0.1446 
+
+PARS (Ours) 0.8953 0.1768 0.3476 0.4572 0.2444 0.2926 0.1282 0.1070 0.1407 0.2961 0.4069 0.1514 0.1726 0.1642 
+
+Table 2: Performance comparison across three datasets. Best results are in bold , second best are underlined. 0.00 0.25 0.50 0.75 1.00 
+
+Ratio     
+
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> 1.0
+> AUC
+> 0.00 0.25 0.50 0.75 1.00
+
+Ratio     
+
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> HR@1
+> 0.00 0.25 0.50 0.75 1.00
+
+Ratio     
+
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> Recall@1
+> 0.00 0.25 0.50 0.75 1.00
+
+Ratio 
+
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> F1@1
+> RR(D) RR(P) YC(D) YC(P) TB(D) TB(P)
+
+Figure 3: Performance comparison across multiple evaluation metrics with varying the ratios of using positive acquisition labels on three e-commerce datasets. (Abbreviations: RR=RetailRocket, YC=YooChoose, TB=Taobao, D=DeepFM, P=PARS.) • DDPO (Su et al. 2024): Doubly-robust estimator with Dual Propensity Optimization that combines inverse propensity weighting with direct prediction. • NISE (Huang et al. 2024a): Negative sampling with Importance Sampling Estimator that addresses exposure bias through importance-weighted learning. • EVI (Fei, Zhang, and Li 2025): An entire-space varia-tional information exploitation framework that generates unbiased pseudo labels via a conditional CVR teacher and transfers non-click information using variational in-ference and logit distillation to improve CVR prediction. These baseline methods represent the current state-of-the-art in CVR prediction, covering diverse approaches that in-clude multi-task learning, causal inference, deep feature in-27805 0 200      
+
+> Epoch
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> AUC
+> 0200
+> Epoch
+> 0.35
+> 0.40
+> 0.45
+> 0.50
+> 0.55
+> 0.60
+> HR@1
+> 0200
+> Epoch
+> 0.65
+> 0.70
+> 0.75
+> 0.80
+> 0.85
+> HR@3
+> 0200
+> Epoch
+> 0.40
+> 0.45
+> 0.50
+> 0.55
+> 0.60
+> NDCG@3
+> 0200
+> Epoch
+> 0.350
+> 0.375
+> 0.400
+> 0.425
+> 0.450
+> 0.475
+> 0.500
+> Precision@3
+> 0200
+> Epoch
+> 0.30
+> 0.35
+> 0.40
+> 0.45
+> Recall@3
+> BERT4Rec CL4CVR DCMT DDPO DeepFM ESCM2_DR ESCM2_IPS ESM2 ESMM EVI MMOE NISE PARS
+
+Figure 4: Comparison of our method and baselines on the YooChoose dataset across six metrics (AUC, HR@1, HR@3, NDCG@3, Precision@3, Recall@3) over training epochs. teraction modeling, and various debiasing techniques. Com-pared against this comprehensive set of baselines, we can thoroughly evaluate the effectiveness of PARS. Our imple-mentation is publicly available at the following link 4.
+
+Impact of Label Availability on Baseline Performance 
+
+We investigate how label availability affects baseline model performance. Ablation studies are conducted by providing baseline training models with varying ratios of ground-truth labels. Note that when the ratio equals 50%, it means that the baseline methods use 50% of the positive acquisition labels and set the rest positive acquisition labels to zeros. Figure 3 illustrates the performances of DeepFM using dif-ferent label ratios on all three datasets. Remarkably, PARS without using item acquisition labels outperforms DeepFM using 100% item acquisition labels. More experiments are postponed to supplementary materials. The results reveal a critical finding: baseline performance deteriorates significantly when label availability drops be-low 10%, with AUC scores declining by up to 35% on Yoo-Choose and 42% on Taobao. This dramatic performance drop underscores the heavy reliance of traditional CVR models on labeled data. 
+
+Overall Comparative Analysis Although PARS outper-forms most CVR baselines using 100% item acquisition la-bels, its performance on Taobao is not significant because Taobao has a very high number of positive item acquisition labels, i.e., 75.45% of the user interaction sequences contain at least one item marked as purchased. Table 2 shows that, under different metrics, PARS without using item acquisi-tion labels remarkably outperforms all baselines using 50% positive item acquisition labels, showing the effectiveness of PARS. In the supplementary materials, we show that PARS without using any item acquisition labels outperforms most of the CVR baselines using 100% item acquisition labels. 
+
+Training Stability and Convergence Analysis To evalu-ate the training dynamics and convergence behavior of our proposed methods, we conduct extensive experiments track-ing model performance throughout the training process. Fig-ure 4 presents a comprehensive comparison between our approach and baseline methods on the YooChoose datasets 
+
+> 4
+
+https://github.com/bjtu-lucas-nlp/PARS 
+
+(comparisons on RetailRocket and Taobao datasets are put in the supplementary materials due to space limit), evaluat-ing six key metrics: AUC, HR@1, HR@3, NDCG@3, Pre-cision@3, and Recall@3 over 300 training epochs. The re-sults reveal several important insights about our label-free learning framework. First, PARS demonstrates remarkable training stability across all metrics and datasets. While base-line methods exhibit considerable fluctuations during train-ing, particularly in the initial 50 epochs, PARS maintains a smooth and consistent improvement trajectory. This sta-bility is particularly pronounced in ranking metrics such as NDCG@3 and HR@3, where PARS shows monotonic improvement without the oscillations commonly observed in baselines. Second, our approach achieves faster con-vergence compared to most baselines. On the YooChoose dataset, PARS reaches 95% of its final performance within 50 epochs, while baselines such as DDPO and DeepFM re-quire approximately 150-200 epochs to stabilize. This ef-ficient convergence is attributed to our principled learn-ing framework that leverages inherent data structures rather than relying on potentially noisy label signals. Furthermore, the consistent performance across all six evaluation met-rics demonstrates the robustness of PARS. Unlike some baselines that show trade-offs between different metrics (e.g., improving AUC while degrading Precision@3), PARS maintains balanced performance improvements across both ranking and classification objectives. This comprehensive superiority validates the effectiveness of PARS. 
+
+## Conclusion 
+
+The paper presents a novel and promising RS setting, where only user browsing histories are available without any item acquisition labels. An effective algorithm termed as par-tial acquisition recommender system (PARS) has been pro-posed. The key idea is to use maksed language modeling and partial label learning to help extract reliable user and item embeddings to predict item acquisition probabilities. Exper-iments show that PARS without using item acquisition la-bels outperforms baselines using item acquisition labels. In the future, we will extend the work in the following aspects. First, build a theoretical foundation of the proposed method. Second, how to effectively incorporate a small amount of item acquisition labels when available. 27806 Acknowledgments 
+
+This work is supported by ARC Discovery Project DP220102635 “Robust Meta Learning for Risk-aware Rec-ommender Systems.” 
+
+## References 
+
+Claypool, M.; Brown, D.; Le, P.; and Waseda, M. 2001. In-ferring user interest. IEEE Internet Computing , 5(6): 32–39. Cour, T.; Sapp, B.; and Taskar, B. 2011. Learning from par-tial labels. The Journal of Machine Learning Research , 12: 1501–1536. Devlin, J.; Chang, M.-W.; Lee, K.; and Toutanova, K. 2019. Bert: Pre-training of deep bidirectional transformers for lan-guage understanding. In Proceedings of the 2019 conference of the North American chapter of the association for compu-tational linguistics: human language technologies, volume 1 (long and short papers) , 4171–4186. Dwork, C. 2006. Differential privacy. In International col-loquium on automata, languages, and programming , 1–12. Springer. Fei, K.; Zhang, X.; and Li, J. 2025. Entire-Space Varia-tional Information Exploitation for Post-Click Conversion Rate Prediction. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 39, 11654–11662. Feng, L.; Lv, J.; Han, B.; Xu, M.; Niu, G.; Geng, X.; An, B.; and Sugiyama, M. 2020. Provably consistent partial-label learning. Advances in neural information processing systems , 33: 10948–10960. Gui, J.; Chen, T.; Zhang, J.; Cao, Q.; Sun, Z.; Luo, H.; and Tao, D. 2024. A survey on self-supervised learning: Al-gorithms, applications, and future trends. IEEE Transac-tions on Pattern Analysis and Machine Intelligence , 46(12): 9052–9071. Guo, H.; Tang, R.; Ye, Y.; Li, Z.; and He, X. 2017. DeepFM: a factorization-machine based neural network for CTR pre-diction. arXiv preprint arXiv:1703.04247 .Huang, J.; Zhang, L.; Wang, J.; Jiang, S.; Huang, D.; Ding, C.; and Xu, L. 2024a. Utilizing Non-click Samples via Semi-supervised Learning for Conversion Rate Prediction. In Proceedings of the 18th ACM Conference on Recom-mender Systems , 350–359. Huang, W.; Ye, M.; Shi, Z.; Wan, G.; Li, H.; Du, B.; and Yang, Q. 2024b. Federated learning for generalization, ro-bustness, fairness: A survey and benchmark. IEEE Transac-tions on Pattern Analysis and Machine Intelligence , 46(12): 9387–9406. Kang, W.-C.; and McAuley, J. 2018. Self-attentive sequen-tial recommendation. In 2018 IEEE international confer-ence on data mining (ICDM) , 197–206. IEEE. Liang, F.; Pan, W.; and Ming, Z. 2021. Fedrec++: Lossless federated recommendation with explicit feedback. In Pro-ceedings of the AAAI conference on artificial intelligence ,volume 35, 4224–4231. Liu, Z.; Chen, Y.; Li, J.; Yu, P. S.; McAuley, J.; and Xiong, C. 2021. Contrastive self-supervised sequential rec-ommendation with robust augmentation. arXiv preprint arXiv:2108.06479 .Lu, J.; Wu, D.; Mao, M.; Wang, W.; and Zhang, G. 2015. Recommender system application developments: a survey. 
+
+Decision support systems , 74: 12–32. Lu, K.; Lu, J.; Xu, H.; Guo, K.; Zhang, Q.; Lin, H.; Grosser, M.; Zhang, Y.; and Zhang, G. 2025. Genomics-Enhanced Cancer Risk Prediction for Personalized LLMs-Driven Healthcare Recommender Systems. ACM Transac-tions on Information Systems .Lu, K.; Zhang, Q.; Hughes, D.; Zhang, G.; and Lu, J. 2024. Amt-cdr: A deep adversarial multi-channel transfer network for cross-domain recommendation. ACM Transactions on Intelligent Systems and Technology , 15(4): 1–26. Lv, J.; Xu, M.; Feng, L.; Niu, G.; Geng, X.; and Sugiyama, M. 2020. Progressive identification of true labels for partial-label learning. In international conference on machine learning , 6500–6510. PMLR. Ma, J.; Zhao, Z.; Yi, X.; Chen, J.; Hong, L.; and Chi, E. H. 2018a. Modeling task relationships in multi-task learning with multi-gate mixture-of-experts. In Proceedings of the 24th ACM SIGKDD international conference on knowledge discovery & data mining , 1930–1939. Ma, X.; Zhao, L.; Huang, G.; Wang, Z.; Hu, Z.; Zhu, X.; and Gai, K. 2018b. Entire space multi-task model: An effective approach for estimating post-click conversion rate. In The 41st International ACM SIGIR Conference on Research & Development in Information Retrieval , 1137–1140. N´ u˜ nez-Valdez, E. R.; Quintana, D.; Crespo, R. G.; Isasi, P.; and Herrera-Viedma, E. 2018. A recommender system based on implicit feedback for selective dissemination of ebooks. Information Sciences , 467: 87–98. Ouyang, W.; Dong, R.; Zhang, X.; Guo, C.; Luo, J.; Liu, X.; and Du, Y. 2023. Contrastive Learning for Conversion Rate Prediction. In Proceedings of the 46th International ACM SIGIR Conference on Research and Development in Information Retrieval , 1909–1913. Rajendran, D. P. D.; and Sundarraj, R. P. 2021. Using topic models with browsing history in hybrid collaborative fil-tering recommender system: Experiments with user ratings. 
+
+International Journal of Information Management Data In-sights , 1(2): 100027. Resnick, P.; and Varian, H. R. 1997. Recommender systems. 
+
+Communications of the ACM , 40(3): 56–58. Roy, D.; and Dutta, M. 2022. A systematic review and re-search perspective on recommender systems. Journal of Big Data , 9(1): 59. Su, H.; Meng, L.; Zhu, L.; Lu, K.; and Li, J. 2024. DDPO: Direct Dual Propensity Optimization for Post-Click Conver-sion Rate Estimation. In Proceedings of the 47th Interna-tional ACM SIGIR Conference on Research and Develop-ment in Information Retrieval , 1179–1188. Sun, F.; Liu, J.; Wu, J.; Pei, C.; Lin, X.; Ou, W.; and Jiang, P. 2019. BERT4Rec: Sequential recommendation with bidi-rectional encoder representations from transformer. In Pro-ceedings of the 28th ACM international conference on infor-mation and knowledge management , 1441–1450. 27807 Wang, H.; Chang, T.-W.; Liu, T.; Huang, J.; Chen, Z.; Yu, C.; Li, R.; and Chu, W. 2022. Escm2: Entire space counterfac-tual multi-task model for post-click conversion rate estima-tion. In Proceedings of the 45th International ACM SIGIR Conference on Research and Development in Information Retrieval , 363–372. Wang, S.; Hu, L.; Wang, Y.; Cao, L.; Sheng, Q.; and Orgun, M. 2019. Sequential recommender systems: Challenges, progress and prospects. In Twenty-Eighth International Joint Conference on Artificial Intelligence {IJCAI-19 }. In-ternational Joint Conferences on Artificial Intelligence Or-ganization. Wen, H.; Zhang, J.; Lin, Q.; Yang, K.; and Huang, P. 2019. Multi-level deep cascade trees for conversion rate prediction in recommendation system. In proceedings of the AAAI con-ference on artificial intelligence , volume 33, 338–345. Wen, H.; Zhang, J.; Wang, Y.; Lv, F.; Bao, W.; Lin, Q.; and Yang, K. 2020. Entire space multi-task modeling via post-click behavior decomposition for conversion rate prediction. In Proceedings of the 43rd International ACM SIGIR confer-ence on research and development in Information Retrieval ,2377–2386. Xie, X.; Sun, F.; Liu, Z.; Wu, S.; Gao, J.; Zhang, J.; Ding, B.; and Cui, B. 2022. Contrastive learning for sequential recom-mendation. In 2022 IEEE 38th international conference on data engineering (ICDE) , 1259–1273. IEEE. Xu, M.; Lian, Z.; Feng, L.; Liu, B.; and Tao, J. 2023. ALIM: adjusting label importance mechanism for noisy partial la-bel learning. Advances in Neural Information Processing Systems , 36: 38668–38684. Xu, N.; Lv, J.; and Geng, X. 2019. Partial label learning via label enhancement. In Proceedings of the AAAI Conference on artificial intelligence , volume 33, 5557–5564. Xu, N.; Qiao, C.; Geng, X.; and Zhang, M.-L. 2021. Instance-dependent partial label learning. Advances in Neu-ral Information Processing Systems , 34: 27119–27130. Ye, S.; and Lu, J. 2023. Sequence unlearning for sequential recommender systems. In Australasian Joint Conference on Artificial Intelligence , 403–415. Springer. Ye, S.; and Lu, J. 2024. Robust recommender systems with rating flip noise. ACM Transactions on Intelligent Systems and Technology , 16(1): 1–19. Ye, S.; Lu, J.; and Zhang, G. 2025. Towards safe machine unlearning: A paradigm that mitigates performance degrada-tion. In Proceedings of the ACM on Web Conference 2025 ,4635–4652. Zhang, M.-L.; Zhou, B.-B.; and Liu, X.-Y. 2016. Partial la-bel learning via feature-aware disambiguation. In Proceed-ings of the 22nd ACM SIGKDD international conference on knowledge discovery and data mining , 1335–1344. Zhou, Z.-H. 2018. A brief introduction to weakly supervised learning. National science review , 5(1): 44–53. Zhu, F.; Zhong, M.; Yang, X.; Li, L.; Yu, L.; Zhang, T.; Zhou, J.; Chen, C.; Wu, F.; Liu, G.; et al. 2023. Dcmt: a direct entire-space causal multi-task framework for post-click conversion estimation. In 2023 IEEE 39th Inter-national Conference on Data Engineering (ICDE) , 3113– 3125. IEEE. 27808

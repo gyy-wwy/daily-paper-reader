@@ -1,0 +1,708 @@
+Title: Task-Aware Retrieval Augmentation for Dynamic Recommendation
+
+URL Source: https://ojs.aaai.org/index.php/AAAI/article/download/38609/42571
+
+Number of Pages: 9
+
+Markdown Content:
+# Task-Aware Retrieval Augmentation for Dynamic Recommendation 
+
+Zhen Tao 1,2* , Xinke Jiang 3* , Qingshuai Feng 1, Haoyu Zhang 4, Lun Du 5,Yuchen Fang 6, Hao Miao 7, Bangquan Xie 1, Qingqiang Sun 1,8† 
+
+> 1
+
+Great Bay University 
+
+> 2
+
+Nanjing University 
+
+> 3
+
+Independent Researcher 
+
+> 4
+
+City University of Hong Kong 
+
+> 5
+
+Ant Research 
+
+> 6
+
+University of Electronic Science and Technology of China 
+
+> 7
+
+Hong Kong Polytechnic University 
+
+> 8
+
+Dongguan Key Laboratory of Intelligence Equipment and Smart Industry zhentao.tz@gmail.com, qqsun@gbu.edu.cn 
+
+Abstract 
+
+Dynamic recommendation systems aim to provide personal-ized suggestions by modeling temporal user-item interactions across time-series behavioral data. Recent studies have lever-aged pre-trained dynamic graph neural networks (GNNs) to learn user-item representations over temporal snapshot graphs. However, fine-tuning GNNs on these graphs often results in generalization issues due to temporal discrepan-cies between pre-training and fine-tuning stages, limiting the model’s ability to capture evolving user preferences. To address this, we propose TarDGR, a task-aware retrieval-augmented framework designed to enhance generalization capability by incorporating task-aware model and retrieval-augmentation. Specifically, TarDGR introduces a Task-Aware Evaluation Mechanism to identify semantically relevant his-torical subgraphs, enabling the construction of task-specific datasets without manual labeling. It also presents a Graph Transformer-based Task-Aware Model that integrates seman-tic and structural encodings to assess subgraph relevance. During inference, TarDGR retrieves and fuses task-aware subgraphs with the query subgraph, enriching its represen-tation and mitigating temporal generalization issues. Experi-ments on multiple large-scale dynamic graph datasets demon-strate that TarDGR consistently outperforms state-of-the-art methods, with extensive empirical evidence underscoring its superior accuracy and generalization capabilities. 
+
+1 Introduction 
+
+Dynamic recommendation systems aim to generate person-alized suggestions by modeling how user-item interactions evolve over time through rich temporal behavior data (Zhu et al. 2021b; Yang et al. 2023b; Yu et al. 2024b; Chen et al. 2025). To capture such temporal dynamics, recent ap-proaches have adopted Graph Neural Networks (GNNs) (Yu et al. 2024d,c; Jiang et al. 2025, 2023) that learn user-item representations over sequences of time-evolving snapshot 
+
+> *
+
+These authors contributed equally. 
+
+> †
+
+Corresponding author. Copyright © 2026, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved. Pretained GNN New Temporal Graphs    
+
+> ✗Generalization issue
+> (a) Finetuning
+> Finetune
+> Pretained GNN
+> ✗Semantic mismatch
+> (b) RAG
+> Retrieve via structure and features
+> New Temporal Graphs Pretained GNN
+> Semantic alignment
+> (c) TarDGR
+> Retrieve via task -specific semantic, structure, and features (GT)
+> New Temporal Graphs
+
+✓
+
+Figure 1: Comparison of current methods with TarDGR in dynamic graph recommendation. graphs (Yang et al. 2024; Yu et al. 2024b). These GNN-based methods typically follow a pretraining–finetuning paradigm, where models are first trained on historical graphs to learn transferable structural patterns, and subsequently fine-tuned on recent temporal graphs to adapt to evolving user behavior. However, despite their success, these mod-els often suffer from generalization issues when fine-tuned on new temporal graphs, due to temporal discrepancies be-tween pre-training and fine-tuning interaction graphs (Cong et al. 2024; Lu et al. 2024; Tao et al. 2025; Yu et al. 2023, 2025c; Liang, Gel, and Chen 2025). As the temporal context shifts and user interests evolve, previously learned patterns may no longer align with the current data distribution, limit-ing the model’s ability to deliver accurate recommendations for future interactions. Recent advances in Retrieval-augmented Generation (RAG) techniques have shown promise in addressing gen-eralization issues by incorporating dynamic retrieval mech-anisms, significantly enhancing model capabilities without requiring parameter updates (Wu et al. 2024; Parashar et al. 2024; Jiang* et al. 2025). For dynamic recommendation tasks, providing appropriate context for predicting time-sensitive recommendation representations is crucial for im-proving generalization capability. While existing works have introduced external graph data through structural and feature similarity-based retrieval, they often overlook the seman-The Fortieth AAAI Conference on Artificial Intelligence (AAAI-26) 
+
+15779 Recommendation         
+
+> Prob. Pre -trained
+> Rec. Model
+> Forward
+> Feed
+> Which subgraphs are relevant to the current task
+> and can effectively guide the recommendation ?
+> Coming Interaction Task -Aware Subgraphs Knowledge
+> Retrieved from History Resource
+> Coming Subgraph
+> Embedding
+> Similarity
+> Semantic
+> Encoder
+> Structure
+> Encoder
+> Current Task
+> Desires?
+> Top -M
+> Task -aware
+> user -item
+> Subgraphs
+> 𝑣 !
+> 𝑣 !𝑣 !
+> History user -item
+> Subgraph Library
+> Our TarDGR
+> History
+> Resource?
+
+Figure 2: Task-Aware Retrieval Recommendation. tic task relevance between retrieval and query graphs (Jiang et al. 2024). This limitation is particularly problematic for recommendation tasks, where structurally similar subgraphs may not be beneficial when semantic inconsistency exists among nodes. A comparison of these paradigms is illustrated in Figure 1, highlighting their respective temporal adaptation strategies and limitations. To fully realize the potential of retrieval-augmented recommendation in dynamic environ-ments, we must overcome the following key challenges: C1. How to effectively identify task-relevant subgraphs for recommendation? Current retrieval-based approaches for graph models rely primarily on structural and feature sim-ilarity when retrieving historical subgraphs. They overlook semantic task relevance between retrieval and query graphs, assuming all structurally similar subgraphs provide equal value. For recommendation tasks, this assumption proves problematic as structurally similar subgraphs may contribute little or even negatively when semantic inconsistency exists. Existing frameworks lack mechanisms to evaluate whether retrieved subgraphs actually benefit the specific recommen-dation task at hand. 
+
+C2. How to enable models to understand task-specific requirements without manual annotation? In the realm of graph recommendation, models struggle to interpret what kind of subgraph information best serves the current query recommendation graph. Unlike language model research where task-awareness can be incorporated through dataset construction (Qiao et al. 2025; Sun et al. 2025; Liu et al. 2024), graph data’s inherent complexity makes manual dataset creation nearly infeasible. Without properly under-standing task requirements, models cannot effectively trans-fer knowledge from historical data to new temporal contexts, resulting in suboptimal recommendations in dynamic envi-ronments. To address these challenges, we propose TarDGR 
+
+(Task-Aware Retrieval Augmentation for Dynamic Graph 
+
+Recommendation), a novel framework that enhances gener-alization capability by incorporating task-aware model and retrieval-augmentation. As illustrated in Figure 2, TarDGR identifies and injects task-specific knowledge into the query which enriches the representation. First, to tackle C1 ,TarDGR introduces a Task-Aware Evaluation Mechanism 
+
+that automatically identifies semantically relevant histori-cal resource subgraphs by evaluating how their integration affects similarity with positive recommendation samples. This enables the construction of task-specific datasets with-out manual annotations, defining clear criteria for “task-beneficial” and “task-harmful” subgraphs. Second, address-ing C2 , TarDGR presents a Graph Transformer-based Task-Aware Model that combines semantic and structural encod-ings to evaluate the relevance of subgraphs in relation to current recommendation task requirements. During infer-ence, the model retrieves and fuses task-relevant subgraphs with the query subgraph, thereby enhancing its representa-tion ability and mitigating generalization issues induced by temporal shifts. We summarize our contributions as follows: • We propose a task-aware retrieval-augmented framework for dynamic graph recommendation, offering the first ex-ploration of task-awareness in graph learning for recom-mendation. • We introduce a novel automatic task-aware evaluation framework that distinguishes task-beneficial and task-harmful subgraphs, enabling the construction of task-aware datasets without manual annotations. • We design a Graph Transformer-based Task-Aware Model that effectively captures subgraph relevance by integrating semantic and structural encodings, enabling more accurate relevance estimation and robust knowl-edge transfer under temporal shifts. • We apply the task-aware retrieval-augmentation tech-nique to dynamic graph recommendation systems and demonstrate that TarDGR consistently outperforms state-of-the-art methods across three real-world datasets. 
+
+2 Related Works 
+
+Dynamic Recommendation. Dynamic recommendation has been addressed through sequential models such as BERT4Rec (Sun et al. 2019) and DCRec (Yang et al. 2023a), which rely on fixed historical sequences without ex-plicitly modeling temporal graph structures. To better cap-ture structural dynamics, dynamic graph neural networks (DGNNs) have emerged, including EvolveGCN (Pareja et al. 2020), ROLAND (You, Du, and Leskovec 2022), and WinGNN (Zhu et al. 2023), which explicitly model structural evolution over time. In parallel, the pretrain-ing–finetuning paradigm has proven effective for trans-ferring structural knowledge in graph learning (Yu et al. 2025a,b, 2024a). GraphPro (Yang et al. 2024) extends this to dynamic recommendation by incorporating tem-poral prompts during pretraining and fine-tuning, achiev-ing promising performance. However, significant temporal shifts between pretraining and fine-tuning snapshots can lead to generalization issues, ultimately limiting the model’s ability to adapt to evolving user preferences. 
+
+Retrieval-Augmented Generation. RAG enhances pre-trained language models by retrieving external knowledge 15780 to construct informative context for downstream tasks (Zhu et al. 2021a; Lewis et al. 2021). These systems typically retrieve documents or entities from large corpora to guide generation, improving factuality and interpretability (Sarthi et al. 2024; Gao et al. 2022). RAG has been successfully extended to various modalities, including vision, code, au-dio, and video (Zheng et al. 2025; Yang et al. 2025; Xue et al. 2024; Singh et al. 2025). In the graph domain, RAG has been applied to knowledge graphs by leveraging node-level textual features (Xu et al. 2024). Recent works like RAGRAPH (Jiang et al. 2024) propose plug-and-play re-trieval to augment pre-trained GNNs. However, these meth-ods do not consider task-specific relevance during retrieval. As a result, semantically misaligned subgraphs may be in-troduced, degrading the quality of the downstream recom-mendation. Our approach addresses this gap by incorporat-ing task-aware retrieval mechanisms. 
+
+3 Preliminaries 
+
+Problem Formulation We model dynamic recommenda-tion scenarios as a sequence of temporal user-item inter-action graphs. Formally, the dynamic graph is denoted by 
+
+G = {Gt}Tt=1 , where each snapshot at time step t is repre-sented as Gt = ( Vt, Et, Xt, At). Here, Vt denotes the node set, Et the edge set, Xt the feature matrix, and At the ad-jacency matrix at time t. To facilitate temporal modeling and evaluation, the complete temporal graph G is partitioned along the time axis into a training set Gtrain and a test set 
+
+Gtest (Jiang et al. 2024). Given a temporal graph G, we for-mulate dynamic graph recommendation as the task of learn-ing a predictive model to forecast future user-item interac-tions. To improve generalization under temporal distribution shifts, we adopt an augmented learning framework in which the model enhances the query subgraph by retrieving and in-corporating relevant subgraphs from historical interactions. 
+
+Recommendation Subgraph Library. To improve struc-tural generalization in dynamic recommendation, we con-struct a Recommendation Subgraph Library from histori-cal user-item interactions, utilizing FAISS-based embedding retrieval (Douze et al. 2024). Each resource subgraph is extracted as a k-hop neighborhood centered around nodes involved in past interactions, forming a collection GR =
+
+{G(vr )}Rr=1 . Specifically, each subgraph is defined as: 
+
+G(vr ) = 
+
+
+
+vr , N (k)(vr ), Xr , Ar
+
+
+
+, (1) where vr denotes the central node, and N (k)(vr ) repre-sents its k-hop neighborhood, including both user and item nodes. In our formulation, the embedding of each subgraph serves as the key , while its graph structure and representation jointly constitute the value .
+
+Task Relevance Estimation. To retrieve semantically rel-evant subgraphs for a given recommendation query, we de-fine a task relevance function that evaluates the utility of a candidate subgraph. Given a task T , a query subgraph 
+
+G(vq ), and a candidate subgraph G(vr ) from the resource pool, the task relevance score is defined as: REL (G(vq ), G (vr ) | T ) = Rθ
+
+
+
+G(vq ), G (vr )
+
+
+
+, (2) Task -Aware Transformer Model ℛ!            
+
+> Concat Embedding
+> Position Embedding
+> Structure Encoding Semantic Encoding
+> Score Function Mapping Network
+> Candidate Score List
+> Semantic Encoder Structure Encoder
+> Magnitude
+> Fitting Loss
+> Ordinal
+> Contrast Loss
+> 𝑣 !
+> 𝑣 !
+> 𝑣 !
+> Resource Subgraph
+> Library 𝐺 "
+> History user -item
+> Interaction G raphs
+> Chunk
+> Coming
+> Interaction
+> Subgraph
+> Embed.
+> Similarity
+> Distance
+> TopK
+> Subgraphs
+> Expand to K
+> Training Query
+> Subgraph 𝐺 (𝑣 !)
+> Rec. Task
+> Embedding
+> 𝑣 !𝑣 !
+> Positive
+> Subgraphs 𝐺 (𝑣 #)$
+> ……
+> ……
+> 𝑣 !𝑣 !
+> Sampled
+> Subgraphs 𝐺 "
+> 𝑣 !
+> 𝑣 !
+> Query
+> Subgraph 𝐺 (𝑣 !)
+> Training
+> Dataset  Resource
+> Subgraph Library
+> 𝑆𝑖𝑚 (𝐺 (𝑣 !),𝐺 (𝑣 !)#)
+> 𝑆𝑖𝑚 (𝐺 (𝑣 *!),𝐺 (𝑣 !)#)
+> 𝐶 =∆𝑆𝑖𝑚
+> Task -Aware
+> relevance score
+> 𝑣 !𝑣 !
+> Sampled
+> Subgraphs
+> 𝐺 "
+> 𝑣 !
+> 𝑣 !
+> Query
+> Subgraph
+> 𝐺 (𝑣 #)
+> Pair
+> Task -Aware Dataset
+
+𝔇 !"!#$              
+
+> {(𝐺 𝑣 !
+> $,𝐺 𝑣 %$,𝐶 $)}$&'
+> (
+> BiSCL -Pre -training
+> Query
+> Prob.
+> Similarity
+> Recommendation
+> Calculate
+> with Other
+> Node Subgraph Probs.
+> Task -Aware Retrieval from
+> history resource subgraphs
+
+𝓛 𝒃𝒑𝒓 
+
+𝓛 𝒓𝒆𝒈 
+
+𝓛 𝒎𝒓𝒍 
+
+# ｝𝓛 𝑻𝒂𝒓𝑫𝑮𝑹         
+
+> Pre -trained GNN  Rec.  Model
+> Task -aware Dataset
+> 𝔇 %&%'(
+> Task -Aware Dataset
+> Query Subgraph 𝐺 (𝑣 !)
+> TopM Retireved Subgraphs 𝐺 𝑣 !𝑀
+> Query Subgraph 𝐺 (𝑣 !)
+> Task Aware Model —>Task -Aware Scores
+> Retrieved task -relevant
+> representation
+> 𝑣 !
+> 𝑣 !
+> inter aggregate
+> intra aggregate
+> fuse
+
+Figure 3: Overview of the TarDGR framework. where Rθ is a task-aware neural model parameterized by 
+
+θ, designed to jointly encode both the query graph and the candidate subgraph as dual inputs. 
+
+4 TarDGR Framework 
+
+In this section, we present TarDGR , a novel task-aware retrieval framework designed to enhance the generaliza-tion ability of dynamic graph recommendations. As illus-trated in Figure 3, the top depicts the evaluation mechanism part , which automatically constructs task-specific supervi-sion signals. The middle presents the model part , detail-ing the input formulation, architectural design, and BiSCL pretraining. The bottom presents the inference and training pipeline , where task-aware subgraphs are retrieved and inte-grated to enhance dynamic recommendation. A formal the-oretical analysis of the generalization benefits of TarDGR is provided in Appendix. 
+
+4.1 Task-Aware Evaluation Mechanism 
+
+We propose an automated task-aware evaluation mechanism that quantifies the contribution of a candidate historical sub-graph G(vr ) to the current recommendation query G(vq ).Using a pre-trained GNN recommendation model f θ
+
+pre ,both subgraphs are encoded into embeddings E NC 
+
+ G(vq )
+
+and E NC 
+
+ G(vr ). We first compute the average cosine sim-ilarity between the query embedding and a set of positive 15781 historical subgraphs {G(vq )+}:        
+
+> SIM before =1
+> N+
+> N+
+> X
+> i=1
+> COS
+> 
+> ENC
+>  G(vq),ENC
+>  G(vq)+
+> i
+> 
+> .(3)
+
+Next, we fuse the query subgraph G(vq ) with the can-didate subgraph G(vr ) by constructing inter-subgraph links between the central modes and applying graph convolution to obtain a combined representation: ENC 
+
+  ˜G(vq )= ffuse 
+
+
+
+ENC 
+
+ G(vq ) ⊕ G(vr )
+
+. (4) The updated similarity to the positive set is then:          
+
+> SIM after =1
+> N+
+> N+
+> X
+> i=1
+> COS
+>  ENC
+>  ˜G(vq),ENC
+>  (G(vq)+
+> i
+>  .(5)
+
+We define the relative similarity shift as: ∆REL = SIM after −
+
+SIM before . This ∆REL is utilized as the task relevance score 
+
+Cr , quantifying the degree to which the candidate subgraph 
+
+G(vr ) contributes to current recommendation. Specifically: • If ∆REL > 0, the candidate subgraph is positively corre-lated with the task and is considered a beneficial sample. • If ∆REL ≈ 0, it is deemed irrelevant. • If ∆REL < 0, it is negatively correlated and considered harmful to task performance. Based on this scoring, we construct a task-aware dataset 
+
+Daware = {(G(vq ), G (vr ), C r )}, where each triplet consists of a query subgraph, a candidate recommendation subgraph, and their associated task relevance score. This dataset pro-vides task-aligned supervision signals for the subsequent training of a task-aware graph recommendation model. 
+
+4.2 Graph Transformer-based Task-Aware Model 
+
+To equip the dynamic graph recommendation system with task-aware retrieval augmentation, we propose the Graph Transformer-based Task-Aware Model denoted as Rθ .This model is designed to effectively capture the complex interactions between a query subgraph and candidate sub-graphs by leveraging the expressive power of graph trans-formers, thereby enhancing the relevance estimation and re-trieval performance in dynamic recommendation scenarios. 
+
+Subgraph Semantic Encoder To capture the temporal evolution of user preferences and interaction patterns, we initialize node embeddings using a pre-trained dynamic GNN (Yang et al. 2024), which encodes historical tempo-ral dependencies across graph snapshots. Specifically, the initial node representations at the fine-tuning step t are ob-tained via forward propagation over the graph at time t − 1:
+
+ht = forward (ht−1; Gt−1).Each resource subgraph G(vr ) is encoded by applying 
+
+L-layer graph convolutions on its temporally contextualized node embeddings to yield subgraph-level representations: 
+
+hr =
+
+> L
+
+X
+
+> l=0
+
+GC ONV (hrt , G(vr )) ∈ Rd. (6) Given the query subgraph embedding hq ∈ Rd, we com-pute pairwise L2 distances to resource subgraph embeddings 
+
+{hr }Rr=1 : dist( hq , h r ) = h⊤ 
+
+> q
+
+hq +h⊤ 
+
+> r
+
+hr −2h⊤ 
+
+> q
+
+hr . The top-K
+
+resource subgraphs with the smallest distances to the query subgraph are retrieved to form the initial candidate set: 
+
+G(vq )K = TOP Ksearch (G(vq ), G (vr )) . (7) Each candidate is paired with the query subgraph to form the matching set: ⟨G(vq ), G (vi)⟩ | G(vi) ∈ G (vq )K . To enable pairwise semantic modeling, we jointly encode both the query and candidate subgraphs:        
+
+> h=
+> "LX
+> l=0
+> GC ONV (hqt,G(vq))
+> LX
+> l=0
+> GC ONV (hit,G(vi))
+> #
+> .(8)
+
+A positional embedding P is added to h to encode the relative positional order, hpos = h + P . We input hpos into a multi-head self-attention module to capture fine-grained relational dependencies between query and candidate sub-graphs. It is projected into query, key, and value matri-ces: Q = hpos WQ, K = hpos WK , V = hpos WV . Atten-tion weights are computed as: Attn = SOFTMAX 
+
+ QK ⊤
+
+> √dk
+
+
+
+V ,where dk represents the dimensionality of the key vectors. The final subgraph-level semantic representation is: 
+
+hsem = CONCAT (Attn 1, . . . , Attn H )WO , (9) where WO is a trainable output projection matrix. The re-sulting embedding hsem serves as the task-aware semantic encoding of the query-candidate subgraph pair. 
+
+Subgraph Structure Encoder We further employ a ded-icated subgraph structure encoder to encode structural de-pendencies within each subgraph. The positional-enhanced embedding hpos ∈ R2d is first linearly projected into a lower-dimensional latent space: hhid = hpos W + b.We then apply multi-layer, multi-head attention to cap-ture fine-grained dependencies. At the l-th layer, query, key, and value matrices are computed via linear transformations, followed by attention calculation and concatenation across heads. Each attention layer is followed by residual connec-tion and layer normalization: 
+
+h(l+1)  
+
+> hid
+
+= LAYER NORM (h(l) 
+
+> hid
+
++ Attn (l)
+
+> output
+
+) (10) We apply position-wise feedforward network (FFN) to enhance representation and introduce non-linearity. The fi-nal FFN output is denoted as hffn . To encode subgraph-level structural patterns, the FFN output is aggregated via normal-ized adjacency propagation: 
+
+hstr = D−1(As + I)hffn W, (11) where D is the degree matrix, As is corresponding adjacency matrix and W ∈ Rdhid ×d.The semantic encoding hsem and structural encoding hstr 
+
+are concatenated to form a task-aware fused representation: 
+
+htask = CONCAT (hsem , h str ). The representation is trans-formed into a task-specific relevance score via a parametric scoring function Sψ (·):
+
+si = Sψ (htask ) = w⊤ RELU(W h task + b), (12) where w maps the hidden representation to a scalar score. 15782 BiSCL Pretraining of Task-Aware Model We introduce Bi-Level Supervised Correlation Loss ( BiSCL ), which pre-trains the task-aware model by jointly supervising numerical fidelity and ordinal consistency. Given Daware = ( G(vq ), G (vr ), C ), each subgraph is en-coded into semantic-structural embeddings zq and zr as in Equation 6. The concatenated pairwise feature hq,r =[zq , |, z r ] and adjacency matrix As are then fed into Rθ to compute the predicted task relevance: Rθ (hq,r , As).We apply a magnitude fitting loss to minimize the discrep-ancy between predicted and task relevance scores: 
+
+Lmtl = 1
+
+N
+
+> N
+
+X
+
+> k=1
+
+(Rθ (hq,r , As) − C)2 . (13) In parallel, we impose a pairwise ordinal constraint loss to preserve inter-sample ordering. Specifically, for every pair 
+
+(k, l ) such that C(k) > C (l), the predicted scores must main-tain this ranking:            
+
+> Locl = log
+> 1 + X
+> k,l
+> exp Rθ(h(l)
+> q,r ,As)− R θ(h(k)
+> q,r ,As)
+> τ
+> !,
+> (14)
+
+where τ is a temperature hyperparameter controlling the penalty’s smoothness. The BiSCL loss is expressed as: 
+
+LBiSCL = ρ · L ocl + (1 − ρ) · L mtl , (15) where ρ ∈ [0 , 1] balances absolute fidelity and ordinal co-herence. BiSCL injects task-aware inductive signals, facili-tating robust pretraining for downstream retrieval task. 
+
+4.3 Task-Aware Retrieval Inference and Training 
+
+Given a query node vq and subgraph G(vq ), we obtain task-aware relevance score list {s(i)}Ki=1 by Rθ based on task-aware model in Section 4.2. We select the top-M subgraphs with the highest task-specific relevance scores to construct the set for retrieval augmentation G(vm) ∈ G (vq )M .Through intra-graph aggregation, we obtain the internal rep-resentation of all task-relevant subgraphs: 
+
+hm =
+
+> L
+
+X
+
+> l=1
+
+GC ONV (l)(ht, G (vm)) , (16) where ht denotes features from dynamic encoder. Retrieved subgraphs are then aggregated via soft evidence aggregation: 
+
+Hrag =
+
+> M
+
+X
+
+> i=1
+
+αi · him,
+
+> M
+
+X
+
+> i=1
+
+αi = 1 , (17) where αi are normalized weights indicating retrieval confi-dence, either uniform or learned from Rθ scores. Then, we employ a residual fusion mechanism to integrate retrieval representation into the query subgraph: 
+
+˜hq = βh q + (1 − β)Hrag , (18) where β is a learnable gate balancing original and retrieved task-relevant representation. Semantic retrieval of historical subgraphs recovers latent dependencies beyond the query context, improving general-ization across temporal recommendation tasks. Finally, we conduct a joint fine-tuning recommendation loss function. Structural robustness is encouraged by injecting stochastic perturbations into the graph topology: E′ = {(u, v ) ∈ E | 
+
+Bernoulli (r) = 1 }, G′ = ( V, E′).User preference is modeled using a task-aware scoring function trained under a margin-based objective. For each training triplet (u, i +, i −), where u and i denote the user and item respectively, the corresponding subgraph inputs are constructed as: X+ = [ hu ∥ hi+ ] and X− = [ hu ∥ hi− ], fol-lowed by relevance scoring via Rθ . The resulting margin ranking loss encourages the model to distinguish relevant items from irrelevant ones in a task-consistent manner: 
+
+Lmrl = 1
+
+|B| 
+
+X
+
+> (u,i +,i −)∈B
+
+max(0 , γ − (s+ − s−)) . (19) To mitigate overfitting and promote stable training, we ap-ply a penalty to the embedding norms:          
+
+> Lreg =12N
+> X
+> u∈B u
+> ∥hu∥22+X
+> i∈B +
+> i
+> ∥h+
+> i∥22+X
+> i∈B −
+> i
+> ∥h−
+> i∥22
+> .
+> (20)
+
+The recommendation preference is captured via the bayesian personalized ranking loss (Rendle et al. 2012): 
+
+Lbpr = − X
+
+> (u,i +,i −)∈B
+
+log σ(h⊤ 
+
+> u
+
+hi+ − h⊤ 
+
+> u
+
+hi− ), (21) where σ(·) denotes the Sigmoid function. The final loss ag-gregates all components: 
+
+Ltotal = Lbpr + λ · L mrl + μ · L reg , (22) where λ and μ are weighting hyperparameters. This op-timization encourages the model to align recommendation signals with task-aware semantics, while improving robust-ness under perturbation and preventing overfitting. 
+
+5 Experiments 
+
+This section presents experiments designed to evaluate the performance of TarDGR , against state-of-the-art baselines on three dynamic graph datasets. Further experiments and analyses are provided in the Appendix. 
+
+5.1 Experimental Setup 
+
+Datasets. We evaluate our method on three public datasets spanning diverse dynamic recommendation sce-narios: Taobao , with 10 days of implicit feedback from the Taobao platform; Koubei , a 9-week user–store interac-tion dataset from Alipay’s location service released for IJ-CAI’16; and Amazon , containing 13 weeks of product re-view data. Additional details are provided in Appendix. 
+
+Methods and Baselines. We compare our approach against representative baselines spanning four major categories: GNN-based recommenders, including LightGCN (He et al. 2020) and its self-supervised variants such as SGL (Wu et al. 15783 Method TAOBAO KOUBEI AMAZON Recall nDCG Recall nDCG Recall nDCG LightGCN 22.47 ±02 .53 21.89 ±02 .80 30.21 ±06 .45 22.24 ±05 .83 15.07 ±06 .48 06.53 ±02 .66 
+
+SGL 22.15 ±02 .20 22.12 ±03 .09 32.61 ±04 .27 22.36 ±04 .82 15.78 ±07 .12 07.90 ±02 .49 
+
+MixGCF 22.84 ±02 .15 23.05 ±03 .87 32.06 ±04 .20 22.49 ±06 .91 15.24 ±08 .98 07.40 ±03 .44 
+
+SimGCL 22.18 ±02 .22 23.15 ±02 .75 33.07 ±05 .28 23.08 ±05 .55 16.10 ±07 .91 07.58 ±03 .51 
+
+GraphPrompt 20.76 ±01 .54 20.22 ±00 .98 33.24 ±04 .98 24.12 ±09 .20 16.20 ±08 .58 07.89 ±04 .12 
+
+GPF 22.46 ±01 .66 22.12 ±01 .16 33.70 ±06 .44 24.39 ±04 .01 17.67 ±09 .04 08.94 ±04 .57 
+
+EvolveGCN-H 22.44 ±02 .55 22.17 ±01 .79 31.22 ±04 .25 23.00 ±02 .92 14.97 ±10 .28 07.20 ±05 .43 
+
+EvolveGCN-O 23.64 ±02 .13 23.24 ±01 .28 33.01 ±05 .22 23.98 ±04 .01 17.48 ±08 .13 08.68 ±04 .25 
+
+ROLAND 22.67 ±02 .42 22.60 ±01 .91 30.11 ±03 .14 22.29 ±01 .84 15.33 ±07 .10 07.09 ±03 .02 
+
+GraphPro +Vanilla/NF 20.10 ±01 .50 20.12 ±01 .30 21.31 ±04 .59 15.31 ±03 .11 12.56 ±07 .45 06.31 ±03 .92 
+
+Vanilla/FT 23.99 ±02 .11 23.26 ±01 .42 33.96 ±04 .13 24.66 ±02 .78 18.14 ±07 .55 08.73 ±03 .74 
+
+PRODIGY/NF 21.67 ±01 .42 23.15 ±03 .20 21.66 ±03 .21 14.82 ±03 .92 11.88 ±02 .61 05.84 ±01 .84 
+
+PRODIGY/FT 23.74 ±01 .22 23.65 ±02 .31 33.46 ±04 .70 23.28 ±03 .40 16.72 ±04 .28 08.09 ±02 .66 
+
+RAGRAPH/NF 20.31 ±01 .60 20.45 ±01 .44 22.86 ±03 .44 16.68 ±02 .48 13.78 ±05 .54 06.52 ±02 .69 
+
+RAGRAPH/FT 24.78 ±01 .93 24.35 ±01 .34 34.27 ±03 .93 24.82 ±02 .69 18.69 ±07 .45 09.09 ±03 .89 
+
+TarDGR/NF 20.39 ±02 .41 20.91 ±02 .18 24.83 ±03 .68 17.90 ±02 .62 14.26 ±05 .37 06.74 ±02 .56 
+
+TarDGR/FT 25.20 ±02 .13 24.59 ±01 .42 36.52 ±04 .44 26.63 ±02 .98 19.56 ±07 .17 09.70 ±03 .62 
+
+Table 1: Main performance comparison results of TarDGR. The best performance is bolded, and the second is underlined. 2021), MixGCF (Huang et al. 2021), and SimGCL (Yu et al. 2022); Dynamic GNNs, including EvolveGCN-H/O (Pareja et al. 2020), ROLAND (You, Du, and Leskovec 2022), and GraphPro (Yang et al. 2024); Graph prompting mod-els, including GraphPrompt (Liu et al. 2023) and GPF (Fang et al. 2023); and Retrieval-augmented models, such as PRODIGY (Huang et al. 2023) and RAGRAPH (Jiang et al. 2024), where retrieved subgraphs are integrated into Graph-Pro to enhance contextual representation. Further details on the baselines are provided in Appendix. 
+
+Settings and Evaluation. We adopt the pre-trained dynamic graph dataset as the resource pool. For retrieval-based meth-ods, we consider two variants: non-fine-tuned (NF), which applies plug-and-play retrieval augmentation without addi-tional training on the target dataset, and fine-tuned (FT), which applies tuning on the training set. All models are pre-trained on historical snapshots and subsequently fine-tuned and evaluated on future snapshots. We report average per-formance over time using Recall@20 and nDCG@20 (He et al. 2020; Yu et al. 2022). Further evaluation metrics and experimental settings are detailed in Appendix. TAOBAO KOUBEI AMAZON 
+
+> 0
+> 5
+> 10
+> 15
+> 20
+> 25
+> 30
+> 35
+> 40
+> 45 Recall Metrics
+> TarDGR RAGRAPH PRODIGY
+
+(a) Recall TAOBAO KOUBEI AMAZON  
+
+> 0
+> 5
+> 10
+> 15
+> 20
+> 25
+> 30
+> 35 nDCG Metrics
+> TarDGR RAGRAPH PRODIGY
+
+(b) nDCG 
+
+Figure 4: Performance comparison of TarDGR and other RAG methods. 0 20 40 60 80 100 
+
+> Training Resources (%)
+> 020 40 60 80 100
+> Recall Relative Imp. (%)  TAOBAO
+> KOUBEI
+> AMAZON
+
+(a) Recall 0 20 40 60 80 100  
+
+> Training Resources (%)
+> 020 40 60 80 100
+> nDCG Relative Imp. (%)  TAOBAO
+> KOUBEI
+> AMAZON
+
+(b) nDCG 
+
+Figure 5: Training resource experiments for the Graph Transformer-based Aware Model applied to TarDGR. 
+
+5.2 Baseline Performance Comparison 
+
+Table 1 summarizes the main experimental results, where TarDGR consistently outperforms all baselines across the three benchmark datasets. TarDGR/FT achieves the best overall performance, verifying the efficacy of our task-aware retrieval mechanism. By leveraging semantically aligned subgraphs from prior temporal resources, the model effec-tively transfers history knowledge to downstream recom-mendation tasks, reinforcing the value of task-aware en-hancement in dynamic recommendation settings. By incor-porating task-aware retrieval into the GraphPro framework, TarDGR achieves significant gains over RAGRAPH and PRODIGY. On Amazon, as shown in Table 4, it outper-forms PRODIGY by 16.6% in nDCG and 14.5% in Re-call, and RAGRAPH by 6.3% and 4.4%, respectively. These improvements highlight the importance of injecting task-specific subgraphs to enhance temporal generalization. To further validate generalization over time, we provide a detailed comparison across individual time steps in Fig-15784 Method TAOBAO KOUBEI AMAZON Recall nDCG Recall nDCG Recall nDCG w/o all 24.63 ±01 .81 24.02 ±01 .79 34.14 ±03 .57 24.83 ±02 .13 18.42 ±06 .71 08.91 ±03 .04 
+
+w/o SEM 24.95 ±01 .75 24.48 ±01 .57 35.84 ±03 .88 25.56 ±02 .53 19.10 ±07 .52 09.45 ±03 .59 
+
+w/o STR 25.14 ±02 .10 24.52 ±01 .63 36.30 ±03 .61 26.12 ±02 .75 19.42 ±06 .88 09.57 ±03 .95 
+
+TarDGR 25.20 ±02 .13 24.59 ±01 .42 36.52 ±04 .44 26.63 ±02 .98 19.56 ±07 .17 09.70 ±03 .62 
+
+Table 2: Ablation Study on Graph Transformer-based Aware Model. ure 6 between TarDGR and RAGRAPH. TarDGR consis-tently demonstrates stronger performance across all time snapshots, particularly during earlier stages where user in-teractions are more closely aligned with resource subgraphs. This indicates that TarDGR benefits from enhanced transfer-ability of task-relevant signals from historical contexts. t1 t2 t3 t4 
+
+> 0.020
+> 0.023
+> 0.026
+> 0.029
+> Metrics
+
+(a) Taobao t1 t2 t3 t4  
+
+> 0.021
+> 0.026
+> 0.031
+> 0.036
+> 0.041
+> 0.046
+> Metrics
+
+(b) Koubei t1 t2 t3 t4 t5 t6 t7 t8 
+
+> 0.002
+> 0.007
+> 0.012
+> 0.017
+> 0.022
+> 0.027
+> 0.032
+> 0.037 Metrics
+> TarDGR nDCG RAGRAPH nDCG TarDGR Recall RAGRAPH Recall
+
+(c) Amazon 
+
+Figure 6: Comparison of TarDGR/FT and RAGRAPH/FT performance on each time step. 
+
+5.3 Ablation Study of TarDGR 
+
+Impact of Semantic and Structural Encoding. Table 2 presents an ablation study assessing the contributions of the semantic and structural encoders within the TarDGR frame-work. The removal of both components (w/o all) causes a significant performance drop, affirming the necessity of task-aware representation learning. Removing the semantic encoder (w/o SEM) results in a larger performance drop than removing the structural encoder (w/o STR), indicating that capturing semantic relevance between subgraph embeddings via attention is particularly vital for generating accurate relevance scores. Nonetheless, omitting structural encod-ing (w/o STR) also causes noticeable degradation, demon-strating its complementary value in modeling subgraph-level structural compatibility. 
+
+Effect of Task-Aware Resource Weighting. We exam-ine the impact of task-aware training resource weight in TarDGR, as shown in Figure 5. The performance follows a non-linear trend: initial improvements are slow due to limited supervision; as more subgraphs are introduced, the model quickly gains expressiveness and improves; finally, performance saturates when the resource pool becomes re-dundant or overly dense. The trend underscores the impor-tance of task-aligned supervision and highlights that the quantity of retrieved training subgraphs are essential for maximizing the effectiveness of the TarDGR framework. This trend underscores the importance of task-aligned su-pervision and validates our retrieval-based training strategy for enhancing generalization in dynamic recommendation. 33 36 39 42 45 TAOBAO Recall     
+
+> TAOBAO nDCG
+> KOUBEI Recall
+> KOUBEI nDCG
+> 02510 15 TopM
+> 23
+> 25
+> 27 Metrics
+
+(a) Hyper-parameter Top-M33 37 41 45 49 53 TAOBAO Recall       
+
+> TAOBAO nDCG
+> KOUBEI Recall
+> KOUBEI nDCG
+> 012345K-hop
+> 22
+> 24
+> 26 Metrics
+
+(b) Hyper-parameter k-hop 
+
+Figure 7: Hyper-parameter study results of M and k.
+
+5.4 Hyperparameter Sensitivity 
+
+We investigate the effect of two key hyperparameters: the number of retrieved subgraphs Top-M and neighborhood depth k-hop, as shown in Figure 7. Increasing M intro-duces more retrieved knowledge, which initially enhances performance by providing richer contextual signals. How-ever, excessive retrieval introduces noise and hinders gen-eralization. Similarly, larger k values enable the model to aggregate broader structural context. Yet, excessive neigh-borhood expansion leads to oversized subgraphs with redun-dant information, which may overwhelm the graph encoder, reduce representation quality and impair generalization. 
+
+6 Conclusion 
+
+We present TarDGR, a task-aware retrieval-augmented framework for dynamic graph recommendation. By inte-grating a task-aware evaluation mechanism and a graph transformer-based task-aware model, TarDGR adaptively selects and fuses semantically relevant historical subgraphs to enhance representation learning under temporal dynam-ics. This design effectively mitigates generalization degrada-tion caused by temporal shifts between pretraining and fine-tuning stages. Experimental results validate the effectiveness of TarDGR in dynamic graph recommendation tasks. In the future, our framework can be extended to other specific tasks by adapting the task-aware objective. 15785 Acknowledgments 
+
+This work was supported by the Natural Science Foundation of Guangdong Province, China (No. 2024A1515110162). 
+
+References 
+
+Chen, W.; Yuan, M.; Zhang, Z.; Xie, R.; Zhuang, F.; Wang, D.; and Liu, R. 2025. FairDgcl: Fairness-aware recom-mendation with dynamic graph contrastive learning. IEEE Transactions on Knowledge and Data Engineering .Cong, W.; Kang, J.; Tong, H.; and Mahdavi, M. 2024. On the generalization capability of temporal graph learning al-gorithms: Theoretical insights and a simpler method. arXiv preprint arXiv:2402.16387 .Douze, M.; Guzhva, A.; Deng, C.; Johnson, J.; Szilvasy, G.; Mazar´ e, P.-E.; Lomeli, M.; Hosseini, L.; and J´ egou, H. 2024. The Faiss library. arXiv:2401.08281. Fang, T.; Zhang, Y.; Yang, Y.; Wang, C.; and Chen, L. 2023. Universal prompt tuning for graph neural networks. 
+
+Advances in Neural Information Processing Systems , 36: 52464–52489. Gao, L.; Ma, X.; Lin, J.; and Callan, J. 2022. Pre-cise Zero-Shot Dense Retrieval without Relevance Labels. arXiv:2212.10496. He, X.; Deng, K.; Wang, X.; Li, Y.; Zhang, Y.; and Wang, M. 2020. LightGCN: Simplifying and Powering Graph Convo-lution Network for Recommendation. In SIGIR .Huang, Q.; Ren, H.; Chen, P.; Krˇ zmanc, G.; Zeng, D.; Liang, P.; and Leskovec, J. 2023. PRODIGY: Enabling In-context Learning Over Graphs. arXiv:2305.12600. Huang, T.; Dong, Y.; Ding, M.; Yang, Z.; Feng, W.; Wang, X.; and Tang, J. 2021. Mixgcf: An improved training method for graph neural network-based recommender sys-tems. In Proceedings of the 27th ACM SIGKDD Conference on Knowledge Discovery & Data Mining , 665–674. Jiang, X.; Qin, Z.; Xu, J.; and Ao, X. 2023. Incomplete graph learning via attribute-structure decoupled variational auto-encoder. In WSDM oral 2023 , 304–312. Jiang, X.; Qiu, R.; Xu, Y.; Zhu, Y.; Zhang, R.; Fang, Y.; Xu, C.; Zhao, J.; and Wang, Y. 2024. Ragraph: A general retrieval-augmented graph learning framework. Advances in Neural Information Processing Systems , 37: 29948–29985. Jiang*, X.; Zhang*, R.; Xu*, Y.; Qiu*, R.; Fang, Y.; Wang, Z.; Tang, J.; Ding, H.; Chu, X.; Zhao, J.; et al. 2025. HyKGE: A Hypothesis Knowledge Graph Enhanced Frame-work for Accurate and Reliable Medical LLMs Responses. 
+
+ACL 2025 .Jiang, X.; Zhang, W.; Fang, Y.; Gao, X.; Chen, H.; Zhang, H.; Zhuang, D.; and Luo, J. 2025. Time Series Supplier Allocation via Deep Black-Litterman Model. AAAI 2025 ,39(11): 11870–11878. Lewis, P.; Perez, E.; Piktus, A.; Petroni, F.; Karpukhin, V.; Goyal, N.; K¨ uttler, H.; Lewis, M.; tau Yih, W.; Rockt¨ aschel, T.; Riedel, S.; and Kiela, D. 2021. Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks. arXiv:2005.11401. Liang, P.; Gel, Y. R.; and Chen, Y. 2025. Topology-Informed Pre-training of Graph Neural Networks. In ICASSP 2025-2025 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) , 1–5. IEEE. Liu, Y.; Cao, J.; Liu, C.; Ding, K.; and Jin, L. 2024. Datasets for large language models: A comprehensive survey. arXiv preprint arXiv:2402.18041 .Liu, Z.; Yu, X.; Fang, Y.; and Zhang, X. 2023. Graph-Prompt: Unifying Pre-Training and Downstream Tasks for Graph Neural Networks. In WWW .Lu, B.; Ma, T.; Gan, X.; Wang, X.; Zhu, Y.; Zhou, C.; and Liang, S. 2024. Temporal generalization estimation in evolving graphs. arXiv preprint arXiv:2404.04969 .Parashar, S.; Lin, Z.; Liu, T.; Dong, X.; Li, Y.; Ramanan, D.; Caverlee, J.; and Kong, S. 2024. The Neglected Tails of Vision-Language Models. In CVPR .Pareja, A.; Domeniconi, G.; Chen, J.; Ma, T.; Suzumura, T.; Kanezashi, H.; Kaler, T.; Schardl, T.; and Leiserson, C. 2020. Evolvegcn: Evolving graph convolutional networks for dynamic graphs. In Proceedings of the AAAI conference on artificial intelligence , volume 34, 5363–5370. Qiao, S.; Qiu, Z.; Ren, B.; Wang, X.; Ru, X.; Zhang, N.; Chen, X.; Jiang, Y.; Xie, P.; Huang, F.; et al. 2025. Agentic knowledgeable self-awareness. arXiv preprint arXiv:2504.03553 .Rendle, S.; Freudenthaler, C.; Gantner, Z.; and Schmidt-Thieme, L. 2012. BPR: Bayesian personalized ranking from implicit feedback. arXiv preprint arXiv:1205.2618 .Sarthi, P.; Abdullah, S.; Tuli, A.; Khanna, S.; Goldie, A.; and Manning, C. D. 2024. RAPTOR: Recursive Abstractive Processing for Tree-Organized Retrieval. In ICLR .Singh, A.; Ehtesham, A.; Kumar, S.; and Khoei, T. T. 2025. Agentic retrieval-augmented generation: A survey on agen-tic rag. arXiv preprint arXiv:2501.09136 .Sun, F.; Liu, J.; Wu, J.; Pei, C.; Lin, X.; Ou, W.; and Jiang, P. 2019. BERT4Rec: Sequential recommendation with bidi-rectional encoder representations from transformer. In Pro-ceedings of the 28th ACM international conference on infor-mation and knowledge management , 1441–1450. Sun, R.; Wang, Z.; Sun, J.; and Ranjan, R. 2025. Vision: How to fully unleash the productivity of Agentic AI? Decen-tralized Agent Swarm Network. In ICML 2025 Workshop on Collaborative and Federated Agentic Workflows .Tao, Z.; Cao, Y.; Fang, Y.; Liu, Y.; Zhao, X.; and He, T. 2025. Dynamic Graph Recommendation via Sparse Augmentation and Singular Adaptation. In ICASSP 2025-2025 IEEE Inter-national Conference on Acoustics, Speech and Signal Pro-cessing (ICASSP) , 1–5. IEEE. Wu, J.; Wang, X.; Feng, F.; He, X.; Chen, L.; Lian, J.; and Xie, X. 2021. Self-supervised graph learning for recommen-dation. In Proceedings of the 44th international ACM SIGIR conference on research and development in information re-trieval , 726–735. Wu, S.; Xiong, Y.; Cui, Y.; Wu, H.; Chen, C.; Yuan, Y.; Huang, L.; Liu, X.; Kuo, T.-W.; Guan, N.; et al. 2024. Retrieval-augmented generation for natural language pro-cessing: A survey. arXiv preprint arXiv:2407.13193 .15786 Xu, Y.; He, S.; Chen, J.; Wang, Z.; Song, Y.; Tong, H.; Liu, G.; Liu, K.; and Zhao, J. 2024. Generate-on-graph: Treat llm as both agent and kg in incomplete knowledge graph question answering. arXiv preprint arXiv:2404.14741 .Xue, J.; Deng, Y.; Gao, Y.; and Li, Y. 2024. Retrieval aug-mented generation in prompt-based text-to-speech synthesis with context-aware contrastive language-audio pretraining. 
+
+arXiv preprint arXiv:2406.03714 .Yang, Y.; Huang, C.; Xia, L.; Huang, C.; Luo, D.; and Lin, K. 2023a. Debiased contrastive learning for sequential rec-ommendation. In Proceedings of the ACM web conference 2023 , 1063–1073. Yang, Y.; Xia, L.; Luo, D.; Lin, K.; and Huang, C. 2024. Graphpro: Graph pre-training and prompt learning for rec-ommendation. In Proceedings of the ACM Web Conference 2024 , 3690–3699. Yang, Z.; Chen, S.; Gao, C.; Li, Z.; Hu, X.; Liu, K.; and Xia, X. 2025. An empirical study of retrieval-augmented code generation: Challenges and opportunities. ACM Trans-actions on Software Engineering and Methodology .Yang, Z.; He, X.; Zhang, J.; Wu, J.; Xin, X.; Chen, J.; and Wang, X. 2023b. A generic learning framework for sequen-tial recommendation with distribution shifts. In Proceed-ings of the 46th International ACM SIGIR Conference on Research and Development in Information Retrieval , 331– 340. You, J.; Du, T.; and Leskovec, J. 2022. ROLAND: graph learning framework for dynamic graphs. In Proceedings of the 28th ACM SIGKDD conference on knowledge discovery and data mining , 2358–2366. Yu, J.; Yin, H.; Xia, X.; Chen, T.; Cui, L.; and Nguyen, Q. V. H. 2022. Are graph augmentations necessary? sim-ple graph contrastive learning for recommendation. In Pro-ceedings of the 45th international ACM SIGIR conference on research and development in information retrieval , 1294– 1303. Yu, Q.; Zou, L.; Luo, X.; Zhao, X.; and Li, C. 2025a. Uni-form Graph Pre-training and Prompting for Transferable Recommendation. ACM Transactions on Information Sys-tems .Yu, X.; Fang, Y.; Liu, Z.; Wu, Y.; Wen, Z.; Bo, J.; Zhang, X.; and Hoi, S. C. 2024a. A Survey of Few-Shot Learning on Graphs: from Meta-Learning to Pre-Training and Prompt Learning. arXiv preprint arXiv:2402.01440 .Yu, X.; Liu, Z.; Fang, Y.; Liu, Z.; Chen, S.; and Zhang, X. 2023. Generalized Graph Prompt: Toward a Unification of Pre-Training and Downstream Tasks on Graphs. IEEE TKDE .Yu, X.; Liu, Z.; Fang, Y.; and Zhang, X. 2024b. DyGPrompt: Learning Feature and Time Prompts on Dynamic Graphs. In 
+
+ICLR .Yu, X.; Liu, Z.; Fang, Y.; and Zhang, X. 2024c. HG-PROMPT: Bridging Homogeneous and Heterogeneous Graphs for Few-shot Prompt Learning. In AAAI .Yu, X.; Zhang, J.; Fang, Y.; and Jiang, R. 2024d. Non-Homophilic Graph Pre-Training and Prompt Learning. 
+
+arXiv preprint arXiv:2408.12594 .Yu, X.; Zhang, J.; Fang, Y.; and Jiang, R. 2025b. Non-homophilic graph pre-training and prompt learning. In Pro-ceedings of the 31st ACM SIGKDD Conference on Knowl-edge Discovery and Data Mining V. 1 , 1844–1854. Yu, X.; Zhou, C.; Kuai, Z.; Zhang, X.; and Fang, Y. 2025c. GCoT: Chain-of-Thought Prompt Learning for Graphs. In 
+
+SIGKDD .Zheng, X.; Weng, Z.; Lyu, Y.; Jiang, L.; Xue, H.; Ren, B.; Paudel, D.; Sebe, N.; Van Gool, L.; and Hu, X. 2025. Re-trieval augmented generation and understanding in vision: A survey and new outlook. arXiv preprint arXiv:2503.18016 .Zhu, F.; Lei, W.; Wang, C.; Zheng, J.; Poria, S.; and Chua, T.-S. 2021a. Retrieving and Reading: A Com-prehensive Survey on Open-domain Question Answering. arXiv:2101.00774. Zhu, Y.; Cong, F.; Zhang, D.; Gong, W.; Lin, Q.; Feng, W.; Dong, Y.; and Tang, J. 2023. Wingnn: Dynamic graph neural networks with random gradient aggregation window. In Pro-ceedings of the 29th ACM SIGKDD conference on knowl-edge discovery and data mining , 3650–3662. Zhu, Z.; He, Y.; Zhao, X.; and Caverlee, J. 2021b. Popularity bias in dynamic recommendation. In Proceedings of the 27th ACM SIGKDD conference on knowledge discovery & data mining , 2439–2449. 15787

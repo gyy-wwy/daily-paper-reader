@@ -1,0 +1,515 @@
+Title: Federated Context-Aware Personalized Recommendation
+
+URL Source: https://ojs.aaai.org/index.php/AAAI/article/download/39888/43849
+
+Number of Pages: 9
+
+Markdown Content:
+# Federated Context-Aware Personalized Recommendation 
+
+# Zhihao Wang 1∗, Xiaoying Liao 23 ∗, Wenke Huang 1*, Bingqian Liu 1, Tian Chen 1,Jian Wang 1†, Bing Li 1†
+
+> 1
+
+School of Computer Science, Wuhan University 
+
+> 2
+
+Changsha Bus Group 
+
+> 3
+
+Central South University of Forestry and Technology 
+
+{zhihao wang, jianwang, bingli }@whu.edu.cn 
+
+Abstract 
+
+Federated recommender system is emerging as a new paradigm for providing personalized services while preserv-ing the privacy of user data. Most existing personalized fed-erated recommender systems predict the user’s next item by discretely training user and item embeddings. However, this training approach often overlooks the user’s behavioral pat-terns, suffers from low interpretability, and requires a sub-stantial amount of data and highly meticulous fine-tuning to achieve stable and accurate embeddings. To address these limitations, we propose Fed erated Context-Aware Personal-ized Recommendation ( FedCAR ), a novel framework that effectively leverages users’ recent interactions as behavioral context to guide prediction. Instead of static user embed-dings, FedCAR dynamically constructs context representa-tions by aggregating and weighting recently interacted item embeddings. Additionally, we incorporate a contrastive learn-ing strategy that enables the model to capture shared behav-ioral structures across clients while maintaining personalized preferences, thereby enhancing both generalization and ro-bustness in heterogeneous settings. Experiments on 5 bench-mark datasets show that FedCAR outperforms state-of-the-art methods and provides interpretable recommendations by explicitly modeling context dependencies. 
+
+# 1 Introduction 
+
+Personalized recommendation systems are essential for de-livering relevant content across online platforms. Traditional approaches (Kang and McAuley 2018; Li et al. 2023; Liu et al. 2024; Zhang et al. 2024c, 2025c) typically rely on cen-tralized architectures where user data is collected and pro-cessed on a central server. While this enables effective mod-eling, it also raises serious privacy concerns and conflicts with regulations such as the General Data Protection Regu-lation (GDPR) (Voigt and Bussche 2017). Federated Recom-mendation (FR) (Lin et al. 2021; Liang, Pan, and Ming 2021; Zhang et al. 2023, 2024b; Wang et al. 2025a) has emerged as a promising solution, enabling decentralized model train-ing while keeping user data local and thereby mitigating the privacy risks inherent in centralized methods. 
+
+> *
+
+Equal contribution. 
+
+> †
+
+Corresponding author Copyright © 2026, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved. Client i Client j    
+
+> �1
+> �4
+> �8
+> �7
+> Interactions
+> …
+> Interactions
+> …
+> �2
+> �5�3
+> �6
+> Discretely training Discretely training Prediction Score Prediction Score
+> Embedding
+> Score function
+
+# Server 
+
+> a. Discretely trained without context
+> b. Scores lack interpretability
+
+Figure 1: Illustration of personalized federated Recommen-dation. Local clients sample items from interaction history and make predictions, while the server aggregates parame-ters. This paradigm brings up two questions: (a) Clients dis-cretely train on isolated samples without considering con-text. (b) The prediction scores lack interpretability and make it hard to understand user preferences. While federated recommendation protects user data, achieving effective personalization in this setting remains challenging. As shown in Fig. 1, most existing methods rely on user-specific embeddings trained locally or through pe-riodic aggregation. However, this paradigm often leads to suboptimal performance and provides limited insight into user behavior. In particular, these models struggle to adapt to dynamic user interests and typically lack interpretability, making it difficult to explain why certain items are recom-mended. Addressing these issues requires moving beyond static identity-based modeling toward more flexible and ex-The Fortieth AAAI Conference on Artificial Intelligence (AAAI-26) 
+
+26778 plainable approaches. Prior work has explored matrix factorization (Chai et al. 2021; Perifanis and Efraimidis 2022), graph aggregation(Wu et al. 2022; Zhang et al. 2024b), and reconstruction (Singhal et al. 2021) to enhance federated recommendation. Although these methods bring improvements in personalization, they generally continue to treat users as fixed entities and over-look behavioral dynamics. Furthermore, many approaches struggle to generalize across heterogeneous clients, espe-cially when interaction histories are short. To tackle these challenges, we propose Federated Context-Aware Personalized Recommendation ( FedCAR ), a novel federated framework that moves beyond the con-ventional paradigm of discretely training user (item) embed-dings. Instead, it captures user preferences from recent be-havioral context to enhance both personalization and inter-pretability. The framework consists of two key components. First, a local context encoder models recent user interaction sequences on-device, allowing the model to adapt to short-term behavior patterns while maintaining data locality. In-stead of depending on persistent user identifiers, this encoder dynamically captures contextual preferences, enabling real-time personalization. Additionally, the attention-based con-text encoder provides interpretability by identifying which interactions most influence each prediction. Second, we in-troduce a contrastive learning objective that distinguishes the user’s context-aware preferences from those of other clients. This helps the model focus on uniquely relevant pat-terns rather than simply relying on global trends. By jointly leveraging dynamic behavioral context and contrastive per-sonalization, FedCAR provides a robust and interpretable solution for personalized federated recommendation. Our contributions are summarized as follows: • We propose FedCAR , a federated recommendation frame-work that captures recent user behavior through a lo-cal context encoder, providing a lightweight and privacy-preserving alternative to traditional approaches based on discrete personalization. • We propose a contrastive learning strategy tailored to fed-erated settings, which enhances model adaptability by dis-tinguishing personalized behavior patterns across clients. • We conduct extensive experiments on 5 public datasets, and the results show the superiority of our model over state-of-the-art methods. 
+
+# 2 Related Work 
+
+2.1 Federated Learning 
+
+Federated learning (FL) has emerged as a crucial machine learning paradigm aimed at enabling collaborative model training while preserving user data privacy, especially in sce-narios marked by significant data heterogeneity (Koneˇ cn´ yet al. 2016; Kairouz et al. 2019; Li et al. 2020a; Long et al. 2020; Huang, Ye, and Du 2022; Huang et al. 2023a,b, 2024; Wang et al. 2025b; Chen et al. 2025; Ma et al. 2025). The foundational work FedAvg (McMahan et al. 2017) proposed aggregating locally trained model parameters to construct a shared global model, laying the groundwork for many subse-quent developments. Nevertheless, FedAvg struggles under non-i.i.d. data distributions—a common issue in real-world applications, which has inspired a range of improvements (Luo et al. 2021; Li et al. 2022; Ma et al. 2022; Dai et al. 2023a; Tan et al. 2023; Hong et al. 2023; Hu et al. 2024). To mitigate the effects of heterogeneity, many methods have in-troduced regularization mechanisms. SCAFFOLD (Karim-ireddy et al. 2020) uses control variates to correct local model updates, effectively reducing client drift and improv-ing convergence speed. Similarly, FedProx (Li et al. 2020b) incorporates a proximal term to allow stable aggregation, es-pecially when local updates are partial or imbalanced due to system-level constraints. FedStar (Tan et al. 2023), on the other hand, targets graph-based data and facilitates the transfer of shared latent structures across clients. Alterna-tive strategies focus on controlling the divergence of client models. pFedME (T. Dinh, Tran, and Nguyen 2020) and FedDyn (Acar et al. 2021) both introduce optimization dy-namics that encourage alignment of local models with a cen-tral objective, even under heterogeneous conditions. Mean-while, some methods prioritize alignment in the represen-tation space. Approaches like MOON (Li, He, and Song 2021), FedUFO (Zhang et al. 2021), FedProto (Tan et al. 2022), FedProc (Mu et al. 2023), and FedNH (Dai et al. 2023b) emphasize consistency between local and global em-beddings to promote feature-level agreement and enhance model robustness. FedConcat (Diao, Li, and He 2024) clus-ter clients based on label distributions and encourage intra-group collaboration by aggregating local models accord-ingly. While prior FL works primarily focus on global model alignment or embedding consistency under heterogeneity, we mainly explore behavior-aware personalization. 
+
+2.2 Federated Recommendation 
+
+With the growing demand for data privacy and the increasing prevalence of decentralized data scenarios, federated rec-ommendation has emerged as a viable solution for build-ing personalized services without exposing raw user data (Sun et al. 2024; Zhang et al. 2024a; Wang et al. 2025a; Zhang et al. 2025a,b; Jiang et al. 2025). Early work, such as FCF (Ammad-ud-din et al. 2019), extended collabora-tive filtering to the federated setting by adopting FedAvg to aggregate local updates. Building on this foundation, Fe-dRec (Lin et al. 2021) introduced strategies like user-level averaging and hybrid filling to mask sensitive rating infor-mation, while FedRec++ (Liang, Pan, and Ming 2021) fur-ther enhanced robustness through the involvement of ded-icated denoising clients. FedMF (Chai et al. 2021) incor-porated homomorphic encryption into matrix factorization, offering secure parameter updates, and P-NSMF (Hu et al. 2022) proposed group-concealing techniques to enable non-sampling factorization under secure aggregation. FedNCF (Perifanis and Efraimidis 2022) adapted neural collaborative filtering to federated environments, allowing deep embed-ding of users and items. More recent approaches, including FedPerGNN (Wu et al. 2022), PerFedRec (Luo, Xiao, and Song 2022), and P-GCN (Hu et al. 2023), enrich local rep-resentation learning while preserving user privacy by encod-ing neighborhood or item relations in a protected manner. Additionally, methods such as P2FCDR (Chen et al. 2023), 26779 FPPDM (Liu et al. 2023), and F2PGNN (Agrawal et al. 2024) enhance personalization through transformation or alignment techniques while embedding privacy-preserving mechanisms like local differential privacy. PFedRec (Zhang et al. 2023) proposes a communication-efficient framework that transmits only the item encoder during training, keep-ing user-specific modeling local to further reduce exposure risks. GPFedRec (Zhang et al. 2024b) further utilizes the user graph to guide the training. These advancements collec-tively advance the capabilities of federated recommendation systems in both accuracy and privacy-aware personalization. Different from prior methods that rely on static embeddings, our method captures dynamic user intent and enhances per-sonalization by distinguishing individual behaviors. 
+
+# 3 Method 
+
+In this section, we define the research problem and intro-duce our proposed Federated Context-Aware Personalized Recommendation ( FedCAR ) in detail. 
+
+3.1 Problem Formulation 
+
+Federated Learning. According to the general setting (Huang, Ye, and Du 2022; Ma et al. 2022), the purpose of federated learning is to learn a global model with parameter 
+
+θ based on private data DK of K clients (indexed by k). The training process aims to minimize the accumulated loss of all K clients, 
+
+min 
+
+> θK
+
+X
+
+> k=1
+
+αkLk(θ), (1) where Lk(θ) denotes the loss on the k-th client with data Dk,and all clients share the global parameter θ. The αk means the weight of loss in client k. After the local training epochs of clients k, it uploads back to the server for parameter ag-gregation in communication epoch e,
+
+θek ← θek − η∇ X
+
+> i∈B k
+
+L(θek, ξ i), θe+1 = X
+
+> k
+
+αkθek. (2) The B means the mini-batch sampled from private data Dk,
+
+ξ represents the query instance. The η means the local learn-ing rate. For example, FedAvg (McMahan et al. 2017) as-signs the weight αk according to the scale of clients data: 
+
+αk = Dk/ PKj=1 Dj .
+
+Personalized Federated Learning. From another per-spective, personalized federated learning (PFL) focuses on tailoring models to individual clients while still leveraging shared knowledge across the federation. Unlike standard FL, where all clients optimize a shared global model θ, PFL si-multaneously learns a set of client-specific models {θk}Kk=1 
+
+together with the global representation. The typical opti-mization objective is formulated as: 
+
+min  
+
+> θ, {θk}Kk=1
+> N
+
+X
+
+> k=1
+
+αkLk(θ, θ k), (3) where θk denotes the personalized parameter for the k-th client, and θ represents the shared global knowledge. The loss function Lk(θ, θ k) captures both the global and local perspectives in the training process. 
+
+Personalized Federated Recommendation. In the per-sonalized federated recommendation (PFR) setting, each client k corresponds to a unique user and holds private inter-action data Dk = {(i, r )}, where i is an interacted item and 
+
+r denotes the corresponding feedback, such as an explicit rating or implicit signal. The goal of PFR is to learn a rec-ommendation model that captures user-specific preferences while benefiting from knowledge shared across clients. Formally, the objective is to jointly optimize a global model parameter θ and client-specific personalization pa-rameters {θk}Kk=1 , with the following loss: 
+
+min  
+
+> θ, {θk}Kk=1
+> K
+
+X
+
+> k=1
+
+αkLk(θ, θ k; Dk), (4) where Lk(θ, θ k; Dk) denotes the local loss for client k,incorporating both shared and personalized components. Specifically, the model predicts scores ˆrk,i for each item i
+
+in Dk, and the local objective is computed as: 
+
+Lk(θ, θ k; Dk) = 1
+
+|Dk|
+
+X
+
+> (i,r )∈Dk
+
+ℓ (f (k, i ; θ, θ k), r ) , (5) where f (k, i ; θ, θ k) denotes the predicted score generated using both the global parameter θ and the personalized adap-tation θk, and ℓ(·) is a suitable loss function such as mean squared error or cross-entropy. 
+
+3.2 Algorithm Design 
+
+We treat each user as a client under FL setting. Inspired by PFedRec(Zhang et al. 2023), we maintain the item embed-ding layer in clients and ignore the explicit user embedding layer in previous work like FedMF (Chai et al. 2021) and FedNCF (Perifanis and Efraimidis 2022). On the one hand, explicit user embedding may cause the privacy problem. On the other hand, the client score function can play the role of user preference and make predictions. The classic frame-work can be simplified as follows. 
+
+eki = ek(i), (6) 
+
+ˆrki = Sk(eki ), (7) where ek denote the item embedding layer of client k, eki is the corresponding embedding of item i, Sk is the score func-tion of client k. However, such a training approach remains discrete, lacks interpretability, and is sensitive to user data. 
+
+Context-aware Local Modeling. In order to make more reasonable predictions, we additionally introduce a context encoder to comprehensively consider user behavior patterns. Naturally, we take the user’s most recent L interacted items as the user’s context, 
+
+context k = {icurrent −L, i current −L+1 , ..., i current −1}.
+
+(8) We first obtain the item embeddings of the contextual items via the client-side embedding layer ek:
+
+Ek = [ ek(i)] i∈context k ∈ RL×d, (9) where d is the embedding dimension. 26780 𝐞𝐞 𝑛𝑛𝑛𝑛 
+
+# 𝐄𝐄 𝑛𝑛 
+
+# +
+
+# ℒ 𝑟𝑟𝑟𝑟𝑟𝑟 
+
+# ℒ𝑟𝑟 𝑐𝑐 
+
+# 𝐞𝐞 𝑚𝑚𝑚𝑚 
+
+# 𝐄𝐄 𝑚𝑚 
+
+# +
+
+# ℒ 𝑟𝑟𝑟𝑟𝑟𝑟 
+
+# ℒ𝑟𝑟 𝑐𝑐 
+
+# Client m 
+
+# Client n 
+
+# Server 
+
+# …
+
+# …  
+
+> Item
+> TransEnc Score function
+> Context
+> Position Embedding
+> Aggregate
+
+Figure 2: Architecture illustration of Federated Context-Aware Personalized Recommendation ( FedCAR ). To move beyond treating each candidate item in isolation, we introduce a context-aware modeling module. It fuses user context and position embedding through a TransEnc layer, then performs attention over the candidate item to generate a context representation. Additionally, to enhance personalization of the local context encoder, we employ a personalized contrastive learning strategy. Specifically, we use the same items and context, but apply the context encoder from the previous communication round to generate a positive sample, while a noise-injected context encoder from another random client provides the negative sample for contrastive learning. Please refer to Sec. 3.2. Best viewed in color. Zoom in for details. To model temporal dependencies within the user’s inter-action sequence, we incorporate a learnable positional en-coding matrix P ∈ RL×d into the sequence embeddings: 
+
+Zk = Ek + P. (10) The enriched sequence Zk is then passed through a single-layer Transformer encoder TransEnc (Vaswani et al. 2017) to extract the user’s short-term preference representation. Specifically, we treat the current target item embedding as the query, and the transformed context as keys and values: 
+
+Hk = TransEnc (Zk) ∈ RL×d, (11) 
+
+qk = ek(icurrent ), (12) 
+
+ck = Attn (qk, Hk, Hk) ∈ Rd, (13) where Attn (·) denotes the scaled dot-product attention mechanism. Note that TransEnc is a shared and trainable Transformer encoder layer, and is updated through federated aggregation during training. It enables general modeling of behavioral patterns while preserving user-level data locality. Finally, the context representation is combined with the tar-get item embedding for prediction: 
+
+ˆrki = Sk(ck, qk), (14) where Sk is the client-specific score function that computes the interaction score based on both context and item rep-resentations. Given the prediction ˆrki , we can calculate the loss for recommendation: 
+
+Lrec k = − X
+
+> i∈Dk
+
+log(ˆ rki ) − X
+
+> i′∈D−
+> k
+
+log(1 − ˆrki ′ ). (15) In this formulation: • Dk represents the set of positive samples, containing items that client k has historically interacted with. • D− 
+
+> k
+
+is the set of negative samples used for training. Con-structing this set efficiently is critical. We first define the pool of all unobserved items for client k as I− 
+
+> k
+
+= I \ Ik,where I is the universal set of all items and Ik is the set of items in Dk. Then, to form D− 
+
+> k
+
+, we perform uniform random sampling from the candidate pool I− 
+
+> k
+
+.This approach enhances the expressiveness and inter-pretability of the model while mitigating privacy concerns arising from explicit user embeddings. 
+
+Personalized Contrastive Adaptation. Through parame-ter aggregation, the context encoder can learn common user behavior patterns. In addition, we implement personalized adaptation to capture user-specific preferences. Concretely, we conduct contrastive learning based on the user’s contex-tual representation to encourage local distinguishability. For a given client k, we extract the current context em-bedding ccurr  
+
+> k
+
+as described above. Then, we define the posi-tive sample as the context embedding generated by the same client’s model from the previous communication round: 
+
+cpos  
+
+> k
+
+= C(t−1)  
+
+> k
+
+(Et−1 
+
+> k
+
+), (16) where C(t−1)  
+
+> k
+
+denotes client k’s context encoder (TransEnc, Attn() and P) from the previous round t − 1, and Et−1 
+
+> k
+
+is the context embedding in Eq. (9). To construct the negative sample , we randomly select an-other client k′̸ = k and use its context encoder from the pre-vious round, to which we apply Laplace noise to enhance 26781 Algorithm 1: Model training in FedCAR 
+
+Input: Communication epochs E, local rounds T , number of participants K, the kth participant private data 
+
+Dk = {(i, r )}, private model θk (contains score function Sk , item embedding ek and context encoder Ck )
+
+Output: The final client model set {θk }Kk=1 
+
+for e = 1 , 2, ..., E do 
+
+SC e ← Sample clients of size n randomly from K
+
+Participant Side ;
+
+for client k ∈ SC e in parallel do 
+
+ek , C k ← LocalUpdating (e, f )
+
+Server Side ;
+
+e ← 1
+
+> n
+
+Pnk=1 ek , Update global item embedding 
+
+C ← 1
+
+> n
+
+Pnk=1 Ck , Update global context encoder 
+
+LocalUpdating (e, C ): 
+
+ek , C k ← θ, Distribute global parameter 
+
+Sk ← Initialize score function with last update Count all uninteracted items set I−
+
+> k
+
+Sample negative samples set D− 
+
+> k
+
+from I−
+
+> k
+
+B ← Load data batch from Dk ∪ D −
+
+> k
+
+for t = 1 , 2, ..., T do for b ∈ B do 
+
+eki , Ek ← get embedding in Eq. (6),Eq. (9) 
+
+ck ← Get context in Eq. (13) 
+
+ˆrki ← Make prediction in Eq. (14) 
+
+Lrec k ← Compute prediction loss in Eq. (15) 
+
+θk ← θk − η∇θk Lrec k , Update client parameters 
+
+cpos  
+
+> k
+
+← Get positive sample in Eq. (16) 
+
+cneg  
+
+> k
+
+← Get negative sample in Eq. (19) 
+
+Lcl k ← Compute contrastive loss in Eq. (20) 
+
+Ck ← Ck − η′
+
+∇Ck Lcl k Update context encoder 
+
+Return ek , C k to server 
+
+privacy: 
+
+craw  
+
+> k′
+
+= C(t−1)  
+
+> k′
+
+(Et−1 
+
+> k′
+
+), (17) 
+
+ϵ ∼ Laplace (0 , λ neg ), (18) 
+
+cneg  
+
+> k
+
+= craw  
+
+> k′
+
++ ϵ, (19) where Laplace (0 , λ neg ) denotes element-wise Laplace noise with scale λneg , and λneg is the privacy parameter control-ling the noise level. We then compute a margin-based contrastive loss: 
+
+Lcl k = max 
+
+
+
+0, ccurr  
+
+> k
+
+− cpos  
+
+> k
+> 2
+
+− ccurr  
+
+> k
+
+− cneg  
+
+> k
+> 2
+
++ δ
+
+
+
+,
+
+(20) where δ is a fixed margin hyperparameter. 
+
+Importantly , the contrastive loss is optimized in a sepa-rate training phase, where only the context encoder compo-nents (i.e., the Transformer encoder, attention layer, and po-sitional encoding) are updated. Inspired by PFedRec (Zhang et al. 2023), this modular optimization strategy avoids inter-ference with the main recommendation objective and allows 
+
+Dataset #Users #Items #Interactions 
+
+MovieLens-100K 943 1,682 100,000 
+
+MovieLens-1M 6,040 3,952 100,000,209 
+
+Amazon-Vedio 11,830 8,072 63,836 
+
+Lastfm-2K 1,600 12,454 185,650 
+
+HetRec2011 2,113 10,109 855,598 
+
+Table 1: Statistics of datasets for better control of local personalization without the need for a weighting factor. The workflow of FedCAR is illus-trated in Algorithm 1. 
+
+# 4 Experiment 
+
+4.1 Experimental Setup 
+
+Dataset. We conduct experiments on five widely used public datasets: MovieLens-100K, MovieLens-1M (Harper and Konstan 2015), Amazon-Video (Ni, Li, and McAuley 2019), Lastfm-2K and HetRec-2K (Cantador, Brusilovsky, and Kuflik 2011). The MovieLens-100K and MovieLens-1M datasets are widely used benchmarks for recommender systems, containing 100K and 1M user-movie ratings re-spectively. For the Amazon dataset, we select the Video category. Lastfm-2K is a music recommendation dataset that records each user’s listening history. HetRec2011 is an extended version of the MovieLens-10M dataset. Detailed statistics of all datasets are summarized in Tab. 1. 
+
+Comparison Methods. We compare FedCAR with both centralized methods and personalized federated methods. For centralized methods, we compare with MF (Koren, Bell, and Volinsky 2009) and NCF (He et al. 2017). For person-alized federated methods, we evaluate FedMF (Chai et al. 2021), FedNCF (Perifanis and Efraimidis 2022), FedRecon (Singhal et al. 2021), PFedRec (Zhang et al. 2023) and GPFedRec (Zhang et al. 2024b). 
+
+Evaluation Metrics. We adopt two widely used metrics: Hit Ratio (HR) and Normalized Discounted Cumulative Gain (NDCG) (He et al. 2015) to evaluate model perfor-mance. Both of them measure the model’s performance on the next-item prediction task. 
+
+Implementation Details. All methods operate under the most fundamental setting, where recommendations are made purely based on user-item interactions without incor-porating any auxiliary information. We filter the users who interact with fewer than 6 items in every dataset, and the length of context is 5. The λneg in Eq. (18) is set as 0.1 and 
+
+δ in Eq. (20) is set as 1. As for the data split, we follow the classic leave-one-out evaluation (He et al. 2017; Kang and McAuley 2018). For each positive item, we sample 4 nega-tive items following (He et al. 2017). For a fair comparison, we conduct the communication epochs E = 100 , and per-form 1 local rounds ( T = 1 ) for the federated setting. We adopt the one-layer MLP as the score function. Besides, the initial embedding size is fixed at 32 and the batch size is 26782 Methods MovieLens-100K MovieLens-1M Amazon-Video Lastfm-2K Hetrec2011 HR@10 ↑ NDCG@10 ↑ HR@10 ↑ NDCG@10 ↑ HR@10 ↑ NDCG@10 ↑ HR@10 ↑ NDCG@10 ↑ HR@10 ↑ NDCG@10 ↑                                                                                 
+
+> Central MF 0.6617 0.3884 0.4879 0.2694 0.3017 0.1742 0.8117 0.6480 0.6432 0.3916 NCF 0.6416 0.3682 0.6613 0.3870 0.5520 0.3496 0.8288 0.6528 0.6588 0.4040 Federated FedMF 0.1782 0.0900 0.2692 0.1294 0.1136 0.0522 0.5866 0.5540 0.1107 0.0505 FedNCF 0.1208 0.0531 0.2947 0.1659 0.3543 0.3314 0.4898 0.4528 0.1283 0.630 FedRecon 0.3584 0.1948 0.3831 0.2118 0.5181 0.3723 0.5181 0.3723 0.5182 0.3054 PFedRec 0.5101 0.2754 0.5075 0.2811 0.5487 0.3534 0.8168 0.7003 0.5953 0.3525 GPFedRec 0.5027 0.2754 0.5348 0.3202 0.4759 0.3137 0.7834 0.6908 0.5660 0.3494
+> FedCAR 0.5270 0.2837 0.5555 0.3068 0.5515 0.3529 0.8236 0.7222 0.5963 0.3571
+
+Table 2: Comparison with the state-of-the-art methods on MovieLens-100K, MovieLens-1M, Amazon-Video, Lastfm-2K, and Hetrec2011. The best results in FL setting are bolded and the suboptimal results are underlined. Please refer to Sec. 4.2. set as 256 for all methods. We use the SGD (Robbins and Monro 1951) optimizer and set the same learning rate for methods depending on the datasets. We fix the seed to en-sure reproduction and conduct experiments on the NVIDIA 3090 with the PyTorch framework. 
+
+4.2 Results 
+
+Performance Comparison. We conduct a comprehensive comparison between our proposed method FedCAR and several representative baselines. Experimental results across five public datasets are reported in Tab. 2. FedCAR con-sistently achieves top performance across most federated benchmarks. On Lastfm-2K, it yields an HR@10 of 0.8236 and NDCG@10 of 0.7222, outperforming the previous best (PFedRec). Similar trends are observed on MovieLens, Amazon-Video, and Hetrec2011, where FedCAR demon-strates both high accuracy and robustness. The superior per-formance of our method can be attributed to two key de-sign components: (a) Context-aware Local Modeling: Un-like prior works that rely solely on static user-item embed-dings or item ID sequences, FedCAR incorporates a local context encoder that captures the fine-grained, recent inter-action patterns of each user. This allows the model to bet-ter understand what aspects of an item are relevant in the current recommendation situation, rather than treating pref-erences as fixed. (b) Personalized Contrastive Adaptation: We further enhance local personalization by introducing a contrastive learning objective tailored to federated settings, which enables each client to differentiate its own interac-tion behaviors from those of others. Some baselines perform poorly due to limited robustness under unified hyperparam-eter settings like a fixed learning rate. 
+
+Explainable Recommendation. Our method enhances explainability by leveraging attention between the target item and user context, enabling the model to highlight which historical interactions are most influential. On the Lastfm-2K dataset, we select two users for case studies as shown in Fig. 3. For User A, the positive item (artist 173, Hoobas-tank) receives high attention to the third item in the context (Gotthard), both sharing tags like ”rock” and ”hard rock”, while the negative item (artist 11, Segue) with unrelated tags 0 0.2  0.4  0.6      
+
+> 5
+> 4
+> 3
+> 2
+> 1
+> Artist173 Artist11
+> 00.1 0.2 0.3
+> 5
+> 4
+> 3
+> 2
+> 1
+> Artist40 Artist1970
+
+Figure 3: Attention weight of positive and negative samples in 2 clients (Lastfm-2K). 
+
+(a) User 178  (b) User 198 
+
+Figure 4: TSNE visualization of item embeddings in 2 dif-ferent clients (Lastfm-2K) learned by FedCAR .× denotes negative items, while + denotes positve items. (”ambient”, ”dub”) shows evenly distributed attention. As a result, the positive item’s prediction score (0.6849) is sig-nificantly higher than the negative one (0.3723). Similarly, for User B, the positive item (artist 40, Infected Mushroom, with tags ”electronic”, ”psytrance”) gains strong attention from context-2 and context-3 items with related genres such as Box Car Racer. In contrast, the negative item (artist 1970, Alice Cooper) tagged as ”classic rock” receives less focused attention, confirming the model’s ability to align predictions with semantically coherent context. To further validate the effectiveness of our model, we vi-sualize the learned item embeddings using t-SNE (Maaten and Hinton 2008). As shown in Fig. 4, embeddings from two different clients exhibit clear separation between pos-itive and negative items. This indicates that after training, 26783 our model captures meaningful representations that preserve preference signals across heterogeneous user distributions.                          
+
+> MovieLens-100K Lastfm-2K Context Contrast HR@10 NDCG@10 HR@10 NDCG@10 CentralNCF 0.6416 0.3682 0.8288 0.6528
+> ✘✘0.5027 0.2754 0.7834 0.6908
+> ✔✘0.5175 0.2830 0.8196 0.7210
+> ✔✔0.5270 0.2837 0.8236 0.7222
+
+Table 3: Ablation Study on MovieLens-100K and Lastfm-2K datasets. ✘ denotes removing the corresponding module while ✔ means keeping it. Please refer to Sec. 4.2 0.2     
+
+> 0.4
+> 0.6
+> 0.10 0.20 0.30 0.40 0.50
+> HR@10
+> LDP ratio
+
+Lastfm-2K  FedNCF 
+
+> FedCAR
+
+Figure 5: Influence of the LDP ratio in the training of Lastfm-2K. The higher LDP ratio indicates stronger noises. 
+
+Ablation Study. To better understand FedCAR , we con-ducted ablation experiments on MovieLens-100K and Lastfm-2K to investigate the roles of each component. For the case where both the context encoder and personalized contrastive adaptation are removed, we choose the most re-cent GPFedRec (Zhang et al. 2024b) for comparison. As can be seen in these two datasets, treating items in such a discrete manner leads to a noticeable performance degradation. This also shows that considering user context can effectively take into account users’ consistent behavior patterns. Then, we removed personalized contrastive adaptation separately for comparison. These results highlight the effectiveness of per-sonalized adaptation in helping local models capture fine-grained user preferences, surpassing models trained solely on general behavior patterns. 
+
+Protection with Local Differential Privacy. To enhance user privacy, we incorporate Local Differential Privacy (LDP) (Choi et al. 2018) into our framework. Specifically, each client perturbs its local model parameters with Lapla-cian noise, sampled from Laplace (0 , λ dp ), before upload-ing to the server. We evaluate its effect using values λdp ∈{0.1, 0.2, 0.3, 0.4, 0.5} on the Lastfm-2K dataset. Since our framework already introduces randomness through person-alized contrastive adaptation during local training, it inher-ently improves robustness to noisy updates. As illustrated in Fig. 5, even under different levels of LDP noise, FedCAR 
+
+consistently outperforms baseline methods, demonstrating its resilience to noise in the aggregation phase. 
+
+4.3 Discussion 
+
+Concept Difference. Traditional personalized recommen-dation often trains user-specific models or discrete embed-dings independently for each user. In contrast, our approach employs a local user context encoder to capture short-term behavior without explicitly modeling user identity, reduc-ing privacy risks while enabling adaptive personalization on the client. Centralized sequential recommendation typically uses a global encoder trained on aggregated user sequences, often ignoring user identity. Federated recommendation, by contrast, preserves privacy by keeping data and user-specific parameters local. Our context-aware encoder fits this setting by embedding recent user interactions locally, supporting lightweight, privacy-preserving personalization aligned with federated learning principles. 
+
+Privacy in Federated Recommendation. Our framework builds upon the decentralized nature of federated learning to preserve data locality and minimize exposure of user infor-mation, aligning with privacy regulations like GDPR (Voigt and Bussche 2017). By locally encoding user context and avoiding explicit user embeddings, we reduce the risk of identity inference. Furthermore, the structure of the model allows for seamless integration with privacy enhancement techniques (e.g., Differential Privacy), such as adding noise to the embeddings of the items and the context encoder be-fore communication, further strengthening the protection of the privacy of the system. 
+
+Limitation. Although the proposed method performs well under federated settings, all evaluated approaches still face challenges in extremely sparse interaction scenarios, indicat-ing room for improvement. In addition, while the framework is lightweight, its scalability across diverse client capacities and recommendation tasks has not been fully validated. 
+
+# 5 Conclusion 
+
+In this work, we propose FedCAR , a novel federated rec-ommendation framework that integrates local context en-coding and personalized contrastive adaptation to address key challenges in personalization and interpretability. By at-tending to recent user behavior patterns, our method offers a lightweight yet expressive alternative to traditional dis-crete personalization, enabling more accurate and explain-able predictions without compromising user privacy. Exten-sive experiments across multiple datasets demonstrate the superiority of our approach in both recommendation per-formance and representation quality. Case studies and em-bedding visualizations further validate the model’s ability to generate meaningful predictions and semantic alignment across clients. Our work highlights the potential of context-aware and contrastive learning designs in advancing person-alized federated recommendation. Further exploration can be directed toward cross-domain recommendation tasks and improving robustness in sparse or low-resource scenarios. 26784 Acknowledgments 
+
+We thank the support of National Natural Science Founda-tion of China under Grant Nos. 62032016, 623B2080 and 62272412. 
+
+# References 
+
+Acar, D. A. E.; Zhao, Y.; Navarro, R. M.; Mattina, M.; What-mough, P. N.; and Saligrama, V. 2021. Federated Learning Based on Dynamic Regularization. In ICLR .Agrawal, N.; Sirohi, A. K.; Kumar, S.; and , J. 2024. No Prejudice! Fair Federated Graph Neural Networks for Per-sonalized Recommendation. In AAAI .Ammad-ud-din, M.; Ivannikova, E.; Khan, S. A.; Oyomno, W.; Fu, Q.; Tan, K. E.; and Flanagan, A. 2019. Federated Collaborative Filtering for Privacy-Preserving Personalized Recommendation System. CoRR , abs/1901.09888. Cantador, I.; Brusilovsky, P.; and Kuflik, T. 2011. Second workshop on information heterogeneity and fusion in rec-ommender systems (HetRec2011). In ACM RecSys .Chai, D.; Wang, L.; Chen, K.; and Yang, Q. 2021. Secure Federated Matrix Factorization. IEEE Intell. Syst. 
+
+Chen, G.; Zhang, X.; Su, Y.; Lai, Y.; Xiang, J.; Zhang, J.; and Zheng, Y. 2023. Win-Win: A Privacy-Preserving Feder-ated Framework for Dual-Target Cross-Domain Recommen-dation. AAAI .Chen, T.; Huang, W.; Wang, Z.; Shi, Z.; Li, H.; Dong, W.; Ye, M.; Du, B.; and Xu, Y. 2025. Pixel-wise Divide and Conquer for Federated Vessel Segmentation. In IJCAI .Choi, W.-S.; Tomei, M.; Vicarte, J. R. S.; Hanumolu, P. K.; and Kumar, R. 2018. Guaranteeing Local Differential Pri-vacy on Ultra-Low-Power Systems. In ISCA .Dai, Y.; Chen, Z.; Li, J.; Heinecke, S.; Sun, L.; and Xu, R. 2023a. Tackling Data Heterogeneity in Federated Learning with Class Prototypes. AAAI .Dai, Y.; Chen, Z.; Li, J.; Heinecke, S.; Sun, L.; and Xu, R. 2023b. Tackling Data Heterogeneity in Federated Learning with Class Prototypes. AAAI .Diao, Y.; Li, Q.; and He, B. 2024. Exploiting Label Skews in Federated Learning with Model Concatenation. AAAI .Harper, F. M.; and Konstan, J. A. 2015. The MovieLens Datasets: History and Context. ACM TiiS .He, X.; Chen, T.; Kan, M.-Y.; and Chen, X. 2015. TriRank: Review-aware Explainable Recommendation by Modeling Aspects. In CIKM .He, X.; Liao, L.; Zhang, H.; Nie, L.; Hu, X.; and Chua, T.-S. 2017. Neural Collaborative Filtering. In WWW .Hong, J.; Wang, H.; Wang, Z.; and Zhou, J. 2023. Federated Robustness Propagation: Sharing Adversarial Robustness in Heterogeneous Federated Learning. AAAI .Hu, M.; Cao, Y.; Li, A.; Li, Z.; Liu, C.; Li, T.; Chen, M.; and Liu, Y. 2024. FedMut: Generalized Federated Learning via Stochastic Mutation. In AAAI .Hu, P.; Lin, Z.; Pan, W.; Yang, Q.; Peng, X.; and Ming, Z. 2023. Privacy-preserving graph convolution network for federated item recommendation. Artificial Intelligence .Hu, P.; Yang, E.; Pan, W.; Peng, X.; and Ming, Z. 2022. Federated one-class collaborative filtering via privacy-aware non-sampling matrix factorization. KBS .Huang, W.; Ye, M.; and Du, B. 2022. Learn from Others and Be Yourself in Heterogeneous Federated Learning. In 
+
+CVPR .Huang, W.; Ye, M.; Shi, Z.; and Du, B. 2023a. General-izable Heterogeneous Federated Cross-Correlation and In-stance Similarity Learning. IEEE PAMI .Huang, W.; Ye, M.; Shi, Z.; Li, H.; and Du, B. 2023b. Re-thinking Federated Learning with Domain Shift: A Proto-type View. In CVPR .Huang, W.; Ye, M.; Shi, Z.; Wan, G.; Li, H.; Du, B.; and Yang, Q. 2024. A Federated Learning for Generalization, Robustness, Fairness: A Survey and Benchmark. IEEE PAMI .Jiang, J.; Zhang, C.; Zhang, H.; Li, Z.; Li, Y.; and Yang, B. 2025. A Tutorial of Personalized Federated Recommender Systems: Recent Advances and Future Directions. In Com-panion Proceedings of the ACM on Web Conference 2025 .Kairouz, P.; McMahan, H. B.; Avent, B.; Bellet, A.; Bennis, M.; Bhagoji, A. N.; Bonawitz, K.; Charles, Z.; Cormode, G.; Cummings, R.; et al. 2019. Advances and Open Problems in Federated Learning. arXiv preprint arXiv:1912.04977 .Kang, W.-C.; and McAuley, J. 2018. Self-attentive sequen-tial recommendation. In ICDM , 197–206. Karimireddy, S. P.; Kale, S.; Mohri, M.; Reddi, S. J.; Stich, S. U.; and Suresh, A. T. 2020. SCAFFOLD: stochastic con-trolled averaging for federated learning. In ICML .Koneˇ cn´ y, J.; McMahan, H. B.; Ramage, D.; and Richt´ arik, P. 2016. Federated Optimization: Distributed Machine Learn-ing for On-Device Intelligence. CoRR , abs/1610.02527. Koren, Y.; Bell, R.; and Volinsky, C. 2009. Matrix Factor-ization Techniques for Recommender Systems. Computer .Li, M.; Zhang, Z.; Zhao, X.; Wang, W.; Zhao, M.; Wu, R.; and Guo, R. 2023. Automlp: Automated mlp for sequential recommendations. In WWW , 1190–1198. Li, Q.; Diao, Y.; Chen, Q.; and He, B. 2022. Federated Learning on Non-IID Data Silos: An Experimental Study. In ICDE .Li, Q.; He, B.; and Song, D. 2021. Model-Contrastive Fed-erated Learning. In CVPR .Li, T.; Sahu, A. K.; Talwalkar, A.; and Smith, V. 2020a. Federated Learning: Challenges, Methods, and Future Di-rections. IEEE SPM .Li, T.; Sahu, A. K.; Zaheer, M.; Sanjabi, M.; Talwalkar, A.; and Smith, V. 2020b. Federated Optimization in Heteroge-neous Networks. In MLSys .Liang, F.; Pan, W.; and Ming, Z. 2021. FedRec++: Lossless Federated Recommendation with Explicit Feedback. AAAI .Lin, G.; Liang, F.; Pan, W.; and Ming, Z. 2021. FedRec: Federated Recommendation With Explicit Feedback. IEEE Intell. Syst. 26785 Liu, B.; Li, D.; Wang, J.; Wang, Z.; Li, B.; and Zeng, C. 2024. Integrating user short-term intentions and long-term preferences in heterogeneous hypergraph networks for se-quential recommendation. IPM .Liu, W.; Chen, C.; Liao, X.; Hu, M.; Yin, J.; Tan, Y.; and Zheng, L. 2023. Federated probabilistic preference distribu-tion modelling with compactness co-clustering for privacy-preserving multi-domain recommendation. In IJCAI .Long, G.; Tan, Y.; Jiang, J.; and Zhang, C. 2020. Feder-ated Learning for Open Banking , 240–254. Springer Inter-national Publishing. Luo, M.; Chen, F.; Hu, D.; Zhang, Y.; Liang, J.; and Feng, J. 2021. No Fear of Heterogeneity: Classifier Calibration for Federated Learning with Non-IID Data. In NeurIPS .Luo, S.; Xiao, Y.; and Song, L. 2022. Personalized Federated Recommendation via Joint Representation Learning, User Clustering, and Model Adaptation. In CIKM .Ma, X.; Zhu, J.; Lin, Z.; Chen, S.; and Qin, Y. 2022. Astate-of-the-art survey on solving non-IID data in Federated Learning. Future Gener Comput Syst .Ma, Y.; Dai, W.; Huang, W.; and Chen, J. 2025. Geometric Knowledge-Guided Localized Global Distribution Align-ment for Federated Learning. In CVPR .Maaten, L. v. d.; and Hinton, G. 2008. Visualizing data using t-SNE. JMLR .McMahan, B.; Moore, E.; Ramage, D.; Hampson, S.; and Arcas, B. A. y. 2017. Communication-Efficient Learning of Deep Networks from Decentralized Data. In AISTATS .Mu, X.; Shen, Y.; Cheng, K.; Geng, X.; Fu, J.; Zhang, T.; and Zhang, Z. 2023. FedProc: Prototypical contrastive federated learning on non-IID data. Future Gener Comput Syst .Ni, J.; Li, J.; and McAuley, J. 2019. Justifying Recommen-dations using Distantly-Labeled Reviews and Fine-Grained Aspects. In EMNLP .Perifanis, V.; and Efraimidis, P. S. 2022. Federated Neural Collaborative Filtering. KBS .Robbins, H.; and Monro, S. 1951. A stochastic approxima-tion method. AoMS .Singhal, K.; Sidahmed, H.; Garrett, Z.; Wu, S.; Rush, J.; and Prakash, S. 2021. Federated reconstruction: Partially local federated learning. NeurIPS .Sun, Z.; Xu, Y.; Liu, Y.; He, W.; Kong, L.; Wu, F.; Jiang, Y.; and Cui, L. 2024. A Survey on Federated Recommendation Systems. IEEE TNNLS .T. Dinh, C.; Tran, N.; and Nguyen, J. 2020. Personalized Federated Learning with Moreau Envelopes. In NeurIPS .Tan, Y.; Liu, Y.; Long, G.; Jiang, J.; Lu, Q.; and Zhang, C. 2023. Federated Learning on Non-IID Graphs via Structural Knowledge Sharing. In AAAI .Tan, Y.; Long, G.; Liu, L.; Zhou, T.; Lu, Q.; Jiang, J.; and Zhang, C. 2022. FedProto: Federated Prototype Learning across Heterogeneous Clients. In AAAI .Vaswani, A.; Shazeer, N.; Parmar, N.; and Uszkoreit. 2017. Attention is all you need. NeurIPS , 30. Voigt, P.; and Bussche, A. v. d. 2017. The EU General Data Protection Regulation (GDPR): A Practical Guide . Springer Publishing Company, Incorporated. Wang, Z.; Bai, H.; Huang, W.; Li, D.; Wang, J.; and Li, B. 2025a. Federated Recommendation with Explicitly Encod-ing Item Bias. AAAI .Wang, Z.; Huang, W.; Chen, T.; Shi, Z.; Wan, G.; Qiao, Y.; Yang, B.; Wang, J.; Li, B.; and Ye, M. 2025b. An Empirical Study of Federated Prompt Learning for Vision Language Model. In IJCAI .Wu, C.; Wu, F.; Lyu, L.; Qi, T.; Huang, Y.; and Xie, X. 2022. A federated graph neural network framework for privacy-preserving personalization. NC .Zhang, C.; Long, G.; Guo, H.; Fang, X.; Song, Y.; Liu, Z.; Zhou, G.; Zhang, Z.; Liu, Y.; and Yang, B. 2024a. Federated Adaptation for Foundation Model-based Recommendations. In IJCAI .Zhang, C.; Long, G.; Guo, H.; Liu, Z.; Zhou, G.; Zhang, Z.; Liu, Y.; and Yang, B. 2025a. Multifaceted user modeling in recommendation: A federated foundation models approach. In AAAI .Zhang, C.; Long, G.; Zhang, Z.; Li, Z.; Zhang, H.; Yang, Q.; and Yang, B. 2025b. Personalized recommendation models in federated settings: A survey. IEEE TKDE .Zhang, C.; Long, G.; Zhou, T.; Yan, P.; Zhang, Z.; Zhang, C.; and Yang, B. 2023. Dual Personalization on Federated Recommendation. In AAAI .Zhang, C.; Long, G.; Zhou, T.; Zhang, Z.; Yan, P.; and Yang, B. 2024b. GPFedRec: Graph-Guided Personalization for Federated Recommendation. In ACM SIGKDD .Zhang, L.; Luo, Y.; Bai, Y.; Du, B.; and Duan, L.-Y. 2021. Federated Learning for Non-IID Data via Unified Feature Learning and Optimization Objective Alignment. In ICCV .Zhang, Z.; Liu, S.; Liu, Z.; Zhong, R.; Cai, Q.; Zhao, X.; Zhang, C.; Liu, Q.; and Jiang, P. 2025c. Llm-powered user simulator for recommender system. In AAAI .Zhang, Z.; Liu, S.; Yu, J.; Cai, Q.; Zhao, X.; Zhang, C.; Liu, Z.; Liu, Q.; Zhao, H.; Hu, L.; et al. 2024c. M3oe: Multi-domain multi-task mixture-of experts recommenda-tion framework. In SIGIR .26786

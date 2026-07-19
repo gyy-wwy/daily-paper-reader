@@ -1,0 +1,449 @@
+Title: FusedRec: Fused Embedding Communication for Distributed Recommendation Training on GPUs
+
+URL Source: https://ojs.aaai.org/index.php/AAAI/article/download/38512/42474
+
+Number of Pages: 9
+
+Markdown Content:
+# FUSED REC : Fus ed Embedding Communication for Distribut ed Rec ommendation Training on GPUs 
+
+# Xuanteng Huang 1, Fan Li 2, Riyang Hu 2, Jianchang Zhang 2, Yuan Peng 2, Yang Zhou 2
+
+# Fangying Chen 2, Xianwei Zhang 1* 
+
+> 1
+
+School of Computer Science and Engineering, Sun Yat-sen University, Guangzhou, China 
+
+> 2
+
+Tencent Inc., Guangzhou, China huangxt57@mail2.sysu.edu.cn, zhangxw79@mail.sysu.edu.cn 
+
+Abstract 
+
+Recent years have witnessed the wide adoption of deep learning recommendation models (DLRMs) for many on-line services. Unlike traditional DNN training, DLRMs lever-age massive embeddings to represent sparse features, which are stored in distributed GPUs following the model parallel paradigm. Existing approaches adopt deduplication to elimi-nate replicated embeddings involved in AlltoAll transfers to avoid unnecessary communication. In our practices, we have observed that such a deduplication design exacerbates interconnect inefficiency due to the fragmented embedding transfers with reduced message sizes, hindering the perfor-mance of distributed DLRM training. This paper introduces F USED REC , a fused embedding com-munication and lookup mechanism to tackle the inefficiency due to deduplication. By seeking the opportunities to fuse em-beddings from multiple categories into a group, F USED REC 
+
+conducts the communication in a combined shot to allevi-ate bandwidth under-utilization. Meanwhile, a categorical-aware deduplication algorithm is integrated into F USED REC 
+
+to retain the category information during lookup without ex-tra communication. Combining with efficient recovery pro-cedure, comprehensive results show F USED REC achieves a 37.8% throughput speedup in average compared to the SOTA industry implementation, without hurting the recommenda-tion qualities of our in-house models used in online produc-tion environments. 
+
+# 1 Introduction 
+
+Deep learning recommendation models (DLRMs) have been widely adopted for content recommendation in online plat-forms of Meta (Firoozshahian et al. 2023; Naumov et al. 2019), Amazon (ama 2025-03-23; Smith and Linden 2017), Alibaba (dee 2025-03-23; Pan et al. 2023) and Tencent (Sima et al. 2022). To cope with the continuously pour-ing users/items and capture the ever-changing trends, ven-dors incline to invest a large portion of resources for on-line DLRM training with timely statistics and samples. For example, Meta spends more than 80% of cycles in their training clusters for DLRMs (Gupta et al. 2020). And there are numerous software frameworks (Wang et al. 2022b; Ivchenko et al. 2022; tfr 2025-03-23) and hardware designs 
+
+> *
+
+Corresponding author. Copyright © 2026, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved. 𝑁×  
+
+> ranks
+> emb. tables
+> 𝑁×
+> ranks embedding
+> AlltoAll
+> bottom MLP feature interaction top MLP Model Parallel Data Parallel
+> 𝑁×
+> batches sparse feature AlltoAll
+> Input Batches
+
+Figure 1: Distributed DLRM training with N workers. (Firoozshahian et al. 2023; Guo, Hao, and et al. 2023) to expedite the DLRM training. Unlike traditional DNN models receiving dense features in the continuous domain, DLRM accepts vectorized fea-tures (i.e., embeddings) indexed by sparse inputs to repre-sent the high-level semantics, e.g., item characteristics and user profiles (Fig. 1) . Hence, DLRM follows the model parallel (MP) paradigm where embedding tables are scat-tered in multiple distributed GPUs to host the massive em-bedding entries. During training, each worker (i.e., rank) concurrently receives batches of inputs (i.e., index keys 1
+
+) to retrieve the demanding embeddings from other dis-tributed peers via AlltoAll s. In backward, the embed-ding rows are updated by the sparse gradients communicated by AlltoAll s, while the dense parameters (top/bottom MLPs) are synchronized with AllReduce .With large volume of data being transmitted and the number of involved workers increasing (Park et al. 2018; Firoozshahian et al. 2023; Zhang et al. 2022), the embed-ding lookup stage tends to propose a bottleneck on DLRM training. With our in-house production models, we observe that the embedding lookup process accounts for up-to 60% duration in a training iteration. There are massive explo-rations trying to speedup and optimize the distributed em-bedding lookups. Some works (Wang et al. 2022b; Ivchenko et al. 2022; Sethi et al. 2022; Wang et al. 2024; Luo et al. 2024) propose hybrid embedding table parallel via repli-cating frequently-accessed embeddings in multiple workers based on historical statistics and hardware topologies. On the other hand, there are some approaches aiming to re-duce the message sizes involved in the communications for 
+
+> 1
+
+In this work, we use keys/tokens to denote the numeric IDs to index the rows in embedding tables, and we use embedding 
+
+rows/entries interchangeably to represent the trainable vectors with semantic features. The Fortieth AAAI Conference on Artificial Intelligence (AAAI-26) 
+
+14910 distributed embedding lookup. QuickUpdate (Matam et al. 2024) and AdaEmbed (Lai et al. 2023) selectively update the “important” embeddings having large impacts on model parameters and prune the less crucial embeddings from com-munications. The adaptive lossy compression mechanism (Feng et al. 2024) is proposed to condense embedding sizes in AlltoAll communications based on offline embedding statistics. Additionally, RecD (Zhao et al. 2023), PICASSO (Zhang et al. 2022), EL-Rec (Wang et al. 2022a) and LS-PLM (Gai et al. 2017) target on eliminating the potential du-plications of samples within a batch in order to avoid need-less embedding exchanges in the distributed lookups. Al-though the number of embeddings and message sizes per transfer are reduced, these methods lead to increasingly frequent fragmented communications as recommendation models tend to incorporate more diverse sparse features, making the interconnect bandwidth under-utilized during communication (§2). To address this network inefficiency, we propose F USE -
+
+> D
+
+REC , a fused embedding communication and lookup work-flow for large-scale distributed DLRM training on GPUs. The key design of F USED REC is to seek and fully leverage the opportunities to group the sparse features from multiple categories, and conduct the distributed embedding lookup for the fused embedding groups in a combined manner. FUSED REC also achieves a lossless lookup with the cate-gory level information retained by deferring the hashing the just before the embedding retrieval at the remote side. To accomplish this, F USED REC exploits a segment unique op-erator implemented in GPU to efficiently eliminate the du-plicated entries on the fused embedding groups. With the runtime information produced in the forward pass, F USE -
+
+> D
+
+REC recovers and stitches the fused embedding into the dense format for proceeding computation. The contributions of this paper can be summarized as follows: • With the ample adopted embedding categories, we ob-serve interconnect bandwidth inefficiency due to frag-mented communications with reduced message sizes. • We propose F USED REC , a distributed embedding lookup approach which executes the communication and re-trieval in semantic-preserving fused manner to better uti-lize the network bandwidth. • Extensive experiment results show FUSED REC can achieve significant end-to-end training throughput speedups without hurting model qualities in our production environments. 
+
+# 2 Motivation 
+
+Embedding Deduplication and Network Inefficiency . In DLRM trainings, embedding accesses tend to express local-ity and skewness. For example, users may watch the same clips with the recently hot topics in video platforms, and people in the same city may share similar interests in some items. Thus, there will be a considerable number of dupli-cated embedding keys within a batch during training (Liu et al. 2024; Wang et al. 2024; Sethi et al. 2023, 2022; Song et al. 2023; Zhang et al. 2022), leading to skew accesses on the hot embeddings. To avoid unnecessary embedding 16KB 128KB 1MB 8MB 64MB 512MB 4GB  
+
+> Message Size
+> 020 40 60 80 AlltoAll Bandwidth (GB/s)
+> 4816 32 64
+> Embedding Dimension Sizes 10 1
+> 10 0
+> 10 1
+> 10 2
+> 10 3
+> 10 4
+> 10 5
+> Message Size (KB)
+
+Figure 2: (a) Left : The message size involved in 
+
+AlltoAll s with different embedding dimensions. (b) 
+
+Right : The observed AlltoAll bandwidth by NCCL test running on 2 nodes each with 8 GPUs. transfers, existing DLRM frameworks tend to deduplicate the sparse keys by applying the unique operator on the em-bedding token tensor before distributed lookup. However, we have observed that such a deduplication design exac-erbates the interconnect inefficiency (NVLink/InfiniBand). In Fig. 2 (a), we count the message sizes involved in 
+
+AlltoAll s for deduplicated embeddings. It can be cap-tured that the vast majority of embedding message sizes in-volved in AlltoAll is small. In Fig. 2(b), we conduct a performance benchmark for AlltoAll communication be-tween 16 GPUs in 2 nodes (hardware specification in §4) to draw the relationship between achieved bandwidth and the message size. We highlight the message size range in Fig. 2(b) where the majority of AlltoAll operations in Fig. 2(a) span, indicating such category-wise communica-tions with reduced message sizes can only achieve less than half of the peak bandwidth in distributed environments. The inefficiency comes from two folds: 1) the reduced message size due to the removal of redundant sparse keys within each feature category; b) the feature-wise communication pattern where the AlltoAll communication is invoked to lookup embeddings only for one individual sparse feature category. 
+
+Category-aware Lossless Lookup . An embedding token is composed of two levels of information: category (i.e., the sparse feature name like User Profile ) and instance ID (e.g., a specific user with ID #1234 ). For distributed DLRM train-ing jobs in production environments, it is demanding to track and record both the category and instance statistics during embedding lookup, which are used by distributed workers to periodically interact the remote parameter server for ac-cess statistics analysis and evict policy decisions. Besides, some DLRMs may refer to embeddings from other mod-els, which also depends both the category and instance in-formation to fetch the external embeddings. With the fused embedding lookup scheme, one has to encode the embed-ding tokens with categorical information and conduct hash functions to eliminate the intra-category duplications on the fused groups. As the hash is an irreversible operation, the category and instance information is unavailable during the distributed lookup process. Thus, it is demanding to propose a lossless fused embedding lookup scheme with both the cat-egory and instance information retained after fusion. 14911 3 Design 
+
+Problem Formulation & Overview 
+
+We formulate the embedding lookup process of N involved distributed workers (ranks/GPUs) on M sparse categories as follows. For clarity, we exemplify with 1 rank but it applies to all peer ranks. With sparse category i with mi
+
+tokens ei = [ e1, . . . , e mi ] from the input batch, the dis-tributed embedding lookup aims to retrieve embeddings en-tries Ei = [ E1, . . . , Emi ] from N distributed workers with 
+
+AlltoAll communications, where Ej (1 ≤ j ≤ mi) may locate in one of the N distributed workers. F USED REC in-tegrates a fusion criteria to fuse M embedding categories into K groups and initiates the AlltoAll communications at group granularity. Besides, F USED REC also proposes a lossless category-aware lookup mechanism by deferring the token hashing after the AlltoAll communication in the destination side. Combined with the segment unique opera-tor for grouped token deduplication and efficient embedding format recovery, F USED REC ships an end-to-end distributed embedding lookup workflow for DLRM training. 𝑎 !, 𝑎 ", 𝑎 ", 𝑎 #, 𝑎 $                     
+
+> 𝑏 !,𝑏 !,𝑏 ",𝑏 ",𝑏 #
+> [𝑐 !,𝑐 ",𝑐 #,𝑐 #,𝑐 $]
+> 𝑎 !,𝑎 ",𝑎 ",𝑎 #,𝑎 $,𝑏 !,𝑏 !,𝑏 ",𝑏 ",𝑏 #
+> [𝑐 !,𝑐 ",𝑐 #,𝑐 #,𝑐 $]
+
+(a.1 ) Fusion 
+
+fused groups 
+
+input 
+
+tokens          
+
+> 𝑎 #,𝑎 !,𝑎 $,𝑎 ",𝑏 #,𝑏 !,𝑏 "
+> [𝑐 !,𝑐 ",𝑐 #,𝑐 $]
+
+(a.2 )
+
+Segment 
+
+Unique 
+
+unique 
+
+groups 
+
+𝐼 !         
+
+> 𝑎 !,𝑎 #,𝑏 !,𝑏 #,𝑎 ",𝑎 $,𝑏 "
+> [𝑐 !,𝑐 #,𝑐 ",𝑐 $]
+
+sorted 
+
+groups  
+
+> (a. 3)
+
+Routing 
+
+Token AlltoAll             
+
+> 𝑎 !,𝑎 #,𝑏 !,𝑏 #,𝑎 !,𝑎 %,𝑏 #,𝑏 %
+> [𝑐 !,𝑐 #,𝑐 !,𝑐 #,𝑐 %]
+
+receive 
+
+groups        
+
+> 𝑎 !,𝑎 #,𝑏 !,𝑏 #,𝑎 %,𝑏 %
+> [𝑐 !,𝑐 #,𝑐 %]
+
+(b.1 ) Global Unique 
+
+lookup groups            
+
+> 𝐴 !,𝐴 #,𝐵 !,𝐵 #,𝐴 !,𝐴 %,𝐵 #,𝐵 %
+> [𝐶 !,𝐶 #,𝐶 !,𝐶 #,𝐶 %]
+
+(b.2) Lookup & Recovery 
+
+𝐼 "
+
+Embedding AlltoAll                       
+
+> 𝐴 !,𝐴 #,𝐵 !,𝐵 #,𝐴 ",𝐴 $,𝐵 "
+> [𝐶 !,𝐶 #,𝐶 ",𝐶 $]
+> 𝐴 !,𝐴 ",𝐴 ",𝐴 #,𝐴 $,𝐵 !,𝐵 !,𝐵 ",𝐵 ",𝐵 #
+> [𝐶 !,𝐶 ",𝐶 #,𝐶 #,𝐶 $]
+
+(c.1) Layout Recovery (𝐼 #, 𝐼 !)
+
+𝐼 #
+
+(𝐼 ")
+
+result groups 
+
+Figure 3: The forward workflow in F USED REC , exemplified with rank 0.Fig. 3 depicts the steps to process the embeddings in the forward pass. In this section, we represent the sparse embed-ding tokens with lower case letters as the category followed by the numeric instance IDs (e.g., a0), and the embedding entries (rows) indexed by the tokens are expressed with the corresponding upper case letters ( A0). 
+
+Embedding Fusion and Deduplication 
+
+Upon receiving the sparse embedding tokens in an input batch, F USED REC firstly fuses the applicable keys from M
+
+isolated categories into K groups based on their specifica-tions (detailed below), where each group incorporates Mk
+
+features and PKk=1 Mk = M . Within each group, there are potential occurrences of conflicting keys with the same IDs but originating from different categories (e.g., a0 and b0
+
+share the same instance ID 0, but represent different sparse features a and b). Then for each fused group, F USED REC 
+
+initiates the segment unique operator at the group granular-ity, to remove the redundant keys from the same feature cate-gory while allowing conflicting keys to co-exist, meanwhile containing the category and instance statistics for lookup. 
+
+Embedding Fusion . Given an embedding Ei out of the M
+
+involved categories, F USED REC aims to fuse the keys from categories with the same embedding specifications, which is defined as: spec (Ei) = ( dEi , o Ei , i Ei ), (1) where dEi , oEi and iEi stand for dimension size (e.g., 32, 64), optimizer (e.g., AdaGrad , Adam ), and initializer (e.g., normal or uniform distribution) for Ei. By fusing embed-ding with the same specification into a group, F USED REC 
+
+could conduct the lookup, gradient and initialization opera-tions for embeddings in a combined shot at the group gran-ularity. For example, as all the embedding entries contained in a group have the same dimension, one can easily store them in a continuous GPU buffer without further compli-cated management. Given the same dimension and optimizer type, F USED REC can invoke common GPU kernels to cal-culate and accumulate the gradients in the backward pass for all embeddings within the group. Besides, F USED REC can also initialize the missing embeddings during lookup (e.g., when new user registers or new video is uploaded) with the same distribution if the embeddings within the group share the same initialization configurations. In Fig. 3 step ( a.1 ), given the embedding keys from 3 cat-egories ( a, b, c , and suppose a and b share the same specifi-cation), F USED REC fuses keys from a and b into a group by directly concatenating them into a flat tensor, and treats keys from c as another standalone group. 
+
+Embedding Deduplication . In the fused group, there exist redundant embedding keys within each category, e.g., there are more than one occurrences of a1, b 0 and b1 in the fused groups in Fig. 3. Existing unique operators in mainstream DL frameworks (e.g., torch.unique ) only support to re-move the redundant elements at the whole array. In order to eliminate the duplication and avoid needless traffics in com-munication, one has to either invoke the unique operators 
+
+Mk times for tokens from each category, resulting in non-negligible runtime overhead due to frequent kernel launches (Pan et al. 2023, 2024) and dynamic memory allocations since the number of unique elements can not be inferred in advance. Or apply the hashing function with both the cate-gory and instance ID as the hashing keys to filter out con-flicting keys. As hashing operation is irreversible, the cate-gory and instance information of each token is unavailable during lookup, making the training system malfunctioned in production environments. To overcome the defects of both strawman schemes, FUSED REC is designed to conduct the deduplicate opera-tion on the fused group in a single shot. In Fig. 3 step ( a.2 ), we develop a custom segment unique operator in GPU (with similar semantic to segment sort (Hou et al. 2017; Kobus et al. 2023)) to remove the redundant keys within the cat-egory boundary, while retaining the conflicting keys with 14912 same IDs but from different categories (e.g., a0 and b0). Sim-ilar to existing unique operators (e.g., torch.unique ), inverse indices Iu mapping from the keys in fused group to their occurrences in the unique group are also returned by the segment unique operator. We elaborate the implementa-tion details for segment unique later in section 3. After the segment unique, F USED REC ensures keys in each unique group are distinct, which avoids the unnecessary transfers of duplicated elements. 
+
+Embedding Route 
+
+In distributed DLRM training, the embedding entries are stored in tables physically located in the GPU memory. Given the tokens in each unique group, F USED REC needs to dispatch them into distributed peers to fetch the corre-sponding embedding entries (Pan et al. 2023; Jain et al. 2024), and then routes them back to the requesting worker via AlltoAll operations. The AlltoAll interfaces pro-vided by existing implementations (Sergeev and Balso 2018; Romero et al. 2022) requires elements with the same desti-nation to be stored in continuous locations in the input ten-sor. Thus, F USED REC needs to rearrange each unique group to make keys that will be scheduled to the same worker col-located in adjacent positions in the send buffer. In Fig. 3 (a.3 ), F USED REC reorders the tokens in each unique group 
+
+by their destinations, such that keys with the same destina-tion are located consecutively, indicated by underlines in the resulting sorted groups . In this rankwise sort stage, the des-tination of each key is determined by the hashing value of its ID in order to keep a balanced distribution within each feature category, i.e., conflicting keys like a0 and b0 will be routed to the same worker as they have the same ID ( 0). After rankwise sort, the fused keys in sorted groups will be dispatched to different workers via the AlltoAll op-erations (step b.2 in Fig. 3). Meanwhile, the rankwise sort operator also returns the indices Is where Is[i] records the position of unique group[i] in the sorted group .Together with Iu returned by segment unique (§3), both of indices are used by F USED REC to stitch and recovery the dense embedding layout. 
+
+Lossless Lookup 
+
+After the embedding keys AlltoAll , a worker receives the query tokens from distributed peer ranks to retrieve the in-dexed rows stored in its local GPU memory. Unlike tradi-tional strawman fusion scheme (§2) which applies the irre-versible hash operation right after fusion, F USED REC defers it just before the lookup stage, where both the category and instance information for received tokens are available in step (b.1 ). The training framework could exploit these informa-tion for metric reporting and external embedding reference, resulting in a lossless lookup process. Although the duplication has been eliminated by segment unique locally within each rank (step a.2 ), it is possible for one embedding entry to be retrieved by more than one workers. Thus, there may be redundant keys from differ-ent ranks in the receive buffer (marked by different under-lines), e.g., a0, b 2, c 0, c 2 before step b.1 . As the redundant embedding lookup may introduce significant runtime over-head due to the irregular and repetitive memory accesses (Jain et al. 2024; Pan et al. 2023, 2024; Xie et al. 2025), it is demanding to further eliminate the redundancy within each category to ensure the oneness of tokens in the result-ing lookup groups (step b.1 ). As the receive groups are in the format numeric instance IDs, it is necessary to hash them to-gether with the category information to distinguish the con-flicting tokens across multiple sparse features. In this step, we stringify the received tokens by concatenating the in-stance ID with the embedding category name and generate the unified query keys , e.g., a2 is converted to ‘a/2’ . Then we feed the converted strings into a hash function to filter out the redundant elements, which are stored in the lookup groups as the query keys for embedding tables. Note that the embedding name strings ( ‘a’ , ‘b’ ) are only recorded once during the compute graph construction stage, which are kept unchanged and can be reused in the subsequent training it-erations. Meanwhile, the inverse mapping Il is also returned for subsequent local embedding entry recovery. 
+
+Embedding Recovery 
+
+After retrieving the embedding entries indexed by the uni-fied query keys from embedding tables in each distributed ranks, F USED REC applies the local recovery in the desti-nation side by invoking gather operator on the retrieved deduplicated embedding entries lookup indices Il and pro-duces the embedding groups with the same order as the tokens in receive groups (step b.2 ). Then each involved distributed worker initiates AlltoAll communications to transfer the lookup results back to the corresponding re-questing peers. After the embedding AlltoAll , the received lookup re-sults in each worker are organized in a deduplicated, fused and reordered layout, as shown in step ( c.1 ). For following DNN computations, F USED REC has to recover the entries in a format where the duplication is restored and the fused en-tries are further split as the categorical input for dense MLP layers. Recall that the previously applied segment unique (a.2 ) and rankwise sort ( a.3 ) operations both return the in-verse indices: Iu and Is. F USED REC leverage these two in-dices stored locally in each rank to recover the processed entries back to the originally neat layout. segment unique indices from ( a.2 )tf.gather ( , )  
+
+> 𝐴 !, 𝐴 ", 𝐴 ", 𝐴 #, 𝐴 $, 𝐵 !, 𝐵 !, 𝐵 ", 𝐵 ", 𝐵 #
+> 1, 0, 5, 4, 3, 2, 6
+> rankwise sort indices from (a.3 )tf.gather
+
+# ( , ) 
+
+> 0, 4, 4, 1, 5, 2, 2, 6, 6, 3 𝐴 !, 𝐴 #, 𝐵 !, 𝐵 #, 𝐴 ", 𝐴 $, 𝐵 "
+> lookup results (c. 1)
+
+𝐼 !𝐼 "
+
+= 𝐼 #
+
+> 1, 3, 3 0, 2, 5, 5, 6, 6, 4
+
+=
+
+Figure 4: The depiction of embedding recovery (step c.1 in Fig. 3) after distributed lookup. Fig. 4 demonstrates the process of embedding entry lay-out recovery. The indices returned by rankwise sort ( Is)14913 record the positions mapping from unique groups to the sorted groups. While the indices returned by segment unique (Iu) represent the mapping from keys in the fused group to their occurrences in the unique group, i.e., the ith key in the fused group (step a.1 ) will be placed at position 
+
+Iu[i] in the unique group after deduplication. With both in-dices, F USED REC then constructs the recover mapping in-dices ( Ir ) via the gather operator (e.g., tf.gather in Ten-sorFlow). By applying another gather operation on the re-ceived lookup results and Ir , F USED REC can reproduce the fused entry group without unnecessary intermediate mem-ory copies, where the embeddings from the same category are stored continuously in the same order as the input sparse tokens (step c.1 ). After the second gathering, the produced fused entries are further split into separated categories for following dense model computation. 
+
+Putting All Together 
+
+Algorithm 1 The fused embedding lookup in F USED REC 
+
+Input: 
+
+N : the number of distributed training workers 
+
+B = {e1, . . . , eM }: embedding keys from M sparse categories in a batch, where ei contains all the demand-ing tokens for the ith category  
+
+> 1:
+
+G = group (B) ▷ fuse into K groups (step a.1 ) 
+
+> 2:
+
+for g ∈ G do  
+
+> 3:
+
+Conduct segment unique on g, get unique group gu
+
+(step a.2 ) and indices Igu 
+
+> 4:
+
+Route embedding to their destinations via rankwise sort ( a.3 ), which returns sorted group gs and indices Igs ,then route gs to distributed ranks with AlltoAll  
+
+> 5:
+
+Apply global unique on the received tokens from peers ( b.1 ), and retrieve embedding entries from local tables with the produced unified tokens, followed by the lookup recovery to produce the lookup results Gl (b.2 ) 
+
+> 6:
+
+Transfer Gl back to the requesting side, and re-cover them to the dense layout ( c.1 ), based on previ-ously saved Igs and Igu (Fig. 4)  
+
+> 7:
+
+end for 
+
+Algorithm 1 summarizes the process of embedding group, deduplication, route, lookup and recovery in F USED REC .For the batch inputs in each iteration, F USED REC firstly merges the sparse embedding keys into fused groups based on their specifications. Then for each fused group g, F USE -
+
+> D
+
+REC conducts the segment unique to eliminate the intra-category redundancy at group granularity, and reorders and routes the unique groups to distributed workers. With de-ferred hashing, F USED REC produces the unified lookup keys after receiving AlltoAll tokens from all peers, which are then used to lookup the corresponding embedding entries stored locally in each worker. Finally, F USED REC 
+
+sends the retrieved entries back to the requesting peers with 
+
+AlltoAll communications, and conducts recovery steps with the previously saved runtime information. For clarity, we only discuss the forward pass for F USE -
+
+> D
+
+REC , the backward acts mirrorily as the forward stage. Since only embeddings with the same specification (§3) can be grouped, it is feasible for F USED REC to compute and ac-cumulate the local gradients within each group, and invoke 
+
+AlltoAll operations in a combined manner to update the touched embedding entries in the distributed unified tables, which further helps to reduce the communication and kernel launch overhead. 
+
+Implementation 
+
+Software . We implement F USED REC based on TensorFlow 2.11 (Abadi et al. 2016) and the recommendation add-ons (TFRA (tfr 2025-03-23)) in its graph mode. We leverage Horovod (Sergeev and Balso 2018) backended by NCCL as the library for the communications among distributed peers. hindices sindices           
+
+> 𝑎 !, 𝑎 ", 𝑎 ", 𝑎 #, 𝑎 $, 𝑏 !, 𝑏 !, 𝑏 ", 𝑏 ", 𝑏 #
+> 43hash buffer
+> 𝑎 𝑏 2212②reduction sum
+> 7
+> utokens
+> fgroup :
+> ℎ(0) ℎ(2) ℎ(3) ℎ(1) ℎ(2) ℎ(0) ℎ(1)
+
+ℎ( )   
+
+> allocate atomic writes
+> ①hashing
+> ③squeeze ballot popc
+> usizes
+> 𝑎 #, 𝑎 !, 𝑎 $, 𝑎 ", 𝑏 #, 𝑏 !, 𝑏 "
+> 1, 3, 3 0, 2, 5, 5, 6, 6, 4
+
+𝐼 !
+
+Figure 5: Our custom implementation of segment unique op-erator used in F USED REC which removes the redundant em-beddings keys at group level. 
+
+Segment unique . With embedding tokens from multiple categories being fused into a group (Fig. 3 step a.1 ), F USE -
+
+> D
+
+REC needs to remove the redundant instance IDs within category boundary. We develop an efficient CUDA imple-mentation for the segment unique operator in GPU to avoid the potential runtime overhead for the per-category dedupli-cation. Fig. 5 presents the segment unique workflow, taking a fused group ( fgroup ) as input, which contains the mixed tokens from multiple sparse feature categories. Given the fused group, F USED REC firstly 1⃝ allocates a contiguous buffer in GPU memory and hashes the input tokens into this scratch area. Meanwhile, F USED REC also counts and up-dates the number of unique tokens on-the-fly with atomic writes to allocate the output tensor utokens . Then F USE -
+
+> D
+
+REC launches 2⃝ a warp-level reduction GPU kernel to collect the scattered hashed tokens and 3⃝ squeezes them into a compact format using CUDA warp-level primitives 
+
+ballot and popc to produce the output tensor utokens 
+
+incorporating the unique tokens deduplicated within each category. Additionally, F USED REC also records two posi-tional mapping hindices and sindices in steps 1 ⃝ and 3⃝ to generate the inverse indices Iu, which is further ex-ploited to recover the dense embedding layout. 
+
+Embedding prefetch and eviction . F USED REC is inte-grated with a similar embedding prefetch design like Bag-pipe (Agarwal et al. 2023) and ScratchPipe (Kwon and Rhu 2022) to asynchronously retrieve the touched embeddings in the next few iterations from remote parameter server in ad-14914 vance, such that the execution of embedding communication and dense MLP calculation can be pipelined. 
+
+# 4 Experiment Setup 
+
+Hardware . We evaluate FUSED REC in a GPU cluster where each node is equipped with 8 NVIDIA H20 GPUs with 96 GB VRAM capacity connected with 900 GB /s
+
+fast NVLink. And each GPU is attached with a Mellanox ConnectX-7 NIC, providing 400 Gb /s bidirectional inter-node bandwidth with the support of RDMA. In the following experiments, we scale the number of nodes from 1 to 16 with the number of GPUs from 8 to 128. 
+
+Models and Datasets . We evaluate F USED REC with 4 rep-resentative in-house production models listed in Table 1, which incorporates TB-level embedding entries stored in hi-erarchical locations: GPU memory, local host memory and remote persistent storage. The training samples are collected from real-time data stream in our platforms with hundreds of millions of daily active users to continuously training the models. We set the batch size as the maximal value to satu-rate the GPU memory. Model Emb. Table (TB) Model Emb. Table (TB) 
+
+W0 4.4 W1 5.6 
+
+W2 8 W3 12.8 Table 1: Evaluation Model Embedding Table Size. 
+
+Baseline . We compare FUSED REC with TFRA 2 , an industry-leading distributed DLRM training framework sup-porting elastic scaling of dynamic embeddings in GPU stor-age. We also integrate the prefetch scheme proposed in Bag-pipe (Agarwal et al. 2023) and ScratchPipe (Kwon and Rhu 2022) in TFRA and F USED REC to asynchronously fetch the embedding entries in the next few batches from distributed workers. To validate the effectiveness of F USED REC , we also propose a comparable scheme TFRA-fused with the same fuse criterion as F USED REC with hashing operator in the source side to filter out duplicated tokens the followed by an extra communication to inform the category statistics to the destination side to accomplish the lossless lookup. 
+
+# 5 Results and Analysis 
+
+Training Throughput and Scalability 
+
+End-to-end throughput . Fig. 6 demonstrates continuously online training throughput speedups of F USED REC over 
+
+TFRA and TFRA-fused , where FUSED REC achieves 37.8% throughput elevation over TFRA , and 16.7% addi-tional throughput gains over TFRA-fused . It can be ob-served that conducting the embedding lookup in the fused manner brings significant training throughput, while the efficient segment unique implementation further provides performance gains by avoiding repetitive unique kernel launches for multiple fused categories and extra communi-cation for category information during token AlltoAll .
+
+> 2
+
+https://github.com/tensorflow/recommenders-addons 8 16 32 64 128               
+
+> W0
+> 010 20
+> 816 32 64 128
+> W1
+> 010 20
+> 816 32 64 128
+> W2
+> 010 20
+> 816 32 64 128
+> W3
+> 010 20
+> Throughput Speedup #GPUs TFRA TFRA-fused FusedRec
+
+Figure 6: Comparison of the training throughput and scala-bility with different number of GPUs, which is normalized 
+
+TFRA in single node. 
+
+Scalability . F USED REC accomplishes a promising scalabil-ity with the scaling factor (Zhang et al. 2020) sustained in 0.93 when the number of involved GPUs increases from 8 to 128, which indicates that F USED REC could be applied in large scale distributed DLRM training with manageable communication efficiency. 
+
+Communication Efficiency 4 8 16 32 64 Embedding Dimensions 010 20 Communication Rounds Ratios      
+
+> 4816 32 64 Embedding Dimensions 0510 Perceived Bandwidth Ratios
+> TFRA FusedRec
+
+Figure 7: (a) Left: the ratios of AlltoAll communica-tion rounds (b) Right: the ratios of perceived interconnection bandwidth for different embedding dimensions in W0 with 32 GPUs. 
+
+Communication rounds . To demonstrate how F USED REC 
+
+reduces the number of AlltoAll s required to complete the embedding lookups in distributed training, we count the communication rounds (sending embedding tokens and receiving corresponding entries) in Fig. 7(a), which indi-cates how many embedding categories with the same spec-ification (equation 1) could be fused into one communi-cation group. In average, F USED REC reduces the number of AlltoAll rounds by 11 .4× for each dimension. And for each AlltoAll , F USED REC could send/receive 8.16 ×
+
+more embedding entries compared to TFRA .14915 Interconnect bandwidth . We also quantify perceived inter-connect bandwidth for communications on embeddings with different dimensions from the execution timeline in NVIDIA 
+
+Nsight System profiler. Fig. 7(b) illustrates the ratios the achieved bandwidth of two schemes, where F USED REC pos-sesses 5.66 × interconnect bandwidth (NVLink for intra-node and InfiniBand for inter-node communications) com-pared to TFRA . Besides, it can be noticed that low-dimensional embeddings (i.e., 4, 8, 16) earns higher band-width benefits than the high-dimensional ones. Typically, recommendation models tend to employ low-dimension em-beddings to represent features with relatively simple seman-tic information like geographic locations or user genders, while high-dimensional embeddings are used to character-ize features with richer semantics like user profiles or video tags. The high-dimensional embeddings are more possible to be unique across samples within a batch, resulting in a relatively larger message size in each transfer compared to low-dimensional embeddings. Therefore, the bandwidth im-provements are less pronounced for high-dimensional ones. 
+
+Latency Analysis and GPU Utilization W0 W1 W2 W3   
+
+> Models 050 100 150 Training Iteration Duration (ms)
+> TFRA TFRA-fused FusedRec
+> Fwd A2A Compute Bwd A2A Unique
+> W0W1W2W3
+> Models 0.00 0.25 0.50 0.75 1.00 GPU Utilization TFRA TFRA-fused FusedRec
+
+Figure 8: (a) Left: latency breakdown of a training iteration duration for different schemes (b) Right: GPU utilization during training. 
+
+Forward and backward AlltoAll s. To further investi-gate the performance improvement, we compare the break-downs of the duration for TFRA , TFRA-fused and F USE -
+
+> D
+
+REC in a single training iteration in Fig. 8(a). As the com-putation and communication are already pipelined in both FUSED REC and TFRA , we only show the exposed part of dense layer computation. F USED REC significantly boosts the forward and backward AlltoAll 1.39 × compared to 
+
+TFRA in average. Note that the backward communication follows the similar workflow in the forward embedding ex-change, where the computed gradients on the touched em-beddings are accumulated locally at first, then routed back to the corresponding ranks in the same fused groups as for-ward to update the embedding table rows. Overall, F USE -
+
+> D
+
+REC can shorten the latency of one training iteration up-to 20.3% with the fused embedding lookup workflow. 
+
+GPU utilization . Fig. 8(b) quantifies ratios of duration in an iteration where the GPU is active for computing as the indicator for hardware utilization. With the improved dis-tributed embedding lookup workflow by F USED REC , there is a more compact pipeline to better overlap the dense com-putation and embedding AlltoAll during training, result-ing in a significant 11.4% utilization improvement compared to TFRA .
+
+# 6 Related Work 
+
+Embedding Communication Optimization . To optimize distributed embedding lookup as the bottleneck hindering DLRM training performance, QuickUpdate (Matam et al. 2024) and AdaEmbed (Lai et al. 2023) selectively update the “important” embeddings having large impacts on model parameters and prune the less crucial embeddings from com-munications. The adaptive lossy compression mechanism (Feng et al. 2024) is proposed to condense embedding sizes in AlltoAll communications based on offline embed-ding statistics. Additionally, RecD (Zhao et al. 2023), PI-CASSO (Zhang et al. 2022), EL-Rec (Wang et al. 2022a) and LS-PLM (Gai et al. 2017) target on eliminating the potential duplications of samples within a batch in order to avoid needless embedding exchanges in the distributed lookups. Although the number of embeddings and message sizes per transfer are reduced, these methods lead to increas-ingly frequent fragmented communications as recommenda-tion models tend to incorporate more diverse sparse features. The fused embedding lookup workflow proposed by F USE -
+
+> D
+
+REC in this work can cooperate with these orthogonal com-munication optimizations for further embedding lookup im-provements. 
+
+Embedding Scheduling . With the prior knowledge of the samples in the incoming batches, it is possible to schedule them for the sake of embedding locality. Bagpipe (Agarwal et al. 2023) prefetches the embedding entries from remote PS in advance and holds them in the GPU VRAM if they will be consumed again in the next few steps. Similarly, Scratch-Pipe (Kwon and Rhu 2022) exploits the samples in future batches to manage a dynamic GPU cache so that the traf-fic between CPU and GPU can be minimized. Herald (Zeng et al. 2024), permutes the incoming data samples to workers where the used embeddings are resident in the GPU caches to minimize the remote embedding accesses. Although these scheduling mechanisms could bring performance benefits by leveraging the embedding locality, permuting the data sam-ples introduces the risks that the online recommendation quality could be affected (Lai et al. 2023), which is unac-ceptable for commercial platforms as even 0.01% accuracy downgrade leads to non-negligible revenue loss. 
+
+# 7 Conclusion 
+
+In this work, we propose F USED REC , a fused embedding lookup and storage workflow for end-to-end distributed DLRM training on GPUs. F USED REC fuses applicable em-beddings from multiple sparse features into a group, and conducts the embedding lookup in a combined shot. Com-bined with performant segment unique implementation and efficient embedding layout recovery procedure, F USED REC 
+
+achieves lossless fused embedding lookup without extra communication. Comprehensive experiments show F USE -
+
+> D
+
+REC could bring significant performance improvements for our in-house production models. 14916 Acknowledgments 
+
+We sincerely thank the anonymous reviewers for their valu-able comments and suggestions. This research is supported by the NSFC grants (62472462, 62461146204). 
+
+# References 
+
+2025-03-23. Amazon Personalize. https://aws.amazon.com/ personalize/. 2025-03-23. DeepRec: a high-performance recommenda-tion deep learning framework based on TensorFlow. https: //github.com/DeepRec-AI/DeepRec. 2025-03-23. TensorFlow Recommenders Addons. https: //github.com/tensorflow/recommenders-addons. Abadi, M.; Barham, P.; Chen, J.; Chen, Z.; Davis, A.; Dean, J.; Devin, M.; Ghemawat, S.; Irving, G.; Isard, M.; Kudlur, M.; Levenberg, J.; Monga, R.; Moore, S.; Murray, D. G.; Steiner, B.; Tucker, P. A.; Vasudevan, V.; Warden, P.; Wicke, M.; Yu, Y.; and Zheng, X. 2016. TensorFlow: A System for Large-Scale Machine Learning. In 12th USENIX Sym-posium on Operating Systems Design and Implementation ,265–283. USENIX Association. Agarwal, S.; Yan, C.; Zhang, Z.; and Venkataraman, S. 2023. Bagpipe: Accelerating Deep Recommendation Model Train-ing. In Proceedings of the 29th Symposium on Operating Systems Principles , 348–363. ACM. Feng, H.; Zhang, B.; Ye, F.; Si, M.; Chu, C.; Tian, J.; Yin, C.; Deng, S.; Hao, Y.; Balaji, P.; Geng, T.; and Tao, D. 2024. Ac-celerating Communication in Deep Learning Recommenda-tion Model Training with Dual-Level Adaptive Lossy Com-pression. In Proceedings of the International Conference for High Performance Computing , 89. IEEE. Firoozshahian, A.; Coburn, J.; Levenstein, R.; Nattoji, R.; Kamath, A.; Wu, O.; Grewal, G.; Aepala, H.; Jakka, B.; Dreyer, B.; Hutchin, A.; Diril, U.; Nair, K.; Ardestani, E. K.; Schatz, M.; Hao, Y.; Komuravelli, R.; Ho, K.; Asal, S. A.; Shajrawi, J.; Quinn, K.; Sreedhara, N.; Kansal, P.; Wei, W.; Jayaraman, D.; Cheng, L.; Chopda, P.; Wang, E.; Bikumandla, A.; Sengottuvel, A. K.; Thottempudi, K.; Narasimha, A.; Dodds, B.; Gao, C.; Zhang, J.; Al-Sanabani, M.; Zehtabioskuie, A.; Fix, J.; Yu, H.; Li, R.; Gondkar, K.; Montgomery, J.; Tsai, M.; Dwarakapuram, S.; Desai, S.; Avidan, N.; Ramani, P.; Narayanan, K.; Mathews, A.; Gopal, S.; Naumov, M.; Rao, V.; Noru, K.; Reddy, H.; Venkatapu-ram, P.; and Bjorlin, A. 2023. MTIA: First Generation Sil-icon Targeting Meta’s Recommendation Systems. In Pro-ceedings of the 50th Annual International Symposium on Computer Architecture , 80:1–80:13. ACM. Gai, K.; Zhu, X.; Li, H.; Liu, K.; and Wang, Z. 2017. Learn-ing Piece-wise Linear Models from Large Scale Data for Ad Click Prediction. CoRR , abs/1704.05194. Guo, A.; Hao, Y.; and et al. 2023. Software-Hardware Co-design of Heterogeneous SmartNIC System for Recommen-dation Models Inference and Training. In Proceedings of the 37th International Conference on Supercomputing , 336– 347. ACM. Gupta, U.; Wu, C.; Wang, X.; Naumov, M.; Reagen, B.; Brooks, D.; Cottel, B.; Hazelwood, K. M.; Hempstead, M.; Jia, B.; Lee, H. S.; Malevich, A.; Mudigere, D.; Smelyan-skiy, M.; Xiong, L.; and Zhang, X. 2020. The Architectural Implications of Facebook’s DNN-Based Personalized Rec-ommendation. In IEEE International Symposium on High Performance Computer Architecture , 488–501. IEEE. Hou, K.; Liu, W.; Wang, H.; and Feng, W. 2017. Fast seg-mented sort on GPUs. In Proceedings of the International Conference on Supercomputing , 12:1–12:10. ACM. Ivchenko, D.; Staay, D. V. D.; Taylor, C.; Liu, X.; Feng, W.; Kindi, R.; Sudarshan, A.; and Sefati, S. 2022. TorchRec: a PyTorch Domain Library for Recommendation Systems. In 
+
+Sixteenth ACM Conference on Recommender Systems , 482– 483. ACM. Jain, R.; Bhasi, V. M.; Jog, A.; Sivasubramaniam, A.; Kan-demir, M. T.; and Das, C. R. 2024. Pushing the Performance Envelope of DNN-based Recommendation Systems Infer-ence on GPUs. In 57th IEEE/ACM International Symposium on Microarchitecture, MICRO Austin, TX, USA , 1217–1232. IEEE. Kobus, R.; Nelgen, J.; Henkys, V.; and Schmidt, B. 2023. Faster Segmented Sort on GPUs. In 29th International Conference on Parallel and Distributed Computing , vol-ume 14100 of Lecture Notes in Computer Science , 664–678. Springer. Kwon, Y.; and Rhu, M. 2022. Training personalized recom-mendation systems from (GPU) scratch: look forward not backwards. In The 49th Annual International Symposium on Computer Architecture , 860–873. ACM. Lai, F.; Zhang, W.; Liu, R.; Tsai, W.; Wei, X.; Hu, Y.; De-vkota, S.; Huang, J.; Park, J.; Liu, X.; Chen, Z.; Wen, E.; Rivera, P.; You, J.; Chen, C. J.; and Chowdhury, M. 2023. AdaEmbed: Adaptive Embedding for Large-Scale Recom-mendation Models. In 17th USENIX Symposium on Operat-ing Systems Design and Implementation , 817–831. USENIX Association. Liu, S.; Zheng, N.; Kang, H.; Simmons, X.; Zhang, J.; Langer, M.; Zhu, W.; Lee, M.; and Wang, Z. 2024. Embed-ding Optimization for Training Large-scale Deep Learning Recommendation Systems with EMBark. In Proceedings of the 18th ACM Conference on Recommender Systems, Rec-Sys , 622–632. ACM. Luo, L.; Zhang, B.; Tsang, M.; Ma, Y.; Chu, C.; Chen, Y.; Li, S.; Hao, Y.; Zhao, Y.; Lakshminarayanan, G.; Wen, E.; Park, J.; Mudigere, D.; and Naumov, M. 2024. Disaggregated Multi-Tower: Topology-aware Modeling Technique for Ef-ficient Large Scale Recommendation. In Proceedings of the Seventh Annual Conference on Machine Learning and Sys-tems, MLSys . mlsys.org. Matam, K. K.; Ramezani, H.; Wang, F.; Chen, Z.; Dong, Y.; Ding, M.; Zhao, Z.; Zhang, Z.; Wen, E.; and Eisenman, A. 2024. QuickUpdate: a Real-Time Personalization System for Large-Scale Recommendation Models. In 21st USENIX Symposium on Networked Systems Design and Implementa-tion , 731–744. USENIX Association. 14917 Naumov, M.; Mudigere, D.; Shi, H. M.; Huang, J.; Sundara-man, N.; Park, J.; Wang, X.; Gupta, U.; Wu, C.; Azzolini, A. G.; Dzhulgakov, D.; Mallevich, A.; Cherniavskii, I.; Lu, Y.; Krishnamoorthi, R.; Yu, A.; Kondratenko, V.; Pereira, S.; Chen, X.; Chen, W.; Rao, V.; Jia, B.; Xiong, L.; and Smelyanskiy, M. 2019. Deep Learning Recommendation Model for Personalization and Recommendation Systems. 
+
+CoRR , abs/1906.00091. Pan, Z.; Zheng, Z.; Zhang, F.; Wu, R.; Liang, H.; Wang, D.; Qiu, X.; Bai, J.; Lin, W.; and Du, X. 2023. RECom: A Com-piler Approach to Accelerating Recommendation Model In-ference with Massive Embedding Columns. In Proceedings of the 28th ACM International Conference on Architectural Support for Programming Languages and Operating Sys-tems, Volume 4 , 268–286. ACM. Pan, Z.; Zheng, Z.; Zhang, F.; Xie, B.; Wu, R.; Smith, S.; Liu, C.; Ruwase, O.; Du, X.; and Ding, Y. 2024. RecFlex: Enabling Feature Heterogeneity-Aware Optimization for Deep Recommendation Models with Flexible Schedules. In 
+
+Proceedings of the International Conference for High Per-formance Computing, Networking, Storage, and Analysis ,41. IEEE. Park, J.; Naumov, M.; Basu, P.; Deng, S.; Kalaiah, A.; Khu-dia, D. S.; Law, J.; Malani, P.; Malevich, A.; Satish, N.; Pino, J. M.; Schatz, M.; Sidorov, A.; Sivakumar, V.; Tulloch, A.; Wang, X.; Wu, Y.; Yuen, H.; Diril, U.; Dzhulgakov, D.; Hazelwood, K. M.; Jia, B.; Jia, Y.; Qiao, L.; Rao, V.; Rotem, N.; Yoo, S.; and Smelyanskiy, M. 2018. Deep Learning In-ference in Facebook Data Centers: Characterization, Perfor-mance Optimizations and Hardware Implications. CoRR ,abs/1811.09886. Romero, J.; Yin, J.; Laanait, N.; Xie, B.; Young, M. T.; Tre-ichler, S.; Starchenko, V.; Borisevich, A. Y.; Sergeev, A.; and Matheson, M. A. 2022. Accelerating Collective Com-munication in Data Parallel Training across Deep Learning Frameworks. In 19th USENIX Symposium on Networked Systems Design and Implementation , 1027–1040. USENIX Association. Sergeev, A.; and Balso, M. D. 2018. Horovod: fast and easy distributed deep learning in TensorFlow. CoRR ,abs/1802.05799. Sethi, G.; Acun, B.; Agarwal, N.; Kozyrakis, C.; Trippel, C.; and Wu, C. 2022. RecShard: statistical feature-based memory optimization for industry-scale neural recommen-dation. In 27th ACM International Conference on Architec-tural Support for Programming Languages and Operating Systems , 344–358. ACM. Sethi, G.; Bhattacharya, P.; Choudhary, D.; Wu, C.; and Kozyrakis, C. 2023. FlexShard: Flexible Sharding for Industry-Scale Sequence Recommendation Models. CoRR ,abs/2301.02959. Sima, C.; Fu, Y.; Sit, M.; Guo, L.; Gong, X.; Lin, F.; Wu, J.; Li, Y.; Rong, H.; Aublin, P.; and Mai, L. 2022. Ekko: A Large-Scale Deep Learning Recommender System with Low-Latency Model Update. In 16th USENIX Symposium on Operating Systems Design and Implementation , 821– 839. USENIX Association. Smith, B.; and Linden, G. 2017. Two decades of recom-mender systems at Amazon.com. IEEE Internet Computing .Song, X.; Zhang, Y.; Chen, R.; and Chen, H. 2023. UGACHE: A Unified GPU Cache for Embedding-based Deep Learning. In Proceedings of the 29th Symposium on Operating Systems Principles , 627–641. ACM. Wang, Z.; Wang, Y.; Feng, B.; Huang, G.; Mudigere, D.; Muthiah, B.; Li, A.; and Ding, Y. 2024. OPER: Optimality-Guided Embedding Table Parallelization for Large-scale Recommendation Model. In Proceedings of the USENIX Annual Technical Conference, USENIX ATC , 667–682. USENIX Association. Wang, Z.; Wang, Y.; Feng, B.; Mudigere, D.; Muthiah, B.; and Ding, Y. 2022a. EL-Rec: Efficient Large-Scale Recom-mendation Model Training via Tensor-Train Embedding Ta-ble. In Proceedings of the International Conference for High Performance Computing, Networking, Storage and Analysis ,70:1–70:14. IEEE. Wang, Z.; Wei, Y.; Lee, M.; Langer, M.; Yu, F.; Liu, J.; Liu, S.; Abel, D. G.; Guo, X.; Dong, J.; Shi, J.; and Li, K. 2022b. Merlin HugeCTR: GPU-accelerated Recommender System Training and Inference. In RecSys: Sixteenth ACM Confer-ence on Recommender Systems, Seattle, WA, USA , 534–537. ACM. Xie, M.; Zeng, S.; Guo, H.; Gao, S.; and Lu, Y. 2025. Frugal: Efficient and Economic Embedding Model Training with Commodity GPUs. In Proceedings of the 30th ACM Inter-national Conference on Architectural Support for Program-ming Languages and Operating Systems, Volume 1 , 509– 523. ACM. Zeng, C.; Liao, X.; Cheng, X.; Tian, H.; Wan, X.; Wang, H.; and Chen, K. 2024. Accelerating Neural Recommendation Training with Embedding Scheduling. In 21st USENIX Sym-posium on Networked Systems Design and Implementation .USENIX Association. Zhang, Y.; Chen, L.; Yang, S.; Yuan, M.; Yi, H.; Zhang, J.; Wang, J.; Dong, J.; Xu, Y.; Song, Y.; Li, Y.; Zhang, D.; Lin, W.; Qu, L.; and Zheng, B. 2022. PICASSO: Unleashing the Potential of GPU-centric Training for Wide-and-deep Rec-ommender Systems. In 38th IEEE International Conference on Data Engineering , 3453–3466. IEEE. Zhang, Z.; Chang, C.; Lin, H.; Wang, Y.; Arora, R.; and Jin, X. 2020. Is Network the Bottleneck of Distributed Training? In Proceedings of the Workshop on Network Meets AI & ML, NetAI@SIGCOMM , 8–13. ACM. Zhao, M.; Choudhary, D.; Tyagi, D.; Somani, A.; Kaplan, M.; Lin, S.; Pumma, S.; Park, J.; Basant, A.; Agarwal, N.; Wu, C.; and Kozyrakis, C. 2023. RecD: Deduplication for End-to-End Deep Learning Recommendation Model Train-ing Infrastructure. In Proceedings of the Sixth Conference on Machine Learning and Systems . mlsys.org. 14918

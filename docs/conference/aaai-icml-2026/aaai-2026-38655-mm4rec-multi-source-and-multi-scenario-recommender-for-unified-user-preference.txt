@@ -1,0 +1,415 @@
+Title: MM4Rec: Multi-Source and Multi-Scenario Recommender for Unified User Preference
+
+URL Source: https://ojs.aaai.org/index.php/AAAI/article/download/38655/42617
+
+Number of Pages: 9
+
+Markdown Content:
+# MM4Rec: Multi-Source and Multi-Scenario Recommender for Unified User Preference 
+
+# Chu-Chun Yu 1* , Ming-Yi Hong 1, 2*† , Miao-Chen Chiang 1, 2† , Min Chen Hsieh 1, Che Lin 1†‡ 
+
+> 1
+
+National Taiwan University 
+
+> 2
+
+Academia Sinica 
+
+Abstract 
+
+As online ecosystems grow increasingly complex, person-alized recommendation systems must integrate user prefer-ences across heterogeneous content sources and interaction scenarios. However, conventional methods typically model each source and scenario in isolation, hindering their abil-ity to capture shared and complementary signals across con-texts. In this work, we propose MM4Rec , a unified frame-work for multi-source and multi-scenario recommenda-tion. MM4Rec introduces a Source-Aware Transformer Encoder to jointly model heterogeneous inputs, a Multi-Scenario Behavior Extraction Layer based on a multi-mixture-of-experts architecture to capture scenario-specific dynamics, and a Trend-Aware Learner to enhance tempo-ral representation learning. Extensive experiments on three real-world datasets demonstrate that MM4Rec consistently outperforms strong baselines across standard recommenda-tion metrics. To facilitate future research, we also release two large-scale datasets encompassing diverse sources and sce-narios. 
+
+Code, Datasets, and Appendix —https://github.com/idssplab/MM4Rec 
+
+# 1 Introduction 
+
+In the digital era, online platforms engage users through diverse scenarios: active browsing (Browse), where users explore content at their own pace, and push notifications (Push), which deliver timely and targeted re-engagement messages. These platforms also operate over multiple con-tent sources—such as news for engagement, ads for prof-itability, and reviews for decision-making. Crucially, inter-actions in one scenario influence behavior in another; for in-stance, news engagement may increase ad responsiveness. While integrating cross-source and cross-scenario signals enables richer and more context-aware preference model-ing, progress remains constrained by the scarcity of public datasets that capture such interactions. To advance research 
+
+> *
+
+These authors contributed equally. 
+
+> †
+
+Data Science Degree Program, National Taiwan University and Academia Sinica. 
+
+> ‡
+
+Corresponding author. (Email: chelin@ntu.edu.tw) Copyright © 2026, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved. 
+
+in this direction, we release two real-world datasets featur-ing News and Ads interactions on media platforms and fur-ther utilize a public dataset that encompasses video and ar-ticle behaviors. These datasets reveal that sources and sce-narios differ in content style and temporal density—for ex-ample, ad interactions are sparse and profit-driven, while news interactions are frequent and interest-oriented. This heterogeneity motivates our focus on unified multi-source and multi-scenario recommendation, where complementary information across contexts is jointly modeled to enhance personalization. Traditional recommendation systems (Hidasi and Karat-zoglou 2018; Kang and McAuley 2018; Sun et al. 2019) typically employ separate subsystems for distinct scenarios and sources, limiting their ability to provide integrated rec-ommendations. Multi-Task Learning (MTL) (Caruana 1997; Ma et al. 2018; Tang et al. 2020) approaches primarily opti-mize multiple objectives (e.g., click-through and conversion rates) within a single scenario. In contrast, Multi-Scenario Learning (MSL) (Li et al. 2020; Sheng et al. 2021; Shen et al. 2021; Tian et al. 2023; Wang et al. 2023) integrates user behaviors across scenarios by aligning representations and capturing complementary patterns. For example, brows-ing technology articles might correlate with engagement in related push notifications—an insight overlooked by MTL due to its scenario isolation. However, existing MSL frameworks often neglect cross-source relationships, highlighting the need for a unified ap-proach bridging scenarios and sources. Such integration is essential for several reasons. First, overlapping users and items across scenarios may enrich recommendation quality. For example, behaviors in news browsing can inform push notification content, and integrating News and Ads sources can leverage browsing behaviors to recommend relevant ad-vertisements. Second, unified modeling must address the seesaw effect (Weiss, Khoshgoftaar, and Wang 2016; Tang et al. 2020; Zhou et al. 2023), carefully balancing perfor-mance across different scenarios and sources. Lastly, inte-grating multi-source and multi-scenario information miti-gates data imbalance issues, such as sparse advertisement clicks, providing a more comprehensive understanding of user preferences. To this end, we propose MM4Rec, a unified framework The Fortieth AAAI Conference on Artificial Intelligence (AAAI-26) 
+
+16190 for Multi-source and Multi-scenario Recommendation that jointly models complex user behaviors across heteroge-neous data. To the best of our knowledge, MM4Rec is the first framework to simultaneously address both multi-source and multi-scenario settings in a unified architecture. Ad-dressing a critical gap in current research infrastructure, we also release two new large-scale real-world datasets— AviviD DatasetA and AviviD DatasetB—which span both scenarios and sources and include push interaction data. MM4Rec features three core components: • Source-Aware Transformer Encoder (SATE) : Cap-tures both shared and source-specific semantics through a source-adaptive gating mechanism, enabling effective 
+
+cross-source representation learning .• Multi-Scenario Behavior Extraction Layer (MSBE) :Based on the Multi-Mixture-of-Experts (MMoE) frame-work (Ma et al. 2018), it disentangles scenario-specific behaviors and supports information sharing across inter-action contexts .• Trend-Aware Learner (Yu et al. 2024): Refines the fi-nal user representation by capturing temporal evolution in user behavior. We conduct extensive experiments on a public bench-mark dataset and the two AviviD datasets. Results show that MM4Rec consistently outperforms state-of-the-art baselines in sequential recommendation across diverse scenarios and content sources. 
+
+Our main contributions are summarized as follows: 
+
+• We propose MM4Rec , a novel unified framework for modeling multi-source and multi-scenario user behav-iors, advancing the design of next-generation recommen-dation systems. • We introduce key architectural components— SATE and 
+
+MSBE —to enable end-to-end cross-source and cross-scenario integration while effectively mitigating the see-saw effect. • We release two real-world datasets from two differ-ent media platforms, that cover both content sources and interaction scenarios, including push notification data ,filling a critical gap in public resources and enabling fu-ture research on integrated recommendation tasks. Additional visual motivation, detailed analysis, and real-world data statistics are provided in Appendix A.1. 
+
+# 2 Related Work 
+
+## 2.1 Sequential Recommender Systems 
+
+Sequential Recommender Systems (SRSs) predict the next item users will interact with based on their historical be-haviors. Early works such as GRU4Rec (Hidasi and Karat-zoglou 2018) employ gated recurrent units to capture tem-poral dynamics, while SASRec (Kang and McAuley 2018) leverages self-attention (Vaswani et al. 2017) to model item dependencies. BERT4Rec (Sun et al. 2019) further employs a bidirectional transformer to learn representations from both directions. Despite these advances, most SRSs operate within a single scenario and source, limiting their ability to capture cross-context preferences. 
+
+## 2.2 Multi-task Learning 
+
+MTL focuses on simultaneously learning multiple related tasks by leveraging shared information across them to en-hance overall performance. The primary objective of MTL is to exploit task relationships, enabling the model to learn shared patterns while maintaining task-specific representa-tions. Shared Bottom (Caruana 1997) is a basic multi-task learning model that shares underlying feature information across tasks. However, its hard parameter sharing limits its ability to learn distinct tasks effectively. To overcome the limitation, MMoE (Ma et al. 2018) introduces multi-ple expert networks and ensemble learning to enhance rep-resentation capabilities, using a flexible gating network to create task-specific representations for prediction. Despite its progress, MMoE suffers from the seesaw phenomenon, where improvements in one task or scenario lead to per-formance declines in others. This issue is symptomatic of the negative transfer problem (Pan and Yang 2010; Weiss, Khoshgoftaar, and Wang 2016). PLE (Tang et al. 2020) ad-dresses this issue by explicitly separating shared and task-specific components and using a progressive routing mech-anism to gradually extract and differentiate semantic knowl-edge, improving joint representation learning and informa-tion routing across tasks. 
+
+## 2.3 Multi-Scenario Learning 
+
+MSL is designed to address distinct learning challenges across various scenarios by capturing both shared and scenario-specific information, often with the help of transfer learning techniques (Pan and Yang 2010). In recent years, it has been applied to multi-scenario recommendation (Chen et al. 2020; Cheng et al. 2023; Gao et al. 2023; Hao et al. 2021; Huan et al. 2023; Lan, Zhang, and Li 2023; Li et al. 2020; Shen et al. 2021; Sheng et al. 2021; Tian et al. 2023; Wang et al. 2023; Xu et al. 2023). Inspired by MTL, HMoE (Li et al. 2020) leverages the MMoE framework to implic-itly capture distinctions and commonalities across domains. SAR-Net (Shen et al. 2021) utilizes attention modules to transfer user interests across domains and applies a mix-ture of experts to extract relevant information. STAR (Sheng et al. 2021) employs a star topology with shared central pa-rameters and domain-specific parameters, enabling a single model to serve multiple domains. Recently, unified frame-works have emerged for multi-scenario and multi-task rec-ommendation: Liu et al. (Liu et al. 2024b) leverage ranking signals from heterogeneous scenarios; MultiFS (Liu et al. 2024a) automates feature selection for scenario-specific modeling; and M3oE (Zhang et al. 2024) applies mixture-of-experts for multi-domain and multi-task learning. Similarly, PEPNet (Chang et al. 2023) and HiNet (Zhou et al. 2023) fo-cus on multi-task personalization and cross-domain transfer through advanced parameter sharing and hierarchical MOE structures. Despite advancements, MSL research in SRSs re-mains limited. Most work focuses on click-through rate pre-dictions, rather than sequential recommendations. 
+
+## 2.4 Cross-Domain Recommendation 
+
+Recent studies have explored transferable sequential rec-ommenders to improve generalization across domains. In 16191 particular, VQRec (Hou et al. 2023) proposes learning vector-quantized item representations that decouple tex-tual semantics from item embeddings, enabling cross-domain adaptation without overlapping users or items. Un-like VQRec, which focuses on transferable item represen-tations across domains, MM4Rec addresses multi-source and multi-scenario integration within a unified architec-ture. Thus, while both aim to enhance generalization, our work complements cross-domain transfer by focusing on in-platform multi-context modeling. Existing works mainly address either multi-task, multi-scenario, or cross-domain challenges in isolation. However, real-world systems require unified modeling of heteroge-neous sources and interaction contexts. Effectively leverag-ing both multi-source and multi-scenario information is cru-cial for building adaptive and accurate recommendation sys-tems that capture the richness of real-world user behavior. 
+
+# 3 Proposed Method: MM4Rec 
+
+## 3.1 Preliminaries 
+
+The problem formulation and notations for our study are for-mally defined as follows. Let U = {u1, u 2, ..., u |U |} denote a set of users, O = {1, 2, . . . , q } and C = {1, 2, . . . , m }
+
+be a set of source and scenario, where q and m are the number of unique sources and scenarios, respectively. Let 
+
+S(u) 
+
+> o,c
+
+= [ v(u)
+
+> o,c, 1
+
+, . . . , v (u)
+
+> o,c,t
+
+, . . . , v (u) 
+
+> o,c,n u
+
+] denote the history in-teraction sequence, where v(u) 
+
+> o,c,t
+
+∈ V o is the item from the 
+
+o-th source that user u has interacted with in the c-th sce-nario at time step t. The set Vo contains all items available in source o, and nu is the length of the interaction sequence. Given the user’s interaction sequence in a specific source and scenario, the objective is to predict the next item v(u)
+
+> nu+1
+
+that user u will interact with, across all possible sources and scenarios, denoted as follows: 
+
+P r 
+
+
+
+v(u) 
+
+> nu+1
+
+{S(u) 
+
+> o,c
+
+}, o, c 
+
+
+
+. (1) In this way, the model can differentiate and process informa-tion based on the content source and the scenario in which the user interaction occurs. 
+
+## 3.2 Feature Representation 
+
+Our model incorporates two specialized extractors inspired by (Yu et al. 2024) to capture and utilize information from user interactions and content: Temporal Information Ex-tractor (TIE) extracts features such as weekday, hour, and click time intervals, which are normalized and embed-ded into a vector eTt ∈ Rdmodel , capturing comprehensive temporal information. Contextual Information Extractor (CIE) uses pre-trained language models to extract contex-tual embedding from news articles and advertisement titles. Each item’s title is processed using the TAIDE (NARLab 2024), a model that represents the SOTA in the Traditional Chinese language processing, based on Llama 2 (Touvron et al. 2023). The model parameters are frozen during training to leverage its pre-trained knowledge effectively. The output is a unified contextual embedding eAt ∈ Rdmodel . Further details are provided in Appendices A.2 and A.3. 
+
+Embedding Layer. The embedding layer converts the source ( o) and scenario ( c) into embeddings of dimension 
+
+dmodel . These values are mapped to their corresponding learnable embeddings eo, e c ∈ Rdmodel , which are randomly initialized at the start of training. These embeddings are then used throughout the model to identify the nuances of differ-ent sources and scenarios, effectively differentiating how the model processes content based on where it originates and in what context it is being consumed. 
+
+## 3.3 Source-Aware Transformer Encoder (SATE) 
+
+The SATE tackles the challenges of multi-source data in-tegration in sequential recommendation tasks by combining shared and source-specific feed-forward networks inspired by Switch Transformers (Fedus, Zoph, and Shazeer 2022). Unlike existing models that treat content sources either uni-formly or in isolation, SATE strikes a balance between gen-eralization and source-specific modeling through a source-adaptive gating mechanism that dynamically modulates the contribution of shared versus source-specific representa-tions. This design enables effective cross-source informa-tion sharing while preserving critical distinctions across con-tent types. By capturing nuanced sequential dependencies and uncovering richer behavioral patterns, SATE achieves substantial improvements over traditional source-agnostic or source-separated approaches. 
+
+Multi-head Self-attention Layers. To allow the model to jointly attend to information from different representation subspaces at various positions, we employ multi-head self-attention in SATE as shown in Figure 1. After applying layer normalization and the residual connection, the output of the multi-head attention layer is denoted as H(l) ∈ Rnu×dmodel .This output serves as the foundational representation of the 
+
+l-th layer in SATE . For more detailed information, refer to Appendix A.4. 
+
+Feed-forward Networks in SATE. Point-wise Feed-forward Networks (PFFN) enhance representation capacity by applying fully connected layers to the output of multi-head attention. For details, see Appendix A.5. However, us-ing a single PFFN across all data sources, as in many exist-ing transformer-based models, can obscure source-specific nuances, limiting the model’s ability to differentiate the unique characteristics of each source. To address this, we in-troduce a novel design that incorporates both Shared FFNs and Source-Specific FFNs, as shown in Figure 1 and will be discussed below. 
+
+Source-Specific FFNs. For each source i, a dedicated FFN is applied to sequences originating from that specific source. The operation of the Source-Specific FFNs can be generalized as: PFFN i(H(l)) = 
+
+h
+
+FFN i
+
+ hl
+
+> 1
+
+T ; . . . ; FFN i
+
+ hlnu
+
+T iT
+
+,
+
+∀i ∈ { 1, 2, . . . , q }.
+
+(2) 
+
+Shared FFN processes sequences from all sources collec-tively, learning common features that are applicable across 16192 Figure 1: Overall architecture of MM4Rec. S denotes the user’s historical interaction sequence, and P is the top N ∗ popular items list clicked by all users within an hour. Sequence S passes through the TIE and CIE for temporal and contextual repre-sentations, while P uses CIE only. These embeddings ( eT , e A) and source embeddings eo are fed into T-SATE and C-SATE for information sharing. The outputs are concatenated, processed in the MSBE, then combined with the Trend-Aware Learner output to form the final representation V .different content types. This shared layer generates a uni-form representation that serves as a foundational input for further processing in the network. The operation of the Shared FFN can be expressed as: PFFN sh (H(l)) = [ FFN sh (hl
+
+> 1
+
+)T ; . . . ; FFN sh (hlnu )T ]T .
+
+(3) 
+
+Source Adaptive Gate (SoAG). In each SATE block, 
+
+SoAG first dynamically computes gating weights based on the mean-pooled output from the multi-head self-attention layer H(l). This output is then concatenated with the source embedding es, as illustrated in Figure 1. This process en-ables the model to balance shared and source-specific infor-mation at each encoder block. The gating weights for the l-th encoder block are computed as follows: 
+
+SoAG (l) := softmax 
+
+
+
+W l 
+
+> 2
+
+ReLU  W l 
+
+> 1
+
+[ ¯H(l); eo]
+
+,
+
+= [ glsh , g l
+
+> 1
+
+, . . . , g lq ].
+
+(4) where ¯H(l) is the mean-pooled output of H(l), [·; ·] denotes concatenation, and W l 
+
+> 1
+
+and W l 
+
+> 2
+
+are learnable matrices. The 
+
+sof tmax (·) function ensures that the gating weights sum up to one, enabling effective integration of shared and source-specific features. Here, glsh represents the weight for the shared FFN, and gli represents the weight for the i-th source-specific FFN in the l-th block. These weights are used to combine the outputs from the Shared FFN and the Source-Specific FFNs, formulated as follows: 
+
+H(l) 
+
+> out
+
+= glsh · PFFN sh (H(l)) + 
+
+> q
+
+X
+
+> i=1
+
+gli · PFFN i(H(l)). (5) The adaptive gating mechanism dynamically integrates shared and source-specific features at each encoder block, improving the model’s ability to capture complex user inter-action patterns across various content sources. 
+
+Stacking SATE. We incorporate residual connections and layer normalization across SATE blocks. The output of each 
+
+SATE block is computed as follows: 
+
+H(l+1) = LayerNorm (H(l) + H(l)
+
+> out
+
+), (6) where H(l) is the input to the l-th block, and H(l+1) is the in-put to the subsequent block. This stacking allows for the ef-ficient integration of learned features across multiple blocks, enhancing the model’s representation capabilities. 
+
+Integration of Temporal and Contextual Features. We introduce Temporal Source-Aware Transformer Encoder (T-SATE) and Contextual Source-Aware Transformer Encoder (C-SATE) to learn temporal and contextual em-bedding sequences, respectively, as shown in Figure 1. These two modules consist of stacked SATE blocks to en-hance representation learning. Let eT = [ eT 
+
+> 1
+
+, ..., e Tt , ..., e Tnu ]
+
+and eA = [ eA 
+
+> 1
+
+, ..., e At , ..., e Anu ] be the temporal and contex-tual embedding input sequences. We apply learnable posi-tional embeddings P E = [p1, ..., p t, ..., p nu ] to each in-put sequence to incorporate position information. The out-puts, HT and HA, undergo mean pooling to yield ˆhT =
+
+mean (HT ) and ˆhA = mean (HA). The final representation, 
+
+ˆh, is obtained by concatenating ˆhT and ˆhA, capturing both temporal and contextual information. 16193 3.4 Multi-Scenario Behavior Extraction Layer (MSBE) 
+
+The MSBE is designed to capture and model user behav-ior patterns across diverse interaction scenarios, such as browsing and push notifications. By leveraging the MMoE framework (Ma et al. 2018) in Figure 1, MSBE captures scenario-specific nuances while enabling effective informa-tion sharing across scenarios. Each Expert is an indepen-dent, fully connected network, with the integrated represen-tation ˆh serving as input. Multiple gates aggregate the out-puts of these experts, learning scenario-specific representa-tions and capturing diverse scenario characteristics. The gat-ing weights are computed from the concatenation of ˆh and the scenario embedding ec:
+
+Gc := sof tmax 
+
+
+
+W2c · ReLU 
+
+
+
+W1c · [ˆh; ec]
+
+ 
+
+,
+
+∀c ∈ { 1, 2, . . . , m }.
+
+(7) where Gc = [ wc, 1, w c, 2, . . . , w c,n ] represents the vector of gating weights for scenario c, and each element wc,i is the weight for expert i in scenario c. The number of experts, 
+
+n, can be regarded as a hyperparameter. For each scenario, 
+
+c, the output Vc is a weighted sum of the expert outputs. These outputs are then concatenated and refined by the tower network to encapsulate multi-scenario behavior and enhance predictive performance: 
+
+V P = Tower 
+
+" nX
+
+> i=1
+
+wc,i · Expert i(ˆh)
+
+#
+
+> c
+
+!
+
+, (8) where each Expert i() is an independent fully-connected net-work, and [·]c denotes the concatenation of the weighted sums of expert outputs for all scenarios. The tower network consists of two fully connected layers, each followed by a ReLU activation, which processes the concatenated outputs to produce the final prediction. 
+
+## 3.5 Trend-Aware Learner (TAL) 
+
+The user’s click preference is influenced by historical pref-erences and current trends. We build a trend-aware learner to capture dynamic trends inspired by Push4Rec (Yu et al. 2024) in Figure 1. To realize a trend-aware representation, we retrieve the top-N ∗ items based on recent overall clicks as a popular item list. We then obtain their contextual em-beddings ( eT r = [ eT r  
+
+> 1
+
+, e T r  
+
+> 2
+
+, ..., e T r N ∗ ]) using the CIE module. These embeddings serve as the queries, keys, and values in the self-attention mechanism. The resulting output ( HT r ) is then mean-pooled to aggregate the trend-aware representa-tion ( V T r ). TAL uses a gating network to dynamically bal-ance personalized interest ( V P ) and trend-aware representa-tion ( V T r ). This ensures the final representation ( V ) reflects the influence of different information sources for each se-quence. See Appendix A.6 for details. 
+
+## 3.6 Loss Function 
+
+For each sequence, we generate a user representation V
+
+and candidate item embeddings {e1, e 2, . . . , e N +1 }, includ-ing one ground-truth item and N negative samples. Co-sine similarity scores between the user and item embeddings are scaled into probabilities {p1, p 2, . . . , p N +1 }. The binary cross-entropy loss for training is computed as: 
+
+L = − 1
+
+M
+
+> M
+
+X
+
+> j=1
+
+1
+
+N + 1  
+
+> N+1
+
+X
+
+> i=1
+
+yji log( pji )+(1 − yji ) log(1 − pji ),
+
+(9) where yji ∈ { 0, 1} indicates whether the i-th item is the ground truth, and M is the total number of sequences. Fur-ther details are provided in Appendix A.7. 
+
+# 4 Experiments 
+
+## 4.1 Experimental Settings 
+
+Datasets. Our experiments were conducted on two newly released datasets, AviviD DatasetA and AviviD DatasetB, collected from two media platforms featuring user inter-actions in two distinct scenarios: push notifications and web browsing, with content from two sources: News and Ads. Additionally, we utilized the public dataset from Ten-cent (Yuan et al. 2022), which includes two interaction sce-narios (QB and QK) and two content sources (articles and videos) spanning those scenarios. Users with fewer than three interactions were excluded, and the most recent 20 in-teractions were used as input for training. User sequences were segmented for training, validation, and testing. Simi-lar performance trends were observed on AviviD DatasetB; detailed results are provided in Appendices A.8 and A.12 (Tables A.4–A.6). 
+
+Baselines. To evaluate MM4Rec , we compare it to state-of-the-art methods in three categories: (i) Single model: 
+
+Models like SASRec (Kang and McAuley 2018) (self-attention for sequential patterns) and Push4Rec (Yu et al. 2024) (adapted from CTR to sequential tasks) are trained separately for each source and scenario. (ii) Multi-scenario model: Models such as Shared Bottom, MMoE (Ma et al. 2018), PLE (Tang et al. 2020), and STAR (Sheng et al. 2021) are trained per source but across multiple scenarios, using various mechanisms (shared experts, multi-gate shar-ing, or star topology) to balance shared and scenario-specific knowledge. (iii) Multi-source and Multi-scenario model: 
+
+To address the limited research in this area, we introduce STAR-MM (late fusion of separate STAR topologies for sources and scenarios) and Push4Rec-MM (Push4Rec back-bone with dual MMoE modules for both dimensions). De-tailed model descriptions are provided in Appendix A.9. 
+
+Evaluation and Implementation Details. The perfor-mances are evaluated by Hit Ratio@10 (HR@10) and Nor-malized Discounted Cumulative Gain@10 (NDCG@10). To reduce the computational burden of evaluating all user-item pairs, we adopted the training strategy from (Koren 2008; He et al. 2017; Kang and McAuley 2018) and tuned hyperpa-rameters based on validation NDCG@10. Detailed configu-rations are provided in Appendices A.10–A.13, along with the parameter analysis. Each experiment was conducted five times, and the results were averaged to ensure reliable and consistent performance metrics. 16194 Push Ads Browse Ads Push News Browse News Model NDCG@10 HR@10 NDCG@10 HR@10 NDCG@10 HR@10 NDCG@10 HR@10 SASRec 0.414 0.744 0.164 0.274 0.075 0.172 0.369 0.564 Push4Rec 0.425 0.753 0.456 0.744 0.092 0.206 0.380 0.590 Source: Ads Source: News Shared Bottom 0.285 ( ↓) 0.654 ( ↓) 0.464 ( ↑) 0.772 (↑) 0.047 ( ↓) 0.111 ( ↓) 0.417 ( ↑) 0.661 ( ↑)MMOE 0.354 ( ↓) 0.694 ( ↓) 0.464 ( ↑) 0.758 ( ↑) 0.057 ( ↓) 0.137 ( ↓) 0.423 ( ↑) 0.669 ( ↑)PLE 0.352 ( ↓) 0.689 ( ↓) 0.467 ( ↑) 0.757 ( ↑) 0.056 ( ↓) 0.131 ( ↓) 0.419 ( ↑) 0.664 ( ↑)STAR 0.337 ( ↓) 0.688 ( ↓) 0.468 ( ↑) 0.759 ( ↑) 0.057 ( ↓) 0.136 ( ↓) 0.431 ( ↑) 0.675 ( ↑)STAR-MM 0.448 ( ↑) 0.767 ( ↑) 0.427 ( ↓) 0.716 ( ↓) 0.068 ( ↓) 0.165 ( ↓) 0.433 ( ↑) 0.690 ( ↑)Push4Rec-MM 0.455 ( ↑) 0.773 ( ↑) 0.460 ( ↑) 0.733 ( ↓) 0.091 ( ↓) 0.226 ( ↑) 0.434 ( ↑) 0.690 ( ↑)               
+
+> MM4Rec 0.473 (*) 0.776 (↑)0.469 (↑)0.735 ( ↓)0.093 (↑)0.230 (↑)0.441 (↑)0.701 (**)
+
+Table 1: Performance on AviviD DatasetA. Results are averaged over five runs, with standard deviations provided in Appendix Table A.4. The best and second-best results are highlighted in boldface and underlined, respectively. Arrows indicate im-provement (↑) or decline (↓) relative to Push4Rec. Statistical significance is assessed via paired t-tests against the second-best baseline, Push4Rec-MM (in most cases). Significance levels are denoted as follows: * for p-value < 0.05, ** for p-value <
+
+0.01, and *** for p-value < 0.001.                                                                                             
+
+> QK Video QB Video QK Article QB Article Model NDCG@10 HR@10 NDCG@10 HR@10 NDCG@10 HR@10 NDCG@10 HR@10 SASRec 0.187 0.319 0.306 0.472 0.253 0.403 0.427 0.634 Push4Rec 0.200 0.332 0.306 0.449 0.254 0.396 0.399 0.597 Source: Video Source: Article Shared Bottom 0.197 ( ↓)0.347 ( ↑)0.376 ( ↑)0.577 ( ↑)0.246 ( ↓)0.423 ( ↑)0.548 ( ↑)0.826 ( ↑)MMOE 0.197 ( ↓)0.347 ( ↑)0.374 ( ↑)0.572 ( ↑)0.247 ( ↓)0.415 ( ↑)0.552 ( ↑)0.819 ( ↑)PLE 0.196 ( ↓)0.344 ( ↑)0.375 ( ↑)0.578 ( ↑)0.247 ( ↓)0.415 ( ↑)0.553 ( ↑)0.819 ( ↑)STAR 0.199 ( ↓)0.349 ( ↑)0.382 ( ↑)0.591 ( ↑)0.247 ( ↓)0.410 ( ↑)0.561 ( ↑)0.830 ( ↑)STAR-MM 0.199 ( ↓)0.350 ( ↑)0.381 ( ↑)0.591 ( ↑)0.248 ( ↓)0.414 ( ↑)0.568 ( ↑)0.840 ( ↑)Push4Rec-MM 0.198 ( ↓)0.347 ( ↑)0.384 ( ↑)0.591 ( ↑)0.258 ( ↑)0.430 ( ↑)0.568 ( ↑)0.842 ( ↑)
+> MM4Rec 0.207 (***) 0.365 (***) 0.388 (***) 0.598 (**) 0.263 (**) 0.439 (**) 0.571 (**) 0.846 (**)
+
+Table 2: Performance on Tenrec dataset. The table follows Table 1 conventions. Standard deviations are provided in Appendix Table A.6. 
+
+## 4.2 Performance Comparison 
+
+Tables 1 and 2 show the overall performance of the AviviD DatasetA and Tenrec datasets. We observe that 
+
+MM4Rec significantly outperforms most competitors and achieves near state-of-the-art results. These performance im-provements are further supported by statistical significance tests, confirmed through p-values. Several takeaways can be noted from our experimental results: 
+
+(1) Integrating multi-source and multi-scenario frame-works enhances the predictive ability of sequential recom-mendations compared to traditional single models. In the AviviD DatasetA and Tenrec datasets, all variants of multi-source and multi-scenario models, including STAR-MM, Push4Rec-MM, and the proposed MM4Rec , consistently outperform single models across most metrics. This sug-gests that leveraging multiple sources and scenarios is ad-vantageous for complex recommendation tasks. For exam-ple, in AviviD DatasetA (Table 1), MM4Rec achieves an NDCG@10 of 0.473 and HR@10 of 0.776 in the Push Ads scenario (versus Push4Rec’s 0.425 and 0.753), and an NDCG@10 of 0.441 and HR@10 of 0.701 in the Browse News scenario (versus 0.380 and 0.590). These highlight MM4Rec ’s superior performance in integrating multi-source and multi-scenario data. 
+
+(2) We effectively address the seesaw effect commonly observed in existing multi-scenario models, where improv-ing performance in one scenario often leads to degrada-tion in another. For example, in AviviD DatasetA (Table 1), the STAR-MM model improves NDCG@10 for Push Ads (0.448 vs. 0.337 in STAR), but its performance on Browse Ads drops (0.427 vs. 0.468), exemplifying this trade-off. In contrast, MM4Rec achieves higher NDCG@10 for both Push Ads (0.473) and Browse Ads (0.469), demonstrating consistent improvements across scenarios without compro-mising one for the other. A similar trend is observed in Ta-ble 2. This robustness stems from the joint use of SATE for cross-source representation learning and MSBE for multi-scenario information extraction, which together enable bal-anced and enhanced performance across diverse settings. 16195 Push Ads Browse Ads Push News Browse News Setting NDCG@10 HR@10 NDCG@10 HR@10 NDCG@10 HR@10 NDCG@10 HR@10                                         
+
+> MM4Rec 0.473 0.776 0.469 0.735 0.093 0.230 0.441 0.701
+> MM4Rec w/o MSBE 0.461 0.766 0.455 0.740 0.092 0.225 0.437 0.701
+> MM4Rec w/o SATE in T&C 0.461 0.774 0.450 0.726 0.089 0.216 0.434 0.688 MM4Rec w/o SATE in T 0.450 0.775 0.453 0.731 0.088 0.226 0.436 0.693 MM4Rec w/o SATE in C 0.459 0.773 0.457 0.728 0.091 0.218 0.431 0.691
+
+Table 3: Ablation study on AviviD DatasetA: Assessing the effectiveness of modules in MM4Rec. In the “w/o SATE” settings, we replace SATE with a standard encoder. In this context, “T” and “C” refer to the temporal (T-SATE) and contextual (C-SATE) pathways within the MM4Rec model.                                    
+
+> Push Ads Browse Ads Push News Browse News Setting NDCG@10 HR@10 NDCG@10 HR@10 NDCG@10 HR@10 NDCG@10 HR@10
+> MM4Rec 0.473 0.776 0.469 0.735 0.093 0.230 0.441 0.701
+> MM4Rec w/o SoAG †0.457 0.771 0.457 0.738 0.089 0.222 0.432 0.692 MM4Rec w/o specific FFN ‡0.451 0.773 0.446 0.728 0.086 0.215 0.431 0.691
+
+Table 4: Impact of source-specific FFNs and SoAG on SATE performance, evaluated on AviviD DatasetA. †Equal Weights 0.33/0.33/0.33. ‡shared FFN × 3
+
+MM4Rec achieves state-of-the-art performance across most metrics and datasets. Integrating multi-source and multi-scenario data significantly enhances the understanding of user preferences, offering superior efficiency and effec-tiveness compared to models trained separately. MM4Rec 
+
+leverages the strengths of the SATE and MSBE modules to implement an information-sharing process, effectively miti-gating the seesaw effect observed in other models. 
+
+## 4.3 Ablation Study 
+
+The ablation results in Table 3 highlight the importance of MM4Rec’s key components. Removing MSBE leads to sig-nificant performance degradation across metrics, emphasiz-ing its effectiveness in capturing complex scenario interac-tions. Similarly, substituting the proposed SATE with a stan-dard encoder—especially when excluded from both tempo-ral ( T-SATE ) and contextual ( C-SATE ) pathways—results in notable performance declines, illustrating its role in in-tegrating nuanced, multi-source signals. We omit additional ablation on the ( TAL ), as its effectiveness was extensively demonstrated in Push4Rec (Yu et al. 2024). Overall, these results confirm that MM4Rec’s integration of multi-scenario and multi-source information substantially enhances recom-mendation performance. 
+
+## 4.4 Analysis on SATE 
+
+The results in Table 4 demonstrate the importance of source-specific FFNs and SoAG in improving NDCG@10 and HR@10 on AviviD DatasetA. Replacing SoAG with fixed equal weights (0.33/0.33/0.33) reduces performance across scenarios, showing that static weighting fails to dynamically capture each source’s distinct contribution. Similarly, using only shared FFNs (without source-specific FFNs) leads to slight drops in metrics compared to MM4Rec , highlight-ing the necessity of source-specific modeling. By dynam-ically adjusting source influences and integrating tailored FFNs, MM4Rec consistently outperforms alternative con-figurations. Further analysis of the SoAG module across sources and scenarios is available in Appendix A.14. In ad-dition, we discuss time complexity in Appendix A.15. 
+
+## 4.5 Limitations and Future Works 
+
+While MM4Rec demonstrates strong performance across diverse sources and scenarios, several limitations remain. First, performance may degrade under extremely sparse user behavior, highlighting a need for improved robustness in cold-start settings. Second, although MM4Rec does not re-quire overlapping users or items across sources and sce-narios, future work should explore more complex source-scenario structures and interaction patterns. Lastly, broader benchmarking across additional platforms is needed to fully validate the framework’s generalizability. 
+
+# 5 Conclusion 
+
+In this paper, we introduced MM4Rec , a novel framework for sequential recommendations that seamlessly integrates multi-source and multi-scenario data. Leveraging the SATE 
+
+and MSBE modules, MM4Rec enhances information shar-ing across diverse content sources and interaction scenar-ios. Extensive experiments on both newly released and pub-lic datasets demonstrate that MM4Rec not only outper-forms traditional single-source models but also significantly mitigates the seesaw effect commonly observed in MSL. By advancing the field of sequential recommendations, 
+
+MM4Rec improves predictive accuracy and deepens the un-derstanding of user preferences. Additionally, the release of two comprehensive new media datasets (AviviD DatasetA and AviviD DatasetB) supports further research, paving the foundation for the development of more adaptive models in dynamic environments. 16196 Acknowledgments 
+
+This work was supported in part by the National Science and Technology Council (NSTC) of Taiwan under grant num-ber 113-2622-E-002-015. We thank the National Center for High-performance Computing (NCHC) of National Applied Research Laboratories (NARLabs) in Taiwan for providing computational and storage resources. We are also grateful to AviviD.ai for providing the datasets. 
+
+# References 
+
+Caruana, R. 1997. Multitask Learning. Mach. Learn. , 28(1): 41–75. Chang, J.; Zhang, C.; Hui, Y.; Leng, D.; Niu, Y.; Song, Y.; and Gai, K. 2023. PEPNet: Parameter and Embedding Per-sonalized Network for Infusing with Personalized Prior In-formation. In Proceedings of the 29th ACM SIGKDD Con-ference on Knowledge Discovery and Data Mining , KDD ’23, 3795–3804. New York, NY, USA: Association for Com-puting Machinery. Chen, Y.; Wang, Y.; Ni, Y.; Zeng, A.-X.; and Lin, L. 2020. Scenario-aware and Mutual-based approach for Multi-scenario Recommendation in E-Commerce. In 2020 Inter-national Conference on Data Mining Workshops (ICDMW) ,127–135. Cheng, W.; Ding, K.; Dong, X.; He, Y.; Zhang, L.; and Mo, L. 2023. MI-DPG: Decomposable Parameter Gen-eration Network Based on Mutual Information for Multi-Scenario Recommendation. CIKM ’23, 3803–3807. New York, NY, USA: Association for Computing Machinery. ISBN 9798400701245. Fedus, W.; Zoph, B.; and Shazeer, N. 2022. Switch Trans-formers: Scaling to Trillion Parameter Models with Simple and Efficient Sparsity. Journal of Machine Learning Re-search , 23(120): 1–39. Gao, J.; Chen, B.; Zhu, M.; Zhao, X.; Li, X.; Wang, Y.; Wang, Y.; Guo, H.; and Tang, R. 2023. Scenario-Aware Hierarchical Dynamic Network for Multi-Scenario Recom-mendation. arXiv:2309.02061. Hao, X.; Liu, Y.; Xie, R.; Ge, K.; Tang, L.; Zhang, X.; and Lin, L. 2021. Adversarial Feature Translation for Multi-domain Recommendation. KDD ’21, 2964–2973. New York, NY, USA: Association for Computing Machinery. ISBN 9781450383325. He, X.; Liao, L.; Zhang, H.; Nie, L.; Hu, X.; and Chua, T.-S. 2017. Neural Collaborative Filtering. In Proceedings of the 26th International Conference on World Wide Web , WWW ’17, 173–182. Republic and Canton of Geneva, CHE: Inter-national World Wide Web Conferences Steering Committee. Hidasi, B.; and Karatzoglou, A. 2018. Recurrent Neural Networks with Top-k Gains for Session-based Recommen-dations. In Proceedings of the 27th ACM International Con-ference on Information and Knowledge Management , CIKM ’18, 843–852. New York, NY, USA: Association for Com-puting Machinery. Hou, Y.; He, Z.; McAuley, J.; and Zhao, W. X. 2023. Learn-ing Vector-Quantized Item Representation for Transferable Sequential Recommenders. In Proceedings of the ACM Web Conference (WWW) .Huan, Z.; Li, A.; Zhang, X.; Min, X.; Yang, J.; He, Y.; and Zhou, J. 2023. SAMD: An Industrial Framework for Het-erogeneous Multi-Scenario Recommendation. KDD ’23, 4175–4184. New York, NY, USA: Association for Comput-ing Machinery. ISBN 9798400701030. Kang, W.-C.; and McAuley, J. 2018. Self-Attentive Sequen-tial Recommendation. In 2018 IEEE International Confer-ence on Data Mining (ICDM) , 197–206. Koren, Y. 2008. Factorization meets the neighborhood: a multifaceted collaborative filtering model. In Proceedings of the 14th ACM SIGKDD International Conference on Knowl-edge Discovery and Data Mining , KDD ’08, 426–434. New York, NY, USA: Association for Computing Machinery. Lan, Z.; Zhang, Y.; and Li, X. 2023. M3REC: A Meta-based Multi-scenario Multi-task Recommendation Frame-work. RecSys ’23, 771–776. New York, NY, USA: Asso-ciation for Computing Machinery. ISBN 9798400702419. Li, P.; Li, R.; Da, Q.; Zeng, A.-X.; and Zhang, L. 2020. Im-proving Multi-Scenario Learning to Rank in E-commerce by Exploiting Task Relationships in the Label Space. In 
+
+Proceedings of the 29th ACM International Conference on Information & Knowledge Management , CIKM ’20, 2605–2612. New York, NY, USA: Association for Comput-ing Machinery. Liu, D.; Yang, C.; Tang, X.; Wang, Y.; Lyu, F.; Luo, W.; He, X.; Ming, Z.; and Zhao, X. 2024a. MultiFS: Auto-mated Multi-Scenario Feature Selection in Deep Recom-mender Systems. In WSDM .Liu, J.; Chen, Q.; Xu, J.; Li, J.; Li, B.; and Xu, S. 2024b. A Unified Search and Recommendation Framework Based on Multi-Scenario Learning for Ranking in E-commerce. In 
+
+SIGIR .Ma, J.; Zhao, Z.; Yi, X.; Chen, J.; Hong, L.; and Chi, E. H. 2018. Modeling Task Relationships in Multi-task Learn-ing with Multi-gate Mixture-of-Experts. In Proceedings of the 24th ACM SIGKDD International Conference on Knowl-edge Discovery & Data Mining , KDD ’18, 1930–1939. New York, NY, USA: Association for Computing Machinery. NARLab. 2024. Trustworthy AI Dialogue Engine. https: //taide.tw. Pan, S. J.; and Yang, Q. 2010. A Survey on Transfer Learn-ing. IEEE Transactions on Knowledge and Data Engineer-ing , 22(10): 1345–1359. Shen, Q.; Tao, W.; Zhang, J.; Wen, H.; Chen, Z.; and Lu, Q. 2021. SAR-Net: A Scenario-Aware Ranking Net-work for Personalized Fair Recommendation in Hundreds of Travel Scenarios. In Proceedings of the 30th ACM Inter-national Conference on Information & Knowledge Manage-ment , CIKM ’21, 4094–4103. New York, NY, USA: Associ-ation for Computing Machinery. Sheng, X.-R.; Zhao, L.; Zhou, G.; Ding, X.; Dai, B.; Luo, Q.; Yang, S.; Lv, J.; Zhang, C.; Deng, H.; and Zhu, X. 2021. One Model to Serve All: Star Topology Adaptive Recom-mender for Multi-Domain CTR Prediction. In Proceedings 16197 of the 30th ACM International Conference on Information & Knowledge Management , CIKM ’21, 4104–4113. New York, NY, USA: Association for Computing Machinery. Sun, F.; Liu, J.; Wu, J.; Pei, C.; Lin, X.; Ou, W.; and Jiang, P. 2019. BERT4Rec: Sequential Recommendation with Bidirectional Encoder Representations from Transformer. In Proceedings of the 28th ACM International Conference on Information and Knowledge Management , CIKM ’19, 1441–1450. New York, NY, USA: Association for Comput-ing Machinery. Tang, H.; Liu, J.; Zhao, M.; and Gong, X. 2020. Progres-sive Layered Extraction (PLE): A Novel Multi-Task Learn-ing (MTL) Model for Personalized Recommendations. In 
+
+Proceedings of the 14th ACM Conference on Recommender Systems , RecSys ’20, 269–278. New York, NY, USA: Asso-ciation for Computing Machinery. Tian, Y.; Li, B.; Chen, S.; Li, X.; Deng, H.; Xu, J.; Zheng, B.; Wang, Q.; and Li, C. 2023. Multi-Scenario Ranking with Adaptive Feature Learning. In Proceedings of the 46th In-ternational ACM SIGIR Conference on Research and Devel-opment in Information Retrieval , 517–526. New York, NY, USA: Association for Computing Machinery. Touvron, H.; Martin, L.; Stone, K.; Albert, P.; Almahairi, A.; Babaei, Y.; Bashlykov, N.; Batra, S.; Bhargava, P.; Bhosale, S.; Bikel, D.; Blecher, L.; Ferrer, C. C.; Chen, M.; Cucu-rull, G.; Esiobu, D.; Fernandes, J.; Fu, J.; Fu, W.; Fuller, B.; Gao, C.; Goswami, V.; Goyal, N.; Hartshorn, A.; Hosseini, S.; Hou, R.; Inan, H.; Kardas, M.; Kerkez, V.; Khabsa, M.; Kloumann, I.; Korenev, A.; Koura, P. S.; Lachaux, M.-A.; Lavril, T.; Lee, J.; Liskovich, D.; Lu, Y.; Mao, Y.; Martinet, X.; Mihaylov, T.; Mishra, P.; Molybog, I.; Nie, Y.; Poul-ton, A.; Reizenstein, J.; Rungta, R.; Saladi, K.; Schelten, A.; Silva, R.; Smith, E. M.; Subramanian, R.; Tan, X. E.; Tang, B.; Taylor, R.; Williams, A.; Kuan, J. X.; Xu, P.; Yan, Z.; Zarov, I.; Zhang, Y.; Fan, A.; Kambadur, M.; Narang, S.; Ro-driguez, A.; Stojnic, R.; Edunov, S.; and Scialom, T. 2023. Llama 2: Open Foundation and Fine-Tuned Chat Models. arXiv:2307.09288. Vaswani, A.; Shazeer, N.; Parmar, N.; Uszkoreit, J.; Jones, L.; Gomez, A. N.; Kaiser, L.; and Polosukhin, I. 2017. At-tention is All You Need. In Proceedings of the 31st Inter-national Conference on Neural Information Processing Sys-tems , 6000–6010. Curran Associates Inc. Wang, Y.; Zhao, X.; Chen, B.; Liu, Q.; Guo, H.; Liu, H.; Wang, Y.; Zhang, R.; and Tang, R. 2023. PLATE: A Prompt-Enhanced Paradigm for Multi-Scenario Recommendations. In Proceedings of the 46th International ACM SIGIR Con-ference on Research and Development in Information Re-trieval , SIGIR ’23, 1498–1507. New York, NY, USA: Asso-ciation for Computing Machinery. Weiss, K.; Khoshgoftaar, T. M.; and Wang, D. 2016. A sur-vey of transfer learning. Journal of Big data , 3: 1–40. Xu, S.; Li, L.; Yao, Y.; Chen, Z.; Wu, H.; Lu, Q.; and Tong, H. 2023. MUSENET: Multi-Scenario Learning for Repeat-Aware Personalized Recommendation. WSDM ’23, 517–525. New York, NY, USA: Association for Computing Machinery. ISBN 9781450394079. Yu, C.-C.; Hong, M.-Y.; Ho, C.-Y.; and Lin, C. 2024. Push4Rec: Temporal and Contextual Trend-Aware Trans-former Push Notification Recommender. In ICASSP 2024 - 2024 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) , 6625–6629. Yuan, G.; Yuan, F.; Li, Y.; Kong, B.; Li, S.; Chen, L.; Yang, M.; Yu, C.; Hu, B.; Li, Z.; et al. 2022. Tenrec: A large-scale multipurpose benchmark dataset for recommender sys-tems. Advances in Neural Information Processing Systems ,35: 11480–11493. Zhang, Z.; Liu, S.; Yu, J.; Cai, Q.; Zhao, X.; Zhang, C.; Liu, Z.; Liu, Q.; Zhao, H.; Hu, L.; Jiang, P.; and Gai, K. 2024. M3oE: Multi-Domain Multi-Task Mixture-of Experts Rec-ommendation Framework. In SIGIR .Zhou, J.; Cao, X.; Li, W.; Bo, L.; Zhang, K.; Luo, C.; and Yu, Q. 2023. HiNet: Novel Multi-Scenario & Multi-Task Learning with Hierarchical Information Extraction. In 2023 IEEE 39th International Conference on Data Engineering (ICDE) , 2969–2975. 16198

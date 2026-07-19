@@ -1,0 +1,395 @@
+Title: Capturing Dynamic User Interests Under Modality Imbalance for Multimodal Sequential Recommendation
+
+URL Source: https://ojs.aaai.org/index.php/AAAI/article/download/38544/42506
+
+Number of Pages: 9
+
+Markdown Content:
+# Capturing Dynamic User Interests Under Modality Imbalance for Multimodal Sequential Recommendation 
+
+# Zilong Li 1, Jia Zhu 1* , Chenglei Huang 1, Zhangze Chen 1, Hanghui Guo 2, Guoqing Ma 1, Jianxia Ling 1
+
+> 1
+
+Zhejiang Key Laboratory of Intelligent Education Technology and Application, Zhejiang Normal University 
+
+> 2
+
+School of Computer Science and Engineering, Southeast University 
+
+{lizilong, jiazhu }@zjnu.edu.cn 
+
+Abstract 
+
+Multimodal sequential recommender systems leverage di-verse modal inputs to enhance the accuracy and relevance of personalized recommendations. However, existing fusion strategies often struggle to capture intricate cross-modal in-teractions, especially under the evolving dynamics of user in-tent. Moreover, they frequently neglect modality imbalance issues, leading to suboptimal utilization of multimodal in-formation. To address these challenges, we propose DuAF-MAT, a novel framework for robust multimodal sequential recommendation. Our approach consists of three key compo-nents: (1) a Dual-Aware Adaptive Fusion (DuAF) module dy-namically calibrates modality contributions by jointly mod-eling user preferences and temporal information, enabling the extraction of multimodal features aligned with evolving user interests; (2) by integrating Modality Adversarial Train-ing with the Mixture-of-Experts paradigm, MAT-MoE em-ploys an ensemble of expert generators to dynamically re-construct missing modality representations, effectively mit-igating modality imbalance challenges; (3) to address the inherent sparsity of sequential behavior data, we propose a Multi-Supervised Contrastive Learning strategy that inte-grates cross-modal alignment and virtual sequence augmenta-tion. This approach enhances user interest modeling by lever-aging diverse learning signals, resulting in improved model robustness and generalization capability. Extensive experi-ments on four public datasets demonstrate that DuAF-MAT significantly outperforms state-of-the-art baselines. 
+
+# Introduction 
+
+Sequential Recommendation (SR) (Wang et al. 2019a; Wu et al. 2024; Quadrana, Cremonesi, and Jannach 2018; Wang et al. 2019b) has emerged as a prominent research direction in recent years, aiming to capture users’ dynamic interests and predict the next item of interest based on their historical behaviors. Current SR approaches (Chen et al. 2022; Kang and McAuley 2018; Lin et al. 2023; Sun et al. 2019) pre-dominantly rely on user-item interaction IDs as input. This reliance results in performance degradation under data spar-sity and cold-start scenarios, ultimately limiting model ro-bustness and scalability. 
+
+> *
+
+Corresponding author. Copyright © 2026, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved. 
+
+Figure 1: MMSR Challenges: a) Users’ attention to different modalities of items may depend on their preferences, and these preferences dynamically evolve over time. b) Numer-ous real-world datasets exhibit modal incompleteness phe-nomena. c) The sparsity of sequential data affects recom-mendation accuracy. Real-world recommendation systems often involve multi-modal information (e.g., text, images), which provides ad-ditional semantic enrichment for user interest modeling. In recent years, Multimodal Sequential Recommendation (MMSR) (Bian et al. 2023; Hou et al. 2022; Hu et al. 2023; Liang et al. 2023; Guo et al. 2025b) has gained increasing at-tention. MMSR integrates multimodal data to enhance user interest modeling, offering richer representations while alle-viating data sparsity and cold-start issues. Existing MMSR methods primarily focus on modality fusion to improve recommendation accuracy. For instance, UniSRec (Hou et al. 2022) maps textual semantics into ID embeddings through an expert mixture mechanism, and MissRec (Wang et al. 2023) designs a lightweight fusion module to model user preferences across modalities adap-tively. While these methods have advanced multimodal fu-sion, three critical challenges remain: (1) Although multi-modal data greatly enriches user interest modeling, tradi-tional fusion strategies often fail to effectively capture cross-The Fortieth AAAI Conference on Artificial Intelligence (AAAI-26) 
+
+15198 modal interactions within the complex dynamics of con-stantly changing user intentions. This leads to extracted mul-timodal features that are inconsistent with dynamic user in-terests. Users may prioritize different modalities in different situations. As shown in Figure 1 a), fitness enthusiasts may focus more on textual information such as nutritional con-tent and calories when selecting food during their dietary discipline periods, while visual attributes like color and ap-pearance in item images may play a more important role during their indulgence phases. (2) In practical applications, recommender systems typically involve multiple heteroge-neous data sources, resulting in incomplete modal informa-tion for certain items (e.g., missing images or descriptions), as illustrated in Figure 1 b). (3) User interaction data is typi-cally sparse, especially for cold-start users or those with lim-ited historical behaviors, which creates challenges in accu-rately modeling their interest patterns. As shown in Figure 1 c), interaction sequences with lengths of 5-9 account for the majority of the training set, highlighting the need to extract meaningful signals from these relatively short sequences. To address the aforementioned challenges, we propose a novel framework for Multimodal Sequential Recommenda-tion, termed DuAF-MAT. Our approach consists of three key components. First, to tackle the dynamic nature of modal-ity contributions, we design a Dual-Aware Adaptive Fusion (DuAF) module that dynamically adjusts modality weights based on user preferences and temporal information, ef-fectively capturing evolving user interests across scenarios. Second, to handle incomplete modality data, we propose a Modality Adversarial Training with Mixture-of-Experts (MAT-MoE), which leverages adversarial learning and spe-cialized expert generators to reconstruct modalities, ensur-ing robust item representations even under data heterogene-ity. Third, to mitigate data sparsity and enhance generaliza-tion, we introduce Multi-Supervised Contrastive Learning (MSCL), integrating cross-modal and virtual sequence con-trastive objectives to enrich signals and improve preference modeling for sparse sequences. In summary, the contribu-tions of our work are as follows: • We propose a Dual-Aware Adaptive Fusion module that synergistically combines user-aware and time-aware adaptation mechanisms, enabling fine-grained modality weighting tailored to user preferences and temporal in-formation. • We propose a Modality Adversarial Training framework enhanced by a Mixture of Experts, which generates high-fidelity synthetic embeddings for missing modalities us-ing modality-guided adversarial learning. • We propose a Multi-Supervised Contrastive Learning strategy that integrates cross-modal alignment, virtual se-quence augmentation to address sparse sequential data is-sues. This approach enhances user interest modeling by leveraging diverse learning signals, resulting in improved model robustness and generalization capability. • We conducted extensive experiments on four real-world public datasets, demonstrating that our DuAF-MAT method surpasses state-of-the-art approaches. 
+
+# Related Work 
+
+Sequential Recommendation 
+
+Sequential Recommendation (SR) focuses on modeling user preferences based solely on historical interaction sequences, aiming to capture dynamic user interests and predict fu-ture interactions. Early methods relied on Markov Chains, such as FPMC (Rendle, Freudenthaler, and Schmidt-Thieme 2010) and HRM (Wang et al. 2015). Inspired by the suc-cess of deep learning in sequence modeling, researchers applied various neural network architectures for sequen-tial recommendation, including CNNs (Tang and Wang 2018), RNNs (Hidasi 2015; Tan, Xu, and Liu 2016), and GNNs (Chang et al. 2021; Wu et al. 2019). The intro-duction of self-attention-based models has significantly ad-vanced SR, with SASRec (Kang and McAuley 2018) lever-aging self-attention for long-range dependency modeling and BERT4Rec (Sun et al. 2019) enhancing this with bidi-rectional encoding for contextualized sequence representa-tion. Among them, some Transformer-based methods and graph attention-based methods have achieved remarkable re-sults (Chen et al. 2022; Kang and McAuley 2018; Xia et al. 2022; Zhang et al. 2022; Zhou et al. 2020, 2023; Zhu et al. 2025). However, these methods primarily rely on user-item interaction IDs, making them susceptible to data sparsity and cold-start issues. 
+
+Mutlimodal Sequential Recommendation 
+
+Multimodal sequential Recommendation (MMSR) has emerged as a promising direction to incorporate multimodal information into sequential recommendation, significantly enhancing recommendation quality by capturing richer user interests (Ji et al. 2023; Li et al. 2023; Liang et al. 2023; Ye et al. 2024; Yuan et al. 2023; Guo et al. 2025a). Ex-isting research primarily focuses on modality fusion strate-gies to improve recommendation accuracy. UniSRec (Hou et al. 2022) leverages a Mixture of Experts (MoE) mech-anism to facilitate semantic transfer from textual represen-tations to ID embeddings, improving the expressiveness of user representations. Building on these foundations, sub-sequent studies have introduced adaptive fusion mecha-nisms to enhance the effectiveness of multimodal integra-tion. For instance, MISSRec (Wang et al. 2023) employs a lightweight fusion module to dynamically model user at-tention across different modalities, enabling personalized modality weighting. MMSR (Hu et al. 2023) incorporates heterogeneous graph neural networks to adaptively capture the intricate relationships between modalities, allowing for more flexible and robust multimodal fusion. Beyond con-ventional fusion techniques, TedRec (Xu et al. 2024) intro-duces a novel frequency-domain fusion approach, leverag-ing the Fast Fourier Transform (FFT) to process embed-ding sequences of item IDs and textual content, enabling sequence-level semantic fusion in the frequency spectrum. While these methods have achieved substantial progress in multimodal fusion, challenges remain in effectively mod-eling modality dynamics, handling missing modalities, and mitigating the impact of data sparsity, highlighting the need for further research in MMSR. 15199 Figure 2: The overall architecture of the proposed DuAF-MAT. 
+
+# Preliminaries 
+
+In our scenario, we focus on multimodal sequential recom-mendation tasks. Let U = {u1, u 2, . . . , u N } represent the set of users, and V = {v1, v 2, . . . , v M } represent the set of items. Each item v ∈ V is represented as v = ⟨iid , i t, i v⟩,where iid is the item ID, while it and iv refer to the associ-ated textual and visual content of item v.For each user u ∈ U , we define their interaction sequence 
+
+Su = {r1, r 2, . . . , r |S|}, where each interaction record rj
+
+corresponds to an interaction between user u and item vj ∈
+
+V at time tj . The corresponding timestamp sequence is de-noted as T = {t1, t 2, . . . , t |S|}.Given a user’s interaction sequence Su, our objective is to predict the next item vn+1 the user is likely to interact with at the (n + 1) -th time step. This can be formulated as finding the item v that maximizes the conditional probability given the interaction sequence: 
+
+vn+1 = arg max  
+
+> v∈V
+
+P (v|Su). (1) 
+
+# Proposed Method 
+
+Multimodel Item Representation 
+
+Multimodal information provides comprehensive item char-acterization essential for effective recommendation systems. We integrate four modalities for initial item embeddings: ID, textual, visual, and structural features. For ID-based representation, we define an embedding ma-trix where each item v is associated with an ID embed-ding xid of dimension d. The textual representation lever-ages BERT (Devlin et al. 2019) to extract semantic features from an item’s textual content, using the special [CLS] to-ken to capture sentence-level information. This produces a textual feature vector ft that we transform to the embedding space through a linear projection to obtain xt.Similarly, for visual representation, we employ ViT (Dosovitskiy et al. 2020) to process images by segmenting them into patches and extracting visual features. The result-ing visual feature vector fv is also projected to the common embedding space to obtain xv . These linear transformations involve trainable weight matrices and bias terms, while the original feature vectors remain frozen during training. Finally considering the significance of sequential order in recommendation tasks, we incorporate positional embed-dings into all modality representations: 
+
+em = xm + p, (2) where m ∈ { id, textual, visual } represents the modality, and p ∈ Rd denotes the positional embedding. 
+
+Dual-Aware Adaptive Fusion 
+
+Traditional fusion strategies, such as those employed in MissRec, typically rely on static or user-aware weighting schemes, which overlook the temporal dynamics of user in-tent. As a result, they often fail to capture nuanced cross-modal interactions that evolve over time, leading to mis-alignment between extracted multimodal features and users’ real-time preferences. To address this limitation, we propose the Dual-Aware Adaptive Fusion (DuAF) module, which dy-namically adjusts the contribution of each modality based on user preferences and temporal information. 15200 In more specific terms, given a user sequence Su =
+
+{v1, v 2, . . . , v |S|} for user u, and the corresponding times-tamp sequence T = {t1, t 2, . . . , t |S|}, we calculate the time interval sequence as follows: 
+
+{∆t1, ∆t2, . . . , ∆t|S|} = {0, t 2 − t1, . . . , t |S| − t|S−1|},
+
+(3) where ∆ti denotes the corresponding interval of the item 
+
+vi ∈ Su. Than we calculate the time interval embedding as follows: 
+
+einter  
+
+> i
+
+= W1 · log(∆ ti + 1) + b1, (4) where W and b are learnable parameters in our method. Dif-ferent time intervals einter  
+
+> i
+
+indicate different user interest tran-sitions. Meanwhile inspired by the positional embedding in Transformer, we calculate the timestamp embedding as fol-lows: 
+
+ets [2 k] = sin( αkt+βk), ets [2 k+1] = cos( αkt+βk), (5) where αk and βk are learnable parameters. then we combine both representations to get the final time embedding: 
+
+etime  
+
+> i
+
+= W2[einter  
+
+> i
+
+; ets  
+
+> i
+
+] + b2, (6) the adaptive weights for each modality m in the sequence are computed as follows: 
+
+ωmi (u, t i) = exp   su, tanh( emi + etime  
+
+> i
+
+) P 
+
+> n∈M
+
+exp   su, tanh( eni + etime  
+
+> i
+
+)  , (7) where ⟨· , ·⟩ is the inner product, and tanh( ·) is the hyper-bolic tangent function. emi is the item embedding of the modality m, calculated from Equation (2), and su represents the dynamic preference of the user u, calculated by Equation (17). Finally, the fused embedding of the item vi is aggre-gated as: 
+
+hi = X 
+
+> m∈M∪{ S}
+
+ωmi (u, t )emi , (8) This weighted aggregation ensures that the fused embedding extracts the modal information most relevant to dynamic user interests, leading to more personalized item represen-tations. 
+
+Modality Adversarial Training with Mixture-of-Experts 
+
+Traditional multimodal recommendation models suffer from performance degradation when facing missing modalities, particularly images. Existing methods often overlook these gaps or rely on naive random initialization, failing to capture complex cross-modal relationships and resulting in subopti-mal representations. To address this, we propose a Modality Adversarial Training with Mixture-of-Experts (MAT-MoE) module that actively reconstructs missing modality embed-dings through adversarial learning, enhancing the robustness of item representations. Drawing from Wasserstein GAN (WGAN) (Arjovsky, Chintala, and Bottou 2017), we formulate a min-max game between the discriminator D and generator G:
+
+max  
+
+> D
+
+min  
+
+> G
+
+Ex∼preal [D(x)] − Ex′∼G[D(x′)] , (9) where x is the data sample. In this min-max game, the dis-criminator D is assigned to discriminate the input data sam-ple x with a score while the generator G aims to generate a synthetic data sample x′. With the adversarial training, the generator G adapts to the actual distribution of the data x
+
+and the discriminator D can learn to judge the plausibility of the input data. 
+
+The Design of Generator In the design of MAT-MoE, We implement each generator expert Gi with a two-layer feed-forward network (FFN), which could be denoted as: 
+
+Gi(et, z ) = W2,i · δ(W1,i [et; z] + b1,i ) + b2,i , (10) where δ is the LeakyReLU activation function, z ∼ N (0 , I )
+
+is the random noise, and [; ] represents the concatenation op-eration. et represents the text embedding of the item e. Dif-ferent item categories often exhibit distinct visual character-istics and semantic patterns. To facilitate more fine-grained expert selection conditioned on item categories, we maintain a learnable category embedding matrix Ec ∈ RC×d, where 
+
+C is the total number of categories. Then we compute the routing weights: 
+
+g = softmax (Wg ec + bg ), (11) where ec is the category embedding retrieved from Ec.
+
+g = [ g1, g 2, . . . , g N ] ∈ RN and N is the number of gen-erator experts. The final synthetic item embedding esyn is obtained by aggregating the outputs of all experts according to their respective routing weights: 
+
+esyn = G(et, z ) = 
+
+> N
+
+X
+
+> i=1
+
+gi · Gi(et, z ), (12) where esyn ∈ Rd represents the generated visual embed-ding of item e.
+
+The Design of Discriminator Discriminator D serves as a classifier designed to determine whether a pair of textual em-bedding et and visual embedding ev are compatible, which is a binary classifier. The existing textual-visual embedding pair (eit, e iv ) for ei ∈ Ec are positive feature pairs with label 
+
+1, while the generated pair (eit, ei
+
+> syn
+
+) are viewed as negative embedding pairs with ground-truth label 0. In practice, D is a two-layer network denoted as: 
+
+D(et, e v ) = W4[δ(W3et + b3); ev ] + b4, (13) where W3, W 4, b 3, b 4 are the learnable parameters of the network. During training, we apply binary cross-entropy as the loss function to optimize the models: 
+
+Ladv = − 1
+
+|E|
+
+X
+
+> ei∈E
+
+log(1 − D(eit, e isyn )) + 1
+
+|Ec|
+
+X
+
+> ei∈Ec
+
+log( D(eit, e iv )) .
+
+(14) In the adversarial context, the generator G aims to gener-ate convincing visual embedding and fool the discriminator 15201 D, while D is designed to make robust predictions to recog-nize the generated embeddings. Thus, G and D play a mini-max game and optimize their parameters in an adversarial manner, denoted as: 
+
+min  
+
+> G
+
+max  
+
+> D
+
+Ladv − λgp Lgp , (15) where λgp is a hyperparameter controlling the intensity of the gradient penalty. Lgp is the gradient penalty (Gulrajani et al. 2017) , commonly used for stable WGAN training, denoted as: 
+
+Lgp = λgp Eˆev ∼Pˆev 
+
+h
+
+(∥∇ ˆev D(et, ˆev )∥2 − 1) 2i
+
+, (16) where ˆev = αe v + (1 − α)esyn are interpolated samples. 
+
+α ∼ U (0 , 1) is an interpolation coefficient randomly sam-pled from a uniform distribution. 
+
+Prediction and Optimization 
+
+Based on the sequence Su = {i1, i 2..., i |Su|}, our objective is to predict the next item it that the user u is likely to inter-act with at the t-th step. Following the above design of MAT-MoE, for items without visual embeddings, we first generate visual embedding esyn by G and assess their compatibility with the text embedding et using D. Then, we apply mean pooling to the valid visual embedding esyn to obtain the fi-nal visual embedding e′ 
+
+> v
+
+. This process can be denoted as 
+
+e′ 
+
+> v
+
+=   
+
+> PKj=1 yi,j ·esyn
+> PKj=1 yi,j
+
+:where yi,j ∈ { 0, 1} is the prediction re-sult of (et, e syn ) made by D. Then we use Equation (8) to get the fused item embedding h. After this, we got user se-quence Su = {h1, h 2..., h |Su|}, we use SeqEncoder to cap-ture the user’s evolving interests, which can be denoted as: 
+
+su = SeqEncoder (Su), (17) where su denotes the representation of sequence Su. Se-qEncoder is a sequence encoder, which can be implemented with the Attention (Vaswani et al. 2017) or other neural ar-chitectures (Sherstinsky 2020; Zhang et al. 2019a). In this work, we adopt SASRec(Kang and McAuley 2018) as our sequence encoder. After generating the above representa-tions, we can obtain the final prediction ˆy ∈ { 0, 1} at time 
+
+t with dot product, where each element ˆyui indicates how likely the item i should be recommended to the target user 
+
+u. Finally, the model is trained with binary cross-entropy loss as follows: 
+
+Lmain = − X
+
+> u∈U
+
+X
+
+> i∈I
+
+yui log ˆ yui + (1 − yui ) log(1 − ˆyui ).
+
+(18) 
+
+Multi-Supervised Contrastive Learning 
+
+The inherent sparsity of sequential behavioral data often fails to provide sufficient signal fidelity for robustly mod-eling users’ evolving preferences. This fundamental limi-tation leads traditional recommendation models to overfit spurious patterns, thereby degrading the quality of learned representations. To address this challenge, we propose Multi-Supervised Contrastive Learning (MSCL). This novel framework integrates CSCL and VSCL to generate com-plementary, multifaceted supervisory signals, thereby effec-tively enhancing model training. 
+
+Cross-Modal Sequence Contrastive Learning In order to better adapt the model to the relevant semantic infor-mation of different modalities, especially to extract the global shared behavioral preferences of users by coarse-grained alignment of semantic information between differ-ent modalities, we designed Cross-modal Sequence Con-trastive Learning (CSCL). Specifically, given a text sequence Stu = {et
+
+> 1
+
+, e t
+
+> 2
+
+..., e t
+
+> |Su|
+
+}
+
+and the image sequence Svu = {ev 
+
+> 1
+
+, e v 
+
+> 2
+
+..., e v
+
+> |Su|
+
+} (include generated visual embedding e′ 
+
+> v
+
+) of the same user. We use SeqEncoder to capture user preferences stu and svu in differ-ent modalities and consider them as positives, while other in-batch ones are considered as negatives ( Nu). The cross-modal sequence contrastive loss can be formally presented as follows: 
+
+LCSCL = − log exp( stu · svu)exp( stu · svu) + P 
+
+> u−∈Nu
+
+exp( stu · sv− 
+
+> u
+
+) .
+
+(19) By the contrastive learning of sequences in different modal-ities, coarse-grained alignment of cross-modal semantic in-formation can be achieved, thereby enhancing the modeling of user preferences and improving the stability of the train-ing process of MAT-MoE. 
+
+Virtual Sequence Contrastive Learning To further en-hance the robustness of sequence representations, we pro-pose a sequence augmentation contrastive learning method called Virtual Sequence Contrastive Learning (VSCL). VSCL generates semantically consistent virtual sequences through strategic similar-item insertion across dual modali-ties. Given a user sequence Su = {i1, i 2, ..., i n}, we construct an virtual sequence Sm, + 
+
+> u
+
+for modality m by inserting simi-lar but not interacted items at semantic transition points: 
+
+P (isim  
+
+> k
+
+= j | ik, i k+1 ) ∝ exp( 1
+
+λ (γ · sim (emk , e mj )+(1 − γ) · sim (emk+1 , e mj ))) ,
+
+(20) where γ balances the contribution from adjacent items, and 
+
+λ controls sampling diversity. The number of insertions fol-lows a Poisson distribution with a mean proportional to the sequence length. After encoding the original and virtual sequences into rep-resentations smu and sm, + 
+
+> u
+
+, we optimize the contrastive ob-jective: 
+
+LmV SCL = − log exp( s(smu , sm, + 
+
+> u
+
+)/τ )
+
+P|B|  
+
+> j=1
+
+exp( s(smu , smj )/τ ) . (21) The final VSCL loss combines both modalities: 
+
+LV SCL = ( LvV SCL + LtV SCL )/2. (22) This dual-modality approach effectively enriches sparse sequences with plausible interactions from complementary information sources, helping the model learn more robust sequential patterns while maintaining semantic coherence. 15202 Method Toys Games Beauty Home NDCG MRR NDCG MRR NDCG MRR NDCG MRR @5 @10 @5 @10 @5 @10 @5 @10 @5 @10 @5 @10 @5 @10 @5 @10 GRU4Rec 0.0236 0.0289 0.0201 0.0222 0.0385 0.0514 0.0311 0.0365 0.0271 0.0337 0.0223 0.0260 0.0067 0.0087 0.0056 0.0064 SASRec 0.0348 0.0411 0.0257 0.0295 0.0391 0.0546 0.0286 0.0349 0.0325 0.0415 0.0246 0.0283 0.0118 0.0148 0.0089 0.0100 LRURec 0.0362 0.0446 0.0278 0.0312 0.0410 0.0557 0.0315 0.0376 0.0323 0.0412 0.0250 0.0286 0.0112 0.0141 0.0084 0.0096 FDSA 0.0255 0.0307 0.0214 0.0235 0.044 0.0576 0.0372 0.0423 0.0298 0.0365 0.0254 0.0282 0.0115 0.0138 0.0098 0.0108 UniSRec 0.0276 0.0384 0.0194 0.0239 0.0386 0.0535 0.0291 0.0353 0.0287 0.0398 0.0212 0.0288 0.0121 0.0160 0.0092 0.0108 TedRec 0.0318 0.0397 0.0265 0.0297 0.0468 0.0604 0.0384 0.0439 0.0330 0.0419 0.0275 0.0311 0.0113 0.0140 0.0094 0.0105 NOVA 0.0381 0.0478 0.0288 0.0328 0.0417 0.0576 0.0303 0.0368 0.0347 0.0442 0.0273 0.0312 0.0120 0.0147 0.0092 0.0102 DIF-SR 0.0359 0.0444 0.0284 0.0318 0.0416 0.0575 0.0311 0.0375 0.0340 0.0436 0.0262 0.0302 0.0092 0.0112 0.0078 0.0086 MISSRec 0.0323 0.0414 0.0235 0.0270 0.0398 0.0506 0.0312 0.0353 0.0315 0.0397 0.0240 0.0271 0.0140 0.0174 0.0107 0.0119 M3SRec 0.0416 0.0486 0.0363 0.0391 0.0493 0.0643 0.0404 0.0464 0.0345 0.0428 0.0294 0.0328 0.0122 0.0144 0.0105 0.0115 IISAN 0.0395 0.0489 0.0354 0.0393 0.0525 0.0671 0.0432 0.0491 0.0372 0.0464 0.0309 0.0347 0.0152 0.0187 0.0129 0.0142 DuAF-MAT 0.0483 0.0553 0.0405 0.0437 0.0534 0.0682 0.0457 0.0511 0.0403 0.0475 0.0338 0.0374 0.0162 0.0189 0.0139 0.0156  
+
+> Improv. +16.11% +13.09% +11.57% +11.20% +1.71% +1.64% +5.79% +4.07% +8.33% +2.37% +9.39% +7.78% +6.58% +1.07% +7.75% +9.86%
+
+Table 1: Performance comparison of different recommendation methods across various categories. 
+
+Joint Training Objective Finally, we integrate the pro-posed multi-supervised contrastive learning objectives with the main task to form a unified training framework: 
+
+L = Lmain + λ1LCSCL + λ2LV SCL , (23) where λ1 and λ2 are hyperparameters controlling the contri-bution of CSCL and VSCL. 
+
+# Experiments 
+
+Experimental Setup 
+
+Datasets We adopt four domains, including Toys and Games” (Toys), “Video Games” (Games), “Beauty” and “Home and Kitchen” (Home), from the standard bench-mark dataset, Amazon Review (He and McAuley 2016). The statistics of the processed datasets are shown in the sup-plementary material. Following previous studies (Hou et al. 2022; Lin et al. 2024; Wang et al. 2024; Xie, Zhou, and Kim 2022), for each dataset, duplicated interactions are removed, and the interactions of each user are sorted by timestamps chronologically to build behavior sequences. 
+
+Compared Methods To verify the effectiveness of our method, we select the following representative and com-petitive baselines for sequential recommendation from three categories: (1) For pure ID-based methods, includ-ing GRU4Rec (Hidasi 2015), SASRec (Kang and McAuley 2018), and LRURec (Yue et al. 2024). (2) For text-based methods, including FDSA (Zhang et al. 2019b), UniSRec (Hou et al. 2022), and TedRec (Xu et al. 2024). (3) For mul-timodal methods, including NOVA (Liu et al. 2021), DIF-SR (Xie, Zhou, and Kim 2022), MISSRec (Wang et al. 2023), M3SRec (Bian et al. 2023), and IISAN (Fu et al. 2024). 
+
+Evaluation Settings Following previous works (Hou et al. 2022; Zhou et al. 2020), we adopt two standard met-rics, namely Normalized Discounted Cumulative Gain (NDCG@K) and Mean Reciprocal Rank (MRR@K). We set 
+
+K to 5 and 10 for showcases. We adopt the leave-one-out evaluation strategy to conduct the experiments. The ranking scores are computed on the whole item set without sampling. 
+
+Implementation Details We implement DuAF-MAT us-ing a popular open-source recommendation library RecBole (Zhao et al. 2021). To ensure a fair comparison, we opti-mize all the methods with Adam optimizer and carefully search the hyper-parameters of all the compared methods. The batch size is set to 2,048. We adopt early stopping with the patience of 10 epochs to prevent overfitting, and NDCG@10 is set as the indicator. We tune the learning rate in {0.0003, 0.001, 0.003, 0.01 } and the embedding dimen-sion in {64, 128, 300 }. The expert number for MAT-MoE is selected from {2, 4, 6, 8, 10 }, τ is searched within {0.1, 0.2, 0.3, 0.5, 0.7, 1.0 }. the coefficient λgp are tuned from {1e−2,1e−3, 1 e−4, 1 e−5}. The loss weight λ1 and λ2 are tuned from {0.2, 0.4, 0.6, 0.8, 1.0 }. We conduct each experiment on a Linux server with Ubuntu 20.04.5 operating system and NVIDIA GeForce RTX 3090 GPUs. 
+
+Overall Comparison 
+
+We present the comprehensive experimental results in Ta-ble 1, which yields several significant findings. First, DuAF-MAT consistently outperforms both conventional and mul-timodal baselines across all evaluation metrics. Specifi-cally, compared to the best-performing multimodal method, DuAF-MAT achieves performance improvements rang-ing from 1.07% to 16.11%. When compared against the strongest text-based model, our approach demonstrates more remarkable gains of 12.91% to 52.83%. Second, text-based models consistently outperform conventional recommenda-tion methods across most experimental settings. This gain highlights how textual information provides valuable se-mantic context that enriches item representations, leading to improved recommendation quality. Third, multimodal ap-proaches demonstrate clear advantages over traditional and text-based models. This finding confirms that integrating di-verse modal information captures complementary item char-acteristics. Notably, DuAF-MAT significantly outperforms existing multimodal methods through its dual adaptive fu-sion that dynamically calibrates modal contributions, ex-tracting multimodal features aligned with dynamic user in-terests. 15203 Figure 3: Evaluation of DuAF-MAT performance across various hyper-parameter configurations. 
+
+Figure 4: Ablation study of DuAF-MAT variants on “Beauty” and “Toys” 
+
+Ablation Study 
+
+To validate the effectiveness of each component in our pro-posed framework, we conduct ablation experiments on all datasets. Figure 4 presents the experimental results for dif-ferent variants of our model, including (1) −DuAF that re-places the Dual-Aware Adaptive Fusion with average fusion. (2) −MAT MoE removes the Modality Adversarial Train-ing with MoE module. (3) −CSCL removes the cross-modal sequence contrastive learning task. (4) −VSCL removes the virtual sequence contrastive learning task. First, DuAF demonstrates the importance of our adaptive fusion mecha-nism in dynamically adjusting modality contributions based on user preferences and temporal information, which is es-pecially valuable in domains with heterogeneous user inter-ests. MAT-MoE confirms that our adversarial approach with multiple expert generators effectively reconstructs missing modality information, enhancing robustness against modal-ity incompleteness that commonly occurs in real-world rec-ommendation scenarios. Among the two contrastive learn-ing components, CSCL demonstrates the most significant influence. This suggests that aligning semantic informa-tion across different modalities substantially improves the model’s ability to capture comprehensive user preferences. 
+
+Hyper-Parameter Study 
+
+To comprehensively evaluate the sensitivity of the proposed DuAF-MAT framework to key hyperparameters, we con-ducted extensive experiments by varying three critical pa-rameters: the number of experts ( N ), the contrastive learn-ing weights ( λ1, λ2), and the modality dropout rate. Figure 3 illustrates our findings on two datasets: Toys and Beauty. First, the model achieves peak performance when N = 2 
+
+or 4, confirming that the Mixture-of-Experts (MoE) mecha-nism effectively handles modal heterogeneity. However, an excessive number of experts may destabilize the adversarial training process. Second, our proposed DuAF-MAT consis-tently outperforms random initialization and zero initializa-tion across all dropout rates, achieving optimal performance at a dropout rate of 0.6. This demonstrates the robustness of our model even under modality-missing scenarios. Interest-ingly, as the modality dropout rate increases, random initial-ization does not exhibit a strong negative correlation with performance. This suggests that DuAF may appropriately reduce the weight of visual modality contributions to mit-igate its impact. 
+
+# Conclusion 
+
+In this paper, we present DuAF-MAT, a novel multimodal sequential recommendation framework that effectively ad-dresses key challenges in real-world recommender systems. Our approach integrates three innovative components: (1) Dual-Aware Adaptive Fusion (DuAF) module that dynam-ically calibrates modal contributions based on user prefer-ences and temporal information to extract multimodal fea-tures consistent with dynamic user interests; (2) Modality Adversarial Training with Mixture of Experts (MAT-MoE) that leverages specialized expert generators to reconstruct missing modal features, effectively mitigating modality im-balance; and (3) Multi-Supervised Contrastive Learning (MSCL) strategy that combats data sparsity through comple-mentary supervision signals derived from cross-modal align-ment and virtual sequence augmentation. Comprehensive experiments across four diverse real-world datasets demon-strate our approach’s substantial performance gains over state-of-the-art methods, validating the effectiveness of our proposed architecture in addressing the multifaceted chal-lenges of multimodal sequential recommendation. 
+
+# Acknowledgments 
+
+This work was supported by the National Natural Science Foundation of China (Grant No. 62577050), the Zhejiang Provincial Philosophy and Social Sciences Program (Grant 15204 No. 24NDJC191YB), and the Natural Science Foundation of Zhejiang Province (Grant No. LY23F020010). 
+
+# References 
+
+Arjovsky, M.; Chintala, S.; and Bottou, L. 2017. Wasserstein GAN. arXiv:1701.07875. Bian, S.; Pan, X.; Zhao, W. X.; Wang, J.; Wang, C.; and Wen, J.-R. 2023. Multi-modal mixture of experts represetation learning for sequential recommendation. In Proceedings of the 32nd ACM International Conference on Information and Knowledge Management , 110–119. Chang, J.; Gao, C.; Zheng, Y.; Hui, Y.; Niu, Y.; Song, Y.; Jin, D.; and Li, Y. 2021. Sequential recommendation with graph neural networks. In Proceedings of the 44th interna-tional ACM SIGIR conference on research and development in information retrieval , 378–387. Chen, Y.; Liu, Z.; Li, J.; McAuley, J.; and Xiong, C. 2022. Intent contrastive learning for sequential recommendation. In Proceedings of the ACM web conference 2022 , 2172– 2182. Devlin, J.; Chang, M.-W.; Lee, K.; and Toutanova, K. 2019. Bert: Pre-training of deep bidirectional transformers for lan-guage understanding. In Proceedings of the 2019 conference of the North American chapter of the association for compu-tational linguistics: human language technologies, volume 1 (long and short papers) , 4171–4186. Dosovitskiy, A.; Beyer, L.; Kolesnikov, A.; Weissenborn, D.; Zhai, X.; Unterthiner, T.; Dehghani, M.; Minderer, M.; Heigold, G.; Gelly, S.; et al. 2020. An image is worth 16x16 words: Transformers for image recognition at scale. arXiv preprint arXiv:2010.11929 .Fu, J.; Ge, X.; Xin, X.; Karatzoglou, A.; Arapakis, I.; Wang, J.; and Jose, J. M. 2024. IISAN: Efficiently adapting mul-timodal representation for sequential recommendation with decoupled PEFT. In Proceedings of the 47th International ACM SIGIR Conference on Research and Development in Information Retrieval , 687–697. Gulrajani, I.; Ahmed, F.; Arjovsky, M.; Dumoulin, V.; and Courville, A. C. 2017. Improved training of wasserstein gans. Advances in neural information processing systems ,30. Guo, H.; Shi, W.; Li, M.; Li, J.; Chen, H.; Cui, Y.; Xu, J.; Zhu, J.; Shen, J.; Chen, Z.; et al. 2025a. Consistent and Invariant Generalization Learning for Short-video Misinfor-mation Detection. In Proceedings of the 33rd ACM Interna-tional Conference on Multimedia , 2254–2263. Guo, H.; Zhu, J.; Di, S.; Shi, W.; Chen, Z.; and Xu, J. 2025b. DioR: Adaptive Cognitive Detection and Contextual Retrieval Optimization for Dynamic Retrieval-Augmented Generation. arXiv preprint arXiv:2504.10198 .He, R.; and McAuley, J. 2016. Ups and downs: Modeling the visual evolution of fashion trends with one-class collab-orative filtering. In proceedings of the 25th international conference on world wide web , 507–517. Hidasi, B. 2015. Session-based Recommendations with Re-current Neural Networks. arXiv preprint arXiv:1511.06939 .Hou, Y.; Mu, S.; Zhao, W. X.; Li, Y.; Ding, B.; and Wen, J.-R. 2022. Towards universal sequence representation learn-ing for recommender systems. In Proceedings of the 28th ACM SIGKDD Conference on Knowledge Discovery and Data Mining , 585–593. Hu, H.; Guo, W.; Liu, Y.; and Kan, M.-Y. 2023. Adaptive multi-modalities fusion in sequential recommendation sys-tems. In Proceedings of the 32nd ACM International Con-ference on Information and Knowledge Management , 843– 853. Ji, W.; Liu, X.; Zhang, A.; Wei, Y.; Ni, Y.; and Wang, X. 2023. Online distillation-enhanced multi-modal transformer for sequential recommendation. In Proceedings of the 31st ACM International Conference on Multimedia , 955–965. Kang, W.-C.; and McAuley, J. 2018. Self-attentive sequen-tial recommendation. In 2018 IEEE international confer-ence on data mining (ICDM) , 197–206. IEEE. Li, J.; Wang, M.; Li, J.; Fu, J.; Shen, X.; Shang, J.; and McAuley, J. 2023. Text is all you need: Learning language representations for sequential recommendation. In Proceed-ings of the 29th ACM SIGKDD Conference on Knowledge Discovery and Data Mining , 1258–1267. Liang, J.; Zhao, X.; Li, M.; Zhang, Z.; Wang, W.; Liu, H.; and Liu, Z. 2023. Mmmlp: Multi-modal multilayer percep-tron for sequential recommendations. In Proceedings of the ACM Web Conference 2023 , 1109–1117. Lin, G.; Gao, C.; Zheng, Y.; Chang, J.; Niu, Y.; Song, Y.; Li, Z.; Jin, D.; and Li, Y. 2023. Dual-interest factorization-heads attention for sequential recommendation. In Proceedings of the ACM Web Conference 2023 , 917–927. Lin, X.; Luo, J.; Pan, J.; Pan, W.; Ming, Z.; Liu, X.; Huang, S.; and Jiang, J. 2024. Multi-sequence attentive user repre-sentation learning for side-information integrated sequential recommendation. In Proceedings of the 17th ACM Interna-tional Conference on Web Search and Data Mining , 414– 423. Liu, C.; Li, X.; Cai, G.; Dong, Z.; Zhu, H.; and Shang, L. 2021. Noninvasive self-attention for side information fusion in sequential recommendation. In Proceedings of the AAAI conference on artificial intelligence , volume 35, 4249–4256. Quadrana, M.; Cremonesi, P.; and Jannach, D. 2018. Sequence-Aware Recommender Systems. arXiv:1802.08452. Rendle, S.; Freudenthaler, C.; and Schmidt-Thieme, L. 2010. Factorizing personalized markov chains for next-basket recommendation. In Proceedings of the 19th inter-national conference on World wide web , 811–820. Sherstinsky, A. 2020. Fundamentals of recurrent neural net-work (RNN) and long short-term memory (LSTM) network. 
+
+Physica D: Nonlinear Phenomena , 404: 132306. Sun, F.; Liu, J.; Wu, J.; Pei, C.; Lin, X.; Ou, W.; and Jiang, P. 2019. BERT4Rec: Sequential recommendation with bidi-rectional encoder representations from transformer. In Pro-ceedings of the 28th ACM international conference on infor-mation and knowledge management , 1441–1450. 15205 Tan, Y. K.; Xu, X.; and Liu, Y. 2016. Improved recur-rent neural networks for session-based recommendations. In 
+
+Proceedings of the 1st workshop on deep learning for rec-ommender systems , 17–22. Tang, J.; and Wang, K. 2018. Personalized top-n sequential recommendation via convolutional sequence embedding. In 
+
+Proceedings of the eleventh ACM international conference on web search and data mining , 565–573. Vaswani, A.; Shazeer, N.; Parmar, N.; Uszkoreit, J.; Jones, L.; Gomez, A. N.; Kaiser, Ł.; and Polosukhin, I. 2017. At-tention is all you need. Advances in neural information pro-cessing systems , 30. Wang, J.; Zeng, Z.; Wang, Y.; Wang, Y.; Lu, X.; Li, T.; Yuan, J.; Zhang, R.; Zheng, H.-T.; and Xia, S.-T. 2023. Missrec: Pre-training and transferring multi-modal interest-aware se-quence representation for recommendation. In Proceedings of the 31st ACM International Conference on Multimedia ,6548–6557. Wang, P.; Guo, J.; Lan, Y.; Xu, J.; Wan, S.; and Cheng, X. 2015. Learning hierarchical representation model for nextbasket recommendation. In Proceedings of the 38th In-ternational ACM SIGIR conference on Research and Devel-opment in Information Retrieval , 403–412. Wang, S.; Hu, L.; Wang, Y.; Cao, L.; Sheng, Q. Z.; and Orgun, M. 2019a. Sequential recommender sys-tems: challenges, progress and prospects. arXiv preprint arXiv:2001.04830 .Wang, S.; Hu, L.; Wang, Y.; Cao, L.; Sheng, Q. Z.; and Orgun, M. 2019b. Sequential Recommender Systems: Chal-lenges, Progress and Prospects. In Proceedings of the Twenty-Eighth International Joint Conference on Artificial Intelligence , IJCAI-2019, 6332–6338. International Joint Conferences on Artificial Intelligence Organization. Wang, S.; Shen, B.; Min, X.; He, Y.; Zhang, X.; Zhang, L.; Zhou, J.; and Mo, L. 2024. Aligned side information fu-sion method for sequential recommendation. In Companion Proceedings of the ACM Web Conference 2024 , 112–120. Wu, S.; Tang, Y.; Zhu, Y.; Wang, L.; Xie, X.; and Tan, T. 2019. Session-Based Recommendation with Graph Neural Networks. Proceedings of the AAAI Conference on Artificial Intelligence , 33(01): 346–353. Wu, W.; Wang, C.; Shen, D.; Qin, C.; Chen, L.; and Xiong, H. 2024. Afdgcf: Adaptive feature de-correlation graph col-laborative filtering for recommendations. In Proceedings of the 47th International ACM SIGIR Conference on Research and Development in Information Retrieval , 1242–1252. Xia, L.; Huang, C.; Xu, Y.; and Pei, J. 2022. Multi-behavior sequential recommendation with temporal graph transformer. IEEE Transactions on Knowledge and Data Engineering , 35(6): 6099–6112. Xie, Y.; Zhou, P.; and Kim, S. 2022. Decoupled side in-formation fusion for sequential recommendation. In Pro-ceedings of the 45th international ACM SIGIR conference on research and development in information retrieval , 1611– 1621. Xu, L.; Tian, Z.; Li, B.; Zhang, J.; Wang, D.; Wang, H.; Wang, J.; Chen, S.; and Zhao, W. X. 2024. Sequence-level Semantic Representation Fusion for Recommender Systems. In Proceedings of the 33rd ACM International Conference on Information and Knowledge Management ,5015–5022. Ye, Y.; Zheng, Z.; Shen, Y.; Wang, T.; Zhang, H.; Zhu, P.; Yu, R.; Zhang, K.; and Xiong, H. 2024. Harnessing multi-modal large language models for multimodal sequential rec-ommendation. arXiv preprint arXiv:2408.09698 .Yuan, Z.; Yuan, F.; Song, Y.; Li, Y.; Fu, J.; Yang, F.; Pan, Y.; and Ni, Y. 2023. Where to go next for recommender systems? id-vs. modality-based recommender models revis-ited. In Proceedings of the 46th International ACM SIGIR Conference on Research and Development in Information Retrieval , 2639–2649. Yue, Z.; Wang, Y.; He, Z.; Zeng, H.; McAuley, J.; and Wang, D. 2024. Linear recurrent units for sequential recommenda-tion. In Proceedings of the 17th ACM international confer-ence on web search and data mining , 930–938. Zhang, M.; Wu, S.; Yu, X.; Liu, Q.; and Wang, L. 2022. Dynamic graph neural networks for sequential recommen-dation. IEEE Transactions on Knowledge and Data Engi-neering , 35(5): 4741–4753. Zhang, S.; Tong, H.; Xu, J.; and Maciejewski, R. 2019a. Graph convolutional networks: a comprehensive review. 
+
+Computational Social Networks , 6(1): 1–23. Zhang, T.; Zhao, P.; Liu, Y.; Sheng, V. S.; Xu, J.; Wang, D.; Liu, G.; Zhou, X.; et al. 2019b. Feature-level deeper self-attention network for sequential recommendation. In IJCAI ,4320–4326. Zhao, W. X.; Mu, S.; Hou, Y.; Lin, Z.; Chen, Y.; Pan, X.; Li, K.; Lu, Y.; Wang, H.; Tian, C.; Min, Y.; Feng, Z.; Fan, X.; Chen, X.; Wang, P.; Ji, W.; Li, Y.; Wang, X.; and Wen, J.-R. 2021. RecBole: Towards a Unified, Comprehensive and Efficient Framework for Recommendation Algorithms. arXiv:2011.01731. Zhou, K.; Wang, H.; Zhao, W. X.; Zhu, Y.; Wang, S.; Zhang, F.; Wang, Z.; and Wen, J.-R. 2020. S3-rec: Self-supervised learning for sequential recommendation with mutual infor-mation maximization. In Proceedings of the 29th ACM in-ternational conference on information & knowledge man-agement , 1893–1902. Zhou, P.; Ye, Q.; Xie, Y.; Gao, J.; Wang, S.; Kim, J. B.; You, C.; and Kim, S. 2023. Attention calibration for transformer-based sequential recommendation. In Proceedings of the 32nd ACM international conference on information and knowledge management , 3595–3605. Zhu, J.; Guo, H.; Shi, W.; Chen, Z.; and De Meo, P. 2025. Radio: Real-time hallucination detection with contextual in-dex optimized query formulation for dynamic retrieval aug-mented generation. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 39, 26129–26137. 15206

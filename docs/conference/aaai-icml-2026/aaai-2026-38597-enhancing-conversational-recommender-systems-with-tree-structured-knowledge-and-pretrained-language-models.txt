@@ -1,0 +1,518 @@
+Title: Enhancing Conversational Recommender Systems with Tree-Structured Knowledge and Pretrained Language Models
+
+URL Source: https://ojs.aaai.org/index.php/AAAI/article/download/38597/42559
+
+Number of Pages: 9
+
+Markdown Content:
+# Enhancing Conversational Recommender Systems with Tree-Structured Knowledge and Pretrained Language Models 
+
+## Yongwen Ren 1,2 , Chao Wang 3* , Peng Du 4, Chuan Qin 5,6 , Dazhong Shen 7, Hui Xiong 8,9* 
+
+> 1
+
+School of Computer Science and Technology, University of Science and Technology of China 
+
+> 2
+
+iFLYTEK AI Research, iFLYTEK Co.,Ltd 
+
+> 3
+
+School of Artificial Intelligence and Data Science, University of Science and Technology of China 
+
+> 4
+
+School of Software and Microelectronics, Peking University 
+
+> 5
+
+Computer Network Information Center, Chinese Academy of Sciences 
+
+> 6
+
+University of Chinese Academy of Sciences 
+
+> 7
+
+College of Computer Science and Technology, Nanjing University of Aeronautics and Astronautics 
+
+> 8
+
+Thrust of Artificial Intelligence, The Hong Kong University of Science and Technology (Guangzhou) 
+
+> 9
+
+Department of Computer Science and Engineering, The Hong Kong University of Science and Technology yovren@mail.ustc.edu.cn, wangchaoai@ustc.edu.cn, pdu@pku.edu.cn, chuanqin0426@gmail.com, shendazhong@nuaa.edu.cn, xionghui@ust.hk 
+
+Abstract 
+
+Recent advances in pretrained language models (PLMs) have significantly improved conversational recommender systems (CRS), enabling more fluent and context-aware interactions. To further enhance accuracy and mitigate hallucination, many methods integrate PLMs with knowledge graphs (KGs), but face key challenges: failing to fully exploit PLM reason-ing over graph relationships, indiscriminately incorporating retrieved knowledge without context filtering, and neglect-ing collaborative preferences in multi-turn dialogues. To this end, we propose PCRS-TKA, a prompt-based framework em-ploying retrieval-augmented generation to integrate PLMs with KGs. PCRS-TKA constructs dialogue-specific knowl-edge trees from KGs and serializes them into texts, enabling structure-aware reasoning while capturing rich entity seman-tics. Our approach selectively filters context-relevant knowl-edge and explicitly models collaborative preferences using specialized supervision signals. A semantic alignment mod-ule harmonizes heterogeneous inputs, reducing noise and en-hancing accuracy. Extensive experiments demonstrate that PCRS-TKA consistently outperforms all baselines in both recommendation and conversational quality. 
+
+Code — https://github.com/YovRen/PCRS-TKA 
+
+## 1 Introduction 
+
+Recommendation systems play a crucial role in intelli-gent assistants by helping users efficiently discover rele-vant items. However, traditional systems lack interactive di-alogue abilities, limiting flexibility and explainability (Chen et al. 2017; Ji et al. 2025). Conversational recommender systems (CRS) address this issue by supporting personal-ized and natural interactions. With recent advances in pre-trained language models (PLMs), CRS have achieved no-
+
+> *
+
+Corresponding author. Copyright © 2026, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved. 
+
+table improvements in conversational fluency and context understanding (Wu et al. 2021; Qin et al. 2025). However, PLMs still suffer from hallucinations, gener-ating inaccurate or irrelevant information, which damages recommendation reliability (Chen et al. 2023; Zhang et al. 2023). To mitigate this issue, knowledge graphs (KGs) can be integrated with PLMs to provide factual external knowl-edge, thereby improving both accuracy and robustness of conversational recommendations (Wang et al. 2022, 2018; Tong, Li, and Liu 2024). In the literature, early CRS primarily relied on structured conversations centered around item attributes such as genre or price (Gao et al. 2021). Later, KG-based CRS (Wang et al. 2019; Petroni et al. 2019; Bouraoui, Camacho-Collados, and Schockaert 2020) integrated external knowledge resources and developed alignment techniques to ensure semantic con-sistency, e.g., KBRD (Chen et al. 2019) leveraging relational graph convolutional networks (RGCNs) (Schlichtkrull et al. 2018), KGSF (Zhou et al. 2020a) applying mutual informa-tion maximization for word-entity alignment. More recent PLM-based approaches, including BARCOR (Wang, Su, and Chen 2022), UniCRS (Wang et al. 2022), KERL (Qiu et al. 2025), and DCRS (Dao et al. 2024), combine prompt learning with KG integration to mitigate hallucination and boost domain knowledge. However, these existing methods fail to fully exploit the rich semantic information embedded in KGs, limiting their ability to capture complex relational patterns and contextual dependencies. Despite progress, several challenges persist in integrating PLMs and KGs for conversational recommendation. First, many existing approaches depend on GCN-based encoders (e.g., RGCN) (Zhu et al. 2024), which struggle to lever-age PLMs’ reasoning capabilities over complex graph struc-tures and cannot fully capture rich KG semantics (Shen et al. 2021). Second, current approaches typically integrate all re-trieved KG information without filtering out information ir-relevant to the current dialogue context. This inevitably in-The Fortieth AAAI Conference on Artificial Intelligence (AAAI-26) 
+
+15671 troduces noise and compromises the model’s performance. Third, dialogue text is often treated merely as textual input data, neglecting valuable latent user collaborative preference information embedded in conversations. This oversight can result in suboptimal personalized recommendations that fail to align with users’ true preferences (Wang et al. 2021b). To address these issues, we propose PCRS-TKA, aprompt-based framework that integrates PLMs with KGs via retrieval-augmented generation (RAG) style strategy. First, to augment the static, global embeddings from RGCN and fully exploit PLM reasoning capabilities, PCRS-TKA con-structs dynamic, context-aware knowledge trees in a RAG-style. These trees are selectively built from the KG, serial-ized into text, and fed into the PLM to enable direct, fine-grained reasoning on dialogue-specific structured informa-tion. Second, our approach filters context-relevant seman-tics through this dialogue-specific knowledge tree construc-tion, ensuring only pertinent information is utilized. Third, we explicitly model collaborative preferences from multi-turn dialogues using specialized supervision signals, captur-ing latent user preference patterns that are often overlooked in existing methods. Additionally, we employ an RGCN to encode the global semantics of the entire KG, and these mul-tiple sources of knowledge are jointly embedded into prompt representations, enabling the PLM to perform end-to-end graph reasoning in a unified manner. Complemented by a semantic alignment module that harmonizes heterogeneous inputs from dialogues and KGs, PCRS-TKA effectively re-duces noise and enhances recommendation accuracy. Exten-sive experiments demonstrate its superiority in both recom-mendation and conversational quality. 
+
+## 2 Related Work 
+
+2.1 Conversational Recommendation Systems 
+
+Early CRS methods (Chen et al. 2019, 2017) focused on structured conversations that gathered user preferences through item attributes like genre or price, using predefined templates and algorithms such as multi-armed bandits or re-inforcement learning (Wang et al. 2021a). However, these methods lacked flexibility and natural language generation capabilities. KG-based CRS methods were later developed to improve this. KBRD (Chen et al. 2019) introduced KGs and RGCNs to model relationships between items and users. KGSF (Zhou et al. 2020a) enhanced this by incorporating word-level KGs and MIM to align word and entity represen-tations, resulting in more coherent responses. RevCore (Lu et al. 2021) enriched dialogue generation with unstructured review data, while C2CRS (Zhou et al. 2022) used multi-granularity contrastive learning for multimodal data align-ment (Zong et al. 2024). Despite these advancements, KG-based methods often treated recommendation and dialogue modules separately, limiting the full use of dialogue con-tent. With the rise of PLMs, prompt learning was introduced to improve conversational capabilities. For example, BAR-COR (Wang, Su, and Chen 2022) uses BART (Lewis et al. 2020) for better response generation, UniCRS (Wang et al. 2022) integrates recommendation and dialogue generation via prompt learning, and DCRS (Dao et al. 2024) employs a knowledge-aware retriever for improved capabilities. 
+
+2.2 Unifying PLMs and KGs in Recommendations 
+
+Recommendation systems often require domain-specific knowledge that PLMs alone cannot provide. KGs supply structured knowledge to fill this gap. Many studies focus on aligning the semantic spaces of PLMs and KGs by modi-fying Transformer architectures, often incorporating cross-attention mechanisms to jointly model dialogue text and KG information. For instance, KGSF (Zhou et al. 2020a) uses mutual information maximization for embedding alignment, while C2CRS (Zhou et al. 2022) applies contrastive learning at both sentence and word levels to improve semantic consis-tency. In prompt learning frameworks, the PLM architecture generally remains fixed, and KG information is integrated by concatenating implicit graph embeddings derived from graph neural networks (GNNs) into input prompts, as seen in UniCRS and DCRS. Although this enables KG data in-corporation, it does not fully exploit the reasoning abilities of PLMs over KG relations, nor does it provide dynamic knowledge filtering tailored to the dialogue context. 
+
+## 3 Methodology 
+
+3.1 Task Formulation 
+
+The goal of CRS is to recommend relevant items while maintaining a natural, interactive dialogue with the user. At each turn, the system analyzes the dialogue history, infers the user’s preferences, and generates a response that includes recommended items within the natural language utterance. Formally, let u represent a user in the user set U, i an item in the item set I, and w a word in the vocabulary V. A multi-turn conversation C is defined as a sequence of utterances: 
+
+C = {st}nt=1 , where st denotes the t-th sentence. Addi-tionally, an external KG G is represented as a set of triples: 
+
+G = {(e1, r, e 2)}, where e1, e 2 ∈ E and r ∈ R . Here, we assume I ⊂ E , indicating that all candidate items are included in E. Given an n-turn conversation C, the task of CRS is to generate a response sentence sn+1 and select a set of recommended items In+1 from the item set I.
+
+3.2 Overview of the Approach 
+
+As illustrated in Figure 1, we propose PCRS-TKA , a con-versational recommendation framework that unifies PLMs and KGs via knowledge-enhanced prompt learning. The key idea is to augment the PLM with two distinct forms of knowledge: a static, global understanding of the entire KG, and a dynamic, dialogue-specific subgraph for fine-grained reasoning. We also introduce a collaborative signal to guide the PLM’s optimization. This is realized through four core components: 1) User Preference Extraction Module. We first employ RoBERTa (Liu et al. 2021) , a bidirectional PLM, and RGCN (Schlichtkrull et al. 2018) to encode dia-logue text C and mentioned KG entities E into embeddings 
+
+C and E, user preference features U are then extracted ex-plicitly and supervised by an auxiliary recommendation task to ensure that Puser effectively learns and incorporates this information. 2) Knowledge Tree Enhanced Module. For 15672 Knowledge Tree Enhanced Module 
+
+> Colored: Relavant to dialogue Gray: Irrelavant to dialogue
+> Legend
+> AttentionSum
+> AttentionSum (Entity Level)
+
+User Preference Extraction Module Similarity Score    
+
+> Wreck-It Ralph 0.8
+> Avatar 0.1 ...
+> AttentionSum
+> RGCN
+> FUSE
+> User: Yes, I especially like Zootopia (2016) .
+
+Knowledge Graph Dialogue Text   
+
+> System: Do you like disney movies? KTE Module
+> concat
+
+Prompt Learning Module Multimodal Information Integration Module      
+
+> Entity
+> Dialogue
+> RoBerta frozen [CLS], #Walt Disney ,$distributor ##Zootopia(2016) $$director ###Rich Moore ... ...
+> ##Wreck It-Ralph
+> ... ... ... ... [SEP]
+> Tree Serialization and Encoding Hierarchical Neighbor Retrieval
+> AttentionSum (Token Level)
+> Aggregation of Tree Representations
+> Response: I recommend you
+> Wreck-It Ralph .
+> Contrastive Learning extract
+> distributor
+> employer employer distributor director director director director Rich Moore Byron Howard Predict: Then I will recommend you Wreck-It Ralph directed by
+> Rich Moore .
+> RoBerta frozen
+> Similarity Score
+> Wreck-It Ralph 0.8
+> Avatar 0.1 ...
+> DialoGPT frozen
+
+Figure 1: The network architecture of the PCRS-TKA framework. each entity in E, we retrieve a multi-hop knowledge tree from G using a RAG-style strategy. These trees are then hi-erarchically aggregated based on structural and contextual relevance, forming a serialized textual sequence T , which is encoded into Ptree . 3) Multimodal Information Integra-tion Module This module aligns T with E through pair-wise contrastive learning, effectively integrating information across modules. 4) Prompt Learning Module. The con-catenated prompt sequence (Pprompt , P rgcn , P tree , P user ), in-cluding learnable soft prompts Pprompt , is prepended to the dialogue context and fed into DialoGPT. 
+
+3.3 User Preference Extraction Module 
+
+This module learns user preference representations U from multi-turn dialogue C and injects them into the PLM as an auxiliary supervision signal for prompt learning. 
+
+Feature Encoder. For natural language understanding, we use RoBERTa to encode the dialogue text C into embed-dings C as follows: 
+
+C = RoBERTa( C). (1) 
+
+To provides structured information about the entities men-tioned in the conversation, we incorporate a knowledge graph G and adopt RGCN to encode it into embeddings G,the embeddings E corresponding to E are retrieved from matrix G as below: 
+
+G = RGCN( G), (2) 
+
+E = Retrieve( G, E ). (3) 
+
+User Collaborative Information Extraction. Since C
+
+and E originate from different sources, a semantic gap ex-ists between them. To bridge this gap, we employ a cross-interaction mechanism (Wang et al. 2022) to align their se-mantic spaces via linear transformations and bilinear inter-action: 
+
+C = CWC , E = EWE , A = CW E⊤, (4) 
+
+eC = C + EA , eE = E + CA ⊤, (5) 
+
+This interaction fuses contextual semantics from the dia-logue and relational knowledge from the KG, generating en-riched representations eC and eE. Furthermore, we concate-nate them and apply a self-attention mechanism to capture dependencies across the entire input sequence. We define the resulting attention aggregation as a function ASum (·),and compute the user preference embedding U as follows: 
+
+ASum (X) = 
+
+> nX
+
+X
+
+> i=1
+> nX
+
+X
+
+> j=1
+
+softmax 
+
+ XiWQ · (Xj WK )⊤
+
+√d
+
+
+
+· Xj WV ,
+
+(6) 
+
+X = concat ( eC, eE), U = ASum (X) (7) 
+
+where WQ, W K , W V are learnable parameters. 
+
+Supervision Recommendation Task. To introduce col-laborative preference supervision, we define an auxiliary task. Instead of implicitly fetching neighbor features (Xie et al. 2024; Liu et al. 2025), this task learns to explicitly en-code a collaborative signal by computing relevance scores between the user embedding U and candidate item embed-dings I, which are retrieved from the graph entity embed-dings G. We then project I and compute the scores: 
+
+I = Retrieve( G, I ), I = IWI , R = softmax( UI ⊤), (8) 15673 where WI is a learnable projection matrix and R repre-sents the predicted rating scores. Given N conversations and ground-truth preference labels Y , we can compute the pre-dicted rating score R in all conversations, and the cross-entropy loss is defined as: 
+
+Luser = −
+
+> N
+
+X
+
+> j=1
+> nI
+
+X
+
+> i=1
+
+h
+
+Y ij · log Rij + (1 − Y ij ) · log(1 − Rij )
+
+i
+
+.
+
+(9) 
+
+3.4 Knowledge Tree Enhanced Module 
+
+To better utilize the structured semantics in KGs, we dy-namically construct a dialogue-specific knowledge tree that captures context-relevant information in a hierarchical form, enabling PLMs to conduct structure-aware reasoning. 
+
+Hierarchical Neighbor Retrieval. Given a dialogue con-text C and the mentioned entities E = {e1, . . . , e nE }, we construct a personalized knowledge tree Gtree e for each en-tity e ∈ E. We first encode the dialogue into a fixed-length vector by applying a pooling operation (e.g., mean pooling) over word embeddings: 
+
+c = Pooling( C). (10) 
+
+Starting from the root N 0 
+
+> e
+
+= {e}, each layer l expands by retrieving one-hop neighbors M(v) for every node v ∈ N le .Their relevance to the dialogue is measured via cosine sim-ilarity and we select the top-N most relevant neighbors to form the next layer until reaching depth L:
+
+sim( c, Em) = c · E⊤
+
+> m
+
+∥c∥∥ Em∥ , (11) 
+
+N l+1  
+
+> v
+
+= TopN  M(v), sim( c, Em), N , (12) 
+
+N l+1  
+
+> e
+
+= [ 
+
+> v∈N le
+
+N l+1  
+
+> v
+
+, (13) 
+
+Gtree e =
+
+> L
+
+[
+
+> l=0
+
+N le , corresponding edges 
+
+!
+
+. (14) 
+
+Tree Serialization and Encoding. To retain structural in-formation, virtual relation nodes are inserted between par-ent–child pairs. The tree is serialized into a natural language sequence via depth-first traversal, where entities and rela-tions are formatted as “#EntityName” or “$RelationName” to indicate depth. The serialized sequence Te is encoded us-ing RoBERTa to produce contextualized token embeddings: 
+
+Te = RoBERTa( Te). (15) 
+
+Aggregation of Tree Representations. To obtain a con-densed representation for each tree, we apply token-level self-attention followed by weighted summation to get the representation of Te. The entity-level embeddings for all trees are then concatenated as follows: 
+
+te = ASum (Te), (16) 
+
+T = [ t1; t2; . . . ; tnE ]. (17) 
+
+A further self-attention layer captures interactions among entities and yields a unified knowledge representation. The final vector tE encodes structured, dialogue-specific knowl-edge for downstream recommendation and generation: 
+
+tE = ASum (T). (18) 
+
+3.5 Multimodal Information Integration Module 
+
+Our framework incorporates information from both con-versations and KGs. The KG provides two complemen-tary forms of embeddings: entity embeddings E and knowl-edge tree embeddings T. Aligning them helps ensure that representations of the same entity remain close in the se-mantic space. Since the entity embedding matrix E =[e1; e2; . . . ; enE ] contains all mentioned entities, we obtain a single entity-level representation using the same attention-based aggregation introduced in Section 3.4: 
+
+eE = ASum (E). (19) 
+
+To align eE and tE , we employ contrastive learning(Ma and Collins 2018), encouraging positive pairs to be close and negative pairs to be separated. Specifically, given two entity sequences Ei and Ej from a mini-batch, eEi and tEj form a positive pair if Ei = Ej , and a negative pair otherwise. For a batch of b conversations with sequences [E1, . . . , E b], the contrastive loss is: 
+
+Mi,j = I[Ei = Ej ], (20) 
+
+Lalign =
+
+> b
+
+X
+
+> i=1
+> b
+
+X
+
+> j=1
+
+− log e(eEi ·tEj )/τ · Mi,j 
+
+Pbk=1 (e(eEi ·tEk )/τ · (1 − Mi,k )) ,
+
+(21) 
+
+where τ is a temperature hyperparameter that controls the sharpness of similarity discrimination. 
+
+3.6 Prompt Learning Module 
+
+The overall model is divided into four parameter groups: the base PLM Θplm , the user preference extraction module Θuser ,the knowledge tree enhanced module Θtree , and the task-specific soft prompts Θprompt . We adopt DialoGPT (Zhang et al. 2019), a Transformer-based autoregressive model pre-trained on large-scale Reddit dialogues, as the backbone PLM. Its parameters Θplm remain frozen during training, while the other modules are learnable. To reduce halluci-nations in recommendation, we follow UniCRS (Wang et al. 2022) and append the generated conversation response to the dialogue context C when constructing the recommendation input. The final inputs for generation and recommendation tasks are: 
+
+eCgen = concat (Prgcn , P tree , P user , P prompt(C) , C ), (22) 
+
+eCrec = concat (Prgcn , P tree , P user , P prompt(E) , C ). (23) 
+
+The training is conducted in two stages. In Stage 1, Θuser and 
+
+Θtree are pretrained via self-supervised response generation. In Stage 2, we initialize Θprompt randomly and jointly opti-mize Θuser , Θtree , and Θprompt . For the recommendation task, we compute: 
+
+O = Pooling( f ( eCrec | Θ)) , ˆR = softmax( OI ⊤), (24) 
+
+Lrec = −
+
+> N
+
+X
+
+> j=1
+> M
+
+X
+
+> i=1
+
+[Y ij log ˆRij + (1 − Y ij ) log(1 − ˆRij )] , (25) 
+
+Lall = Lrec + αL user + βL align , (26) 
+
+where f (· | Θ) is the output of DialoGPT with input tokens and parameters. Pooling can be mean, max, or [CLS] em-bedding. α and β are weighting hyperparameters. For the conversation task, we follow a similar two-stage training strategy, replacing Lrec with standard generation loss Lconv .15674 INSPIRED ReDial Model R@10 R@50 N@10 N@50 M@10 M@50 R@10 R@50 N@10 N@50 M@10 M@50                                                                                                             
+
+> ReDial 0.106 0.223 0.049 0.075 0.031 0.037 0.050 0.186 0.024 0.053 0.015 0.021 KBRD 0.151 0.278 0.102 0.128 0.086 0.091 0.189 0.372 0.101 0.141 0.074 0.082 KGSF 0.178 0.294 0.109 0.133 0.088 0.093 0.177 0.369 0.094 0.137 0.069 0.078 TG-ReDial 0.173 0.331 0.110 0.144 0.091 0.098 0.179 0.353 0.101 0.140 0.078 0.086 UNICRS 0.262 0.406 0.159 0.193 0.131 0.138 0.213 0.414 0.119 0.163 0.090 0.100 KERL 0.206 0.380 0.128 0.168 0.113 0.117 0.216 0.421 0.122 0.161 0.087 0.097 DCRS 0.267 0.410 0.162 0.196 0.132 0.139 0.217 0.426 0.119 0.166 0.090 0.101
+> PCRS-TKA 0.278 *0.438 *0.187 *0.222 *0.158 *0.166 *0.221 *0.432 *0.123 *0.170 *0.093 *0.103 *
+> Improvement (%) 4.12% 6.83% 15.43% 13.27% 19.70% 19.42% 1.84% 1.41% 3.36% 2.41% 3.33% 1.98%
+
+Table 1: Evaluation results for recommendation task across two datasets (INSPIRED and ReDial). “R”, “N”, and “M” refer to “recall”, “ndcg”, and “mrr”, respectively. 
+
+## 4 Experiments 
+
+4.1 Experimental Setup 
+
+Dataset. We conducted experiments on the ReDial (Li et al. 2018) and INSPIRED (Hayati et al. 2020) datasets. Both datasets were constructed using the Amazon Mechan-ical Turk (AMT) platform. The ReDial dataset contains 10,006 dialogues, with an average of 18.2 utterances per dia-logue and 14.5 words per utterance, covering 6,281 movies. In contrast, the INSPIRED dataset includes 1,001 dialogues, with an average of 35.7 utterances per dialogue and 19 words per utterance, encompassing 1,472 movies. In the experi-ment, we split each dataset into training, validation, and test sets in an 8:1:1 ratio. For each dialogue, we incrementally added one round of utterances starting from the first round to create new data, thereby expanding the dataset. 
+
+Knowledge Graph. DBpedia (Auer et al. 2007) is a large-scale KG extracted from the structured content of Wikipedia. It contains 5,040,986 high-frequency entities with their cor-responding 927 relations and 24,267,796 triplets. Since the entire DBpedia graph is too large, we collected all entities in the dataset corpus using TagMe (Ferragina and Scaiella 2010) tool and extracted their one-hop triples, forming the subgraph used as the external KG in our experiment. 
+
+Evaluation Metrics. We conducted two types of evalu-ations: recommendation and conversation. For the recom-mendation task, we used recall@k (k=10, 50), ndcg@k (k=10, 50), and mrr@k (k=10, 50) as metrics. For the conversation task, we employed both automatic and man-ual evaluations. The automatic evaluation used word-level distinct-n (n=2, 3, 4) to measure response diversity. Addi-tionally, for manual evaluation, we randomly selected 100 conversations and their model-generated responses and in-vited ten annotators to score them. The evaluation assessed four aspects: Fluency , Informativeness(Inform.) , Consis-tency , and Accuracy , with scores ranging from 0 to 5. Fur-ther details are provided in our public code repository. 
+
+Benchmark Models. We compared PCRS-TKA with sev-eral state-of-the-art models, including: ReDial : Integrates an autoencoder-based recommendation module with an HRED-based conversation module. KBRD : Utilizes DBpedia to enhance entity representations, combining a self-attention recommendation module with a Transformer-based con-versation module. KGSF : Integrates ConceptNet (Speer, Chin, and Havasi 2017) and DBpedia, using mutual infor-mation maximization to align their semantic spaces. TG-ReDial (Zhou et al. 2020b): Introduces a topic prediction task, using SASRec (Kang and McAuley 2018) for recom-mendation, BERT (Devlin et al. 2019) for topic prediction, and GPT-2 (Gao, Fisch, and Chen 2021) for response gen-eration. UniCRS : Uses prompt learning to guide a PLM for both tasks, integrating DBpedia information into the prompt. 
+
+KERL : Introduces a Wikipedia KG with entity descriptions and a PLM encoder for better entity representations. DCRS :Incorporates a knowledge-aware retriever to collect selective analogues from dialogue histories. 
+
+Implementation Details. We conducted the experiment on one single NVIDIA-V100 GPU. We used grid search to choose the hyperparameters. After searching, we used AdamW with epsilon set to 0.01, learning rate set to 5e-4 for first-stage pre-training, and 1e-4 for second-stage train-ing for both recommendation and conversation tasks. The batch size was set to 64 for the recommendation task and 8 for the conversation task. The soft prompt token length was set to 10 for the recommendation task and 20 for the conver-sation task. For all baseline methods, hyperparameters were also tuned using grid search. More details can be found in our public code repository. 
+
+4.2 Overall Performance 
+
+Recommendation Task. As shown in Table 1, our model consistently outperforms all baseline models on both IN-SPIRED and ReDial datasets. Specifically, it achieves sig-nificant improvements over the best-performing baseline, DCRS, with improvements of up to 19.70% on INSPIRED and 3.33% on ReDial in key metrics like mrr@10. The larger improvements on the INSPIRED dataset are likely due to the greater number of utterances per dialogue, which enables PCRS-TKA to capture more complex user prefer-ences. Those using external KGs, such as KBRD and KGSF, generally outperform the basic ReDial model. And KGSF outperforms KBRD for the integration of ConceptNet. How-ever, these methods show limited improvement compared to UniCRS, which leverages PLMs and prompt learning. 15675 INSPIRED ReDial Model Dist-2 Dist-3 Dist-4 Dist-2 Dist-3 Dist-4                                                 
+
+> ReDial 0.313 1.237 2.562 0.070 0.279 0.643 KBRD 0.567 2.017 3.621 0.094 0.488 1.004 KGSF 0.657 2.822 5.992 0.110 0.656 1.729 TG-ReDial 0.778 2.825 5.511 1.016 1.487 1.642 UniCRS 3.949 6.004 7.082 0.899 1.267 1.390 KERL 3.102 5.194 6.548 0.797 1.511 1.783 DCRS 4.383 6.140 7.312 0.922 1.313 1.422
+> PCRS-TKA 6.805 *9.906 *10.804 *1.162 *1.676 *1.845 *
+> Improvement (%) 55.23% 61.33% 47.74% 26.02% 27.65% 29.74%
+
+Table 2: Evaluation results for conversation task across two datasets (INSPIRED and ReDial). “Dist” refers to “distinct”.                                 
+
+> Models Fluency Inform. Consistency Accuracy
+> ReDial 2.57 2.11 1.96 3.04 KGSF 3.08 1.98 1.86 2.76 UniCRS 3.43 3.36 2.98 3.14 KERL 3.47 3.44 3.28 3.23 DCRS 3.93 3.36 3.66 3.07
+> PCRS-TKA 4.18 *3.94 *3.77 *3.27 *
+> Improvement (%) 6.36% 14.53% 3.01% 1.24%
+
+Table 3: Human evaluation results on INSPIRED dataset for conversation task. KERL introduces a Wikipedia KG with entity descriptions and DCRS uses a knowledge-aware retriever. Our model, utilizes PLMs to process tree-structured KGs and incorpo-rates user preference extraction from multi-turn dialogues, leading to its superior performance over all baselines. 
+
+Conversation Task. Table 2 presents the evaluation re-sults for the conversation task, where PCRS-TKA outper-forms all baselines across both datasets in distinct-n met-rics. Specifically, it improves up to 55.23% in distinct-2 on the INSPIRED dataset and 29.74% in distinct-4 on the Re-Dial dataset compared to the best baseline, DCRS. These results demonstrate that PCRS-TKA generates more diverse responses, crucial for engaging and natural conversations. While distinct-n metrics measure lexical diversity, they don’t fully capture dialogue quality. Table 3 presents human eval-uation results, where PCRS-TKA outperforms all baselines in fluency, informativeness, consistency, and accuracy. Our model achieves improvements of 6.36% in fluency, 14.53% in informativeness, 3.01% in consistency, and 1.24% in ac-curacy over DCRS. The superior performance is driven by two factors: integrating structured dialogue-specific knowl-edge from the KG and leveraging user preferences across multi-turn conversations for better alignment. While DCRS excels at retrieving contextualized information, PCRS-TKA captures conversational dynamics more effectively. UniCRS surpasses KGSF and ReDial by leveraging PLMs for text generation. KGSF benefits from external KGs but doesn’t fully capture the nuances of dialogue like PCRS-TKA does. recall@10 recall@50 ndcg@10 ndcg@50 mrr@10 mrr@50 0.0 0.1 0.2 0.3 0.4 0.5 PCRS-TKA w/o user w/o tree w/o align w/ triples w/ unfilter tree 
+
+Figure 2: Ablation study on INSPIRED dataset for recom-mendation task.                                      
+
+> Model R@10 R@50 N@10 N@50 M@10 M@50
+> PCRS-TKA (BERT) 0.254 0.441 0.174 0.214 0.148 0.156 -all (BERT) 0.250 0.426 0.162 0.201 0.138 0.143 PCRS-TKA (GPT2) 0.258 0.430 0.162 0.204 0.140 0.147 -all (GPT2) 0.230 0.422 0.153 0.196 0.129 0.138 PCRS-TKA (origin) 0.278 0.438 0.187 0.222 0.158 0.166 -all (origin) 0.262 0.406 0.159 0.193 0.131 0.138
+
+Table 4: Generalizability analysis on INSPIRED for recom-mendation task. 
+
+4.3 Ablation Study 
+
+We performed ablation experiments to evaluate the contri-bution of each component in our approach. Specifically, we excluded the knowledge tree enhanced prompts, user pref-erence prompts, and the multimodal information integration module, separately, during both the pre-training and train-ing phases. As shown in Figure 2, removing any compo-nent leads to performance degradation, confirming that all components are crucial for improving the recommendation task. To further validate the design of our core knowledge tree module, we conducted deeper ablations. For instance, replacing the hierarchical tree with simple unordered triples caused a significant performance drop, confirming that the tree structure is critical for preserving a clear reasoning path for the PLM, a finding that aligns with prior work like TREA (Li et al. 2023). Similarly, removing our context-aware filtering mechanism also degraded performance. This result, combined with our hyperparameter analysis showing that performance declines as tree degree increases, provides strong evidence that our RAG-style filtering is significant for reducing noise. The ability to isolate such a relevant, filtered subgraph also gives our framework strong potential for ro-bustness against dynamic or noisy KGs. 
+
+4.4 Generalizability Analysis 
+
+To evaluate the generalizability of PCRS-TKA across var-ious PLMs, we substituted RoBERTa with BERT and Di-aloGPT with GPT-2 to assess whether the framework could be seamlessly adapted to different model architectures while maintaining its effectiveness. The experimental results, pre-sented in Table 4, demonstrate the consistent performance PCRS-TKA across these alternative PLMs. These findings 15676 3 4 5 6 7                     
+
+> ary
+> 0.200 0.250
+> recall@10
+> two-layer one-layer
+> 34567
+> ary
+> 0.350 0.400
+> recall@50
+> two-layer one-layer
+> 34567
+> ary
+> 0.100 0.125 0.150 0.175
+> ndcg@10
+> two-layer one-layer
+> 34567
+> ary
+> 0.150 0.175 0.200 0.225 ndcg@50
+> two-layer one-layer
+> 34567
+> ary
+> 0.100 0.125 0.150
+> mrr@10
+> two-layer one-layer
+> 34567
+> ary
+> 0.100 0.125 0.150
+> mrr@50
+> two-layer one-layer
+
+Figure 3: Model performance comparison with varing degree and depth of knowledge tree on INSPIRED dataset. 0.005 0.01 0.02 0.03 0.05             
+
+> α
+> 0.270 0.280
+> recall@10
+> β= 0.002
+> 0.005 0.01 0.02 0.03 0.05
+> α
+> 0.410 0.420 0.430
+> recall@50
+> β= 0.002
+> 0.005 0.01 0.02 0.03 0.05
+> α
+> 0.180 0.185
+> ndcg@10
+> β= 0.002
+> 0.005 0.01 0.02 0.03 0.05
+> α
+> 0.210 0.220
+> ndcg@50
+> β= 0.002
+> 0.005 0.01 0.02 0.03 0.05
+> α
+> 0.150 0.155
+> mrr@10
+> β= 0.002
+> 0.005 0.01 0.02 0.03 0.05
+> α
+> 0.155 0.160 0.165
+> mrr@50
+> β= 0.002
+> 0.0005 0.001 0.002 0.003 0.005
+> β
+> 0.275 0.280 0.285
+> recall@10
+> α= 0.02
+> 0.0005 0.001 0.002 0.003 0.005
+> β
+> 0.420 0.430
+> recall@50
+> α= 0.02
+> 0.0005 0.001 0.002 0.003 0.005
+> β
+> 0.182 0.184 0.186
+> ndcg@10
+> α= 0.02
+> 0.0005 0.001 0.002 0.003 0.005
+> β
+> 0.215 0.220
+> ndcg@50
+> α= 0.02
+> 0.0005 0.001 0.002 0.003 0.005
+> β
+> 0.152 0.155 0.158
+> mrr@10
+> α= 0.02
+> 0.0005 0.001 0.002 0.003 0.005
+> β
+> 0.160 0.165
+> mrr@50
+> α= 0.02
+
+Figure 4: Model performance comparison with varing α and β on INSPIRED dataset. underscore the flexibility and adaptability of our approach, confirming its applicability to diverse model architectures. Notably, in principle, we could use larger LLMs to replace RoBERTa and DialoGPT. However, LLMs require substan-tial computational resources, and prior studies (Schick and Sch¨ utze 2021; Subramanian, Elango, and Gungor 2025) suggest in tasks with modest semantic complexity and generalization demands, such as movie recommendations, LLMs may not surpass PLMs. In contrast, PLMs like RoBERTa and DialoGPT strike a balance between per-formance and efficiency, making them more practical in resource-constrained environments. In this paper, we focus on leveraging PLMs to achieve high-quality recommenda-tions while maintaining efficiency. 
+
+4.5 Hyperparameter Sensitivity Analysis 
+
+Analysis on the degree and depth of the knowledge tree. 
+
+We conduct parameter-tuning experiments to study the im-pact of the knowledge tree’s depth and degree on recom-mendation performance. As shown in Figure 3, one-layer and two-layer trees yield similar optimal results, suggesting that a two-hop path captures sufficient information—e.g., (movie, starring, actor). For one-layer trees, performance is stable across degrees. However, for two-layer trees, perfor-mance declines sharply as the degree increases. We attribute this to deeper and wider trees introducing contextually irrel-evant entities, diluting critical first-hop signals with noise. This highlights the importance of our context-aware filter-ing and suggests that the tree’s depth and degree should be carefully adapted to the KG structure and dialogue context to minimize noise. 
+
+Analysis on loss balancing. The recommendation task loss function includes two hyperparameters, α and β, to balance its components. The parameter α controls collab-orative signal weight: as α increases, user preference in-fluence grows, enhancing performance until excessive em-phasis over shadows dialogue context, leading to a decline. Similarly, β tunes alignment: as β rises, alignment improves performance up to a point, beyond which can disrupt in-formation learned by entity embeddings via RGCN, while a smaller proportion facilitates better integration of entity and tree embeddings. As shown in Figure 4, optimal perfor-mance occurs with α ≈ 0.02 and β ≈ 0.002 . These values remained stable across datasets, indicating consistent perfor-mance trends and an efficient tuning process. 
+
+## 5 Conclusion 
+
+In this paper, we presented PCRS-TKA, a novel framework for conversational recommendation featuring a synergistic architecture that integrates pretrained language models with knowledge graphs. Our approach uniquely augments static, global KG embeddings with dynamic, context-aware knowl-edge trees constructed in a RAG-style, enabling direct and fine-grained reasoning by the PLM. Furthermore, it explic-itly models collaborative preferences by learning to encode this signal into the prompts via an auxiliary task. Extensive experiments demonstrate that this design allows PCRS-TKA to consistently outperform strong baselines in both recom-mendation quality and dialogue generation. 15677 Acknowledgments 
+
+This work was supported in part by the Natural Science Foundation of Anhui Province (Grant No. 2508085QF211), the National Key R&D Program of China (Grant No. 2023YFF0725001), the National Natural Science Founda-tion of China (Grant Nos. 62506348, 92370204, 62406141), the Guangdong Basic and Applied Basic Research Foun-dation (Grant No. 2023B1515120057), the Key-Area Spe-cial Project of Guangdong Provincial Ordinary Universi-ties (Grant No. 2024ZDZX1007), the CCF-1688 Yuan-bao Cooperation Fund (Grant No. CCF-Alibaba2025005), the China Postdoctoral Science Foundation (Grant No. GZC20252740), and the Education Bureau of Guangzhou. 
+
+## References 
+
+Auer, S.; Bizer, C.; Kobilarov, G.; Lehmann, J.; Cyganiak, R.; and Ives, Z. 2007. DBpedia: a nucleus for a web of open data. In Proceedings of the 6th International The Semantic Web and 2nd Asian Conference on Asian Semantic Web Con-ference , ISWC’07/ASWC’07, 722–735. Berlin, Heidelberg: Springer-Verlag. ISBN 3540762973. Bouraoui, Z.; Camacho-Collados, J.; and Schockaert, S. 2020. Inducing Relational Knowledge from BERT. Pro-ceedings of the AAAI Conference on Artificial Intelligence ,34(05): 7456–7463. Chen, H.; Liu, X.; Yin, D.; and Tang, J. 2017. A Survey on Dialogue Systems: Recent Advances and New Frontiers. 
+
+ACM SIGKDD Explorations Newsletter , 19(2): 25–35. Chen, Q.; Lin, J.; Zhang, Y.; Ding, M.; Cen, Y.; Yang, H.; and Tang, J. 2019. Towards Knowledge-Based Recom-mender Dialog System. In Conference on Empirical Meth-ods in Natural Language Processing .Chen, Y.; Fu, Q.; Yuan, Y.; Wen, Z.; Fan, G.; Liu, D.; Zhang, D.; Li, Z.; and Xiao, Y. 2023. Hallucination Detection: Robustly Discerning Reliable Answers in Large Language Models. In Proceedings of the 32nd ACM International Conference on Information and Knowledge Management ,CIKM ’23, 245–255. ISBN 9798400701245. Dao, H.; Deng, Y.; Le, D. D.; and Liao, L. 2024. Broaden-ing the View: Demonstration-augmented Prompt Learning for Conversational Recommendation. In Proceedings of the 47th International ACM SIGIR Conference on Research and Development in Information Retrieval .Devlin, J.; Chang, M.-W.; Lee, K.; and Toutanova, K. 2019. BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding. In North American Chapter of the Association for Computational Linguistics .Ferragina, P.; and Scaiella, U. 2010. TAGME: on-the-fly annotation of short text fragments (by wikipedia entities). 
+
+Proceedings of the 19th ACM international conference on Information and knowledge management .Gao, C.; Lei, W.; He, X.; De Rijke, M.; and Chua, T.-S. 2021. Advances and Challenges in Conversational Recom-mender Systems: A Survey. AI Open , 2: 100–126. Gao, T.; Fisch, A.; and Chen, D. 2021. Making Pre-Trained Language Models Better Few-Shot Learners. In Proceed-ings of the 59th Annual Meeting of the Association for Com-putational Linguistics and the 11th International Joint Con-ference on Natural Language Processing (Volume 1: Long Papers) , 3816–3830. Hayati, S. A.; Kang, D.; Zhu, Q.; Shi, W.; and Yu, Z. 2020. INSPIRED: Toward Sociable Recommendation Dialog Sys-tems. In Proceedings of the 2020 Conference on Empirical Methods in Natural Language Processing (EMNLP) , 8142– 8152. Ji, Y.; Sun, Y.; Zhang, Y.; Wang, Z.; Zhuang, Y.; Gong, Z.; Shen, D.; Qin, C.; Zhu, H.; and Xiong, H. 2025. A compre-hensive survey on self-interpretable neural networks. arXiv preprint arXiv:2501.15638 .Kang, W.-C.; and McAuley, J. 2018. Self-Attentive Sequen-tial Recommendation . In 2018 IEEE International Confer-ence on Data Mining (ICDM) , 197–206. Lewis, M.; Liu, Y.; Goyal, N.; Ghazvininejad, M.; Mo-hamed, A.; Levy, O.; Stoyanov, V.; and Zettlemoyer, L. 2020. BART: Denoising Sequence-to-Sequence Pre-training for Natural Language Generation, Translation, and Compre-hension. In Proceedings of the 58th Annual Meeting of the Association for Computational Linguistics , 7871–7880. Li, R.; Kahou, S.; Schulz, H.; Michalski, V.; Charlin, L.; and Pal, C. 2018. Towards deep conversational recommen-dations. In Proceedings of the 32nd International Confer-ence on Neural Information Processing Systems , NIPS’18, 9748–9758. Li, W.; Wei, W.; Qu, X.; Mao, X.-L.; Yuan, Y.; Xie, W.; and Chen, D. 2023. TREA: Tree-Structure Reasoning Schema for Conversational Recommendation. In Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , 2970–2982. Toronto, Canada: Association for Computational Linguistics. Liu, Y.; Pei, J.; Zhang, W.-N.; Li, M.; Che, W.; and de Ri-jke, M. 2025. Augmentation with Neighboring Information for Conversational Recommendation. ACM Trans. Inf. Syst. ,43(3). Liu, Z.; Lin, W.; Shi, Y.; and Zhao, J. 2021. A Ro-bustly Optimized BERT Pre-training Approach with Post-training. In Chinese Computational Linguistics: 20th China National Conference, CCL 2021, Hohhot, China, August 13–15, 2021, Proceedings , 471–484. ISBN 978-3-030-84185-0. Lu, Y.; Bao, J.; Song, Y.; Ma, Z.; Cui, S.; Wu, Y.; and He, X. 2021. RevCore: Review-Augmented Conversational Rec-ommendation. In Findings of the Association for Computa-tional Linguistics: ACL-IJCNLP 2021 , 1161–1173. Ma, Z.; and Collins, M. 2018. Noise Contrastive Estima-tion and Negative Sampling for Conditional Models: Con-sistency and Statistical Efficiency. In Proceedings of the 2018 Conference on Empirical Methods in Natural Lan-guage Processing , 3698–3707. Petroni, F.; Rockt¨ aschel, T.; Riedel, S.; Lewis, P.; Bakhtin, A.; Wu, Y.; and Miller, A. 2019. Language Models as Knowledge Bases? In Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing and 15678 the 9th International Joint Conference on Natural Language Processing (EMNLP-IJCNLP) , 2463–2473. Qin, C.; Chen, X.; Wang, C.; Wu, P.; Chen, X.; Cheng, Y.; Zhao, J.; Xiao, M.; Dong, X.; Long, Q.; et al. 2025. Sci-horizon: Benchmarking ai-for-science readiness from scien-tific data to large language models. In Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining V. 2 , 5754–5765. Qiu, Z.; Tao, Y.; Pan, S.; and Liew, A. W. 2025. Knowledge Graphs and Pretrained Language Models Enhanced Repre-sentation Learning for Conversational Recommender Sys-tems. IEEE Trans. Neural Networks Learn. Syst. , 36(4): 6107–6121. Schick, T.; and Sch¨ utze, H. 2021. It’s Not Just Size That Matters: Small Language Models Are Also Few-Shot Learn-ers. In Proceedings of the 2021 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies , 2339–2352. Schlichtkrull, M.; Kipf, T. N.; Bloem, P.; van den Berg, R.; Titov, I.; and Welling, M. 2018. Modeling Relational Data with Graph Convolutional Networks. In Gangemi, A.; Nav-igli, R.; Vidal, M.-E.; Hitzler, P.; Troncy, R.; Hollink, L.; Tordai, A.; and Alam, M., eds., The Semantic Web , 593–607. Cham: Springer International Publishing. ISBN 978-3-319-93417-4. Shen, D.; Qin, C.; Wang, C.; Dong, Z.; Zhu, H.; and Xiong, H. 2021. Topic modeling revisited: A document graph-based neural network perspective. Advances in neural information processing systems , 34: 14681–14693. Speer, R.; Chin, J.; and Havasi, C. 2017. ConceptNet 5.5: An Open Multilingual Graph of General Knowledge. In Pro-ceedings of the Thirty-First AAAI Conference on Artificial Intelligence, February 4-9, 2017, San Francisco, California, USA , 4444–4451. Subramanian, S.; Elango, V.; and Gungor, M. 2025. Small Language Models (SLMs) Can Still Pack a Punch: A survey. 
+
+CoRR , abs/2501.05465. Tong, G.; Li, D.; and Liu, X. 2024. An Improved Model Combining Knowledge Graph and GCN for PLM Knowl-edge Recommendation. Soft Computing , 28(6): 5557–5575. Wang, C.; Liu, Q.; Wu, R.; Chen, E.; Liu, C.; Huang, X.; and Huang, Z. 2018. Confidence-aware matrix factorization for recommender systems. In Proceedings of the AAAI Confer-ence on artificial intelligence , volume 32. Wang, C.; Zhu, H.; Hao, Q.; Xiao, K.; and Xiong, H. 2021a. Variable interval time sequence modeling for career trajec-tory prediction: Deep collaborative perspective. In Proceed-ings of the Web Conference 2021 , 612–623. Wang, C.; Zhu, H.; Wang, P.; Zhu, C.; Zhang, X.; Chen, E.; and Xiong, H. 2021b. Personalized and explainable em-ployee training course recommendations: A bayesian varia-tional approach. ACM Transactions on Information Systems (TOIS) , 40(4): 1–32. Wang, T.-C.; Su, S.-Y.; and Chen, Y.-N. 2022. BARCOR: Towards A Unified Framework for Conversational Recom-mendation Systems. Wang, X.; He, X.; Cao, Y.; Liu, M.; and Chua, T.-S. 2019. KGAT: Knowledge Graph Attention Network for Recom-mendation. In Proceedings of the 25th ACM SIGKDD Inter-national Conference on Knowledge Discovery & Data Min-ing , 950–958. Wang, X.; Zhou, K.; Wen, J.-R.; and Zhao, W. X. 2022. Towards Unified Conversational Recommender Systems via Knowledge-Enhanced Prompt Learning. In Proceedings of the 28th ACM SIGKDD Conference on Knowledge Discov-ery and Data Mining , 1929–1937. Wu, C.; Wu, F.; Qi, T.; and Huang, Y. 2021. Empowering News Recommendation with Pre-trained Language Mod-els. In SIGIR ’21: The 44th International ACM SIGIR Conference on Research and Development in Information Retrieval, Virtual Event, Canada, July 11-15, 2021 , 1652– 1656. Xie, Z.; Wu, J.; Jeon, H.; He, Z.; Steck, H.; Jha, R.; Liang, D.; Kallus, N.; and Mcauley, J. 2024. Neighborhood-Based Collaborative Filtering for Conversational Recom-mendation. In Proceedings of the 18th ACM Conference on Recommender Systems , RecSys ’24, 1045–1050. ISBN 9798400705052. Zhang, Y.; Li, Y.; Cui, L.; Cai, D.; Liu, L.; Fu, T.; Huang, X.; Zhao, E.; Zhang, Y.; Chen, Y.; Wang, L.; Luu, A. T.; Bi, W.; Shi, F.; and Shi, S. 2023. Siren’s Song in the AI Ocean: A Survey on Hallucination in Large Language Models. CoRR ,abs/2309.01219. Zhang, Y.; Sun, S.; Galley, M.; Chen, Y.-C.; Brockett, C.; Gao, X.; Gao, J.; Liu, J.; and Dolan, W. B. 2019. DI-ALOGPT : Large-Scale Generative Pre-training for Conver-sational Response Generation. In Annual Meeting of the As-sociation for Computational Linguistics .Zhou, K.; Zhao, W. X.; Bian, S.; Zhou, Y.; rong Wen, J.; and Yu, J. 2020a. Improving Conversational Recommender Systems via Knowledge Graph based Semantic Fusion. Pro-ceedings of the 26th ACM SIGKDD International Confer-ence on Knowledge Discovery & Data Mining .Zhou, K.; Zhou, Y.; Zhao, W. X.; Wang, X.; and Wen, J.-R. 2020b. Towards Topic-Guided Conversational Recom-mender System. In Proceedings of the 28th International Conference on Computational Linguistics , 4128–4139. Zhou, Y.; Zhou, K.; Zhao, W. X.; Wang, C.; Jiang, P.; and Hu, H. 2022. C²-CRS: Coarse-to-Fine Contrastive Learn-ing for Conversational Recommender System. In Proceed-ings of the Fifteenth ACM International Conference on Web Search and Data Mining , WSDM ’22, 1488–1496. New York, NY, USA: Association for Computing Machinery. ISBN 9781450391320. Zhu, Y.; Wang, C.; Zhang, Q.; and Xiong, H. 2024. Graph signal diffusion model for collaborative filtering. In Pro-ceedings of the 47th International ACM SIGIR Conference on Research and Development in Information Retrieval ,1380–1390. Zong, Z.; Ma, B.; Shen, D.; Song, G.; Shao, H.; Jiang, D.; Li, H.; and Liu, Y. 2024. Mova: Adapting mixture of vision experts to multimodal context. Advances in Neural Informa-tion Processing Systems , 37: 103305–103333. 15679
