@@ -1,0 +1,775 @@
+Title: SHEAF: Self-profiled Hardness Estimation from Answer-set Flux for Predicting Query Hardness in Graph-based ANN Search
+
+URL Source: https://arxiv.org/pdf/2607.12229v1
+
+Published Time: Wed, 15 Jul 2026 11:58:49 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+# SHEAF: Self-profiled Hardness Estimation from Answer-set Flux for Predicting Query Hardness in Graph-based ANN Search 
+
+# Dongfang Zhao (dzhao@uw.edu) 
+
+## Abstract 
+
+Graph-based approximate nearest neighbor (ANN) search is usually governed by a beam-width parameter that trades recall for through-put and is fixed for the whole workload. Yet, queries may not be equally hard: for example, on the widely used data set SIFT1M, the beam that a query needs to reach 95% recall varies by more than 32 ×. Therefore, serving each query at its own width would help if the system could tell, cheaply and in advance, how hard it is. The prevailing proxy for this difficulty is called local intrinsic dimensionality (LID); however, LID is static and geometric, which makes it only weakly predict the minimum beam. This paper presents a new measure, namely Self-profiled Hard-ness Estimation from Answer-set Flux (SHEAF), which represents a query’s hardness as how much its own top-𝑘 answer set changes between two shallow probe widths. We design a self-profiling esti-mator that turns this flux into a deployable per-query beam predic-tor; furthermore, we develop a fixed-probe evaluation protocol that scores each measure over all queries with an observed minimum sufficient beam. On popular ANN indexes such as CAGRA and HNSW across four diverse data sets, SHEAF predicts the per-query beam better than five baseline measures on both GPU and CPU by up to 1.55 × in held-out correlation, using only two shallow probe searches and no query-time ground truth. 
+
+## Keywords 
+
+Approximate nearest neighbor search, graph-based index, query hardness estimation, local intrinsic dimensionality 
+
+## 1 Introduction 
+
+Graph-based approximate nearest neighbor (ANN) search is usu-ally governed by multiple parameters; one of the most important parameters is the search width, also known as the beam width. On GPUs, cuVS CAGRA’s itopk_size [37 ], like HNSW’s ef [ 32 ] on the CPU, sets the beam width that trades recall for throughput. In practice, the beam width is tuned once to place the whole work-load at a single point on the recall-throughput curve. However, this one-size-fits-all setting ignores the fact that many queries in the real-world are not equally hard. As shown in Figure 1(a), our experiments show that on CAGRA over SIFT1M [ 24 ], the minimum 
+
+itopk a query needs to reach recall@10 ≥ 0.95 spans more than 
+
+32 × with 61% of queries satisfied at the smallest beam and a long tail needing an order of magnitude more. Therefore, serving each query at its own width, i.e., small for the easy majority and large only for the hard tail, would move the system off that uniform curve. Doing so rests on one ingredient above all: a way to tell, cheaply and before committing the search budget, how hard each query is. One prevailing way to price a query is the so-called local intrin-sic dimensionality (LID) [ 2, 19 ], which is a static geometric measure for grading a query’s difficulty [ 4 ]. However, recent studies showed that LID-based approaches exhibit two limitations. First, LID is a 16 32 96 192 384 
+
+min beam 
+
+> 10 1
+> 10 2
+> 10 3
+> number of queries
+
+(a) hardness skew 
+
+> SIFT
+> DEEP
+> SPACEV
+> IMAGENET
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> held-out correlation
+
+(b) SHEAF vs. LID  
+
+> LID fl ux
+
+Figure 1: (a) Minimum beam on CAGRA (SIFT1M) spans 32 ×.(b) Flux outperforms LID at predicting query hardness. 
+
+property of the data alone that is computed independently of the graph index, whereas on a graph the effort to answer a query is governed by connectivity. To fix it, the recent Steiner-hardness measure was proposed [ 50 ]; however, Steiner-hardness is an offline, ground-truth-dependent graph-native reference and requires each query’s ground-truth neighbors, which can be only obtained after the search rather than during it. Second, existing adaptive-search methods read static data features [ 54 ] or the running distance se-quence [ 1, 28 ], but they do not directly correlate the stability of the top-𝑘 answer set itself, which is a direct indicator of how much more work a query needs. What is desired is a cheap, online, ground-truth-free measure that actually quantifies a query’s graph-search cost, i.e., beam width. Our insight toward this goal is that a query’s hardness is not only geometric but algorithmic: a query is hard exactly when its own search has not yet settled, and more importantly, that state is already visible in the search’s early behavior without ground truth at query time. We formulate it as answer-set flux , how much a query’s top-𝑘 
+
+result changes between two shallow probe widths. A query whose answer set is still churning is far from settled; one whose answer set has stopped moving, and whose distances have stopped tightening, is a candidate for convergence that the estimator then confirms. Performance-wise, this flux is computed solely from the results of two shallow probe searches without ground truth or access to the graph index. This paper turns the above insight into a new quantitative mea-sure, namely Self-profiled Hardness Estimation from Answer-set Flux (SHEAF). What SHEAF contributes is a query-hardness mea-sure and the machinery to read and evaluate it: flux itself, a self-profiling estimator that turns it into a per-query cost prediction, and a protocol that scores that prediction with a probe held below the hard tail’s cost. An adaptive serving policy is the application such a measure feeds; how accurately the measure predicts per-query cost, which is what we study here, is what any such policy would rest on. In summary, this paper makes the following contributions. 
+
+> 1arXiv:2607.12229v1 [cs.IR] 14 Jul 2026 Dongfang Zhao (dzhao@uw.edu)
+
+We define answer-set flux as a dynamic measure of query hardness (§3.1). SHEAF runs two searches for the same query. The first search uses a beam 𝑤 0. The second search uses a larger beam 𝑤 1, where 
+
+𝑤 0 < 𝑤 1. Every query uses the same 𝑤 0 and 𝑤 1. Both widths lie at the low end of the beam ladder to keep the two searches cheap. We call these two searches the probe . Flux is the fraction of the top-𝑘 
+
+results at 𝑤 0 that are replaced at 𝑤 1. High flux means that the search result changes when more search budget is used. Low flux means that the result remains stable. Flux needs neither ground truth nor access to the index internals. A short set-counting argument shows that this simple yet effective flux upper-bounds the recall change between the two beam widths (Prop. 1). 
+
+We design a self-profiling estimator of per-query search cost (§3.2). 
+
+We train a lightweight regressor that takes flux and the returned distances from the probe as input. The regressor predicts the mini-mum beam needed for a target recall. At query time, SHEAF runs the probe and predicts the required beam before the full search be-gins. Since every query uses the same 𝑤 0 and 𝑤 1, the relative probe cost approaches zero as the required beam increases, an asymptotic property we state as Prop. 2. These inputs come from standard top-𝑘 search results and do not require graph internals. The same estimator design therefore applies across hardware platforms, e.g., from GPU-based CAGRA to CPU-based HNSW. 
+
+We develop a fixed-probe protocol for evaluating search-based hardness (§3.3). We use the same 𝑤 0 and 𝑤 1 for every query and evaluate each measure over all answerable queries. For the hard queries whose required beam is larger than 𝑤 1, the probe is guar-anteed to not have reached the target recall. We formalize this property as Prop. 3. We evaluate SHEAF across four diverse data sets against five baseline hardness measures. SHEAF outperforms every baseline on both GPU and CPU, with a margin over the prevailing geometric baseline, exact LID, reaching up to 1.55 × in held-out correlation. As an example, Figure 1(b) shows the advantage of SHEAF over the conventional LID. 
+
+## 2 Related Work 
+
+Approximate nearest neighbor (ANN) search. ANN research trades exactness for speed, and most methods fall into one of three fam-ilies. First, quantization compresses vectors so that distances are approximated cheaply, ranging from product quantization [ 24 ] and its optimized [ 15 ] and additive [ 34 ] variants to anisotropic [ 17 ]and recent theory-grounded [ 14 ] schemes, consolidated in libraries such as Faiss [ 11 ]. Second, locality-sensitive hashing gives sublin-ear query time with probabilistic guarantees [ 8, 21 ], refined by multi-probe [ 30 ] and near-optimal constructions [ 3]. Third, space-partitioning trees [ 6] and their auto-tuned toolkits [ 35 ] remain common baselines. These indexes now underpin many applications, for example vector databases [ 48 , 51 ] and retrieval-augmented and recommendation pipelines [26, 55]. 
+
+Graph-based indexes and the width knob. Graph indexes have become one of dominant ANN paradigms. They could build on navigable small-world graphs [ 31 , 32 ] with monotonic or spreading-out designs [ 13 , 18 ]. Methods such as DiskANN [ 22 ], HCNNG [ 45 ], and EFANNA [ 12 ] answer a query by a best-first walk over a 𝑘 -NN graph built by NN-descent and its variants [ 10 , 36 ]. Recent work adds parallel and deterministic construction at scale [ 33 ], sharper graph convergence [ 27 ], and a theoretical analysis of greedy graph search [ 40 ]. Across all of them, however, a single beam-width knob (CAGRA’s itopk_size , HNSW’s ef ) [ 37 ] trades recall for speed and is normally fixed for the whole workload, which places the system at one point on the recall-throughput curve. SHEAF instead serves each query at its own width; this is the premise that makes a per-query notion of hardness necessary. 
+
+GPU, large-scale, and dynamic indexes. A parallel line of work scales graph ANN to modern hardware and workloads. On GPUs, SONG [ 58 ], CAGRA [ 37 ], and GTS [ 59 ] exploit batched parallelism, joined by recent GPU construction and billion-scale search sys-tems [ 29 , 46 , 47 , 57 ]. Disk-resident and streaming variants [ 7 , 38 , 44 ,49 , 52 ], with dynamic or attribute-filtered indexes [ 16 , 23 , 39 , 56 ]keep billion-scale and evolving datasets searchable. These systems, however, optimize how a chosen width is served, not how the width is chosen per query; the latter is the gap SHEAF addresses. 
+
+Intrinsic dimensionality and query hardness. The prevailing way to reason about query difficulty is geometric, namely through local intrinsic dimensionality (LID) [ 2, 19 ]. LID is the field’s default hard-ness axis, and it is used to stratify ANN benchmarks into easy and hard query sets [ 4]. Its standard structural counterpart is hubness, i.e., the tendency of a few points to dominate neighbor lists in high dimension [ 41 ]. Closest to our diagnosis is Steiner-hardness [ 50 ], which argues that a query’s cost is governed by connectivity rather than density. Steiner-hardness measures the query’s cost as an NP-hard Directed-Steiner-Tree quantity over a query’s ground-truth neighbors; complementary theory characterizes the hardness of navigable graphs themselves [ 25 ]. SHEAF departs from all of these. We test LID and hubness as predictors of actual per-query cost on real CAGRA, where both prove suboptimal. We will use Steiner-hardness only as an offline, ground-truth-dependent graph-native reference, since it cannot price a query at search time. 
+
+Adaptive and per-query search. A final line of work makes the search itself adaptive, which is where SHEAF sits; however, it reads different quantities. Learned routing augments graph vertices to escape local minima [ 5] and query-aware modules pick a better entry point per query [ 42 ]. Other work includes: Learned early-termination predicts when to stop from features of the running search [ 28 ], Tao selects parameters from static data features [ 54 ], and distance-adaptive beam search replaces the fixed stopping rule with a relative-distance criterion [ 1 ]. Recent systems even detect and repair hard or out-of-distribution queries on the fly [ 20 ]. SHEAF differs from all of these in what it measures, not in the control policy. These methods learn from static features or read the running distance sequence; SHEAF instead reads the stability of the top-𝑘 
+
+answer itself, i.e., how much it still changes as the probe widens. This is a direct, ground-truth-free measure of how much the query’s search has settled. To our knowledge, prior work has not explicitly applied a fixed-probe control when evaluating such self-observed features, including a pre-target guarantee on the hard tail. 
+
+> 2SHEAF: Self-profiled Hardness Estimation from Answer-set Flux for Predicting Query Hardness in Graph-based ANN Search
+
+## 3 Methodology 
+
+The quantity that a measure predicts is a query’s cost : the smallest beam width at which its own search reaches the recall target, e.g., recall@10 = 0.95. Formally, fix a base set 𝑋 ⊂ R𝑑 , a graph index built on it, and a neighborhood size 𝑘 ; for a query 𝑞 , let 𝑁 = 𝑁 𝑘 (𝑞 ) be its true 𝑘 nearest neighbors. The graph search at beam width 𝑤 returns a top-𝑘 set 𝑅 𝑤 (𝑞 ) with 𝑘 -th returned distance 𝑟 𝑤 (𝑞 ) and recall 
+
+𝜌 𝑤 (𝑞 ) = |𝑅 𝑤 (𝑞 ) ∩ 𝑁 |/ 𝑘 . Fix a recall target 𝜏 and a finite width ladder 
+
+𝐿 = {𝑏 1 < 𝑏 2 < · · · < 𝑏 𝑚 } and let 𝐴 (𝑞 ) = {𝑏 ∈ 𝐿 : 𝜌 𝑏 (𝑞 ) ≥ 𝜏 }. For a query with 𝐴 (𝑞 ) ≠ ∅, its cost is 
+
+𝑐 (𝑞 ) = min 𝐴 (𝑞 ), (1) the minimum beam that reaches the target. We evaluate cost predic-tion only on these answerable queries. Queries with 𝐴 (𝑞 ) = ∅ are right-censored (i.e., its true cost lies beyond the largest width) be-cause no sufficient beam is observed within the ladder. We exclude them from the correlation. 
+
+## 3.1 Dynamic Difficulty Measure 
+
+We read difficulty from the search’s own early behavior rather than from the query’s geometry. The probe is a cheap shallow search: the same graph search runs at two small widths 𝑤 0 < 𝑤 1. Both widths lie far below what hard queries need. The probe returns the top-𝑘 sets 𝑅 0 = 𝑅 𝑤 0 (𝑞 ) and 𝑅 1 = 𝑅 𝑤 1 (𝑞 ) together with their 𝑘 -th distances 𝑟 0 and 𝑟 1.
+
+Answer-set flux summarizes how much the probe is still moving. Its primary component is the set churn 
+
+𝜒 (𝑞 ) = |𝑅 0△𝑅 1 |
+
+2𝑘 ∈ [ 0, 1], (2) where 𝑅 0△𝑅 1 is the symmetric difference of the two answer sets, namely the members in exactly one of them. Churn is thus the fraction of the top-𝑘 that changes as the beam widens from 𝑤 0 to 
+
+𝑤 1. Flux also reads the distance improvement (𝑟 0 − 𝑟 1)/ 𝑟 0 and the probe’s raw 𝑘 -th and mean distances at 𝑤 0. A query whose answer has stopped moving and whose distances have stopped tightening looks close to convergence, and the estimator of §3.2 treats it as such only when both cues agree. A churning answer instead marks a query far from settled. All four flux features are byproducts of a search the index already runs. None needs ground truth at query time. Beyond correlating with convergence, churn upper-bounds the recall that the search can still gain over the probe interval. Al-though the bound is seemingly elementary, it turns a heuristic into a guarantee: a stable answer caps the recall that the interval can still contribute, whereas a moving answer leaves that headroom open. The bound assumes nothing about the data distribution or the graph. Moreover, it holds for every query and every pair of probe widths. With such generality, a two-width probe serves as a proxy for a property of the entire search. The following proposition states this formally. 
+
+Proposition 1 (Churn bounds recall change over probe interval). For any query and widths 𝑤 0 < 𝑤 1 with |𝑅 0 | = |𝑅 1 | = 𝑘 ,
+
+𝜌 𝑤 1 (𝑞 ) − 𝜌 𝑤 0 (𝑞 ) ≤ |𝑅 0△𝑅 1 |
+
+2𝑘 = 𝜒 (𝑞 ).
+
+Proof sketch. Because |𝑅 0 | = |𝑅 1 | = 𝑘 , the sets differ sym-metrically: |𝑅 1 \ 𝑅 0 | = |𝑅 0 \ 𝑅 1 | = 𝑘 − | 𝑅 0 ∩ 𝑅 1 | = |𝑅 0△𝑅 1 |/ 2. The common part 𝑅 0 ∩𝑅 1 contributes equally to both recalls and cancels, so |𝑅 1 ∩ 𝑁 | − | 𝑅 0 ∩ 𝑁 | ≤ | 𝑅 1 \ 𝑅 0 |. Dividing by 𝑘 gives the claim. The complete proof can be found in Appendix A.1. □
+
+We run a small example to make the bound concrete. For 𝑘 = 10 ,a probe that changes two of the ten answers has |𝑅 0△𝑅 1 | = 4 and 
+
+𝜒 = 0.2. Proposition 1 caps the recall still to be gained across the probe interval at 0.2, whether or not those two changes are true neighbors. A query that changes nothing ( 𝜒 = 0) has provably gained no recall over the interval [𝑤 0, 𝑤 1] itself. This is a local certificate, not a global one: it rules out recall gained inside the probe interval, but it does not by itself say the search has reached the target 𝜏 , since a stable answer can also mean the probe has not yet begun to discriminate at all rather than that it has finished. Nonzero churn is the weaker direction of this bound. A moving answer means recall may still change, yet the bound does not guar-antee that it will, since the churn could reshuffle non-neighbors and leave recall flat. §3.2 will show how the estimator combines flux with the probe’s distance features. A plateau is then trusted only when the fuller prediction agrees, which keeps an early, unin-formative probe from being mistaken for a converged one. Among these features, churn is the most important, while the distance terms are secondary. Churn measures a change that the distances cannot see: two queries can have identical distance pro-files yet differ in how much their top-𝑘 membership shifts between the two probes. This shift tracks a query’s unfinished work. The distance terms still help on datasets whose operating beam lies far beyond the probe, where they add what churn does not capture. By default the probe uses 𝑤 0=16 and 𝑤 1=24 . These widths are large enough for an answer set to begin forming on most datasets, but small enough to stay below what a hard query needs. On the hard tail, the probe therefore reports genuine non-convergence rather than a query’s final answer. A wider second width 𝑤 1=32 
+
+raises the correlation slightly. It also overlaps the low end of the ladder 𝐿 and shrinks the hard tail on which the probe stays provably below the target. The default therefore keeps 𝑤 1=24 .A dynamic measure can succeed where geometry fails. The beam that a graph search needs is a property of the graph, not of the embedding alone. A geometric proxy such as LID scores only the query’s neighborhood in the embedding space. The required beam instead depends on how that neighborhood is connected, where the search enters, and how fast greedy expansion reaches the true neighbors. Two queries of equal local dimension can therefore sit in very differently navigable parts of the same index. Rather than modeling any of this directly, flux reads how much the search’s own answer is still moving, which captures the graph’s geometry and the search dynamics at once, without naming either. This is why a quantity from two shallow searches can carry information that an exact geometric measure does not. 
+
+## 3.2 Self-Profiling Difficulty Estimator 
+
+The estimator turns flux from a measurement into a per-query beam prediction before the search commits (Algorithm 1). The 
+
+> 3Dongfang Zhao (dzhao@uw.edu)
+
+Algorithm 1: Self-profiling adaptive search 
+
+Input: query 𝑞 ; index; widths 𝑤 0 < 𝑤 1; ladder 𝐿 ; predictor ℎ
+
+Output: approximate 𝑘 nearest neighbors of 𝑞  
+
+> 1
+
+foreach 𝑤 ∈ { 𝑤 0, 𝑤 1 } do  
+
+> 2
+
+𝑅 𝑤 ← Search (𝑞, 𝑤 ); 
+
+> 3
+
+𝑟 𝑤 ← KthDist (𝑅 𝑤 ); 
+
+> 4
+
+𝜒 ← | 𝑅 𝑤 0 △𝑅 𝑤 1 |/( 2𝑘 ); 
+
+> 5
+
+𝜙 ←  𝜒, (𝑟 𝑤 0 − 𝑟 𝑤 1 )/ 𝑟 𝑤 0 , 𝑟 𝑤 0 , MeanDist (𝑅 𝑤 0 ); 
+
+> 6
+
+ˆ𝑐 ← exp  ℎ(𝜙 ); 
+
+> 7
+
+if ˆ𝑐 ≤ 𝑤 1 then  
+
+> 8
+
+return 𝑅 𝑤 1 ; 
+
+> 9
+
+𝑏 ← max 𝐿 ; 
+
+> 10
+
+foreach 𝑏 ′ ∈ 𝐿 in increasing order do  
+
+> 11
+
+if 𝑏 ′ ≥ ˆ𝑐 then  
+
+> 12
+
+𝑏 ← 𝑏 ′; 
+
+> 13
+
+break ; 
+
+> 14
+
+return Search (q,b); probe features make up a vector 
+
+𝜙 (𝑞 ) =  𝜒 (𝑞 ), (𝑟 0 − 𝑟 1)/ 𝑟 0, 𝑟 0, ¯𝑟 0
+
+, (3) with ¯𝑟 0 the probe’s mean returned distance. A light predictor ℎ of log-cost, ˆ𝑐 (𝑞 ) = exp ℎ(𝜙 (𝑞 )) , is fit on a held-out split of queries. The predictor is calibrated offline on labeled training queries. Only query-time feature extraction is ground-truth-free. At query time, the estimator probes at 𝑤 0 and 𝑤 1 and always forms the prediction 
+
+ˆ𝑐 (𝑞 ) from the full feature vector, not from churn alone. If ˆ𝑐 (𝑞 )
+
+is already at or below 𝑤 1, the probe result is returned directly; otherwise the query is searched at the smallest ladder width at least ˆ𝑐 (𝑞 ). This shortcut is gated on the prediction rather than on churn by itself, because a zero-churn probe can mean the query has converged, or it can mean the probe has not yet begun to discriminate (§4.6), and only the full prediction, built from churn and the probe’s distance features together, can tell the two apart. The estimator touches the index only through the probe. That probe is just two top-𝑘 queries at fixed widths. These two facts together make it portable and cheap. Algorithm 1 adds only a fixed, query-independent cost on top of the search that a query runs anyway. Let 𝑊 (𝑤 ) denote the per-query search work at beam width 𝑤 ; this analysis assumes a linear cost model, 𝑊 (𝑤 ) = Θ(𝑤 ), which both CAGRA’s itopk search and HNSW’s ef search exhibit by the same bounded-candidate-list argument. Under this model, the two probes cost 𝑊 (𝑤 0) + 𝑊 (𝑤 1) =
+
+Θ(𝑤 1). The churn, feature vector, and predictor ℎ are 𝑂 (𝑘 ) over the returned 𝑘 -sets and 𝑂 (1) in the fixed-length feature; forming 
+
+ˆ𝑐 (𝑞 ) costs the same 𝑂 (1) whether or not it ends up at or below 𝑤 1.Choosing the ladder rung is 𝑂 (| 𝐿 |) . When ˆ𝑐 (𝑞 ) > 𝑤 1, the committed search dominates at 𝑊 (𝑏 ) = Θ(𝑏 ) for the predicted beam 𝑏 ≈ 𝑐 (𝑞 ).The per-query time is then Θ(𝑤 1 + 𝑏 ); the probe is an additive 
+
+Θ(𝑤 1) overhead. The per-query time is Θ(𝑤 1) when ˆ𝑐 (𝑞 ) ≤ 𝑤 1 and the probe result is returned directly. Space is 𝑂 (𝑘 ) for the two probe result sets. This fixed probe cost has two consequences that make the estima-tor practical beyond a single system. First, the probe reads only the width-parameterized top-𝑘 that every graph index already exposes. The same estimator design therefore applies to any of them, refit but otherwise unchanged. Second, since its cost stays Θ(𝑤 1) while a hard query pays Θ(𝑐 (𝑞 )) for the search that it needs anyway, the probe is asymptotically free exactly where queries are expensive. The following proposition formalizes these two properties. 
+
+Proposition 2 (Fixed-cost, index-agnostic estimation). Let 
+
+𝑊 (𝑤 ) be the per-query search work at width 𝑤 , nondecreasing in 𝑤 .(i) The estimator is well defined for any ANN index exposing a width-parameterized top-𝑘 , regardless of 𝑊 . (ii) If in addition 𝑊 (𝑤 ) =
+
+Θ(𝑤 ), a linear-cost condition that both CAGRA’s itopk search and HNSW’s ef search satisfy, then the probe cost is 𝑊 (𝑤 1) = Θ(𝑤 1)
+
+per query, independent of the query’s cost label 𝑐 (𝑞 ). The relative overhead 𝑊 (𝑤 1)/ 𝑊 (𝑐 (𝑞 )) = Θ 𝑤 1/𝑐 (𝑞 ) therefore tends to 0 on the hard tail 𝑐 (𝑞 ) ≫ 𝑤 1.
+
+Proof sketch. (i) 𝜙 is a function only of 𝑅 𝑤 0 , 𝑅 𝑤 1 , and their returned distances, all emitted by any width-parameterized search; no index internals appear and no cost model is assumed, which is why the same feature map and fitting procedure transfer from the GPU CAGRA graph to the CPU HNSW graph unchanged, each refit on that index’s own queries (§4.4). (ii) The probe issues two searches at fixed 𝑤 0 < 𝑤 1; under 𝑊 (𝑤 ) = Θ(𝑤 ), its cost is Θ(𝑤 1)
+
+regardless of 𝑞 , while a query that needs width 𝑐 (𝑞 ) pays Θ(𝑐 (𝑞 )) .Appendix A.2 gives the counting and notes an unimplemented warm-start refinement in which a resumable search could reuse part of the probe work. □
+
+The predictor is fit against log 𝑐 (𝑞 ) rather than 𝑐 (𝑞 ). Per-query cost may span more than an order of magnitude across a workload (recall Figure 1(a)). A linear fit on raw cost would therefore be dom-inated by the hard tail. The result depends on the features 𝜙 far more than on the regressor that reads them. In our implementa-tion, ℎ is an ordinary least-squares fit on 𝜙 with no regularization or hyperparameter to tune; §4.3 will show that the flux-over-LID ordering is preserved when it is swapped for a 𝑘 -NN regressor. On a batched GPU index, the predicted widths are consumed by grouping. Queries whose ˆ𝑐 (𝑞 ) falls in the same ladder band are dispatched together at that band’s itopk . The easy majority then runs at a small width, and only the predicted-hard tail pays for a large beam. The estimator therefore needs no per-query kernel launch; it only reorganizes an existing batched search. A prediction need only be accurate enough to place a query in the right band, and by Proposition 2 the probe that produces it becomes negligible relative to the committed search on the sufficiently hard bands, though not on bands near the probe width itself. A misprediction does not invalidate the search procedure, but it can cost either recall or efficiency. The search still runs to the ladder width that the estimator selects, and a query’s recall is whatever that width delivers, never silently corrupted below it. A too-narrow beam places a query below the rung that it needed. By the mini-mality in the cost definition (1) , any ladder rung below 𝑐 (𝑞 ) misses the target recall: this is the recall cost of an error. A too-wide beam instead selects a rung above the minimum sufficient width and spends more work than needed. This extra work cannot exceed what a bounded number of adjacent ladder rungs cost, which is the efficiency cost of an error. A proposition at the close of this section 
+
+> 4SHEAF: Self-profiled Hardness Estimation from Answer-set Flux for Predicting Query Hardness in Graph-based ANN Search
+
+Algorithm 2: Fixed-probe evaluation of a measure 𝑚 
+
+Input: queries 𝑄 ; index; ladder 𝐿 ; target 𝜏 ; fixed probe widths 𝑤 0 < 𝑤 1; measure 𝑚 
+
+Output: held-out correlation between predicted and true 
+
+log -cost  
+
+> 1
+
+foreach 𝑞 ∈ 𝑄 do  
+
+> 2
+
+foreach 𝑏 ∈ 𝐿 in increasing order do  
+
+> 3
+
+𝑅 𝑏 ← Search (𝑞, 𝑏 ); 
+
+> 4
+
+𝜌 𝑏 ← | 𝑅 𝑏 ∩ 𝑁 𝑘 (𝑞 )|/ 𝑘 ; 
+
+> 5
+
+𝐴 𝑞 ← { 𝑏 ∈ 𝐿 : 𝜌 𝑏 ≥ 𝜏 }; 
+
+> 6
+
+𝑥 𝑞 ← 𝑚 (𝑞 ) from the fixed probe (𝑤 0, 𝑤 1); 
+
+> 7
+
+𝑄 obs ← { 𝑞 ∈ 𝑄 : 𝐴 𝑞 ≠ ∅} ; 
+
+> 8
+
+𝑐 (𝑞 ) ← min 𝐴 𝑞 for each 𝑞 ∈ 𝑄 obs ; 
+
+> 9
+
+partition 𝑄 obs into 𝑄 fit ⊔ 𝑄 test ; 
+
+> 10
+
+fit predictor ℎ𝑚 of log 𝑐 (𝑞 ) on {( 𝑥 𝑞 , log 𝑐 (𝑞 )) : 𝑞 ∈ 𝑄 fit }; 
+
+> 11
+
+return correlation of ℎ𝑚 (𝑥 𝑞 ) with log 𝑐 (𝑞 ) over 𝑞 ∈ 𝑄 test ;will bound this extra work (Proposition 4), once the fixed-probe protocol below has introduced the notation it shares. 
+
+## 3.3 Fixed-Probe Evaluation Protocol 
+
+A self-observed measure is computed from the search’s own be-havior, which raises a risk that a static proxy does not share: two such measures could each look accurate simply because they agree with each other, while both miss a query’s real cost. The protocol (Algorithm 2) guards against this by scoring every measure against the query’s true cost label on a held-out split of queries that the measure was not fit on. Two further rules keep the comparison fair between measures. Every baseline is given its strongest available form, for example, exact LID computed from the true 𝑘 -NN rather than an online approximation. Any margin that flux shows is therefore not an artifact of a weakened baseline. Every online measure, flux included, is read from the same fixed, narrow probe at the low end of the beam ladder. No measure therefore sees a wider or more informative window into the search than another. This fixed probe keeps the comparison uniform across all answerable queries and stays below the target recall on the hard tail. Algorithm 2 is a procedure run once over the query set and dominated by the cost of recovering the ground-truth label. For each of the |𝑄 | queries, it searches the full width ladder. That costs 
+
+Í𝑏 ∈𝐿 𝑊 (𝑏 ) = Θ(Í𝑏 ∈𝐿 𝑏 ) under the linear model, plus 𝑂 (| 𝐿 | 𝑘 ) to score recall against the true neighbors 𝑁 𝑘 (𝑞 ). Recovering 𝑐 (𝑞 ) and reading the measure 𝑚 add only 𝑂 (| 𝐿 |) and 𝑂 (1). The split, the regression on a fixed-length feature, and the held-out correlation are each linear in |𝑄 |. The total is thus 𝑂  |𝑄 | ( Í𝑏 ∈𝐿 𝑊 (𝑏 ) + | 𝐿 | 𝑘 ) time and 𝑂 (| 𝑄 |) space. This one-time offline cost recovers the per-query labels 𝑐 (𝑞 ); because the probe stays fixed and narrow, Proposition 3 will demonstrate that it is pre-target on the hard tail. The online estimator of Algorithm 1 pays none of it. The cost label is recovered from ordinary batched searches. For example, CAGRA applies one itopk to a batch but returns per-query neighbors. The protocol therefore reads 𝑐 (𝑞 ) in (1) from a handful of batched searches at increasing ladder widths, taking the smallest width whose per-query result attains 𝜌 ≥ 𝜏 . This needs no kernel instrumentation and no per-query reruns. Each measure is then scored by held-out prediction of log 𝑐 (𝑞 ), fit on a random half of the queries and reported on the other half. Agreement among proxies is not evidence: two proxies can correlate strongly with each other yet jointly miss cost, as any feature 𝑢 and its affine copy 
+
+𝛼𝑢 + 𝛽 do. Only out-of-sample prediction of the cost itself counts. Each baseline is given its best case. Any weakness is therefore the measure’s own rather than an estimator’s. Local intrinsic di-mensionality is tested in its exact form, computed from true 𝑘 -NN distances via the Hill/MLE estimator [ 2, 19 ] rather than any online approximation. Hubness, the structural alternative, is the in-degree of a query’s true neighbors in the graph [ 41 ]. Steiner-hardness needs each query’s ground-truth neighbors and an NP-hard solve. Steiner-hardness enters only as an offline, ground-truth-dependent graph-native reference [50]. The fixed-probe control sets 𝑤 0 < 𝑤 1 at the low end of the ladder for every query. The evaluation scores each measure over all answerable queries. The fixed narrow probe provides a guarantee on the queries that matter: whenever a query’s cost label exceeds 
+
+𝑤 1, the probe has not reached the target. The measure therefore predicts beyond the observed probe widths. Since 𝑤 1 sits far below the beam that the hard tail needs, this covers exactly the hard, expensive queries where prediction is both difficult and valuable. The following proposition makes the guarantee precise. 
+
+Proposition 3 (Probe is pre-target on hard tail). Suppose 
+
+𝑞 is answerable and 𝑤 1 ∈ 𝐿 with 𝑤 1 < 𝑐 (𝑞 ). Then the probe has not reached the target recall: 𝜌 𝑤 1 (𝑞 ) < 𝜏 .
+
+Proof sketch. This follows from (1) . Since 𝑞 is answerable, 
+
+𝑤 1 < 𝑐 (𝑞 ) places 𝑤 1 below the minimum width that reaches 𝜏 .Therefore 𝜌 𝑤 1 (𝑞 ) < 𝜏 . The complete proof can be found in Appen-dix A.3. □
+
+Algorithm 2 does not name any specific measure; it only takes a quantity 𝑚 (𝑞 ) and scores it. Exact LID, hubness, Steiner-hardness, and flux are each such a quantity, computed on their own and then handed to the same protocol. The pre-target guarantee of Proposition 3 is therefore not unique to flux either. Its proof depends only on the condition 𝑤 1 < 𝑐 (𝑞 ), not on what 𝑚 (𝑞 ) computes. It holds for every measure scored under this protocol. We close this section with the bound promised in §3.2: what it costs when the estimator serves a wider beam than a query needs. The bound uses the same ladder 𝐿 and cost 𝑐 (𝑞 ) defined above. 
+
+Proposition 4 (Extra work from too-wide beam is bounded by ladder granularity). Let 𝐿 = {𝑏 1 < · · · < 𝑏 𝑚 } and fix a query 
+
+𝑞 with 𝑐 (𝑞 ) = 𝑏 𝑘 . If the estimator serves rung 𝑏 𝑘 +𝑗 for some 𝑗 ≥ 0, the excess work relative to serving at 𝑐 (𝑞 ) satisfies 
+
+𝑊 (𝑏 𝑘 +𝑗 ) − 𝑊 (𝑐 (𝑞 )) ≤ 𝑗 · max 
+
+> 1≤𝑖 <𝑚
+
+ 𝑊 (𝑏 𝑖 +1) − 𝑊 (𝑏 𝑖 ).
+
+Proof sketch. Telescope 𝑊 (𝑏 𝑘 +𝑗 ) − 𝑊 (𝑏 𝑘 ) into 𝑗 consecutive rung-to-rung differences and bound each by the largest such gap on 𝐿 . The complete proof can be found in Appendix A.4. □
+
+> 5Dongfang Zhao (dzhao@uw.edu)
+
+Table 1: Four evaluation datasets, ordered by mean LID.                     
+
+> Dataset Domain No. of Queries Dimension Mean LID SIFT [24] image 10 ,000 128 23 .4
+> DEEP [53] image 1,000 256 29 .9
+> SPACEV [43] web text 29 ,316 100 30 .0
+> IMAGENET [9] image 10 ,000 100 39 .6
+
+Table 2: Six hardness measures and availability at query time.                       
+
+> Measure Complexity Ground Truth Query-time Exact LID [2] true 𝑘 -NN needed ✗
+> Hubness (R-𝑘 NN) [41] base R-𝑘 NN needed ✗
+> Steiner-hardness [50] NP-hard needed ✗
+> Distance-based probe [1] one probe no need ✓
+> Online LID estimate [2] one probe no need ✓
+> SHEAF (this work) one probe no need ✓
+
+## 4 Evaluation 4.1 Experimental Setup 
+
+Datasets. We evaluate SHEAF and other measures on four bench-marks (Table 1). They span domains from hand-crafted and deep-learning image features to encoded web text, intrinsic dimensional-ity (mean LID) from 23 to 40 , and ambient dimension from 100 to 
+
+256 . We compute the exact 50-nearest-neighbor set for each query once on the GPU. Every experiment in this paper uses the first 10 of these as ground truth ( 𝑘 =10 ), except one sensitivity setting in §4.5 that uses all 50 to test 𝑘 =50 .
+
+Indexes and cost. Our primary index is CAGRA with nn_descent :
+
+graph_degree 64 , intermediate_graph_degree 128 , squared-L2. To test generality off the GPU, we also build HNSW (hnswlib, 𝑀 =16 ,
+
+ef_construction 200 ) on all four datasets. A query’s cost label is the smallest value on the ladder {16 , 24 , 32 , 64 , 96 , 128 , 192 , 256 , 384 ,
+
+512 } (CAGRA’s itopk or HNSW’s ef ) at which its search reaches the recall target, evaluated at recall@ 10 ≥ 𝜏 for 𝜏 ∈ { 0.90 , 0.95 }.Queries that do not reach the target within the ladder are right-censored (i.e., their cost are beyond the ladder scale) and excluded from the correlation. Under these settings, at 𝜏 =0.90 the right-censored counts for SIFT, DEEP, SPACEV, and IMAGENET are 
+
+0, 0, 127 , and 422 . At 𝜏 =0.95 , they are 40 , 1, 670 , and 1,330 .
+
+Baselines. We compare six per-query hardness measures, laid out in Table 2. Three require ground truth: exact LID [ 2] (the stan-dard geometric proxy, computed from true 𝑘 -NN distances so its ceiling is measured, not an estimator’s), reverse-𝑘 -NN hubness [ 41 ](R-𝑘 NN, the structural proxy), and Steiner-hardness [50] (a recent graph-native measure, an offline ground-truth-dependent refer-ence). Three are computable during the search itself: the distance-based probe (shallow-probe distances and their improvement, stand-ing in for adaptive beam search [ 1]), an online LID estimate (the Hill/MLE estimator [ 2, 19 ] applied to the probe’s own returned distances instead of the true 𝑘 -NN), and SHEAF proposed in this work. SIFT   
+
+> DEEP
+> SPACEV
+> IMAGENET
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> held-out corr.
+> 0.42
+> 0.55 0.53
+> 0.64
+> (a) exact LID
+> LID
+> in-deg
+> in-deg(1)
+> anti-hub
+> BFS
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 0.33
+> 0.25
+> 0.12
+> 0.22 0.20
+> (b) SIFT structure
+
+Figure 2: Static proxies predict the beam only weakly. 
+
+Metrics. Every measure is scored by how well it predicts a query’s cost out of sample. The primary metric is the held-out Pearson correlation with log of the cost label, fit on a random half of the queries and reported on the other half. We summarize it as the flux-over-LID ratio of these correlations. 
+
+Platform. All experiments run on a single Chameleon testbed node with two AMD EPYC 7763 64 -core CPUs ( 256 threads, 503 GB RAM) and one NVIDIA A100 80GB PCIe GPU (driver 560 .35 , CUDA 
+
+12 .6), under Ubuntu 24 .04 (kernel 6.8). The software stack is Python 
+
+3.11 , cuVS 26 .06 with CuPy 14 .1 for CAGRA and the exact GPU 𝑘 -NN, hnswlib 0.8.0 for HNSW, and NumPy 2.4. Figures use Matplotlib 
+
+3.11 . CAGRA and ground-truth 𝑘 -NN run on the GPU, and HNSW runs on the host CPU. 
+
+## 4.2 Static Hardness Proxies 
+
+Exact LID predicts the per-query beam only weakly on real CAGRA. Figure 2(a) shows, per dataset, the held-out correlation of exact LID with the per-query minimum itopk : it ranges from 0.42 (SIFT) to 
+
+0.64 (IMAGENET), never strong, even though the beam itself varies several-fold across datasets (mean minimum itopk from 28 to 118 ). Static graph structure does no better than geometry. On SIFT1M (Figure 2(b)), the in-degree of a query’s true neighbors, its anti-hubness, and its BFS hop distance from the medoid all correlate with cost more weakly than LID (Pearson ≤ 0.25 vs. 0.33 ). Adding every structural feature to a held-out regression on top of LID lifts it only from 0.42 to 0.47 . CAGRA balances node degree at construction, which suppresses the hubness skew on which these features rely. This weakness is not a SIFT1M artifact: held-out, hubness alone predicts the per-query beam with correlation 0.15 to 0.30 across the four datasets, below exact LID on every one of them (Figure 4(a)). We also compare against Steiner-hardness on the one dataset where its NP-hard solve is tractable. Steiner-hardness [ 50 ] scores a query by the minimum cost to answer it on a separate refer-ence graph built by its authors’ own method, not CAGRA, us-ing the query’s ground-truth neighbors and an NP-hard Directed-Steiner-Tree solve (authors’ implementation, SIFT1M). At recall 
+
+0.90 , Steiner-hardness correlates with the per-query beam more strongly than exact LID ( 0.47 vs. 0.34 held out), capturing real struc-ture that geometry alone misses. Answer-set flux (SHEAF) scores higher still ( 0.53 ), computed online without ground truth from the same fixed narrow probe used throughout this paper (Table 3). 
+
+> 6
+
+SHEAF: Self-profiled Hardness Estimation from Answer-set Flux for Predicting Query Hardness in Graph-based ANN Search 
+
+Table 3: On SIFT1M at recall 0.90 , flux scores higher than both the offline Steiner-hardness reference and exact LID. 
+
+Measure availability correlation exact LID offline, true 𝑘 -NN 0.34 Steiner-hardness offline, ground-truth-dependent 0.47 SHEAF (this work) online, ground truth not needed 0.53 
+
+## 4.3 Flux as a Cost Predictor 
+
+Answer-set flux (SHEAF) predicts the per-query beam better than exact LID on every one of the four datasets and at both recall targets (Figure 3). The flux-over-LID ratio in held-out correlation ranges from 1.04 × to 1.55 ×. Flux is never worse than LID. This gain holds even though flux’s own probe stays strictly narrower than the widths that hard queries ultimately need. These margins are stable under resampling: across 50 random half/half splits per dataset, flux’s held-out correlation exceeds exact LID’s on every dataset and both targets by 4.2 to 10 .5 standard errors (paired gap 0.04 to 0.16 ). The advantage is therefore not an artifact of a single split. Exact LID, though, is not the comparison that matters for a running system. It is given the true 𝑘 -NN distances of every query. No deployed system has this quantity. We include exact LID because it is the field’s standard difficulty proxy. Outperforming even this generously-equipped baseline is a sanity check rather than the main objective. The measures that a running system could compute online are the distance-based probe and an online LID estimate. These are the baselines that matter most for a real comparison. The remainder of this subsection will compare SHEAF against these two online measures, and then show that the choice of regressor does not drive the result. The online LID estimate applies the Hill/MLE estimator to the probe’s own returned distances rather than to true neighbors. By contrast, flux outperforms it on all four datasets by 1.25 to 2.0×
+
+in held-out correlation (Figure 4(a)). This margin is wider than flux’s lead over exact LID. The probe’s candidate set is a biased, still-converging sample, and the Hill estimator inherits that bias. This leaves the online estimate weaker than even exact LID (on SIFT1M, 0.27 vs. 0.34 at recall 0.90 and 0.30 vs. 0.42 at recall 0.95 ). The distance-based probe is the churn-free online quantity that an adaptive beam search reads. Flux outperforms it on all four datasets by 1.05 to 1.54 ×. This margin isolates exactly what the top-𝑘 mem-bership churn adds over the probe’s distances alone: it is largest on the low-dimensional datasets ( 1.54 × on SIFT) and thinnest on IMA-GENET ( 1.05 ×), whose high intrinsic dimension leaves the probe’s distances already carrying most of the information (more to be discussed in §4.6). Churn is thus a consistent but dataset-dependent gain over a distance-only probe. The choice of regressor does not drive this result. We refit ℎ with a 𝑘 -nearest-neighbor regressor in place of the ordinary least-squares fit used everywhere else in the paper, which is a nonparametric alternative from a different model family entirely. Flux still outper-forms exact LID on all four datasets and both recall targets under this alternative regressor (Figure 4(b)). SIFT     
+
+> DEEP
+> SPACEV
+> IMAGENET
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> held-out corr. with beam
+> 1.55x
+> 1.25x 1.08x
+> 1.06x
+> (τ= 0.90)
+> LID (incumbent)
+> fl ux (ours)
+> SIFT
+> DEEP
+> SPACEV
+> IMAGENET
+> 1.28x
+> 1.07x 1.09x
+> 1.04x
+> (τ= 0.95)
+
+Figure 3: Flux (purple) outperforms LID (gold) on all four datasets and both recall targets; labels show the ratio. SIFT 
+
+> DEEP
+> SPACEV
+> IMAGENET
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> held-out corr. ( τ = 0.95)
+> (a) all baselines
+> LID
+> hubness
+> online-LID
+> fl ux (ours)
+> SIFT
+> DEEP
+> SPACEV
+> IMAGENET
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> (b) regressor choice
+> LID (ref.)
+> fl ux (OLS)
+> flux ( k-NN reg.)
+
+Figure 4: (a) Flux (SHEAF) outperforms LID, hubness, and online LID at recall 0.95 ; (b) The same under a 𝑘 -NN regressor. SIFT      
+
+> DEEP
+> SPACEV
+> IMAGENET
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> held-out corr. with beam ( τ = 0.95)
+> 1.28x 1.07x 1.09x
+> 1.04x
+> (a) cuVS CAGRA (GPU)
+> SIFT
+> DEEP
+> SPACEV
+> IMAGENET
+> 1.13x 1.06x 1.11x
+> 1.07x
+> (b) HNSW (CPU)
+> LID (incumbent) fl ux (ours)
+
+Figure 5: At recall 0.95 , all four datasets, on (a) CAGRA and (b) HNSW; labels show the flux-over-LID ratio. 
+
+## 4.4 Generalization Across Index Architectures 
+
+Flux (SHEAF) outperforming LID is a property of graph-based search, not of CAGRA or of GPUs. To separate the two, we repeat the head-to-head on HNSW, a CPU graph index whose construction, unlike CAGRA’s, does not balance node degree. We use HNSW’s 
+
+ef in place of itopk and otherwise the identical protocol: same 𝑘 ,exact LID, the same fixed probe ( 𝑤 0=16 , 𝑤 1=24 ), beam ladder, and so forth. Flux outperforms LID on HNSW on all four datasets at recall tar-get 0.95 (Figure 5), by 1.06 to 1.13 × in held-out correlation. To verify that this phenomenon is extensible beyond a single target recall, we also compare the two measures at both recall 0.90 and recall 0.95 .Figure 6 shows the held-out correlation of flux and LID on both CAGRA and HNSW, at both recall targets. Flux outperforms LID on both architectures and both targets. This is consistent with LID retaining more relevance on a graph whose degree is imbalanced. 
+
+7Dongfang Zhao (dzhao@uw.edu) recall  
+
+> 0.90
+> recall
+> 0.95
+> held-out corr.
+> with min beam
+> 0.35
+> 0.40
+> 0.52 0.51
+
+cuVS CAGRA (GPU)   
+
+> recall
+> 0.90
+> recall
+> 0.95
+> 0.46 0.48
+> 0.52 0.54
+
+HNSW (CPU)  
+
+> LID fl ux
+
+Figure 6: Held-out correlation on CAGRA and HNSW. s1 s2 s3 s4 s5 s6 s7                                           
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> held-out corr.
+> (SIFT) corr.
+> s1 s2 s3 s4 s5 s6 s7
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> (DEEP) corr.
+> s1 s2 s3 s4 s5 s6 s7
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> (SPACEV) corr.
+> s1 s2 s3 s4 s5 s6 s7
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> (IMAGENET) corr.
+> LID
+> fl ux
+> s1 s2 s3 s4 s5 s6 s7
+> 1.00
+> 1.25
+> 1.50
+> 1.75
+> 2.00
+> 2.25
+> fl ux / LID
+> (SIFT) ratio
+> s1 s2 s3 s4 s5 s6 s7
+> 1.00
+> 1.25
+> 1.50
+> 1.75
+> 2.00
+> 2.25
+> (DEEP) ratio
+> s1 s2 s3 s4 s5 s6 s7
+> 1.00
+> 1.25
+> 1.50
+> 1.75
+> 2.00
+> 2.25
+> (SPACEV) ratio
+> s1 s2 s3 s4 s5 s6 s7
+> 1.00
+> 1.25
+> 1.50
+> 1.75
+> 2.00
+> 2.25
+> (IMAGENET) ratio
+
+Figure 7: Flux/SHEAF (purple) outperforms LID (gold) across seven settings (top); the ratio stays above parity (bottom). 
+
+## 4.5 Parameter Sensitivity 
+
+On all datasets, we vary seven settings, each changing one knob off the default probe: s1 is the default itself ( 𝑤 =(16 , 24 ), 𝜏 =0.95 , 𝑘 =10 ,full ladder); s2 widens the probe to 𝑤 =(16 , 32 ); s3 to 𝑤 =(24 , 32 );s4 to 𝑤 =(16 , 48 ); s5 lowers the recall target to 𝜏 =0.90 ; s6 raises 𝑘 
+
+to 50 with 𝑤 =(64 , 96 ); and s7 coarsens the itopk ladder. Across all seven settings (Figure 7), flux (SHEAF) predicts the per-query beam better than exact LID. The ratio ranges from 1.05 × to 2.03 ×
+
+and never drops to parity. The flux-over-LID advantage is therefore stable across every probe and evaluation knob varied here, not an artifact of a specific setting on any one dataset. The default setting is not selected for the largest advantage. Widening the probe’s second step to 𝑤 =(16 , 48 ) or grading re-call at 𝑘 =50 increases the margin on all four datasets. The default 
+
+𝑤 =(16 , 24 ) keeps the probe at the low end of the cost ladder. 
+
+## 4.6 Ablation Study 
+
+Answer-set churn is the component that carries most of flux’s prediction. On its own, churn already predicts the per-query beam about as well as exact LID, and better on the lower-dimensional datasets (Figure 8). It dominates the 𝑘 -th distance improvement in every case. The probe’s raw distance profile adds a complementary increment, largest on the highest-dimensional dataset (IMAGENET). The full flux predictor is the strongest on all four datasets. The churn term requires the shallow probe to overlap the oper-ating beam, so that widening the probe moves some queries’ top-𝑘 LID 
+
+> churn
+> impr.
+> dist
+> fl ux
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> held-out corr.
+
+SIFT 
+
+> LID
+> churn
+> impr.
+> dist
+> fl ux
+
+DEEP 
+
+> LID
+> churn
+> impr.
+> dist
+> fl ux
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> held-out corr.
+
+SPACEV 
+
+> LID
+> churn
+> impr.
+> dist
+> fl ux
+
+IMAGENET 
+
+Figure 8: Churn leads the flux components; full flux/SHEAF (purple) is best on all four datasets. 
+
+before the target is reached. All four datasets satisfy this: their per-query beams sit within reach of the 16 → 24 probe, which makes churn well-defined and informative across the panel. 
+
+## 5 Conclusion 
+
+This paper presented SHEAF, a self-profiled predictor of per-query cost in graph-based approximate nearest neighbor search. Answer-set flux reads the churn of a query’s own top-𝑘 result across a shal-low probe. This churn provably bounds the recall that a query can still gain over that probe interval. A self-profiling estimator turns flux into a per-query beam prediction at a fixed, index-agnostic probe cost. A fixed-probe evaluation protocol scores each measure over all answerable queries and provides a pre-target guarantee on the hard tail. Our extensive evaluation spans four domain-diverse datasets, five baseline measures including Steiner-hardness, and two architectures, namely CAGRA on GPU and HNSW on CPU. Across all of them, flux predicts the per-query beam better than exact local intrinsic dimensionality. SHEAF thus turns query hard-ness from a static geometric guess into a cheap, online quantity that an adaptive per-query serving policy can act on directly. The directions that SHEAF opens concern the hardness measure rather than any specific system. A first direction is to enrich the measure itself: a probe exposes more of a query’s early behavior than the top-𝑘 churn and distance improvement that flux reads. Any such richer feature could then be scored under the same fixed-probe protocol without new evaluation machinery. A second direction extends validation beyond the four datasets here to further graph architectures, larger workloads, and production scale. Finally, the predictor could drive an adaptive serving policy that gives each query its own beam width: small for the many easy queries, large only for the hard tail. Because every query first runs the probe, such a policy is worthwhile only when the beam that it saves on the easy queries outweighs that probe cost across the workload. 
+
+8SHEAF: Self-profiled Hardness Estimation from Answer-set Flux for Predicting Query Hardness in Graph-based ANN Search 
+
+## Acknowledgments 
+
+Results presented in this paper were obtained using the Chameleon testbed supported by the National Science Foundation. 
+
+Disclosure of AI Usage. Source code and manuscript editing were assisted by Copilot and Claude. All key components of this work, in-cluding the design and analysis of the flux predictor, the evaluation methodology, and the interpretation of results, were developed and executed by the authors. The authors have verified the accuracy and integrity of the content to the best of their knowledge and take full responsibility for the final manuscript. 
+
+## References 
+
+[1] Yousef Al-Jazzazi, Haya Diwan, Jinrui Gou, Cameron Musco, Christopher Musco, and Torsten Suel. 2025. Distance Adaptive Beam Search for Prov-ably Accurate Graph-Based Nearest Neighbor Search. arXiv:2505.15636. arXiv:2505.15636 [cs.DS] [2] Laurent Amsaleg, Oussama Chelly, Teddy Furon, Stéphane Girard, Michael E. Houle, Ken ichi Kawarabayashi, and Michael Nett. 2015. Estimating Local In-trinsic Dimensionality. In Proceedings of the 21th ACM SIGKDD International Conference on Knowledge Discovery and Data Mining (KDD) . ACM, 29–38. [3] Alexandr Andoni, Piotr Indyk, Thijs Laarhoven, Ilya Razenshteyn, and Ludwig Schmidt. 2015. Practical and Optimal LSH for Angular Dis-tance. In Advances in Neural Information Processing Systems , C. Cortes, N. Lawrence, D. Lee, M. Sugiyama, and R. Garnett (Eds.), Vol. 28. Curran Associates, Inc. https://proceedings.neurips.cc/paper_files/paper/2015/file/ 2823f4797102ce1a1aec05359cc16dd9-Paper.pdf [4] Martin Aumüller and Matteo Ceccarello. 2019. The Role of Local Intrinsic Dimensionality in Benchmarking Nearest Neighbor Search. In Similarity Search and Applications (SISAP) (Lecture Notes in Computer Science, Vol. 11807) . Springer, 113–127. [5] Dmitry Baranchuk, Dmitry Persiyanov, Anton Sinitsin, and Artem Babenko. 2019. Learning to Route in Similarity Graphs. In Proceedings of the 36th International Conference on Machine Learning (ICML) (PMLR, Vol. 97) .[6] Jon Louis Bentley. 1975. Multidimensional binary search trees used for associative searching. Commun. ACM 18, 9 (Sept. 1975), 509–517. doi:10.1145/361002.361007 [7] Qi Chen, Bing Zhao, Haidong Wang, Mingqin Li, Chuanjie Liu, Zengzhong Li, Mao Yang, and Jingdong Wang. 2021. SPANN: Highly-efficient Billion-scale Ap-proximate Nearest Neighbor Search. In Advances in Neural Information Processing Systems (NeurIPS) .[8] Mayur Datar, Nicole Immorlica, Piotr Indyk, and Vahab S. Mirrokni. 2004. Locality-sensitive hashing scheme based on p-stable distributions. In Proceedings of the Twentieth Annual Symposium on Computational Geometry (Brooklyn, New York, USA) (SCG ’04) . Association for Computing Machinery, New York, NY, USA, 253–262. doi:10.1145/997817.997857 [9] Jia Deng, Wei Dong, Richard Socher, Li-Jia Li, Kai Li, and Li Fei-Fei. 2009. Ima-geNet: A Large-Scale Hierarchical Image Database. In 2009 IEEE Conference on Computer Vision and Pattern Recognition (CVPR) . 248–255. doi:10.1109/CVPR. 2009.5206848 [10] Wei Dong, Charikar Moses, and Kai Li. 2011. Efficient k-nearest neighbor graph construction for generic similarity measures. In Proceedings of the 20th Interna-tional Conference on World Wide Web (Hyderabad, India) (WWW ’11) . Association for Computing Machinery, New York, NY, USA, 577–586. doi:10.1145/1963405. 1963487 [11] Matthijs Douze, Alexandr Guzhva, Chengqi Deng, Jeff Johnson, Gergely Szilvasy, Pierre-Emmanuel Mazaré, Maria Lomeli, Lucas Hosseini, and Hervé Jégou. 2025. The Faiss library. arXiv:2401.08281 [cs.LG] https://arxiv.org/abs/2401.08281 [12] Cong Fu and Deng Cai. 2016. EFANNA : An Extremely Fast Approximate Nearest Neighbor Search Algorithm Based on kNN Graph. arXiv:1609.07228 [cs.CV] https://arxiv.org/abs/1609.07228 [13] Cong Fu, Chao Xiang, Changxu Wang, and Deng Cai. 2019. Fast approximate nearest neighbor search with the navigating spreading-out graph. Proc. VLDB Endow. 12, 5 (Jan. 2019), 461–474. doi:10.14778/3303753.3303754 [14] Jianyang Gao and Cheng Long. 2024. RaBitQ: Quantizing High-Dimensional Vectors with a Theoretical Error Bound for Approximate Nearest Neighbor Search. Proc. ACM Manag. Data 2, 3, Article 167 (May 2024), 27 pages. doi:10. 1145/3654970 [15] Tiezheng Ge, Kaiming He, Qifa Ke, and Jian Sun. 2014. Optimized Product Quantization. IEEE Trans. Pattern Anal. Mach. Intell. 36, 4 (April 2014), 744–755. doi:10.1109/TPAMI.2013.240 [16] Siddharth Gollapudi, Neel Karia, Varun Sivashankar, Ravishankar Krishnaswamy, Nikit Begwani, Swapnil Raz, Yiyong Lin, Yin Zhang, Neelam Mahapatro, Premku-mar Srinivasan, Amit Singh, and Harsha Vardhan Simhadri. 2023. Filtered-DiskANN: Graph Algorithms for Approximate Nearest Neighbor Search with Filters. In Proceedings of the ACM Web Conference 2023 (Austin, TX, USA) (WWW ’23) . Association for Computing Machinery, New York, NY, USA, 3406–3416. doi:10.1145/3543507.3583552 [17] Ruiqi Guo, Philip Sun, Erik Lindgren, Quan Geng, David Simcha, Felix Chern, and Sanjiv Kumar. 2020. Accelerating Large-Scale Inference with Anisotropic Vector Quantization. In Proceedings of the 37th International Conference on Machine Learning (Proceedings of Machine Learning Research, Vol. 119) , Hal Daumé III and Aarti Singh (Eds.). PMLR, 3887–3896. https://proceedings.mlr.press/v119/ guo20h.html [18] Ben Harwood and Tom Drummond. 2016. FANNG: Fast Approximate Nearest Neighbour Graphs. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR) .[19] Michael E. Houle. 2017. Local Intrinsic Dimensionality I: An Extreme-Value-Theoretic Foundation for Similarity Applications. In Similarity Search and Appli-cations (SISAP) (Lecture Notes in Computer Science, Vol. 10609) . Springer, 64–79. [20] Zhiyuan Hua, Qiji Mo, Zebin Yao, Lixiao Cui, Xiaoguang Liu, Gang Wang, Zijing Wei, Xinyu Liu, Tianxiao Tang, Shaozhi Liu, and Lin Qu. 2025. Dynamically Detect and Fix Hardness for Efficient Approximate Nearest Neighbor Search. arXiv:2510.22316 [cs.DB] To appear, SIGMOD 2026. [21] Piotr Indyk and Rajeev Motwani. 1998. Approximate nearest neighbors: towards removing the curse of dimensionality. In Proceedings of the Thirtieth Annual ACM Symposium on Theory of Computing (Dallas, Texas, USA) (STOC ’98) . Association for Computing Machinery, New York, NY, USA, 604–613. doi:10.1145/276698. 276876 [22] Suhas Jayaram Subramanya, Fnu Devvrit, Harsha Vardhan Simhadri, Ravishankar Krishnawamy, and Rohan Kadekodi. 2019. DiskANN: Fast Accurate Billion-point Nearest Neighbor Search on a Single Node. In Advances in Neural Information Pro-cessing Systems , H. Wallach, H. Larochelle, A. Beygelzimer, F. d 'Alché-Buc, E. Fox, and R. Garnett (Eds.), Vol. 32. Curran Associates, Inc. https://proceedings.neurips. cc/paper_files/paper/2019/file/09853c7fb1d3f8ee67a61b6bf4a7f8e6-Paper.pdf [23] Mengxu Jiang, Zhi Yang, Fangyuan Zhang, Guanhao Hou, Jieming Shi, Wenchao Zhou, Feifei Li, and Sibo Wang. 2025. DIGRA: A Dynamic Graph Indexing for Approximate Nearest Neighbor Search with Range Filter. Proc. ACM Manag. Data 3, 3, Article 148 (June 2025), 26 pages. doi:10.1145/3725399 [24] Herve Jégou, Matthijs Douze, and Cordelia Schmid. 2011. Product Quantization for Nearest Neighbor Search. IEEE Transactions on Pattern Analysis and Machine Intelligence 33, 1 (2011), 117–128. doi:10.1109/TPAMI.2010.57 [25] Sanjeev Khanna, Ashwin Padaki, and Erik Waingarten. 2025. Sparse Navigable Graphs for Nearest Neighbor Search: Algorithms and Hardness. arXiv:2507.14060 [cs.DS] [26] Patrick Lewis, Ethan Perez, Aleksandra Piktus, Fabio Petroni, Vladimir Karpukhin, Naman Goyal, Heinrich Küttler, Mike Lewis, Wen-tau Yih, Tim Rocktäschel, Sebastian Riedel, and Douwe Kiela. 2020. Retrieval-augmented generation for knowledge-intensive NLP tasks. In Proceedings of the 34th Inter-national Conference on Neural Information Processing Systems (Vancouver, BC, Canada) (NIPS ’20) . Curran Associates Inc., Red Hook, NY, USA, Article 793, 16 pages. [27] Binhong Li, Xiao Yan, and Shangqi Lu. 2025. Fast-Convergent Proximity Graphs for Approximate Nearest Neighbor Search. arXiv:2510.05975 [cs.DB] To appear, SIGMOD 2026. [28] Conglong Li, Minjia Zhang, David G. Andersen, and Yuxiong He. 2020. Im-proving Approximate Nearest Neighbor Search through Learned Adaptive Early Termination. In Proceedings of the 2020 ACM SIGMOD International Conference on Management of Data . ACM, 2539–2554. [29] Zhonggen Li, Xiangyu Ke, Yifan Zhu, Bocheng Yu, Baihua Zheng, and Yunjun Gao. 2025. Scalable Graph Indexing using GPUs for Approximate Nearest Neighbor Search. Proc. ACM Manag. Data 3, 6, Article 360 (Dec. 2025), 27 pages. doi:10. 1145/3769825 [30] Qin Lv, William Josephson, Zhe Wang, Moses Charikar, and Kai Li. 2007. Multi-probe LSH: efficient indexing for high-dimensional similarity search. In Pro-ceedings of the 33rd International Conference on Very Large Data Bases (Vienna, Austria) (VLDB ’07) . VLDB Endowment, 950–961. [31] Yury Malkov, Alexander Ponomarenko, Andrey Logvinov, and Vladimir Krylov. 2014. Approximate nearest neighbor algorithm based on navigable small world graphs. Information Systems 45 (2014), 61–68. doi:10.1016/j.is.2013.10.006 [32] Yu A. Malkov and D. A. Yashunin. 2020. Efficient and Robust Approximate Nearest Neighbor Search Using Hierarchical Navigable Small World Graphs. 
+
+IEEE Trans. Pattern Anal. Mach. Intell. 42, 4 (April 2020), 824–836. doi:10.1109/ TPAMI.2018.2889473 [33] Magdalen Dobson Manohar, Zheqi Shen, Guy Blelloch, Laxman Dhulipala, Yan Gu, Harsha Vardhan Simhadri, and Yihan Sun. 2024. ParlayANN: Scalable and Deterministic Parallel Graph-Based Approximate Nearest Neighbor Search Algorithms. In Proceedings of the 29th ACM SIGPLAN Annual Symposium on Principles and Practice of Parallel Programming (Edinburgh, United Kingdom) 9Dongfang Zhao (dzhao@uw.edu) 
+
+(PPoPP ’24) . Association for Computing Machinery, New York, NY, USA, 270–285. doi:10.1145/3627535.3638475 [34] Julieta Martinez, Shobhit Zakhmi, Holger H. Hoos, and James J. Little. 2018. LSQ++: Lower running time and higher recall in multi-codebook quantization. In Proceedings of the European Conference on Computer Vision (ECCV) .[35] Marius Muja and David G. Lowe. 2014. Scalable Nearest Neighbor Algorithms for High Dimensional Data . IEEE Transactions on Pattern Analysis & Machine Intelligence 36, 11 (Nov. 2014), 2227–2240. doi:10.1109/TPAMI.2014.2321376 [36] Naoki Ono and Yusuke Matsui. 2023. Relative NN-Descent: A Fast Index Con-struction for Graph-Based Approximate Nearest Neighbor Search. In Proceedings of the 31st ACM International Conference on Multimedia (Ottawa ON, Canada) 
+
+(MM ’23) . Association for Computing Machinery, New York, NY, USA, 1659–1667. doi:10.1145/3581783.3612290 [37] Hiroyuki Ootomo, Akira Naruse, Corey Nolet, Ray Wang, Tamas Feher, and Yong Wang. 2024. CAGRA: Highly Parallel Graph Construction and Approximate Nearest Neighbor Search for GPUs . In 2024 IEEE 40th International Conference on Data Engineering (ICDE) . IEEE Computer Society, Los Alamitos, CA, USA, 4236–4247. doi:10.1109/ICDE60146.2024.00323 [38] Yu Pan, Jianxin Sun, and Hongfeng Yu. 2023. LM-DiskANN: Low Memory Foot-print in Disk-Native Dynamic Graph-Based ANN Indexing. In IEEE International Conference on Big Data, BigData 2023, Sorrento, Italy, December 15-18, 2023 , Jingrui He, Themis Palpanas, Xiaohua Hu, Alfredo Cuzzocrea, Dejing Dou, Dominik Slezak, Wei Wang, Aleksandra Gruca, Jerry Chun-Wei Lin, and Rakesh Agrawal (Eds.). IEEE, 5987–5996. doi:10.1109/BIGDATA59044.2023.10386517 [39] Liana Patel, Peter Kraft, Carlos Guestrin, and Matei Zaharia. 2024. ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Struc-tured Data. Proc. ACM Manag. Data 2, 3, Article 120 (May 2024), 27 pages. doi:10.1145/3654923 [40] Liudmila Prokhorenkova and Aleksandr Shekhovtsov. 2020. Graph-based Nearest Neighbor Search: From Practice to Theory. In Proceedings of the 37th International Conference on Machine Learning (ICML) (PMLR, Vol. 119) .[41] Milos Radovanović, Alexandros Nanopoulos, and Mirjana Ivanović. 2010. Hubs in Space: Popular Nearest Neighbors in High-Dimensional Data. Journal of Machine Learning Research 11 (2010), 2487–2531. [42] Jiancheng Ruan, Tingyang Chen, Renchi Yang, Xiangyu Ke, and Yunjun Gao. 2025. Empowering Graph-based Approximate Nearest Neighbor Search with Adaptive Awareness Capabilities. In Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining V.2 (Toronto ON, Canada) (KDD ’25) .Association for Computing Machinery, New York, NY, USA, 2444–2454. doi:10. 1145/3711896.3736930 [43] Harsha Vardhan Simhadri, George Williams, Martin Aumüller, Matthijs Douze, Artem Babenko, Dmitry Baranchuk, Qi Chen, Lucas Hosseini, Ravishankar Kr-ishnaswamy, Gopal Srinivasa, Suhas Jayaram Subramanya, and Jingdong Wang. 2021. Results of the NeurIPS’21 Challenge on Billion-Scale Approximate Nearest Neighbor Search. In Proceedings of the NeurIPS 2021 Competitions and Demonstra-tions Track (Proceedings of Machine Learning Research, Vol. 176) . PMLR, 177–189. [44] Aditi Singh, Suhas Jayaram Subramanya, Ravishankar Krishnaswamy, and Har-sha Vardhan Simhadri. 2021. FreshDiskANN: A Fast and Accurate Graph-Based ANN Index for Streaming Similarity Search. arXiv:2105.09613 [cs.IR] https://arxiv.org/abs/2105.09613 [45] Javier Vargas Muñoz, Marcos A. Gonçalves, Zanoni Dias, and Ricardo da S. Torres. 2019. Hierarchical Clustering-Based Graphs for Large Scale Approximate Nearest Neighbor Search. Pattern Recogn. 96, C (Dec. 2019), 10 pages. doi:10.1016/j.patcog. 2019.106970 [46] Karthik Venkatasubba, Saim Khan, Somesh Singh, Harsha Vardhan Simhadri, and Jyothi Vedurada. 2025. BANG: Billion-Scale Approximate Nearest Neighbour Search Using a Single GPU. IEEE Transactions on Big Data 11, 6 (2025), 3142–3157. doi:10.1109/TBDATA.2025.3581085 [47] Hui Wang, Wan-Lei Zhao, Xiangxiang Zeng, and Jianye Yang. 2021. Fast k-NN Graph Construction by GPU based NN-Descent. In Proceedings of the 30th ACM International Conference on Information & Knowledge Management (Virtual Event, Queensland, Australia) (CIKM ’21) . Association for Computing Machinery, New York, NY, USA, 1929–1938. doi:10.1145/3459637.3482344 [48] Jianguo Wang, Xiaomeng Yi, Rentong Guo, Hai Jin, Peng Xu, Shengjun Li, Xi-angyu Wang, Xiangzhou Guo, Chengming Li, Xiaohai Xu, Kun Yu, Yuxing Yuan, Yinghao Zou, Jiquan Long, Yudong Cai, Zhenxiang Li, Zhifeng Zhang, Yihua Mo, Jun Gu, Ruiyi Jiang, Yi Wei, and Charles Xie. 2021. Milvus: A Purpose-Built Vector Data Management System. In Proceedings of the 2021 International Conference on Management of Data (Virtual Event, China) (SIGMOD ’21) . Association for Com-puting Machinery, New York, NY, USA, 2614–2627. doi:10.1145/3448016.3457550 [49] Mengzhao Wang, Weizhi Xu, Xiaomeng Yi, Songlin Wu, Zhangyang Peng, Xi-angyu Ke, Yunjun Gao, Xiaoliang Xu, Rentong Guo, and Charles Xie. 2024. Starling: An I/O-Efficient Disk-Resident Graph Index Framework for High-Dimensional Vector Similarity Search on Data Segment. Proc. ACM Manag. Data 2, 1, Article 14 (March 2024), 27 pages. doi:10.1145/3639269 [50] Zeyu Wang, Qitong Wang, Xiaoxing Cheng, Peng Wang, Themis Palpanas, and Wei Wang. 2024. Steiner-Hardness: A Query Hardness Measure for Graph-Based ANN Indexes. Proc. VLDB Endow. 17, 13 (2024), 4668–4682. doi:10.14778/3704965. 3704974 [51] Chuangxian Wei, Bin Wu, Sheng Wang, Renjie Lou, Chaoqun Zhan, Feifei Li, and Yuanzhe Cai. 2020. AnalyticDB-V: a hybrid analytical engine towards query fusion for structured and unstructured data. Proc. VLDB Endow. 13, 12 (Aug. 2020), 3152–3165. doi:10.14778/3415478.3415541 [52] Yuming Xu, Hengyu Liang, Jin Li, Shuotao Xu, Qi Chen, Qianxi Zhang, Cheng Li, Ziyue Yang, Fan Yang, Yuqing Yang, Peng Cheng, and Mao Yang. 2023. SPFresh: Incremental In-Place Update for Billion-Scale Vector Search. In Proceedings of the 29th Symposium on Operating Systems Principles (Koblenz, Germany) (SOSP ’23) .Association for Computing Machinery, New York, NY, USA, 545–561. doi:10. 1145/3600006.3613166 [53] Artem Babenko Yandex and Victor Lempitsky. 2016. Efficient Indexing of Billion-Scale Datasets of Deep Descriptors. In 2016 IEEE Conference on Computer Vision and Pattern Recognition (CVPR) . 2055–2063. doi:10.1109/CVPR.2016.226 [54] Kaixiang Yang, Hongya Wang, Bo Xu, Wei Wang, Yingyuan Xiao, Ming Du, and Junfeng Zhou. 2021. Tao: A Learning Framework for Adaptive Nearest Neighbor Search using Static Features Only. arXiv:2110.00696. arXiv:2110.00696 [cs.DB] [55] Rex Ying, Ruining He, Kaifeng Chen, Pong Eksombatchai, William L. Hamilton, and Jure Leskovec. 2018. Graph Convolutional Neural Networks for Web-Scale Recommender Systems. In Proceedings of the 24th ACM SIGKDD International Conference on Knowledge Discovery & Data Mining (London, United Kingdom) 
+
+(KDD ’18) . Association for Computing Machinery, New York, NY, USA, 974–983. doi:10.1145/3219819.3219890 [56] Qianxi Zhang, Shuotao Xu, Qi Chen, Guoxin Sui, Jiadong Xie, Zhizhen Cai, Yaoqi Chen, Yinxuan He, Yuqing Yang, Fan Yang, Mao Yang, and Lidong Zhou. 2023. VBASE: Unifying Online Vector Similarity Search and Relational Queries via Relaxed Monotonicity. In 17th USENIX Symposium on Operating Systems Design and Implementation (OSDI 23) . USENIX Association, Boston, MA, 377–395. https://www.usenix.org/conference/osdi23/presentation/zhang-qianxi [57] Dongfang Zhao. 2026. SIVF: GPU-Resident IVF Index for Streaming Vector Ana-lytics. In Proceedings of the 35th International Symposium on High-Performance Parallel and Distributed Computing (HPDC ’26) . Association for Computing Ma-chinery, New York, NY, USA, 31–44. doi:10.1145/3806645.3807575 [58] Weijie Zhao, Shulong Tan, and Ping Li. 2020. SONG: Approximate Near-est Neighbor Search on GPU. In 36th IEEE International Conference on Data Engineering, ICDE 2020, Dallas, TX, USA, April 20-24, 2020 . IEEE, 1033–1044. doi:10.1109/ICDE48307.2020.00094 [59] Yifan Zhu, Ruiyao Ma, Baihua Zheng, Xiangyu Ke, Lu Chen, and Yunjun Gao. 2024. GTS: GPU-based Tree Index for Fast Similarity Search. Proc. ACM Manag. Data 2, 3, Article 142 (May 2024), 27 pages. doi:10.1145/3654945 10 SHEAF: Self-profiled Hardness Estimation from Answer-set Flux for Predicting Query Hardness in Graph-based ANN Search 
+
+## A Appendix: Proofs and Additional Remarks A.1 Churn bounds recall change over probe interval 
+
+Proposition 1. For any query and widths 𝑤 0 < 𝑤 1 with |𝑅 0 | = |𝑅 1 | = 𝑘 ,
+
+𝜌 𝑤 1 (𝑞 ) − 𝜌 𝑤 0 (𝑞 ) ≤ | 𝑅 0△𝑅 1 |/( 2𝑘 ) = 𝜒 (𝑞 ).
+
+Proof. Fix a query 𝑞 and widths 𝑤 0 < 𝑤 1, and write 𝑅 0, 𝑅 1 for the returned top-𝑘 sets with |𝑅 0 | = |𝑅 1 | = 𝑘 , 𝑁 for the true 𝑘 -NN set, and 𝜌 𝑖 = |𝑅 𝑖 ∩ 𝑁 |/ 𝑘 . Let 𝑎 = |𝑅 0 ∩ 𝑅 1 |. Since both sets have size 
+
+𝑘 ,
+
+|𝑅 1 \ 𝑅 0 | = |𝑅 0 \ 𝑅 1 | = 𝑘 − 𝑎, |𝑅 0△𝑅 1 | = 2(𝑘 − 𝑎 ).
+
+Split the intersections with 𝑁 along the common part, 
+
+|𝑅 1 ∩ 𝑁 | − | 𝑅 0 ∩ 𝑁 | = (𝑅 1 \ 𝑅 0) ∩ 𝑁 − (𝑅 0 \ 𝑅 1) ∩ 𝑁 ,
+
+because the shared elements 𝑅 0 ∩ 𝑅 1 contribute the same count to each side and cancel. Each term on the right lies in [0, 𝑘 − 𝑎 ]; their difference is therefore at most 𝑘 − 𝑎 in absolute value: 
+
+|𝑅 1 ∩ 𝑁 | − | 𝑅 0 ∩ 𝑁 | ≤ 𝑘 − 𝑎 = 12 |𝑅 0△𝑅 1 |.
+
+Dividing by 𝑘 yields |𝜌 𝑤 1 − 𝜌 𝑤 0 | ≤ | 𝑅 0△𝑅 1 |/( 2𝑘 ) = 𝜒 (𝑞 ). Equality holds exactly when every element that enters the answer is a true neighbor and every element that leaves is not (or vice versa), i.e., when all churn is aligned with 𝑁 . In particular 𝜒 (𝑞 ) = 0 ⇒ 𝜌 𝑤 1 =
+
+𝜌 𝑤 0 : a stable answer set certifies that recall has plateaued across the probe. □
+
+## A.2 Fixed-cost, index-agnostic estimation 
+
+Proposition 2. With 𝑊 (𝑤 ) the per-query search work at width 𝑤 ,nondecreasing in 𝑤 : (i) the estimator is well defined for any ANN index exposing a width-parameterized top-𝑘 , regardless of 𝑊 ; and (ii) if in addition 𝑊 (𝑤 ) = Θ(𝑤 ), a linear-cost condition that both CAGRA’s itopk search and HNSW’s ef search satisfy, its probe cost is 
+
+𝑊 (𝑤 1) = Θ(𝑤 1) per query, independent of 𝑐 (𝑞 ). The relative overhead 
+
+𝑊 (𝑤 1)/ 𝑊 (𝑐 (𝑞 )) = Θ(𝑤 1/𝑐 (𝑞 )) therefore tends to 0 on the hard tail 
+
+𝑐 (𝑞 ) ≫ 𝑤 1.
+
+Proof. Write 𝑊 (𝑤 ) for the per-query work of a width-𝑤 search, measured in node-distance evaluations. Claim (i) holds for any non-decreasing 𝑊 . Claim (ii) additionally assumes a bounded-candidate-list search model: the search maintains an internal candidate buffer of size Θ(𝑤 ); each step expands one candidate to its fixed out-degree neighbors, an Θ(1) operation. Under this model 𝑊 (𝑤 ) = Θ(𝑤 ).CAGRA’s itopk search satisfies this model directly: the candi-date buffer has size Θ(𝑤 ) and each iteration does Θ(1) expansions. HNSW’s ef search has the same structure: the dynamic candidate list is bounded by ef = 𝑤 , and each visited node expands to a fixed out-degree 𝑀 (a construction-time constant, 𝑀 =16 in our setup); its work is therefore likewise Θ(𝑤 ). This is a structural argument about the search procedure, not a measured timing curve; we do not report wall-clock or node-visit counts against 𝑤 for either index. For (i), recall that the feature map 𝜙 (𝑞 ) in Eq. (3) depends only on 
+
+𝑅 𝑤 0 (𝑞 ), 𝑅 𝑤 1 (𝑞 ) and their 𝑘 -th/mean returned distances. Every one of these is part of the output of a top-𝑘 search at a specified width, which any width-parameterized ANN index exposes; no graph internals, distance cache, or index-specific state is read. Hence the estimator is well defined on any such index, and the identical 𝜙 and predictor ℎ apply to CAGRA and to HNSW. For (ii), the probe runs two searches, at 𝑤 0 and 𝑤 1, costing 
+
+𝑊 (𝑤 0) + 𝑊 (𝑤 1) = Θ(𝑤 1) since 𝑤 0 < 𝑤 1, while forming 𝜙 and evaluating ℎ is 𝑂 (1) arithmetic. This budget is a constant in the query’s true difficulty. A query of cost 𝑐 (𝑞 ) served at its required width pays 𝑊 (𝑐 (𝑞 )) = Θ(𝑐 (𝑞 )) . The relative overhead is therefore 
+
+𝑊 (𝑤 1)/ 𝑊 (𝑐 (𝑞 )) = Θ(𝑤 1/𝑐 (𝑞 )) , which tends to 0 as 𝑐 (𝑞 ) ≫ 𝑤 1.That is precisely the hard, expensive tail an adaptive scheme must budget for. □
+
+Remark 1. This bound charges the probe in full. An implemen-tation that resumes the wider search from the probe’s own state, rather than discarding it, could reuse part of that work. We do not implement or measure this. The reported figures are therefore a conservative upper bound on the probe’s overhead. 
+
+## A.3 The probe remains below the target 
+
+Proposition 3. If 𝑞 is answerable and 𝑤 1 ∈ 𝐿 with 𝑤 1 < 𝑐 (𝑞 ), then 
+
+𝜌 𝑤 1 (𝑞 ) < 𝜏 .
+
+Proof. Fix a query 𝑞 , a target 𝜏 , and the ladder 𝐿 = {𝑏 1 < · · · <
+
+𝑏 𝑚 }. Write 𝐴 (𝑞 ) = {𝑏 ∈ 𝐿 : 𝜌 𝑏 (𝑞 ) ≥ 𝜏 } for the set of ladder widths that attain the target. Suppose 𝑤 1 ∈ 𝐿 and 𝑤 1 < 𝑐 (𝑞 ). Since 𝑞 
+
+is answerable, 𝐴 (𝑞 ) is nonempty and 𝑐 (𝑞 ) = min 𝐴 (𝑞 ). No width smaller than 𝑐 (𝑞 ) belongs to 𝐴 (𝑞 ), so 𝑤 1 ∉ 𝐴 (𝑞 ) and 𝜌 𝑤 1 (𝑞 ) < 𝜏 . □
+
+Remark 2. The argument does not assume 𝜌 𝑏 (𝑞 ) is nondecreasing in 𝑏 . This distinction matters in practice: CAGRA’s recall curve is not guaranteed monotone in itopk , since changing the beam width alters the greedy traversal, and a wider search need not visit or retain exactly the true neighbors that a narrower one recovered. Proposition 3 holds regardless, because it only rules out 𝑤 1 lying in the attaining set 𝐴 (𝑞 ) and says nothing about the shape of 𝜌 𝑏 (𝑞 )
+
+between 0 and 𝑤 1.
+
+Remark 3. This makes the pre-target guarantee meaningful. On any query with 𝑤 1 < 𝑐 (𝑞 ), that is, the hard tail that the fixed probe cannot answer, the probe result 𝑅 𝑤 1 has recall strictly below 𝜏 .The probe has not yet recovered enough true neighbors to answer the query at the target confidence. A measure computed from 𝑅 𝑤 1
+
+therefore cannot be scored on a target that the probe has already attained, since it has not. It must instead extrapolate from a result that is still below target. This is the sense in which flux and the other measures are evaluated on the hard tail: before the probe reaches the recall that it is used to predict, not after. 
+
+## A.4 Extra work from too-wide beam bounded by ladder granularity 
+
+Proposition 4. Let 𝐿 = {𝑏 1 < · · · < 𝑏 𝑚 } and fix a query 𝑞 with 
+
+𝑐 (𝑞 ) = 𝑏 𝑘 . If the estimator serves rung 𝑏 𝑘 +𝑗 for some 𝑗 ≥ 0, the excess work relative to serving at 𝑐 (𝑞 ) satisfies 𝑊 (𝑏 𝑘 +𝑗 ) − 𝑊 (𝑐 (𝑞 )) ≤ 
+
+𝑗 · max 1≤𝑖 <𝑚 (𝑊 (𝑏 𝑖 +1) − 𝑊 (𝑏 𝑖 )) .
+
+Proof. Fix a query 𝑞 with 𝑐 (𝑞 ) = 𝑏 𝑘 , and suppose the estimator serves rung 𝑏 𝑘 +𝑗 for some integer 𝑗 ≥ 0 with 𝑘 + 𝑗 ≤ 𝑚 . Write 
+
+𝛿 = max 1≤𝑖 <𝑚 
+
+ 𝑊 (𝑏 𝑖 +1) − 𝑊 (𝑏 𝑖 ) for the largest work gap between 
+
+> 11 Dongfang Zhao (dzhao@uw.edu)
+
+two adjacent rungs of 𝐿 . Since 𝑊 is nondecreasing, telescope the excess work into 𝑗 consecutive rung-to-rung steps: 
+
+𝑊 (𝑏 𝑘 +𝑗 ) − 𝑊 (𝑏 𝑘 ) = 
+
+> 𝑘 +𝑗 −1
+
+∑︁ 
+
+> 𝑖 =𝑘
+
+ 𝑊 (𝑏 𝑖 +1) − 𝑊 (𝑏 𝑖 ) ≤ 
+
+> 𝑘 +𝑗 −1
+
+∑︁ 
+
+> 𝑖 =𝑘
+
+𝛿 = 𝑗 𝛿. 
+
+Each summand is nonnegative because 𝑊 is nondecreasing, and each is at most 𝛿 by the definition of 𝛿 as the largest such gap on 𝐿 ;the sum of 𝑗 terms is therefore at most 𝑗𝛿 . Substituting 𝑐 (𝑞 ) = 𝑏 𝑘 
+
+gives 𝑊 (𝑏 𝑘 +𝑗 ) − 𝑊 (𝑐 (𝑞 )) ≤ 𝑗𝛿 , which is the claim. □
+
+Remark 4. The integer 𝑗 counts how many rungs above 𝑐 (𝑞 ) that the estimator served, that is, how much wider than needed the served beam was. The bound depends only on this 𝑗 and on 𝛿 , which is a property of the ladder 𝐿 alone. It does not depend on the query, the dataset, or the estimator’s internals: any two estimators that serve a query 𝑗 rungs too wide pay the same worst-case excess, regardless of how their predictions were produced. A coarser ladder has fewer, more widely spaced rungs. This shrinks 𝑗 for a given prediction error measured in absolute beam units, but it grows 𝛿 ; the bound makes this trade-off explicit rather than leaving it implicit in the choice of 𝐿 .
+
+Remark 5. The proposition is silent on a too-narrow beam by con-struction. An estimate that serves a rung below 𝑐 (𝑞 ) is not a work-cost event; by Proposition 3 it is a recall event, since that rung already fails to reach the target. The two failure modes are there-fore addressed by two different guarantees. Proposition 3 certifies that any prediction below 𝑐 (𝑞 ) misses the target. This proposition bounds only the excess work of a prediction above 𝑐 (𝑞 ). Because recall need not be monotone in the beam width, this proposition does not bound the recall deficit of a wider rung or guarantee that the wider rung attains the target; it bounds the search work 𝑊 , not recall.
