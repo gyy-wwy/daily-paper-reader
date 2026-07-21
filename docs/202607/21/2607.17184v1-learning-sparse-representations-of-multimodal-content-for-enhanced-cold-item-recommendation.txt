@@ -1,0 +1,528 @@
+Title: Learning Sparse Representations of Multimodal Content for Enhanced Cold Item Recommendation
+
+URL Source: https://arxiv.org/pdf/2607.17184v1
+
+Published Time: Tue, 21 Jul 2026 01:03:51 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# Learning Sparse Representations of Multimodal Content for Enhanced Cold Item Recommendation 
+
+# Gregor Meehan 
+
+gregor.meehan@qmul.ac.uk Queen Mary University of London London, United Kingdom 
+
+# Johan Pauwels 
+
+j.pauwels@qmul.ac.uk Queen Mary University of London London, United Kingdom 
+
+## Abstract 
+
+The scale and rapid growth of item catalogs in modern digital plat-forms present significant challenges to recommender system (RS) practitioners. Most RSs use embedding similarity to predict user-item preferences, but embedding storage and low-latency retrieval is challenging in industry-scale catalogs. Furthermore, newly added items do not have corresponding embeddings and cannot be recom-mended effectively; previous works often tackle this item cold-start problem by generating cold item representations from auxiliary content, such as images or descriptive text, so that user preferences can be predicted without historical interactions. In this paper, we argue that sparse embeddings have notable advantages over stan-dard dense vectors in this content-based cold-start paradigm. We describe how existing cold-start training regimes can be adapted for sparse representation learning, and build on insights from lin-ear attention to design a pre-sparsification activation technique that induces sharpness and denoising effects in learned item-item similarities. We show that the resulting sparse embeddings achieve significant improvements in cold-start recommendation accuracy over dense embeddings at considerably lower storage costs, espe-cially for users with multiple interests. Through comprehensive experiments on four multimodal RS datasets, we also demonstrate the interpretability of sparse content embeddings and their robust-ness in the trade-off between size and accuracy. 
+
+## CCS Concepts 
+
+• Information systems → Recommender systems .
+
+## Keywords 
+
+Cold-Start Item Recommendation, Content-Based Recommenda-tion, Sparse Representation Learning 
+
+ACM Reference Format: 
+
+Gregor Meehan and Johan Pauwels. 2026. Learning Sparse Representations of Multimodal Content for Enhanced Cold Item Recommendation. In 20th ACM Conference on Recommender Systems (RecSys ’26), September 27-October 02, 2026, Minneapolis, MN, USA. ACM, New York, NY, USA, 10 pages. https: //doi.org/10.1145/3773078.3831760 
+
+## 1 Introduction 
+
+Producing useful predictions for new items is a common hurdle in recommender systems (RSs): deep learning-based collaborative  
+
+> This work is licensed under a Creative Commons Attribution 4.0 International License.
+> RecSys ’26, Minneapolis, MN, USA
+> ©2026 Copyright held by the owner/author(s). ACM ISBN 979-8-4007-2284-4/2026/09 https://doi.org/10.1145/3773078.3831760
+
+filtering (CF) relies on user-item interaction histories, so cannot handle ‘cold’ items [ 51 ]. Instead, auxiliary content features, such as text descriptions or product images, are often used to predict user interest in cold items [ 79 ]. Many works [ 1, 8 , 58 , 59 , 64 , 68 ] use these features to estimate CF embeddings for new items, although recent research [ 42 ] suggests that the semantic gap between content and CF spaces limits this approach’s efficacy, and that directly leverag-ing content similarity for prediction can be more effective [43]. Newly added items also raise another practical concern in real-world RS deployment, as digital platforms face the considerable challenge of storing and accessing huge vector tables for their embedding-based RSs [ 22 , 75 ]. Much research [ 35 ] focuses on em-bedding compression in industry-scale RSs, attempting to balance the trade-off between data efficiency and representation quality. Recent studies [ 26 , 63 , 69 ] suggest that sparse representations [32 , 71 ,81 ] are a promising direction for reducing embedding storage costs while maintaining strong RS performance and providing increased interpretability. Unlike dense vectors, sparse embeddings contain only a small number of activated (non-zero) neurons, e.g. 16 out of 2048. Along with compact storage (e.g. in Compressed Sparse Row (CSR) [ 16 ] format), this approach also supports efficient inverted index retrieval [ 4 , 5]. Dot products between two sparse vectors with 𝑘 non-zeros is O( 𝑘 ), so sparse embeddings with low active di-mensions can outperform dense embeddings in retrieval speed [ 69 ]. Exact and approximate nearest neighbor search for sparse vectors are supported in PostgreSQL vector library pgvector .These works [ 26 , 63 ] explore sparse representations in CF models on warm items. In this paper, we instead investigate their applica-tion to cold items, examining how multimodal item features can be transformed into sparse embeddings well-suited to content-based recommendation. We argue that, beyond reducing size, sparsity has other notable advantages over dense embeddings in content-based cold-start contexts, particularly for users with diverse interests. We design a sparsification pipeline to maximize these benefits, enhanc-ing cold recommendations by emphasizing the most relevant items in a user’s interaction history. Our contributions are as follows: 
+
+• We describe how existing cold-start RS representation learning regimes (e.g. [43]) can be adapted for sparse embeddings; 
+
+• Through a detailed case study, we examine the limitations of dense embeddings in this context. We identify two desirable properties (namely, sharpness and denoising) in learned item-item similarities, and describe how they can be induced for sparse embedding similarities by pre-sparsification activation functions; 
+
+• Through experiments on four multimodal RS datasets, we show that sparse embeddings consistently outperform dense methods by 16.6% to 75.5% in cold NDCG@20 (with comparable storage budgets), plus further gains on users with diverse interests; arXiv:2607.17184v1 [cs.IR] 19 Jul 2026 RecSys ’26, September 27-October 02, 2026, Minneapolis, MN, USA Meehan and Pauwels 
+
+• We analyze other properties of sparse content embeddings, in-cluding their interpetability and robustness to level of sparsity. To facilitate reproducibility of our results, we release our code at https://github.com/gmeehan96/SparseColdStart. 
+
+## 2 Related Work 2.1 Content-Based Cold-Start 
+
+In this work, we address the strict item version of the cold-start problem, and distinguish it from ‘long-tail’ items with sparse but non-zero interaction histories. Some recent studies (e.g. [ 24 , 66 , 72 ,73 ]) address item cold-start by leveraging the world knowledge of large language models (LLMs). Although promising, these methods face latency and efficiency challenges at industry scale [ 65 , 79 ] due to intensive LLM processing or retrieval-augmented generation at inference. For example, ColdLLM [ 24 ], a recent work that simulates cold item behavior with LLMs, has a processing time of about ten seconds per cold item. We focus on the low-latency dot product retrieval paradigm, with inference times in the milliseconds. We therefore discuss methods that leverage item content to pre-dict user preferences without relying on external corpora. Dropout-Net [ 64 ] simulates ‘coldness’ during training by randomly replacing warm item CF embeddings with content features; recent meth-ods augment this dropout paradigm with multi-task training [ 15 ], mixtures-of-experts [ 86 ], graph neighborhoods [ 28 , 34 ], or con-trastive alignment between ID and content embeddings [ 67 , 68 , 85 ]. However, forcing user embeddings to align with item content can harm warm item accuracy [ 25 ]. Several works therefore use em-beddings from a pre-trained warm RS to supervise the item content encoder, e.g. via mean squared error [ 59 ], generative-adversarial nets [ 8, 21 , 57 ] or variational autoencoders [ 1, 30 , 82 ]. Others [ 25 ,80 ] distill user-item scores from pre-trained warm RSs. Once trained, these models are used for new items, while the original CF model is applied to warm items, preserving warm performance. Although more effective than dropout approaches, these gen-erative methods have several drawbacks. First, they often require separate user embeddings for warm and cold items (e.g. [ 8, 25 , 86 ]), further increasing storage requirements. Recent work [ 42 ] also shows that such methods inherit warm model predictive bias due to misalignment between CF and content signals. SEMCo [ 43 ] there-fore frames content-based cold-start as an item similarity problem, using the structure of a shallow linear autoencoder [ 60 ] to con-trastively train multimodal content representations that correlate with user preferences. The resulting RS outperforms models reliant on CF embeddings, while also producing more equitable outcomes across the item population. We therefore adopt this content simi-larity paradigm for our sparse representation training regime. 
+
+## 2.2 Sparse Representations 
+
+Representation sparsity has been explored in information retrieval and question-answering contexts [ 17 , 47 , 76 ], and sparse autoen-coders (SAEs) [ 12 , 19 ] have recently gained attention for facilitating interpretability in LLMs. While earlier works encourage sparsity through regularization, such as penalties proportionate to L1 norms or numbers of FLOPS [ 47 ], we follow more recent studies (e.g. [19 , 63 , 69 ]) in enforcing sparsity explicitly via top-K activation, i.e. only keeping the top-K largest neurons in a dense embedding. Recent work shows that applying SAEs to pre-trained dense embeddings can outperform other embedding compression tech-niques (e.g. Matryoshka representations [ 31 ]) in RS [ 26 ] and image retrieval [ 69 ] applications. Other studies [ 63 ] train sparse embed-dings from scratch, using a shallow linear autoencoder [ 60 ] for warm item CF, rather than as a post-hoc compression step; they show that sparse representations achieve comparable RS accuracy to dense vectors at a fraction of the storage cost, and describe the potential for segment interpretability in the learned user and item embeddings. In this work, we build on this approach to demonstrate the effectiveness of sparse embeddings in item cold-start contexts. 
+
+## 3 Sparse Representations for Cold-Start 
+
+We first outline the content similarity-based cold-start approach, then explain why sparse embeddings are suited to this paradigm. 
+
+## 3.1 Preliminaries 
+
+We begin by revisiting SEMCo [ 43 ], a multimodal representation training regime for content-based cold-start via contrastive learning on user-item interactions. Given a binary user-item interaction matrix R ∈ { 0, 1}| U | × | I 𝑤 | storing historical interactions between user set U and warm item set I𝑤 , SEMCo learns an attention-based projection 𝑓 that fuses multimodal item content vectors x1, ..., x𝑀 
+
+into a single compressed content representation y, i.e. 
+
+y = 𝑓 (x1, ..., x𝑀 ) ∈ R𝑑 , (1) before y is L2-normalized. For a cold item set I𝑐 , user preference score matrix P ∈ R| U | × | I 𝑐 | is predicted via the matrix multiplication 
+
+P = (RY )C⊤, (2) where Y and C are the projected item content matrices for I𝑤 and 
+
+I𝑐 . In other words, users are represented by RY , the aggregated embeddings of their interacted items, and SEMCo’s contrastive objective ensures that similarity with C in the projected space correlates with user interest. This is a content-based adaptation of linear autoencoders (LAEs) [ 46 , 56 ], which are often used in warm item CF; similarly to shallow LAEs [ 60 –62 ], SEMCo factorizes the LAE item-item similarity matrix to facilitate inference on cold items. 
+
+## 3.2 Case Study 
+
+Representing users by average embeddings of interacted items is a key efficiency in this factorized LAE setup. It avoids large O(|I 𝑤 |2)
+
+matrices during training, preserves linearity, and allows for user scores for new items to be computed by a single dot product. How-ever, this approach also has notable downsides for accurate pref-erence prediction. Users can have many diverse interests, so only a small subset of previously interacted items may be relevant to a target item; for example, users on music streaming platforms may not expect their suggestions for classical music to be affected by re-cently listened pop tracks. Multi-interest modeling is a well-studied challenge in the RS literature (e.g. [ 6, 23 , 33 ]), but is exacerbated by this user representation strategy, as unrelated interacted items can add significant noise to predicted preferences. 
+
+3.2.1 Score Augmentation. To illustrate these limitations, we relax the linearity requirement in our preference predictions, and for a Learning Sparse Representations of Multimodal Content for Enhanced Cold Item Recommendation RecSys ’26, September 27-October 02, 2026, Minneapolis, MN, USA 0.05 0.1 0.2 0.5 1.0 2.0 
+
+> 0.020
+> 0.024
+> 0.028
+> 0.032
+> NDCG@20
+
+exp(p/ )       
+
+> 0.05 0.1 0.2 0.5 1.0 2.0
+> 0.020
+> 0.024
+> 0.028
+> 0.032
+
+softmax(p/ )       
+
+> 0.0 0.1 0.2 0.3 0.4 0.5
+> 0.020
+> 0.024
+> 0.028
+> 0.032
+
+ReLU(p- )       
+
+> 110 50 100 200 300
+> 0.020
+> 0.024
+> 0.028
+> 0.032
+
+sparsemax(p/ )       
+
+> 10 25 50 100 200 300
+> K
+> 0.020
+> 0.024
+> 0.028
+> 0.032
+
+top-K(p) 
+
+> Emb. dim.
+> 384
+> 64
+
+Figure 1: Cold NDCG@20 on Electronics for functions 𝜙 of item-item similarities 𝑝 on SEMCo embeddings. Softmax, sparsemax, and top-K (i.e., KNN) are applied over warm items (columnwise on YC ⊤). The reference lines are SEMCo’s base NDCG without 𝜙 .1 2 3 4 5 6+             
+
+> 0.01
+> 0.02
+> 0.03
+> 0.04
+> NDCG@20  Emb. dim. 384
+> 123456+
+> Emb. dim. 64
+> Base sparsemax top-K
+> 123456+
+> 0k
+> 5k
+> 10k
+> 15k
+> 20k
+> 25k
+> Num. Users
+> Num. User Interacted Clusters
+
+Figure 2: Cold NDCG and count for users grouped by number of interacted clusters on Electronics. 
+
+non-linear function 𝜙 we define augmented scores 
+
+˜P = R · 𝜙 (YC ⊤). (3) There are two desirable properties of 𝜙 for addressing our concerns above. The first is denoising , i.e. muting low or negative scores that can accumulate across large item sets to obscure useful items. The second is sharpening , i.e. emphasizing the highest similarities so that they have the most influence on the predicted score; for lower scores, this is a softer version of denoising. To assess the impact of these properties, we train a SEMCo model on the Amazon Electronics dataset [ 40 ] following the experimental setup in [ 43 ], and measure cold-start performance for different choices of 𝜙 .
+
+3.2.2 Analysis. We examine five 𝜙 functions, displaying results in Figure 1: exp and softmax only sharpen; ReLU and sparsemax [ 39 ]both sharpen and denoise; and top-K only denoises. We note first that the larger embeddings (384d) provide much better preference modeling, with a gain in base NDCG@20 of 32.6% over 64d vectors. The 𝜙 ’s consistently outperform the base embeddings, particularly at size 64, where they largely close the gap to 384d. In other words, filtering out noisy similarities compensates for the reduced semantic expressiveness of more compact embeddings. All 𝜙 with sharpening outperform top-K, i.e. accentuating high scores is beneficial beyond de-emphasizing less relevant items. Here 𝜏 , 𝜂 , and K control the strength of sharpening/denoising, and for each 𝜙 there is a balance between relevant scores being either under- or over-represented. To test our hypothesis about user interest diversity, we identify interests by dividing the Electronics items into 64 clusters via K-means [ 37 ] on the size 384 SEMCo embeddings. We group users by their number of interacted clusters and report the user count and av-erage NDCG per group in Figure 2. Results for base and augmented SEMCo predictions are similar for users with a single interest, and all methods see lower NDCG as the number of interests grows, with the difference again more drastic for the smaller 64d embeddings. However, the drop in accuracy is much smaller for the augmented predictions; since most users have at least three interests, dense embeddings have clear limitations for user preference modeling. 
+
+## 3.3 Spikiness and Linear Attention 
+
+Denoising and sharpening both reduce the entropy of cold item similarity distributions across warm items. This ‘spikiness’ in dis-tribution has been shown to be a key property of effective attention weights in transformer-based language models [ 78 ]. Indeed, when 
+
+𝜙 is softmax, Equation 3 can be viewed as an attention calculation: the queries are the cold item vectors C, the keys are the warm item embeddings Y, and the values are the interaction matrix R.However, as with attention, non-linearity harms computational efficiency, as it requires materializing full similarity matrices. In RS cold-start, calculating cold item similarities to the full warm item set is impractical in industry-scale catalogs. While this can be mitigated through approximate methods such as FAISS [ 14 ] or Annoy [ 3], direct prediction by vector dot product is still preferable [11]. Much research attempts to improve transformer efficiency by linearizing attention [ 7, 9 , 10 , 27 , 74 , 77 , 78 ], often through low-rank approximations of the exp kernel. For self-attention over keys K
+
+and queries Q of length 𝑛 , these methods apply some 𝜓 such that softmax (KQ ⊤) ≈ 𝜓 (K)𝜓 (Q)⊤, (4) Then, for values V, the attention calculation is linearized as 
+
+V · softmax (KQ ⊤) ≈ V · 𝜓 (K)𝜓 (Q)⊤ = (V · 𝜓 (K)) 𝜓 (Q)⊤, (5) avoiding the O( 𝑛 2) cost of calculating the full KQ ⊤ matrix. We take inspiration from this body of work: rather than applying a non-linearity 𝜙 to the item-item similarities, to preserve inference effi-ciency we want a non-linear transformation 𝜓 on the item content embeddings such that 𝜓 (Y)𝜓 (C)⊤ achieves the desired properties. We argue that embedding sparsification is a promising direction for defining 𝜓 . Since dot products between dissimilar sparse vec-tors are typically zero, they naturally denoise without non-linear intervention. Below we describe how we adapt RS content repre-sentation learning regimes to produce sparse outputs, modifying standard sparsification pipelines to induce sharper similarity scores. 
+
+## 3.4 Learning Sparse Representations 
+
+Previous RS studies of sparse embeddings [ 26 , 63 ] focus on CF sce-narios, where warm item ID vectors are learned from scratch. For content-based cold-start, our goal is instead to project item content vectors into a latent space that is useful for recommendation, i.e. where high cosine similarity corresponds to an increased likelihood of shared user interest. As described in Section 3.1, content-based LAE-like methods (e.g. SEMCo [ 43 ]) perform well at this task with dense vectors; we therefore propose to modify their architecture to produce a sparse latent space with similar properties. We note that we only adjust the transformation pipeline compared to dense models, and do not modify the training objective. Similarly to [ 63 ], RecSys ’26, September 27-October 02, 2026, Minneapolis, MN, USA Meehan and Pauwels 
+
+our sparse content representations are learned directly from inter-actions, rather than as an intermediate layer in an autoencoder [ 26 ]. 
+
+3.4.1 Sparsification. Content-based LAE methods learn a projec-tion 𝑓 of multimodal features x1, ..., x𝑀 into a fused content rep-resentation y ∈ R𝑑 . In SEMCo, 𝑓 is a two-layer single-branch MLP [ 18 ] that adaptively fuses modalities with an attention mecha-nism. We follow recent work [ 19 , 26 , 63 , 69 ] and enforce sparsity in 
+
+y by applying top-k activation for some 𝑘 before L2-normalization: top-k (y[𝑖 ]) =
+
+(
+
+y[𝑖 ] if |y[𝑖 ]| is in the top 𝑘 elements of |y|,
+
+0 otherwise (6) where typically 𝑘 ≪ 𝑑 . We keep the largest dimensions by absolute value, as in [ 63 ], to preserve top negative neurons. After sparsifica-tion, we L2-normalize and train the content LAE as normal. 
+
+3.4.2 Activation. Since our embeddings are output by an MLP on content vectors, we can influence the learned latent space via ad-ditional transformations on y. In particular, we aim to encourage sharper item-item similarities to complement the built-in denois-ing. We therefore introduce pre-sparsification activation functions (PSAFs ) to our sparse learning pipeline. This step is again motivated by techniques from linear attention, where several studies [ 74 , 77 ,78 ] find that applying exponential activations to query/key vectors is effective for increasing spikiness in attention matrices; however, as with most linear attention methods, this typically requires larger embeddings to provide sufficient semantic flexibility for approx-imating the exp kernel. By compressing this expressive capacity into very few active dimensions, sparse embeddings are ideal for a similar sharpening approach without this added cost. Given our focus on embedding sparsity, we adopt the general 𝛼 -entmax function [ 49 ], which interpolates between softmax ( 𝛼 = 1)and sparsemax ( 𝛼 = 2), as our PSAF. When 𝛼 > 1, it is defined as 
+
+𝛼 -entmax (y) = (𝛼 − 1)y − 𝜂 1 1  
+
+> 𝛼 −1
+> +
+
+, (7) where 1 is the ones-vector, [·] + is the positive-part operator, and 
+
+𝜂 is a threshold such that the output non-negative and sums to 1. Unlike softmax, where all outputs are positive, 𝛼 -entmax zeroes out low-scoring logits. As 𝛼 grows, the level of sparsity increases, but the sharpness of the outputs decreases as the exponent term approaches 1. With appropriate tuning, 𝛼 -entmax thus provides flexibility for the content MLP to adaptively calibrate the level of sharpness and denoising for optimal user preference prediction. 
+
+3.4.3 Two-Siding. Since 𝛼 -entmax mutes negative neurons, we follow [ 52 , 77 , 78 ] in preserving negative signals through antisym-metric concatenation before applying 𝛼 -entmax: two-side (y) = [y; −y] (8) Although doubling embedding sizes during training, this step does not affect model parameters or storage post-sparsification, as we still keep only the top-k dimensions. We show in Section 5 that two-sided PSAFs can notably improve accuracy with only modest training cost. When using a PSAF, our 𝜓 function (Section 3.3) is 
+
+𝜓 (y) = 𝛼 -entmax (two-side (y)/ 𝜔 ), (9) where the hyperparameter 𝜔 modulates the sharpening effect. 
+
+Table 1: Dataset statistics. The feature vector dimension for each content modality is indicated in parentheses.                         
+
+> Dataset Users Items Interactions Density Modes (dim) Clothing 39,387 23,033 278,677 0.031% Text (384) Electronics 192,403 63,001 1,689,188 0.014% Image (4096) Text (384) M4A-Onion 8,807 43,886 1,510,034 0.391% Audio (1024) Text (768) Microlens 98,129 17,228 705,174 0.042% Image (1024) Text (1024) Video (768)
+
+## 4 Experimental Design 
+
+To validate the effectiveness of sparse representations for item cold-start, we investigate the following research questions: 
+
+• RQ1 : How do sparse embeddings perform compared to dense cold-start baselines, especially for users with multiple interests? 
+
+• RQ2 : What is the impact of pre-sparsification activation func-tions on item-item similarity distributions and training efficiency? 
+
+• RQ3 : How does varying the width and level of sparsity affect retrieval accuracy for sparse representations? 
+
+• RQ4 : To what extent do sparse embeddings facilitate interpretable content-based recommendations? 
+
+## 4.1 Evaluation Protocol 
+
+As summarized in Table 1, our datasets include two Amazon sub-sets [ 40 ] (namely, Clothing and Electronics ) and Microlens [45 ], with interaction data and preprocessed multimodal features avail-able via MMRec [ 83 ]. We also test on the 2018 subset of Music4All-Onion [ 44 ] ( M4A-Onion ) described in [ 41 , 43 ], with MusicFM [ 70 ]audio features and BERT [13] lyric features. We use the standard splitting approach [ 8 , 25 , 42 , 43 ] of randomly selecting 20% of items as our ‘cold’ item set and dividing these 50-50 into validation and test sets. The remaining ‘warm’ item interactions are split 80-10-10 into training, validation, and test sets for training the supervisory CF model for the generative cold-start baselines. We measure performance with standard ranking metrics Recall@ 𝑘 
+
+and NDCG@ 𝑘 in our cold holdout sets, setting 𝑘 = 20 . All reported metrics are averaged over five runs at optimal hyperparameters. 
+
+## 4.2 Methods 
+
+In this section, we describe the training setup for our sparse repre-sentations and dense baseline methods. All models are trained with the Adam optimizer [29] and implemented using PyTorch [48]. 
+
+4.2.1 Sparse. We test two content-based training regimes for our sparse representations. The first is the base SEMCo [43 ] model; un-less otherwise specified, we use the sparsemax variant. The other is a content-based analogue of shallow LAE method ELSA [ 60 ], where the learned CF embeddings are replaced with the same attention-based multimodal content encoder as in SEMCo. To avoid dead latents [ 19 ] in our sparse embeddings, we use the exponential prun-ing strategy from [ 63 ], decaying the number of active dimensions from the full embedding width to 32 over the course of training. Unless otherwise stated, we use the top-32 dimensions at inference Learning Sparse Representations of Multimodal Content for Enhanced Cold Item Recommendation RecSys ’26, September 27-October 02, 2026, Minneapolis, MN, USA 
+
+Table 2: Cold test set Recall@20 (R@20) and NDCG@20 (N@20) for sparse embeddings and dense baselines. SEM-Sf and SEM-Sp stand for softmax and sparsemax SEMCo variants respectively. We underline the best model in each group and bold the best overall. The improvement percentage is calculated for the best sparse method over the best dense content LAE method. 
+
+Dense (Baselines) Dense (Content LAEs) Sparse (PSAF: None) Sparse (PSAF: Sparsemax) Dataset Metric ALDI CLCRec GAR GoRec Heater ELSA SEM-Sf SEM-Sp ELSA SEM-Sf SEM-Sp ELSA SEM-Sf SEM-Sp Imp. 
+
+Clothing R@20 0.0954 0.1190 0.1148 0.1389 0.1225 0.1459 0.1435 0.1460 0.1641 0.1544 0.1528 0.1666 0.1676 0.1711 17.2% N@20 0.0453 0.0599 0.0541 0.0638 0.0561 0.0705 0.0698 0.0716 0.0822 0.0767 0.0763 0.0827 0.0824 0.0835 16.6% Electronics R@20 0.0297 0.0299 0.0321 0.0376 0.0329 0.0487 0.0482 0.0488 0.0650 0.0564 0.0550 0.0573 0.0631 0.0659 35.1% N@20 0.0130 0.0138 0.0148 0.0171 0.0149 0.0217 0.0217 0.0218 0.0294 0.0258 0.0254 0.0265 0.0287 0.0302 38.5% M4A-Onion R@20 0.0406 0.0577 0.0464 0.0299 0.0544 0.0784 0.0798 0.0808 0.1026 0.0925 0.0892 0.1150 0.1201 0.1270 57.1% N@20 0.0403 0.0557 0.0467 0.0316 0.0557 0.0762 0.0765 0.0769 0.1049 0.0934 0.0944 0.1221 0.1212 0.1350 75.5% Microlens R@20 0.1075 0.0914 0.1180 0.1294 0.1203 0.1361 0.1389 0.1357 0.1544 0.1456 0.1423 0.1460 0.1483 0.1397 11.1% N@20 0.0445 0.0401 0.0487 0.0562 0.0504 0.0600 0.0609 0.0591 0.0742 0.0671 0.0644 0.0666 0.0694 0.0633 21.7% 
+
+and set the embedding width of our content encoder output at 1024; for two-sided methods (see Section 3.4.3), the effective width is therefore 2048. The content encoder’s hidden dimension is 384. The search ranges for SEMCo’s hyperparameters and the PSAF 𝜔 
+
+are on our GitHub. For ELSA, the learning rate is 0.0001 with early stopping on cold NDCG@20. We tune L2 regularization and batch size in {0, 1e −6, 1e −5, 1e −4 } and {512 , 1024 }. The SEMCo batch size is 2048, and we apply cosine learning rate decay [ 36 ] from 0.001 to zero over 40 epochs. We set the L2 regularization weight at 1e −5
+
+and 1e −3 for the sparsemax and softmax SEMCo variants. 
+
+4.2.2 Dense. Along with dense versions of SEMCo and ELSA, we implement five dense embedding cold-start baselines: 
+
+• CLCRec [ 68 ] aligns CF and content features with a contrastive objective for improved cold item performance; 
+
+• Heater [86 ] applies a dropout strategy [ 64 ] during training and uses mixtures-of-experts [ 53 ] for item content transformation; 
+
+• GAR [8] uses a generative-adversarial approach between the content-based generator and pre-trained warm model; 
+
+• GoRec [ 1 ] implements a conditional variational autoencoder [ 54 ]to generate item CF embeddings conditioned on content; 
+
+• ALDI [25 ] applies knowledge distillation to align cold student-warm teacher rating distributions and rankings. We use multimodal RS FREEDOM [ 84 ] as the supervisory warm model for the generative methods (i.e., all except CLCRec), follow-ing existing work [ 42 , 43 ]. In alignment with previous cold-start studies [ 1, 8, 42 , 43 ], we set the user and item embedding dimension for our baseline methods at 64, and tune their other hyperparame-ters according to the ranges described in the original papers. For dense SEMCo and ELSA, we use the same hyperparameter search ranges as in the sparse case. For SEMCo, we additionally tune the L2 regularization in {1e −5, 1e −4, 1e −3, 1e −2 } and again use cosine learning rate decay from 0.001 to zero, over 15 epochs as in [43]. 
+
+## 5 Results 5.1 Sparse vs. Dense (RQ1) 
+
+To measure the gains offered by sparse representations, we first evaluate them against our dense cold-start baselines with compa-rable storage budgets. Sparse vector storage requires saving both values and indices, so with 𝑛 active dimensions the storage cost is equivalent to that of a dense embedding of size 2𝑛 .1 We therefore set the number of active dimensions in the sparse representations at 32, since the embedding dimension of our dense baselines is 64. We note that, if item embeddings are sparsified, user vectors can have many more than 32 active dimensions, as their item embed-dings may contain diverse sets of non-zero neurons. We therefore also sparsify the user vectors to 32 active neurons to maintain a fair comparison; we quantify the impact of this step in Section 5.3.2. 
+
+5.1.1 Baseline Comparison. Table 2 displays cold test set results for our dense and sparse methods. The sparse regimes consistently out-perform both the CF-based baselines and the dense content LAEs: all gains of sparse methods over the corresponding dense LAE are statistically significant in both metrics by paired t-test with 𝑝 < 0.05 
+
+(except for R@20 on Microlens for Sem-Sp/Sparsemax) and with 
+
+𝑝 < 0.005 in all datasets except Microlens. In other words, sparsi-fying embeddings universally improves cold-start outcomes com-pared to dense representations with equivalent training regimes. The sparsemax variant of SEMCo with sparsemax PSAF has the best overall accuracy, again with the exception of Microlens, where ELSA without PSAF is strongest; we discuss Microlens’s unique results in Section 5.1.4. The sparsemax PSAF generally benefits SEMCo, but has more mixed outcomes for ELSA. We hypothesize that SEMCo’s contrastive regime is better-suited for tuning the sharpening effect, as its extra 𝛼 -entmax on user-item scores per batch can adaptively modulate logit distributions; by contrast, ELSA reconstructs user-item scores directly with mean-squared error, which may harm training stability when the entropy of the MLP outputs is fluctuating. We analyze PSAFs further in Section 5.2. 
+
+5.1.2 Storage Ablation. We measure sparse and dense embedding performance for varying storage costs in Figure 3. We use fixed sparse embeddings with varying numbers of active dimensions, while the dense model hyperparameters are re-tuned at each em-bedding size to maximize performance. We cap the dimension at 1024, since most settings see diminishing returns beyond this size.             
+
+> 1We assume that the dense embeddings and sparse values are stored at the same preci-sion. With full-precision floats, sparse embeddings are more space efficient because small integer indices use fewer bytes. For example, float32 64d dense embeddings on Electronics (63,001 items) use 16.1 MB; CSR sparse embeddings with width 1024, 32 active dimensions, index precision int16 , and value precision float32 take up 12.4 MB. If we use half-precision ( float16 ) instead, the sizes are 8.1 MB and 7.3 MB for dense and sparse respectively. All experiments in this paper use float32 .RecSys ’26, September 27-October 02, 2026, Minneapolis, MN, USA Meehan and Pauwels 32 64 128 256 512 1024
+> Storage Cost
+> 0.14
+> 0.15
+> 0.16
+> 0.17
+> Recall@20
+
+Clothing      
+
+> 32 64 128 256 512 1024
+> Storage Cost
+> 0.050
+> 0.055
+> 0.060
+> 0.065
+
+Electronics      
+
+> 32 64 128 256 512 1024
+> Storage Cost
+> 0.08
+> 0.10
+> 0.12
+
+M4A-Onion       
+
+> 32 64 128 256 512 1024
+> Storage Cost
+> 0.14
+> 0.15
+> 0.16
+
+Microlens Method / PSAF 
+
+> Dense SEMCo / N/A
+> Dense ELSA / N/A
+> ELSA / None
+> SEMCo / None
+> SEMCo / Sparsemax
+
+Figure 3: Cold Recall@20 for dense embeddings against sparse embeddings with comparable storage cost (e.g. a 128-dimensional dense vector and sparse embedding with 64 active dimensions both have storage cost 128). 1 2 3 4+ 
+
+> Num. User Interacted Clusters
+> 0
+> 10
+> 20
+> % Improvement
+
+Clothing    
+
+> 1234+
+> Num. User Interacted Clusters
+> 0
+> 15
+> 30
+> 45
+
+Electronics     
+
+> 1-5 6-10 11-15 16+
+> Num. User Interacted Clusters
+> 0
+> 20
+> 40
+> 60
+> 80
+
+M4A-Onion    
+
+> 1234+
+> Num. User Interacted Clusters
+> 0
+> 10
+> 20
+> 30
+
+Microlens     
+
+> SEMCo Dense (128) SEMCo Dense (1024) SEMCo / None SEMCo / Sparsemax ELSA / None
+
+Figure 4: Improvements in NDCG@20 over dense SEMCo with embedding size 64, against number of interacted clusters by user. 1 2 3 4+            
+
+> 0k
+> 3k
+> 6k
+> Num. Users  Clothing
+> 1234+
+> 0k
+> 20k
+> 40k
+> 60k Electronics
+> 1-5 6-10 11-15 16+
+> 0k
+> 2k
+> 4k
+> 6k M4A-Onion
+> 1234+
+> 0k
+> 5k
+> 10k
+> 15k Microlens
+> Num. User Interacted Clusters
+
+Figure 5: Distributions of number of user interacted clusters. 
+
+Existing work [ 63 ] shows that, in warm item CF, sparse repre-sentations achieve broadly equivalent accuracy to dense models but with significantly lower storage requirements. In our content-based cold-start setting, we see that sparse embeddings are superior on both counts: in all datasets, at least one sparse method with storage cost 64 outperforms the 1024d dense embeddings, representing 16 ×
+
+storage savings with improved accuracy. The best sparse embed-dings with storage cost 128 improve over 1024d dense SEMCo em-beddings by at least 5.2% (Clothing) and up to 29.7% (M4A-Onion). Other than reducing storage, previous research [ 69 ] shows that lowering active dimensions materially increases retrieval speed of sparse embeddings, making them competitive with or faster than dense vectors, especially in large databases. Given these benefits to practicality and accuracy, sparse representations offer compelling advantages over dense embeddings for content-based cold-start. 
+
+5.1.3 Interest Diversity. To understand why sparse embeddings consistently outperform dense embeddings, we recall the insights from our case study in Section 3.2. In Figure 4, we visualize gains over 64d SEMCo embeddings by user interest diversity; we de-termine interests as described in Section 3.2, namely by KMeans with 64 groups on SEMCo embeddings, with user counts by group displayed in Figure 5. Due to the high interaction density of M4A-Onion, we use wider bins to maintain an informative distribution. As we saw with the 𝜙 non-linearities, the sparse methods achieve increasing gains over the dense baseline as the number of user interests grows. Furthermore, for users with at least two inter-ests, SEMCo/Sparsemax generally outperforms the 1024d dense embeddings, while SEMCo/None lags behind. This result illustrates that the PSAF sharpening is particularly valuable for modeling users with multiple interests in the SEMCo setting, as hypothesized above. This is highlighted by SEMCo/Sparsemax’s exceptional per-formance in M4A-Onion, where users have much higher numbers of interests, meaning it is particularly important to emphasize rele-vant items when determining preferences. In general, the overall gains in each dataset in Table 2 correlate exactly with the level of positive skew in interest count distribution in Figure 5. 
+
+5.1.4 Microlens. We next briefly discuss Microlens’s disparate be-havior from other datasets. It has relatively low gains over dense baselines, especially for SEMCo, and furthermore is the only dataset where the sparsemax PSAF does not improve the SEMCo sparsemax variant. We attribute this in part to Microlens’s unique interaction structure, with almost 6 × as many users as items and the lowest proportion of users with multiple interests (see Figure 5), where the gains from sparsity and sharpening are largest. Based on its superior performance, the reconstruction train-ing objective of ELSA is also clearly better-suited to this interac-tion structure than SEMCo’s contrastive regime; ELSA performs well on Microlens even without sparsification, as can be seen in Figure 3. Based on our findings, we suggest to practitioners that SEMCo/Sparsemax is optimal for applications with high user activ-ity, while ELSA without PSAF is also a consistently good choice, especially for smaller item catalogs or less active userbases. 
+
+## 5.2 PSAFs (RQ2) 
+
+We next examine the impact of our pre-sparsification activations on model behavior, reporting SEMCo performance for various PSAFs in Table 3. Aside from 𝛼 -entmax, we also include CReLU [ 52 ], or two-sided ReLU, which zeroes out the redundant negatives after two-siding. We see that this generally improves accuracy compared to only sparsification, as the wider embeddings facilitate denoising. Its zeroing effect on negative similarities is also beneficial, as seen in Learning Sparse Representations of Multimodal Content for Enhanced Cold Item Recommendation RecSys ’26, September 27-October 02, 2026, Minneapolis, MN, USA 
+
+Table 3: Cold NDCG@20 for PSAF ablation in SEMCo.                                 
+
+> PSAF Clothing Elec. M4A-Onion Microlens One-Sided None 0.0763 0.0254 0.0944 0.0644 Sparsemax 0.0819 0.0267 0.1224 0.0574 Two-Sided ReLU 0.0797 0.0268 0.1014 0.0635 Softmax 0.0778 0.0263 0.1135 0.0668
+> 1.5-Entmax 0.0832 0.0285 0.1385 0.0557 Sparsemax 0.0835 0.0302 0.1350 0.0633 0.10 0.15 0.20 0.25
+
+Gini (Top 200)   
+
+> 0.0
+> 0.2
+> 0.4
+> Concentr.@200  PSAF
+> Sparsemax
+> 1.5-Entmax
+> Softmax
+> None
+> Two-Sided
+> Dense
+> 1024d
+> 64d
+> 64d ( = Softmax)
+> 64d ( = Sparsemax)
+> ELSA Sparse
+> None
+
+Figure 6: Gini index and concentration of top-200 cold-warm item similarities on Electronics for sparse SEMCo and others. 
+
+the ReLU ( 𝜂 = 0) results in Figure 1. Sparsemax also performs better after the two-siding operation, illustrating the value of preserving negative MLP outputs. Overall, the two-sided 𝛼 -entmax variants consistently have the highest accuracy across all datasets (again with the exception of Microlens), especially for 𝛼 at 1.5 or 2. 
+
+5.2.1 Sharpness and Denoising. In Figure 6, we quantify the denois-ing and sharpening of our PSAFs on item-item similarity distribu-tions. For cold items in Electronics, we take the top-200 warm item similarity scores and report two quantities: as a proxy for denoising, we calculate the concentration , or proportion of total (non-negative) scores across the full warm item population made up by the top-200 items. To measure sharpness, we calculate inequality within those top-200 scores with the Gini index , where values of 0 and 1 indicate maximal equality and inequality respectively. We use 200 because this provided the best top-K performance in Figure 1. We make several observations: first, as expected, 64d dense em-beddings have minimal sharpness and denoising. Increasing the embedding size to 1024 notably improves the Gini index and slightly removes noise, and sparse embeddings at this size without PSAF only provide a very slight increase over the dense 1024d vectors. Two-siding induces a further gain in Gini index, but the impact of the 𝛼 -entmax PSAFs is much clearer: they all materially increase both sharpness and denoising, with the degree of increase growing with 𝛼 as hypothesized in Section 3.4.2. For 𝛼 < 2, the sharpening impact is more pronounced even than the post-hoc application of softmax or sparsemax as 𝜙 to the 64d embedding similarities. We note that stronger sharpness and denoising effects do not always lead to improved performance, e.g. ELSA without PSAF also has generally strong accuracy. We hypothesize that sparsemax is generally the best-performing PSAF because it has the least extreme sharpening effect while still making a material impact, allowing for more stable convergence during SEMCo training. Given our results in Section 5.1, endowing the model with the ability to calibrate sharpening and/or denoising clearly enhances learning of sparse representations for cold item recommendation in most contexts. 
+
+Table 4: Training efficiency for dense and sparse SEMCo on Electronics. Soft. stands for softmax.                       
+
+> Dense Sparse (One-Sided) Sparse (Two-Sided) PSAF N/A None Sparsemax ReLU Soft. Sparsemax GPU mem. (GB) 2.20 2.20 2.20 2.45 2.55 2.66 Per epoch (sec) 12.8 13.7 14.0 14.9 15.2 15.7 128 256 512 1024 2048
+> Embedding Width
+> 0.025
+> 0.030
+> NDCG@20
+
+Electronics     
+
+> 128 256 512 1024 2048
+> Embedding Width
+> 0.08
+> 0.10
+> 0.12
+> 0.14
+
+M4A-Onion   
+
+> ELSA / None SEMCo / None SEMCo / Sparsemax
+
+Figure 7: Cold NDCG@20 for sparse embeddings of varying widths with 32 active dimensions 
+
+5.2.2 Training Efficiency. Although PSAFs generally increase accu-racy, they require additional computation. In Table 4, we quantify the cost of this extra activation step for SEMCo on Electronics, our largest dataset. We run all configurations on an NVIDIA H100 GPU. We note first that all sparse methods have slightly longer training time per epoch than dense 1024d embeddings due to the sparsifica-tion step, and that the two-siding operation also increases overall training cost. Since we implement sparsemax with efficient triton kernels [ 20 ], it only leads to a moderate increase in cost despite being O( 𝑑 log 𝑑 ); however, the magnitude of this increase is higher for the two-sided embeddings, suggesting its effect may become slightly more pronounced for higher embedding widths. Overall, however, the memory and training costs of the best-performing sparse embeddings are only around 15% to 20% higher than for dense embeddings or sparse embeddings without a PSAF. We argue that this modest increase in training cost does not outweigh the significant benefits to accuracy and storage discussed above. 
+
+## 5.3 Embedding Properties (RQ3) 
+
+In Figure 3, we investigated sparse embedding quality for varying numbers of active dimensions. Below we perform further analysis of how embedding size and sparsity affect ranking accuracy. 
+
+5.3.1 Embedding Width. Rather than varying the number of active neurons, we can also change the total available dimensions in our sparse embeddings. We note that, for consistency in parameter counts, where applicable we measure the embedding width before the two-side operation, i.e. as the dimension of the output of the con-tent encoder MLP. In Figure 7, we see that using wider embeddings generally improves accuracy at a logarithmic rate in Electronics and M4A-Onion; trends in our other datasets are similar. We also observe that, for small widths, performance is similar for SEMCo with and without sparsemax PSAF, but that the margin widens as the width increases. This again illustrates that including the PSAF allows SEMCo to use the embedding space more effectively. Although improving ranking accuracy, larger embedding widths can lead to increased training costs, as seen in our comparison between one- and two-sided methods in Section 5.2.2. We therefore RecSys ’26, September 27-October 02, 2026, Minneapolis, MN, USA Meehan and Pauwels 16 32 64 128 All                         
+
+> User Active Dims
+> 4
+> 8
+> 16
+> 32
+> 64
+> 128
+> Item Active Dims  0.076 0.076 0.077 0.077 0.077
+> 0.080 0.082 0.082 0.082 0.082
+> 0.081 0.083 0.084 0.084 0.084
+> 0.081 0.083 0.084 0.084 0.084
+> 0.081 0.083 0.084 0.084 0.084
+> 0.081 0.083 0.084 0.084 0.084
+
+Clothing                             
+
+> 16 32 64 128 All
+> User Active Dims
+> 0.128 0.129 0.129 0.129 0.129
+> 0.132 0.133 0.133 0.133 0.133
+> 0.134 0.135 0.134 0.134 0.134
+> 0.134 0.135 0.135 0.135 0.134
+> 0.134 0.135 0.135 0.135 0.134
+> 0.134 0.135 0.135 0.135 0.134
+
+M4A-Onion 
+
+Figure 8: Cold NDCG@20 over varying user and item active dimensions for SEMCo with sparsemax PSAF. 
+
+fix embedding widths at 1024 (or 2048 for two-sided methods) in our other experiments, as this provides consistently strong perfor-mance at moderate training speed in our offline scenario. However, previous studies [ 69 ] show that wider embeddings have faster re-trieval, as they have fewer index overlaps and therefore require fewer multiplication operations. Although this balance between training cost and inference efficiency may require calibration in real-world applications, our results show that sparse embedding retrieval performance is generally robust to these adjustments. 
+
+5.3.2 User Sparsification. As noted in Section 5.1, to maintain a fair storage comparison with dense vectors, we sparsify the user embeddings to the same number of active dimensions as the item embeddings. In theory, this can remove important user preference signal, especially for highly active users with diverse interests. We therefore measure the cost of this step in Figure 8; we display results for Clothing and M4A-Onion, but see similar trends for the other datasets. Accuracy is in fact largely robust to this user sparsification: there is little benefit to keeping the number of active user dimen-sions higher than that of items, providing comfort that pruning user embeddings does not overly damage ranking performance. 
+
+## 5.4 Interpretability (RQ4) 
+
+Beyond their considerable performance gains, sparse embeddings can also facilitate increased interpretability of the learned represen-tations [ 12 ]. Previous studies [ 63 ] show that sparse latent factors in CF models form semantically coherent groups, which allows for segment-based analysis of user behavior. We extend this idea to content-based representations with a case study on M4A-Onion, using the top 100 genre labels (by frequency among tracks) from Music4All [ 50 ] as our ‘ground-truth’ for measuring semantic con-sistency. For tracks with more than one label, we keep the least popular genre as the single ground-truth value. As seen in Figure 8, accuracy in M4A-Onion is robust to high sparsity. We therefore activate the top-8 dimensions per warm item in SEMCo with sparsemax PSAF and measure pointwise mutual information (PMI) between binarized dimension activation and gen-res. For each dimension, we refer to the label with maximum PMI as its primary correlate . The average primary correlate PMI across dimensions is 3.81, i.e. a dimension being active makes an item belonging to its primary correlate genre 23.81 ≈ 14 × more likely than chance, indicating strong correlation between dimensions and individual labels. Furthermore, all 100 genres are the primary corre-late of at least one dimension, showing that the learned embeddings 59 1555 858 1969 991 73 1128 739 276 1530 1025 1336 
+
+Dimension 
+
+> Metalcore
+> Screamo
+> Dubstep
+> Techno
+> Jazz
+> Bossa Nova
+> Genre
+> 0.0
+> 2.5
+> 5.0
+> PMI
+
+Figure 9: Top-2 correlated dims by PMI for selected genres. 
+
+provide strong coverage of ground-truth genres. This disentangle-ment illustrates how sparse embeddings better model diverse user interests by reducing noisy collisions among dissimilar items. In Figure 9, we visualize this correlation for three pairs of re-lated genres, namely Metalcore/Screamo, Dubstep/Techno, and Jazz/Bossa Nova. We see a clear block diagonal structure: the PMI is typically zero for dissimilar styles, while each label has its own spe-cialized dimensions and moderate correlation for related genres. It is thus directly observable through analysis of embedding activation patterns that the sparse embeddings capture our intuition about the relationship between genre similarity and user preference. This analysis shows that the disentanglement of user interests in our content-based sparse embeddings provides semantic inter-pretability alongside strong predictive accuracy. If semantic labels are available, as for M4A-Onion, then we can use these directly to interpret user interests. However, in real-world catalogs, such labels are often missing or of poor-quality [ 55 ], particularly for newly added items. By contrast, our sparse latent dimensions are learned only from item content (in this case, audio and lyric embeddings) and user interactions, and do not require supervision from metadata labels. Similarly to [ 63 ], the resulting latents can be therefore be used to derive coherent item segments that facilitate interpretabil-ity of user interests. We have shown that similar insights apply to our sparse embeddings of multimodal item content, opening new avenues for interpretable content-based recommendation. 
+
+## 6 Conclusion 
+
+In this paper, we present a pipeline for learning sparse representa-tions of multimodal content in RS item cold-start contexts. Through comprehensive experiments on four datasets, we show that sparse embeddings consistently and significantly outperform dense meth-ods with equivalent training regimes and storage budgets in cold recommendation accuracy, especially for users with diverse inter-ests. Furthermore, we describe how item-item similarities in the learned latent space can be manipulated via activation functions to exhibit desirable sharpness and denoising properties. Together with their robustness to sparsity level and their increased interpretability, our results show that sparse embeddings are a compelling alter-native to standard dense vectors for content-based item cold-start. Future work will investigate how these benefits can be expanded to enhance content-based recommendation more generally, e.g. for missing modality scenarios [ 2 , 18 , 38 ] or to improve outcomes for long-tail items in warm multimodal RSs. 
+
+## Acknowledgments 
+
+This work was funded by UKRI as part of the UKRI CDT in Artificial Intelligence and Music [grant number EP/S022694/1]. Learning Sparse Representations of Multimodal Content for Enhanced Cold Item Recommendation RecSys ’26, September 27-October 02, 2026, Minneapolis, MN, USA 
+
+## References 
+
+[1] Haoyue Bai, Min Hou, Le Wu, Yonghui Yang, Kun Zhang, Richang Hong, and Meng Wang. 2023. Gorec: a generative cold-start recommendation framework. In Proc. of the 31st ACM international conf. on multimedia . 1004–1012. [2] Haoyue Bai, Le Wu, Min Hou, Miaomiao Cai, Zhuangzhuang He, Yuyang Zhou, Richang Hong, and Meng Wang. 2024. Multimodality invariant learning for multimedia-based new item recommendation. In Proceedings of the 47th Inter-national ACM SIGIR Conference on Research and Development in Information Retrieval . 677–686. [3] Erik Bernhardsson. 2018. Annoy: Approximate Nearest Neighbors in C++/Python .https://pypi.org/project/annoy/ [4] Sebastian Bruch, Franco Maria Nardini, Cosimo Rulli, and Rossano Venturini. 2024. Efficient inverted indexes for approximate retrieval over learned sparse representations. In Proceedings of the 47th International ACM SIGIR Conference on Research and Development in Information Retrieval . 152–162. [5] Sebastian Bruch, Franco Maria Nardini, Cosimo Rulli, and Rossano Venturini. 2025. Efficient Sketching and Nearest Neighbor Search Algorithms for Sparse Vector Sets. arXiv preprint arXiv:2509.24815 (2025). [6] Yukuo Cen, Jianwei Zhang, Xu Zou, Chang Zhou, Hongxia Yang, and Jie Tang. 2020. Controllable multi-interest framework for recommendation. In Proceedings of the 26th ACM SIGKDD international conference on knowledge discovery & data mining . 2942–2951. [7] Beidi Chen, Tri Dao, Eric Winsor, Zhao Song, Atri Rudra, and Christopher Ré. 2021. Scatterbrain: Unifying sparse and low-rank attention. Advances in Neural Information Processing Systems 34 (2021), 17413–17426. [8] Hao Chen, Zefan Wang, Feiran Huang, Xiao Huang, Yue Xu, Yishi Lin, Peng He, and Zhoujun Li. 2022. Generative adversarial framework for cold-start item recommendation. In Proc. of the 45th International ACM SIGIR Conf. on Research and Development in Information Retrieval . 2565–2571. [9] Krzysztof Choromanski, Valerii Likhosherstov, David Dohan, Xingyou Song, Andreea Gane, Tamas Sarlos, Peter Hawkins, Jared Davis, Afroz Mohiuddin, Lukasz Kaiser, et al . 2020. Rethinking attention with performers. arXiv preprint arXiv:2009.14794 (2020). [10] Yuhong Chou, Man Yao, Kexin Wang, Yuqi Pan, Ruijie Zhu, Yiran Zhong, Yu Qiao, Jibin Wu, Bo Xu, and Guoqi Li. 2024. Metala: Unified optimal linear approximation to softmax attention map. Advances in Neural Information Processing Systems 37 (2024), 71034–71067. [11] Paul Covington, Jay Adams, and Emre Sargin. 2016. Deep neural networks for youtube recommendations. In Proceedings of the 10th ACM conference on recommender systems . 191–198. [12] Hoagy Cunningham, Aidan Ewart, Logan Riggs, Robert Huben, and Lee Sharkey. 2023. Sparse autoencoders find highly interpretable features in language models. 
+
+arXiv preprint arXiv:2309.08600 (2023). [13] Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova. 2018. BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding. 
+
+CoRR abs/1810.04805 (2018). arXiv:1810.04805 http://arxiv.org/abs/1810.04805 [14] Matthijs Douze, Alexandr Guzhva, Chengqi Deng, Jeff Johnson, Gergely Szilvasy, Pierre-Emmanuel Mazaré, Maria Lomeli, Lucas Hosseini, and Hervé Jégou. 2024. The faiss library. arXiv preprint arXiv:2401.08281 (2024). [15] Xiaoyu Du, Xiang Wang, Xiangnan He, Zechao Li, Jinhui Tang, and Tat-Seng Chua. 2020. How to learn item representation for cold-start multimedia recom-mendation?. In Proc. of the 28th ACM International Conf. on Multimedia .[16] Stanley C Eisenstat, MC Gursky, Martin H Schultz, and Andrew H Sherman. 1977. 
+
+Yale sparse matrix package. i. the symmetric codes . Technical Report. [17] Thibault Formal, Benjamin Piwowarski, and Stéphane Clinchant. 2021. Splade: Sparse lexical and expansion model for first stage ranking. In Proceedings of the 44th International ACM SIGIR Conference on Research and Development in Information Retrieval . 2288–2292. [18] Christian Ganhör, Marta Moscati, Anna Hausberger, Shah Nawaz, and Markus Schedl. 2024. A Multimodal Single-Branch Embedding Network for Recommen-dation in Cold-Start and Missing Modality Scenarios. In Proc. of the 18th ACM Conf. on Recommender Systems . 380–390. [19] Leo Gao, Tom Dupré la Tour, Henk Tillman, Gabriel Goh, Rajan Troll, Alec Radford, Ilya Sutskever, Jan Leike, and Jeffrey Wu. 2024. Scaling and evaluating sparse autoencoders. arXiv preprint arXiv:2406.04093 (2024). [20] Nuno Gonçalves, Marcos V Treviso, and Andre Martins. 2025. AdaSplash: Adap-tive Sparse Flash Attention. In International Conference on Machine Learning .PMLR, 19878–19896. [21] Ian Goodfellow, Jean Pouget-Abadie, Mehdi Mirza, Bing Xu, David Warde-Farley, Sherjil Ozair, Aaron Courville, and Yoshua Bengio. 2014. Generative adversarial nets. Advances in neural information processing systems 27 (2014). [22] Huifeng Guo, Wei Guo, Yong Gao, Ruiming Tang, Xiuqiang He, and Wenzhi Liu. 2021. Scalefreectr: Mixcache-based distributed training system for ctr models with huge embedding table. In Proceedings of the 44th international ACM SIGIR conference on research and development in information retrieval . 1269–1278. [23] Wenshuo Guo, Karl Krauth, Michael I. Jordan, and Nikhil Garg. 2021. The Stereotyping Problem in Collaboratively Filtered Recommender Systems. Equity and Access in Algorithms, Mechanisms, and Optimization (2021). [24] Feiran Huang, Yuanchen Bei, Zhenghang Yang, Junyi Jiang, Hao Chen, Qijie Shen, Senzhang Wang, Fakhri Karray, and Philip S Yu. 2025. Large Language Model Simulator for Cold-Start Recommendation. In Proceedings of the Eighteenth ACM International Conference on Web Search and Data Mining . 261–270. [25] Feiran Huang, Zefan Wang, Xiao Huang, Yufeng Qian, Zhetao Li, and Hao Chen. 2023. Aligning Distillation For Cold-start Item Recommendation. In Proc. of the 46th International ACM SIGIR Conf. on Research and Development in Information Retrieval (SIGIR ’23) . Association for Computing Machinery, New York, NY, USA. [26] Petr Kasalick `y, Martin Spišák, Vojtěch Vančura, Daniel Bohuněk, Rodrigo Alves, and Pavel Kordík. 2025. The Future is Sparse: Embedding Compression for Scalable Retrieval in Recommender Systems. In Proceedings of the Nineteenth ACM Conference on Recommender Systems . 1099–1103. [27] Angelos Katharopoulos, Apoorv Vyas, Nikolaos Pappas, and François Fleuret. 2020. Transformers are rnns: Fast autoregressive transformers with linear atten-tion. In International conference on machine learning . PMLR, 5156–5165. [28] Jinri Kim, Eungi Kim, Kwangeun Yeo, Yujin Jeon, Chanwoo Kim, Sewon Lee, and Joonseok Lee. 2024. Content-based Graph Reconstruction for Cold-start Item Recommendation. In Proc. of the 47th International ACM SIGIR Conf. on Research and Development in Information Retrieval . 1263–1273. [29] Diederik P. Kingma and Jimmy Ba. 2014. Adam: A Method for Stochastic Opti-mization. CoRR abs/1412.6980 (2014). [30] Diederik P. Kingma and Max Welling. 2014. Auto-Encoding Variational Bayes. In 
+
+2nd International Conf. on Learning Representations, ICLR 2014, Banff, AB, Canada, April 14-16, 2014, Conf. Track Proc. arXiv:http://arxiv.org/abs/1312.6114v10 [31] Aditya Kusupati, Gantavya Bhatt, Aniket Rege, Matthew Wallingford, Aditya Sinha, Vivek Ramanujan, William Howard-Snyder, Kaifeng Chen, Sham Kakade, Prateek Jain, et al . 2022. Matryoshka representation learning. Advances in Neural Information Processing Systems 35 (2022), 30233–30249. [32] Honglak Lee, Alexis Battle, Rajat Raina, and Andrew Ng. 2006. Efficient sparse coding algorithms. Advances in neural information processing systems 19 (2006). [33] Chao Li, Zhiyuan Liu, Mengmeng Wu, Yuchi Xu, Huan Zhao, Pipei Huang, Guoliang Kang, Qiwei Chen, Wei Li, and Dik Lun Lee. 2019. Multi-interest network with dynamic routing for recommendation at Tmall. In Proceedings of the 28th ACM international conference on information and knowledge management .2615–2623. [34] Guohui Li, Li Zou, Zhiying Deng, and Qi Chen. 2024. Neighborhood-Enhanced Multimodal Collaborative Filtering for Item Cold Start Recommendation. In 
+
+ICASSP 2024-2024 IEEE International Conf. on Acoustics, Speech and Signal Pro-cessing (ICASSP) . IEEE, 7815–7819. [35] Shiwei Li, Huifeng Guo, Xing Tang, Ruiming Tang, Lu Hou, Ruixuan Li, and Rui Zhang. 2024. Embedding compression in recommender systems: A survey. 
+
+Comput. Surveys 56, 5 (2024), 1–21. [36] Ilya Loshchilov and Frank Hutter. 2016. Sgdr: Stochastic gradient descent with warm restarts. arXiv preprint arXiv:1608.03983 (2016). [37] James MacQueen. 1967. Some methods for classification and analysis of multi-variate observations. In Proc. of the fifth Berkeley symposium on mathematical statistics and probability , Vol. 1. 281–297. [38] Daniele Malitesta, Emanuele Rossi, Claudio Pomo, Tommaso Di Noia, and Fragkiskos D Malliaros. 2026. Training-free Graph-based Imputation of Missing Modalities in Multimodal Recommendation. IEEE Transactions on Knowledge and Data Engineering (2026). [39] Andre Martins and Ramon Astudillo. 2016. From softmax to sparsemax: A sparse model of attention and multi-label classification. In International conference on machine learning . PMLR, 1614–1623. [40] Julian McAuley, Christopher Targett, Qinfeng Shi, and Anton Van Den Hengel. 2015. Image-based recommendations on styles and substitutes. In Proc. of the 38th international ACM SIGIR conf. on research and development in information retrieval . 43–52. [41] Gregor Meehan and Johan Pauwels. 2025. Artist Considerations in Offline Eval-uation of Music Recommender Systems. MuRS 2025: 3rd Music Recommender Systems Workshop, September 22nd, 2025. [42] Gregor Meehan and Johan Pauwels. 2025. On Inherited Popularity Bias in Cold-Start Item Recommendation. In Proc. of the Nineteenth ACM Conf. on Recommender Systems . 649–654. [43] Gregor Meehan and Johan Pauwels. 2026. Sparse Contrastive Learning for Content-Based Cold Item Recommendation. In Proceedings of the 49th Interna-tional ACM SIGIR Conference on Research and Development in Information Retrieval .3994–3999. [44] Marta Moscati, Emilia Parada-Cabaleiro, Yashar Deldjoo, Eva Zangerle, and Markus Schedl. 2022. Music4All-Onion – A Large-Scale Multi-Faceted Content-Centric Music Recommendation Dataset. In Proc. of the 31st ACM International Conf. on Information & Knowledge Management (Atlanta, GA, USA) (CIKM ’22) .Association for Computing Machinery, New York, NY, USA, 4339–4343. doi:10. 1145/3511808.3557656 [45] Yongxin Ni, Yu Cheng, Xiangyan Liu, Junchen Fu, Youhua Li, Xiangnan He, Yongfeng Zhang, and Fajie Yuan. 2023. A Content-Driven Micro-Video Recom-mendation Dataset at Scale. arXiv preprint arXiv:2309.15379 (2023). RecSys ’26, September 27-October 02, 2026, Minneapolis, MN, USA Meehan and Pauwels 
+
+[46] Xia Ning and George Karypis. 2011. Slim: Sparse linear methods for top-n recommender systems. In 2011 IEEE 11th international conference on data mining .IEEE, 497–506. [47] Biswajit Paria, Chih-Kuan Yeh, Ian EH Yen, Ning Xu, Pradeep Ravikumar, and Barnabás Póczos. 2020. Minimizing flops to learn efficient sparse representations. 
+
+arXiv preprint arXiv:2004.05665 (2020). [48] Adam Paszke, Sam Gross, Francisco Massa, Adam Lerer, James Bradbury, Gregory Chanan, Trevor Killeen, Zeming Lin, Natalia Gimelshein, Luca Antiga, et al . 2019. Pytorch: An imperative style, high-performance deep learning library. Advances in neural information processing systems 32 (2019). [49] Ben Peters, Vlad Niculae, and André FT Martins. 2019. Sparse sequence-to-sequence models. arXiv preprint arXiv:1905.05702 (2019). [50] Igor André Pegoraro Santana, Fabio Pinhelli, Juliano Donini, Leonardo Catharin, Rafael Biazus Mangolin, Valéria Delisandra Feltrim, Marcos Aurélio Domingues, et al . 2020. Music4all: A new music database and its applications. In 2020 Interna-tional Conf. on Systems, Signals and Image Processing (IWSSIP) . IEEE, 399–404. [51] Andrew I Schein, Alexandrin Popescul, Lyle H Ungar, and David M Pennock. 2002. Methods and metrics for cold-start recommendations. In Proc. of the 25th annual international ACM SIGIR conf. on Research and development in information retrieval . 253–260. [52] Wenling Shang, Kihyuk Sohn, Diogo Almeida, and Honglak Lee. 2016. Under-standing and improving convolutional neural networks via concatenated rectified linear units. In international conference on machine learning . PMLR, 2217–2225. [53] Noam Shazeer, Azalia Mirhoseini, Krzysztof Maziarz, Andy Davis, Quoc Le, Geoffrey Hinton, and Jeff Dean. 2017. Outrageously large neural networks: The sparsely-gated mixture-of-experts layer. arXiv preprint arXiv:1701.06538 (2017). [54] Kihyuk Sohn, Honglak Lee, and Xinchen Yan. 2015. Learning structured output representation using deep conditional generative models. Advances in Neural Information Processing Systems 28 (2015). [55] Mohamed Sordo, Oscar Celma, Martin Blech, and Enric Guaus. 2008. The quest for musical genres: Do the experts and the wisdom of crowds agree?. In ISMIR .255–260. [56] Harald Steck. 2019. Embarrassingly shallow autoencoders for sparse data. In The World Wide Web Conference . 3251–3257. [57] Changfeng Sun, Han Liu, Meng Liu, Zhaochun Ren, Tian Gan, and Liqiang Nie. 2020. LARA: Attribute-to-feature adversarial learning for new-item recommen-dation. In Proc. of the 13th international conf. on web search and data mining .[58] Yan-Martin Tamm, Gregor Meehan, Vojtěch Nekl, Vojtech Vancura, Rodrigo Alves, Johan Pauwels, and Anna Aljanaki. 2026. Leveraging Artist Catalogs for Cold-Start Music Recommendation. In Proceedings of the 34th ACM Conference on User Modeling, Adaptation and Personalization . 137–146. [59] Aaron Van den Oord, Sander Dieleman, and Benjamin Schrauwen. 2013. Deep content-based music recommendation. Advances in neural information processing systems 26 (2013). [60] Vojtěch Vančura, Rodrigo Alves, Petr Kasalick `y, and Pavel Kordík. 2022. Scalable linear shallow autoencoder for collaborative filtering. In Proceedings of the 16th ACM Conference on Recommender Systems . 604–609. [61] Vojtěch Vančura, Petr Kasalick `y, Rodrigo Alves, and Pavel Kordík. 2025. Evaluat-ing Linear Shallow Autoencoders on Large Scale Datasets. ACM Transactions on Recommender Systems (2025). [62] Vojtěch Vančura, Pavel Kordík, and Milan Straka. 2024. beeFormer: Bridging the Gap Between Semantic and Interaction Similarity in Recommender Systems. In 
+
+Proceedings of the 18th ACM Conference on Recommender Systems . 1102–1107. [63] Vojtěch Vančura, Martin Spišák, Rodrigo Alves, and Ladislav Peška. 2026. Ef-ficient Learning of Sparse Representations from Interactions. arXiv preprint arXiv:2602.09935 (2026). [64] Maksims Volkovs, Guangwei Yu, and Tomi Poutanen. 2017. Dropoutnet: Ad-dressing cold start in recommender systems. Advances in neural information processing systems 30 (2017). [65] Jianling Wang, Haokai Lu, and Minmin Chen. 2024. Fresh content recommenda-tion at scale: A multi-funnel solution and the potential of LLMs. In Proceedings of the 17th ACM International Conference on Web Search and Data Mining . 1186– 1187. [66] Lei Wang and Ee-Peng Lim. 2023. Zero-shot next-item recommendation using large pretrained language models. arXiv preprint arXiv:2304.03153 (2023). [67] Wenbo Wang, Bingquan Liu, Lili Shan, Chengjie Sun, Ben Chen, and Jian Guan. 2024. Preference Aware Dual Contrastive Learning for Item Cold-Start Recom-mendation. In Proc. of the AAAI Conf. on Artificial Intelligence , Vol. 38. 9125–9132. [68] Yinwei Wei, Xiang Wang, Qi Li, Liqiang Nie, Yan Li, Xuanping Li, and Tat-Seng Chua. 2021. Contrastive learning for cold-start recommendation. In Proc. of the 29th ACM International Conf. on Multimedia . 5382–5390. [69] Tiansheng Wen, Yifei Wang, Zequn Zeng, Zhong Peng, Yudi Su, Xinyang Liu, Bo Chen, Hongwei Liu, Stefanie Jegelka, and Chenyu You. 2025. Beyond Matryoshka: Revisiting Sparse Coding for Adaptive Representation. In International Conference on Machine Learning . PMLR, 66520–66538. [70] Minz Won, Yun-Ning Hung, and Duc Le. 2024. A foundation model for music informatics. In ICASSP 2024-2024 IEEE International Conf. on Acoustics, Speech and Signal Processing (ICASSP) . IEEE, 1226–1230. [71] John Wright, Yi Ma, Julien Mairal, Guillermo Sapiro, Thomas S Huang, and Shuicheng Yan. 2010. Sparse representation for computer vision and pattern recognition. Proc. IEEE 98, 6 (2010), 1031–1044. [72] Junda Wu, Cheng-Chun Chang, Tong Yu, Zhankui He, Jianing Wang, Yupeng Hou, and Julian McAuley. 2024. Coral: collaborative retrieval-augmented large language models improve long-tail recommendation. In Proceedings of the 30th ACM SIGKDD Conference on Knowledge Discovery and Data Mining . 3391–3401. [73] Xuansheng Wu, Huachi Zhou, Yucheng Shi, Wenlin Yao, Xiao Huang, and Ning-hao Liu. 2024. Could small language models serve as recommenders? towards data-centric cold-start recommendation. In Proc. of the ACM Web Conf. 2024 .[74] Yunyang Xiong, Zhanpeng Zeng, Rudrasis Chakraborty, Mingxing Tan, Glenn Fung, Yin Li, and Vikas Singh. 2021. Nyströmformer: A nyström-based algorithm for approximating self-attention. In Proceedings of the AAAI conference on artificial intelligence , Vol. 35. 14138–14148. [75] Zhiqiang Xu, Dong Li, Weijie Zhao, Xing Shen, Tianbo Huang, Xiaoyun Li, and Ping Li. 2021. Agile and accurate CTR prediction model training for massive-scale online advertising systems. In Proceedings of the 2021 international conference on management of data . 2404–2409. [76] Hamed Zamani, Mostafa Dehghani, W Bruce Croft, Erik Learned-Miller, and Jaap Kamps. 2018. From neural re-ranking to neural ranking: Learning a sparse representation for inverted indexing. In Proceedings of the 27th ACM international conference on information and knowledge management . 497–506. [77] Michael Zhang, Simran Arora, Rahul Chalamala, Alan Wu, Benjamin Spector, Aaryan Singhal, Krithik Ramesh, and Christopher Ré. 2024. Lolcats: On low-rank linearizing of large language models. arXiv preprint arXiv:2410.10254 (2024). [78] Michael Zhang, Kush Bhatia, Hermann Kumbong, and Christopher Ré. 2024. The hedgehog & the porcupine: Expressive linear attentions with softmax mimicry. 
+
+arXiv preprint arXiv:2402.04347 (2024). [79] Weizhi Zhang, Yuanchen Bei, Liangwei Yang, Henry Peng Zou, Peilin Zhou, Aiwei Liu, Yinghui Li, Hao Chen, Jianling Wang, Yu Wang, et al . 2025. Cold-start rec-ommendation towards the era of large language models (llms): A comprehensive survey and roadmap. arXiv preprint arXiv:2501.01945 (2025). [80] Weizhi Zhang, Liangwei Yang, Yuwei Cao, Ke Xu, Yuanjie Zhu, and Philip S Yu. 2023. Dual-teacher knowledge distillation for strict cold-start recommendation. In 2023 IEEE International Conf. on Big Data (BigData) . IEEE, 483–492. [81] Zheng Zhang, Yong Xu, Jian Yang, Xuelong Li, and David Zhang. 2015. A survey of sparse representation: algorithms and applications. IEEE access 3 (2015), 490– 530. [82] Xu Zhao, Yi Ren, Ying Du, Shenzheng Zhang, and Nian Wang. 2022. Improv-ing item cold-start recommendation via model-agnostic conditional variational autoencoder. In Proc. of the 45th International ACM SIGIR Conf. on Research and Development in Information Retrieval . 2595–2600. [83] Xin Zhou. 2023. MMRec: Simplifying multimodal recommendation. In Proc. of the 5th ACM International Conf. on Multimedia in Asia Workshops . 1–2. [84] Xin Zhou and Zhiqi Shen. 2023. A Tale of Two Graphs: Freezing and Denoising Graph Structures for Multimodal Recommendation. In Proc. of the 31st ACM International Conf. on Multimedia (MM ’23) .[85] Zhihui Zhou, Lilin Zhang, and Ning Yang. 2023. Contrastive collaborative filtering for cold-start item recommendation. In Proc. of the ACM Web Conf. 2023 .[86] Ziwei Zhu, Shahin Sefati, Parsa Saadatpanah, and James Caverlee. 2020. Rec-ommendation for New Users and New Items via Randomized Training and Mixture-of-Experts Transformation. In Proc. of the 43rd International ACM SIGIR Conf. on Research and Development in Information Retrieval (SIGIR ’20) .

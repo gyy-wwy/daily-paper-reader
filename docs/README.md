@@ -6,41 +6,37 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-20
-- 运行时间：2026-07-20 21:28:36 UTC
+- 最新运行日期：2026-07-21
+- 运行时间：2026-07-21 21:34:58 UTC
 - 运行状态：成功
-- 本次总论文数：7
-- 精读区：1
-- 速读区：6
+- 本次总论文数：5
+- 精读区：3
+- 速读区：2
 
 ### 今日简报（AI）
-今日推荐7篇论文，精读《RecGPT-V3 Technical Report》获9.0高分。最值得关注的是RecGPT-V3技术报告及《LiteTopK》关于长上下文稀疏注意力中维度诅咒的优化。建议优先阅读精读论文，理解大模型在推荐系统中的应用进展。
-- 详情：[/202607/20/README](/202607/20/README)
+今日精读两篇高分论文，分别聚焦LLM生成式推荐中的文本解码trie优化和多模态内容稀疏表示以增强冷物品推荐。  
+最值得关注的方向：一是通过优化trie结构突破固定深度和宽度的限制，提升LLM推荐效率；二是利用稀疏多模态表示有效缓解冷启动问题。  
+建议普通读者优先精读这两篇论文，重点关注其解决实际推荐瓶颈的创新思路，尤其是冷启动场景下的应用潜力。
+- 详情：[/202607/21/README](/202607/21/README)
 
 ### 精读区论文标签
-1. [RecGPT-V3 Technical Report](/202607/20/2607.15591v1-recgpt-v3-technical-report)  
+1. [Beyond Fixed Depths and Widths: Optimizing Textual Decoding Tries in LLM-based Generative Recommendation](/202607/21/2607.16633v1-beyond-fixed-depths-and-widths-optimizing-textual-decoding-tries-in-llm-based-generative-recommendation)  
    标签：评分：9.0/10、query:rec-sys
-   evidence：LLM增强推荐系统，推理用户意图
+   evidence：基于LLM的生成式推荐解码trie优化
+2. [Learning Sparse Representations of Multimodal Content for Enhanced Cold Item Recommendation](/202607/21/2607.17184v1-learning-sparse-representations-of-multimodal-content-for-enhanced-cold-item-recommendation)  
+   标签：评分：9.0/10、query:rec-sys
+   evidence：通过多模态内容的稀疏表示解决冷启动问题
+3. [Bridging the Information Gap: Semantic Densification and Hindsight Distillation for Cold-Start Prediction](/202607/21/2607.17070v1-bridging-the-information-gap-semantic-densification-and-hindsight-distillation-for-cold-start-prediction)  
+   标签：评分：8.0/10、query:rec-sys
+   evidence：新用户冷启动预测，语义致密化与蒸馏
 
 ### 速读区论文标签
-1. [LiteTopK: Exploiting the Curse of Dimensionality for a Fused Indexer-TopK Kernel in Long-Context Sparse Attention](/202607/20/2607.11976v1-litetopk-exploiting-the-curse-of-dimensionality-for-a-fused-indexer-topk-kernel-in-long-context-sparse-attention)  
+1. [HyCoRec: Hypergraph-Enhanced Multi-Preference Learning for Alleviating Matthew Effect in Conversational Recommendation](/202607/21/2607.17461v1-hycorec-hypergraph-enhanced-multi-preference-learning-for-alleviating-matthew-effect-in-conversational-recommendation)  
    标签：评分：7.0/10、query:rec-sys
-   evidence：用于推荐系统中向量检索的高效TopK内核
-2. [Where Reasoning Matters: Rethinking Latent Reasoning in Semantic ID-based Generative Recommendation](/202607/20/2607.12425v1-where-reasoning-matters-rethinking-latent-reasoning-in-semantic-id-based-generative-recommendation)  
+   evidence：利用超图学习缓解对话推荐中的马太效应
+2. [SR-Agent: An Experience-Driven Agentic Framework for Post-Ranking Strategies Refinement in E-Commerce Recommendation](/202607/21/2607.17719v1-sr-agent-an-experience-driven-agentic-framework-for-post-ranking-strategies-refinement-in-e-commerce-recommendation)  
    标签：评分：7.0/10、query:rec-sys
-   evidence：基于LLM的生成式推荐中的推理
-3. [NGM-RAG: Neural Graph Matching based Retrieval-Augmented Generation](/202607/20/2607.11159v1-ngm-rag-neural-graph-matching-based-retrieval-augmented-generation)  
-   标签：评分：6.0/10、query:rec-sys
-   evidence：基于图的检索增强生成，可用于大语言模型增强推荐
-4. [Score-Only Distillation for Compact Dense Retrieval](/202607/20/2607.11465v1-score-only-distillation-for-compact-dense-retrieval)  
-   标签：评分：6.0/10、query:rec-sys
-   evidence：用于推荐系统的紧凑密集检索分数蒸馏
-5. [SHEAF: Self-profiled Hardness Estimation from Answer-set Flux for Predicting Query Hardness in Graph-based ANN Search](/202607/20/2607.12229v1-sheaf-self-profiled-hardness-estimation-from-answer-set-flux-for-predicting-query-hardness-in-graph-based-ann-search)  
-   标签：评分：6.0/10、query:rec-sys
-   evidence：用于推荐系统中图ANN查询硬度预测
-6. [RECAP: Feedback-Driven Streaming Semantic User Profiles for Short-Video Recommendation](/202607/20/2607.15730v1-recap-feedback-driven-streaming-semantic-user-profiles-for-short-video-recommendation)  
-   标签：评分：6.0/10、query:rec-sys
-   evidence：基于语言的用户画像用于推荐
+   evidence：基于LLM的智能体用于推荐后排序优化
 
 
 <div class="dpr-home-promo-card">

@@ -1,0 +1,1178 @@
+Title: Bridging the Information Gap: Semantic Densification and Hindsight Distillation for Cold-Start Prediction
+
+URL Source: https://arxiv.org/pdf/2607.17070v1
+
+Published Time: Tue, 21 Jul 2026 00:56:03 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+# Bridging the Information Gap: Semantic Densification and Hindsight Distillation for Cold-Start Prediction 
+
+## Hao Duong Le 
+
+lihaoyan25@mails.tsinghua.edu.cn Tsinghua University Beijing, China 
+
+## Yifei Gao 
+
+gao-yf@mail.tsinghua.edu.cn Tsinghua University Beijing, China 
+
+## Huan Li 
+
+huan-li22@mails.tsinghua.edu.cn Tsinghua University Beijing, China 
+
+## Lun Jiang 
+
+jianglun02@meituan.com Meituan Beijing, China 
+
+## Chen Bai 
+
+baichen06@meituan.com Meituan Beijing, China 
+
+## Ke Xing 
+
+xingke@meituan.com Meituan Beijing, China 
+
+## Chen Zhang ∗
+
+zhangchen01@tsinghua.edu.cn Tsinghua University Beijing, China 
+
+Abstract 
+
+New-user cold-start is a critical bottleneck for e-commerce plat-forms: predicting user lifetime value (LTV) and conversion rate (CVR) for users with sparse interaction history. Two prior directions— LLM-based semantic augmentation and learning using privileged information (LUPI)—each face a key limitation. First, LLM augmen-tation produces unstructured rationales that are noisy and hard to operationalize in production. Second, naive student-teacher distilla-tion can be brittle due to an information gap between the privileged teacher and the sparse student; moreover, this gap is heterogeneous across users. We propose SemRaD, a Semantic Reasoning-aware Distillation framework addressing both limitations. First, a Struc-tured Semantic Reasoning Pipeline replaces free-form rationales with a structured schema built via a discover–curate–audit work-flow, producing per user a Densified Semantic Profile (consumed by the deployed student via a Semantic-Gated Encoder that focuses on the most informative dimensions) and a Hindsight Distillation Target reconciled from pre- and post-conversion reasoning (used only at training). Second, to bridge this gap and handle its hetero-geneity, a Hindsight-Aware Distillation Network transfers privileged knowledge via the hindsight target, with Distillation Experts improv-ing transfer under per-user variability. On a large-scale industrial dataset, SemRaD lifts +1.9% LTV (Gini) and +1.0% CVR (AUROC) over a production-grade base; a four-week online A/B at Keeta confirms +1.0% LTV / +0.43% CVR. SemRaD also matches the pro-duction system’s LTV using only 9% of the training data while improving CVR by 0.8%.  
+
+> ∗Corresponding author. Permission to make digital or hard copies of all or part of this work for personal or classroom use is granted without fee provided that copies are not made or distributed for profit or commercial advantage and that copies bear this notice and the full citation on the first page. Copyrights for components of this work owned by others than the author(s) must be honored. Abstracting with credit is permitted. To copy otherwise, or republish, to post on servers or to redistribute to lists, requires prior specific permission and/or a fee. Request permissions from permissions@acm.org.
+> Conference acronym ’XX, Woodstock, NY
+> ©2018 Copyright held by the owner/author(s). Publication rights licensed to ACM. ACM ISBN 978-1-4503-XXXX-X/2018/06 https://doi.org/XXXXXXX.XXXXXXX
+
+Keywords 
+
+Cold-start prediction, LTV prediction, CVR prediction, Knowledge distillation, Large language models, Semantic reasoning 
+
+ACM Reference Format: 
+
+Hao Duong Le, Yifei Gao, Huan Li, Lun Jiang, Chen Bai, Ke Xing, and Chen Zhang. 2018. Bridging the Information Gap: Semantic Densification and Hindsight Distillation for Cold-Start Prediction. In Proceedings of Make sure to enter the correct conference title from your rights confirmation email (Conference acronym ’XX). ACM, New York, NY, USA, 12 pages. https://doi. org/XXXXXXX.XXXXXXX 
+
+1 Introduction 
+
+New-user cold-start is a critical challenge for e-commerce user ac-quisition (UA) and lifecycle management. Upon signup, platforms must make early lifetime value (LTV) and conversion rate (CVR) predictions for a large number of users with sparse interaction his-tory. For ad and recommendation systems, LTV and CVR are central signals for UA and lifecycle management; extreme sparsity there-fore induces high-variance estimates and unreliable ranking deci-sions [ 12 , 14 ]. Standard ID-based sequence models (e.g., DIN [ 25 ], SASRec [ 8]) depend on inductive biases learned from rich histories; when user traces contain only a few events, their predictions often degenerate toward population-level averages, leading to inefficient marketing spend and missed retention opportunities. Two prior directions have attempted to address this sparsity, each facing a key limitation: (i) LLM-based semantic augmen-tation , which injects external world knowledge to densify sparse histories [ 3, 21 ], and (ii) learning using privileged information (LUPI) , where a teacher can access post-conversion signals during training [11, 18]. 
+
+First , LLM-based augmentation can infer high-level user intent (e.g., style preference, functional constraints, brand affinity, brows-ing depth) from minimal context and densify sparse cold-start traces [ 3 , 16 , 21 ], with reasoning-centric approaches further elicit-ing natural-language rationales [ 9 , 17 , 24 ]. However, in production pipelines, unstructured rationales are difficult to validate, monitor, and operationalize: small prompt rephrasings or market shifts can yield inconsistent explanations even for the same user log [ 6 , 15 ], complicating downstream encoding and ranking. Second , LUPI arXiv:2607.17070v1 [cs.AI] 19 Jul 2026 Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Le et al. Base Sem.Des. PFD SemRaD             
+
+> 0.282
+> 0.286
+> 0.290
+> Score
+> (A) LTV (Gini)
+> 0.2847
+> 0.2894
+> 0.2881
+> 0.2902
+> No Distillation With Distillation
+> Base Sem.Des. PFD SemRaD
+> 0.632
+> 0.636
+> 0.640
+> (B) CVR (AUROC)
+> 0.6335
+> 0.6359
+> 0.6374
+> 0.6396
+> No Distillation With Distillation
+> 0.2 0.4 0.6 0.8
+> Metric Category Position
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Metric Score
+> 0.2924
+> Prod (100%, ~1.1M)
+> 0.2902
+> SemRaD (9%, ~100K)
+> LTV
+> 0.6345
+> Prod (100%, ~1.1M)
+> 0.6396
+> SemRaD (9%, ~100K)
+> CVR
+> (C) Data Efficiency
+> Baseline / Prior Work Sem.Des - Ours (LTV) Sem.Des - Ours (CVR) SemRaD Full - Ours (LTV) SemRaD Full - Ours (CVR)
+
+Figure 1: Performance and data efficiency of SemRaD. (A–B) component ablations; (C) matches production LTV using 9% of the data (+0.8% CVR). 
+
+methods distill privileged features (available only during train-ing) from a stronger teacher into a student that uses only online-available signals [ 22 , 23 ]. However, the information gap between teacher and student is often too large for naive transfer to be robust, leading to brittle distillation that fails to inherit the teacher’s ad-vantage precisely in the sparse regime that motivates the approach; moreover, this gap is heterogeneous across users—the size and pat-tern of missing signal varies from user to user (Section 6.2)—and a single shared distillation pathway averages over these regimes, underfitting exactly the users for whom privileged information is most informative. To address both limitations together, we propose SemRaD, a 
+
+Semantic Reasoning-aware Distillation framework (Figure 2). Sem-RaD has two complementary components, each addressing one limitation. (i) A Structured Semantic Reasoning Pipeline re-places free-form LLM rationales with structured outputs from a schema built via a discover–curate–audit workflow: per user, it produces a Densified Semantic Profile that ships with the deployed student, and a Hindsight Distillation Target reconciled from pre- and post-conversion reasoning, used only at training. (ii) A Hindsight-Aware Distillation Network then transfers privileged knowledge from teacher to student via the hindsight target, with Distillation Ex-perts handling per-user variability. Beyond the cold-start LTV/CVR setting reported here, the framework is being adopted for addi-tional production tasks at Keeta—including CTR prediction, user simulation, and silent-user re-engagement—which share the same structure: a deployable model predicting from sparse signal while richer outcomes are available only at training. Our contributions are threefold: 
+
+• Structured Semantic Reasoning Pipeline. We introduce an LLM-driven pipeline that replaces unstructured ratio-nales with structured outputs from a discover–curate–audit 
+
+schema-design workflow, producing per user a Densified Semantic Profile (consumed by the deployed student via a Semantic-Gated Encoder that focuses on the most informa-tive dimensions) and a Hindsight Distillation Target recon-ciled from pre- and post-conversion reasoning. 
+
+• Hindsight-Aware Distillation Network. We propose a distillation network that bridges the teacher–student infor-mation gap via the hindsight target and handles per-user variability via Distillation Experts .
+
+• Generalization & Production Deployment at Keeta. We show SemRaD generalizes across tasks (LTV regression and CVR classification), student backbones, and profiler LLMs, then validate it in production: a four-week online A/B con-firms +1.0% LTV and +0.43% CVR, and SemRaD matches the production system’s LTV using only 9% of the training data. The framework is further being adopted for other Keeta production tasks (e.g., CTR, silent-user re-engagement). 
+
+2 Related work 
+
+Cold-Start Prediction. Standard CVR/LTV backbones [ 4, 12 , 20 , 25 ,26 ] excel in warm-start regimes but collapse toward population pri-ors under extreme sparsity. Classical remedies (input dropout [ 19 ], self-supervision) treat the symptom but neither densify sparse in-puts with external knowledge nor exploit privileged training-time outcomes—the two levers we target. 
+
+LLM-Based Semantic Augmentation. LLMs have been used for recommendation via prompting [ 2 , 3 ], fine-tuning [ 1], and reasoning-centric methods [ 9 , 17 , 21 , 24 ], but typically yield free-form ratio-nales that are hard to validate or operationalize. We instead generate 
+
+structured , schema-guided reasoning offline and encode it with a frozen embedder for serving efficiency. 
+
+Privileged Information and Distillation. LUPI [ 11 , 18 ], realized via distillation [ 5, 13 ] and privileged-feature distillation (PFD [ 22 ], HAPFD [ 23 ]), transfers privileged signals through a single shared pathway that is brittle under a heterogeneous gap. We instead add a reconciled hindsight target Z𝑓 𝑢𝑠𝑒𝑑 and per-user expert routing [ 7]. Extended discussion is in the Supplementary Material (§ S5). 
+
+3 Problem Formulation 
+
+We consider new-user cold-start prediction anchored at each user’s first-conversion event 𝑡 0 (𝑢 ) (i.e., the timestamp of their initial pur-chase). Let E𝑢 (𝑡 ) denote the stream of user interactions (e.g., views, clicks, add-to-cart) up to time 𝑡 .
+
+Pre- vs. post-conversion logs (training vs. serving). At serving time, the model only observes all interaction logs before the first conversion: 
+
+Spre (𝑢 ) ≜ E𝑢 
+
+ (−∞ , 𝑡 0 (𝑢 )) . (1) During training, we additionally have access to the post-conversion log within a fixed 30-day window after the first conversion as privileged information: 
+
+Spost (𝑢 ) ≜ E𝑢 
+
+ [𝑡 0 (𝑢 ), 𝑡 0 (𝑢 ) + 30 d]. (2) We use Spre (𝑢 ) and Spost (𝑢 ) as the model-ready feature sequences throughout. 
+
+Prediction targets. We predict two downstream business metrics defined on a fixed 30-day window after the first conversion: 
+
+𝑦 LTV (𝑢 ) ≜ GMV of Post Orders  𝑢 ; [𝑡 0 (𝑢 ), 𝑡 0 (𝑢 ) + 30 d],𝑦 CVR (𝑢 ) ≜ ⊮ Post Orders Exist in [𝑡 0 (𝑢 ), 𝑡 0 (𝑢 ) + 30 d] . (3) Here, 𝑦 CVR indicates whether the user makes any post-conversion purchase within 30 days after their first conversion, and 𝑦 LTV mea-sures the total Gross Merchandise Value (GMV) of all post-conversion orders within the 30-day window (set to 0 if no post-conversion orders occur). For each task 𝜏 ∈ { LTV , CVR }, the goal is to learn a separate student model that satisfies the serving constraint 
+
+ˆ𝑦 𝜏 (𝑢 ) = 𝑓 𝜃 𝜏 
+
+ Spre (𝑢 ), 𝜏 ∈ { LTV , CVR }, (4) while training may utilize Spost (𝑢 ) through a privileged teacher. The two tasks are trained separately on the same augmented data. Bridging the Information Gap: Semantic Densification and Hindsight Distillation for Cold-Start Prediction Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Large Information Gap       
+
+> C, Traditional Privilege Information Distillation
+> D, Reasoning -Aware Distillation Network (Our)
+> Privilege
+> Feature
+> LLM
+> Semantic Reasoning
+> Generation Pipeline
+> Regular
+> Feature
+> Click Checkout
+> Click
+> Embedding
+> Click Checkout
+> Click
+> Embedding
+> …
+> ⊕LLM -Schema
+> User logs
+> User logs
+> LLM
+> LLM
+> Text
+> Encoder
+> 𝐷𝑖 𝑚 !
+> 𝐷𝑖 𝑚 "
+> 𝐷𝑖 𝑚 #
+> 𝐷𝑖 𝑚 $
+> Text
+> Encoder
+> ⊕
+> ⊕
+> ⊕
+> ⊕
+> Semantic -gated Net
+> A, Unstructured Semantic Generation and Encoding
+> Human Expert
+> B, Semantic Reasoning Generation Pipeline and Semantic -Gated Encoder (Our)
+> Narrowed Information Gap
+> Unstructured
+> Reasoning
+> Text
+> Structured
+> Reasoning
+> Text
+> Single -shared Distillation
+> Distillation Experts
+> ⊕⊕
+> Teacher MLP Student
+> Teacher Hindsight
+> Reasoning
+> Profile
+> Student
+
+Figure 2: Semantic encoding and distillation paradigms. (A, C) prior unstructured encoding and large-gap distillation vs. (B, D) our structured schema and hindsight-bridged distillation. 
+
+4 Structured Semantic Reasoning Pipeline 
+
+We address the cold-start information deficit by employing Large Language Models (LLMs) to project sparse user histories into a dense, interpretable semantic space (Figure 3). Our pipeline in-volves three LLM calls under a structured schema: (i) profiling S𝑝𝑟𝑒 
+
+to generate the Densified Semantic Profile Z𝑝𝑟𝑒 (available at infer-ence), (ii) profiling S𝑝𝑜𝑠𝑡 to generate the privileged future profile 
+
+Z𝑝𝑜𝑠𝑡 (training only), and (iii) fusing Z𝑝𝑟𝑒 and Z𝑝𝑜𝑠𝑡 to produce the 
+
+Hindsight Distillation Target Z𝑓 𝑢𝑠𝑒𝑑 (training only). 
+
+4.1 Stage 0: Schema Construction via Discover–Curate–Audit 
+
+As discussed in the introduction, unstructured LLM-generated ratio-nales are difficult to validate, monitor, and operationalize in produc-tion. We therefore introduce a task-specific behavioral dimension schema D = {𝐷 1, . . . , 𝐷 𝐾 } that structures the LLM’s reasoning along predefined, interpretable axes (Figure 3, Stage 0), where each dimension 𝐷 𝑘 captures a distinct aspect of user behavior identified as predictive of conversion (e.g., Temporal Resolution , Transaction Magnitude , Navigation Intent Specificity , Domain Entropy ). Con-straining the LLM to these axes makes the reasoning (i) interpretable 
+
+and verifiable against business intuition, (ii) consistent across users and time, and (iii) task-relevant rather than arbitrary narrative. 
+
+Schema construction. Hand-engineering this schema is brittle, while ad-hoc LLM discovery risks irrelevant or unstable dimensions. We therefore adopt a three-step discover–curate–audit workflow that combines LLM-driven discovery, light human oversight, and a built-in empirical validation step. 
+
+Discover. We stratify the training corpus into 𝐵 ≈ 100 batches of 
+
+𝑛 =20 users each, balanced across activity strata (cold/warm/active/heavy) and outcome (high/low LTV). For each batch, an LLM proposes 3–6 candidate dimensions that discriminate the users and appear pre-dictive of LTV/CVR, yielding ∼500 raw candidates with substantial overlap. 
+
+Curate. Candidates are deduplicated via embedding clustering (cosine ≥ 0.85 ) into 30–60 unique clusters, then consolidated by a second LLM call into 6–8 ranked finalists. Domain experts review these against a rubric checking distinctness, predictive relevance, and naming clarity, requiring domain familiarity rather than ML expertise; the deployed schema D contains 𝐾 =4 dimensions. 
+
+Audit. After training, the mean gate weight ¯𝑤 gate ,𝑘 from the Semantic-Gated Encoder serves as an empirical utility score for each dimen-sion; consistently down-weighted dimensions are candidates for pruning. Section 6.2 reports per-dimension utilization for the de-ployed schema. Discovery and consolidation prompts, and dimen-sion examples, are in the Supplementary Material (§ S4) 1.
+
+4.2 Stage 1: Observed Interaction Log 
+
+We collect two behavioral logs per user (Figure 3, Stage 1): the observed pre-conversion log S𝑝𝑟𝑒 (available at serving time, be-fore first-conversion 𝑡 0) and the privileged future log S𝑝𝑜𝑠𝑡 (post-𝑡 0,training only). 
+
+4.3 Stage 2: LLM Semantic Profiling (Pre vs. Post) 
+
+As shown in Figure 3 (Stage 2), we apply a profiling prompt Pprof 
+
+to generate structured reasoning along the dimensions D defined in Stage 0 (prompt details in the Supplementary Material, § S2). For the student, we profile the pre-conversion log S𝑝𝑟𝑒 to obtain the Densified Semantic Profile Z𝑝𝑟𝑒 = {t𝑝𝑟𝑒 𝑘 }𝐾 𝑘 =1, where each t𝑝𝑟𝑒 𝑘 is a natural language rationale explaining the user’s behavior along dimension 𝐷 𝑘 . This profile is the only LLM-derived signal consumed by the deployed student at serving time. For the teacher (training only), we apply the same profiling process to the privileged post-conversion log S𝑝𝑜𝑠𝑡 to obtain the privileged future profile Z𝑝𝑜𝑠𝑡 =
+
+{t𝑝𝑜𝑠𝑡 𝑘 }𝐾 𝑘 =1.
+
+4.4 Stage 3: Hindsight-Aware Fusion 
+
+Prior privileged-feature distillation [ 22 , 23 ] simply provides the teacher with both Z𝑝𝑟𝑒 and Z𝑝𝑜𝑠𝑡 . However, when these contra-dict, the teacher receives inconsistent supervision that is difficult for the student to learn from. We instead apply a fusion prompt 
+
+Pfusion (Figure 3, Stage 3) that, for each dimension 𝐷 𝑘 , compares the pre-conversion hypothesis with the post-conversion outcome, resolves contradictions by identifying which pre-conversion signals were truly predictive, and outputs a per-dimension hindsight tar-get t𝑡𝑒𝑎𝑐ℎ𝑒𝑟 𝑘 . The complete Hindsight Distillation Target is Z𝑓 𝑢𝑠𝑒𝑑 =
+
+{t𝑡𝑒𝑎𝑐ℎ𝑒𝑟 𝑘 }𝐾 𝑘 =1. During training, the teacher consumes only Z𝑓 𝑢𝑠𝑒𝑑 .
+
+> 1Supplementary Material available at https://github.com/lehaoduong123/semrad-supplementary/blob/main/supplementary.pdf.
+
+Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Le et al. Stage 0: 
+
+Expert -Defined 
+
+Dimension Schema 
+
+Stage 1: 
+
+Observed Interaction Log 
+
+Stage 2: 
+
+LLM Semantic Profiling                                                            
+
+> -!" #!(Temporal Resolution) :User generates ~30 events
+> over 4 days, across 10 short sessions with many app_quit .
+> Events -per -minute is very low → classified as long
+> decision based on sparse, fragmented activity.
+> -!" #"(Transaction Magnitude ):Median price is below
+> regional benchmark, but ~30% of interactions
+> already touch the top price tier ; no burst of rapid
+> activity → confirms genuinely long -path decision
+> horizon .…
+> -!" #!(Temporal Resolution):
+> Future logs show the same pattern:
+> more scattered sessions over the next 2 weeks before
+> the first order; no burst of rapid activity →
+> confirms genuinely long -path decision horizon.
+> -!" #"(Transaction Magnitude) :Actual orders cluster in
+> mid -to -high price bands; median and p90 both sit at or
+> above regional benchmark →
+> consistent medium spending capacity, not truly low …
+
+Stage 3: 
+
+Hindsight -Aware Fusion                                       
+
+> -!" #!(Temporal Resolution):
+> Label =Long . Pre -only low event
+> density and many
+> sessions were reliable signal , not
+> noise. Teacher should teach
+> student to
+> learn that ‘events/min +#sessions
+> over days’ is a robust feature for
+> long -path decisions.
+> -!" #"(Temporal Resolution) :
+> Label = Medium . Early
+> median -only view was misleading ;
+> the combination
+> of ‘some top -tier exposure +
+> later mid/high -priced purchases’ is
+> the true signal. Teacher should
+> teach student to use median +
+> share in top tier, not a single statistic.
+> …
+
+LLM on !!"# 
+
+LLM on !!$%& 
+
+LLM 
+
+Fusion 
+
+Compiler 
+
+Past Behavior Reasoning 
+
+Future Behavior Reasoning   
+
+> Session 1 :
+> click_product →
+> add_to_cart →exit_app
+> Session 2 :
+> add_to_cart →exit_app
+> ...
+> Total: 35 events, 6
+> sessions
+
+Observed Log 
+
+(!!"# )  
+
+> Session K+1 :
+> click_shop →exit_app
+> Session K+2:
+> →checkout →
+> submit_order
+> ...
+> Total: 110 events, 11
+> sessions
+
+Privileged Future Log 
+
+(!!$%& )
+
+(Training only) 
+
+Hindsight Reasoning Profile 
+
+Human Expert          
+
+> You are an expert user behavior
+> analyst ….
+> Input Context:
+> -User Events: { sequence_logs }
+> -Static Profile: { user_profile }
+> Task: Analyze the user along the
+> following dimensions:
+> -!" #!Temporal Resolution
+> -!" #"Transaction Magnitude
+> -!" ##Navigation Intent
+> Specificity
+> ….
+> For each dimension, provide a
+> specific Reasoning Rationale
+> based on the evidence
+
+Expert -Specified Field Schema 
+
+1 Discover ( LLM -driven ) 2 Curate (Deduplicate & Consolidate ) 3 Audit ( Empirical Validation )
+
+Stratify training corpus into B ≈ 100 batches of n = 20 
+
+users balanced across activity strata and outcome. 
+
+Activity Strata 
+
+Cold 
+
+Warm 
+
+Active 
+
+Heavy 
+
+> …
+
+Outcome 
+
+High LTV 
+
+Low LTV 
+
+> LLM
+
+Propose 3 –6 candidate 
+
+dimensions per batch that: 
+
+• Discriminate users 
+
+• Appear predictive of LTV/CVR 
+
+Output: ~500 raw candidate 
+
+dimensions (substantial overlap) 
+
+① Deduplicate via embedding clustering 
+
+(cosine similarity ≥ 0.85) 
+
+Clustering 
+
+30 –60 
+
+unique 
+
+clusters  
+
+> ②Consolidate with LLM
+> LLM
+
+6–8 ranked finalist dimensions 
+
+1. Temporal Resolution 
+
+2. Transaction Magnitude 
+
+3. Navigation Intent 
+
+⋮
+
+8. Domain Entropy  
+
+> ③Domain expert review (Rubric)
+
+✓ Distinctness 
+
+✓ Predictive 
+
+relevance 
+
+✓ Naming clarity 
+
+Deploy 
+
+schema 
+
+D (K = 4) 
+
+After training, use mean gate weight w̄ gate,k from 
+
+the Semantic -Gated Encoder as empirical utility 
+
+score. 
+
+Trained Model Mean Gate Weight ( w̄ gate,k ) 
+
+> Dimension Score
+
+d1 (Temporal  
+
+> Resolution)
+
+0.42 
+
+d2 (Transaction  
+
+> Magnitude)
+
+0.28 
+
+d3 (Navigation  
+
+> Intent Spec.)
+
+0.20 
+
+d4 (Domain  
+
+> Entropy)
+
+0.10 
+
+> …
+
+Dimensions with consistently 
+
+low weights are candidates for 
+
+pruning in future iterations. 
+
+Figure 3: Structured Semantic Reasoning Pipeline (Stages 0–3): schema construction via discover–curate–audit , log collection (S𝑝𝑟𝑒 /S𝑝𝑜𝑠𝑡 ), LLM profiling ( Z𝑝𝑟𝑒 /Z𝑝𝑜𝑠𝑡 ), and hindsight fusion into Z𝑓 𝑢𝑠𝑒𝑑 .
+
+Because Z𝑓 𝑢𝑠𝑒𝑑 already carries the salient pre- and post-conversion signals together with the explicit reconciliation between them, it provides the teacher with self-consistent supervision—rather than the raw, potentially contradictory Z𝑝𝑟𝑒 and Z𝑝𝑜𝑠𝑡 —that the student (which sees only Z𝑝𝑟𝑒 ) can effectively learn from. We validate this design via prediction disagreement analysis in Section 6.2. 
+
+5 Hindsight-Aware Distillation Network 
+
+The proposed SemRaD framework follows a Simultaneous Dis-tillation paradigm [ 22 ]. We instantiate two identical networks with shared architecture: a Student S and a Teacher T . They differ only in their inputs: S observes S𝑝𝑟𝑒 , while T observes both the regular and privileged data S𝑝𝑟𝑒 ⊕ S𝑝𝑜𝑠𝑡 . Both models are trained jointly. Crucially, our framework is Model-Agnostic . It is designed as a plug-and-play enhancement that can be integrated with any standard industrial backbone (DIN or Transformer). 
+
+5.1 Multi-View Feature Encoding 
+
+The Student and Teacher share encoder architectures across three views and differ only in inputs. The Static view embeds categori-cal and numerical user-profile features (shop ID, brand ID, tenure, session counts) via embedding lookups + standardized numerics, projected by an MLP to h𝑠𝑡𝑎𝑡 ∈ R𝑑 𝑠𝑡𝑎𝑡 ; both networks share this view since no privileged signal exists at the profile level. The Dy-namic view encodes the event sequence (event type, shop type, shop AOI; AOV, price, time gap) with a Transformer followed by attention-pooling: 
+
+h𝑑𝑦𝑛 = AttnPool (Transformer ({ 𝑒 1, . . . , 𝑒 𝑇 })) ∈ R𝑑 𝑑 𝑦𝑛 (5) The Student encodes S𝑝𝑟𝑒 , while the Teacher encodes S𝑝𝑟𝑒 ⊕S𝑝𝑜𝑠𝑡 [ 22 ]. The Semantic Reasoning view consumes the rationales from Sec-tion 4: the Student receives Z𝑝𝑟𝑒 and the Teacher receives the recon-ciled Z𝑓 𝑢𝑠𝑒𝑑 , both encoded by the Semantic-Gated Encoder below to produce h𝑆 𝑠𝑒𝑚 and h𝑇 𝑠𝑒𝑚 . Feature details are in the Supplementary Material (§ S3). 
+
+5.2 Semantic-Gated Encoder 
+
+User behavior is heterogeneous: different semantic dimensions matter for different users (e.g., Temporal Resolution dominates for rapid converters, Domain Entropy for diverse browsers). Naively concatenating all 𝐾 semantic embeddings introduces interference from irrelevant dimensions. We instead encode each rationale t𝑘 Bridging the Information Gap: Semantic Densification and Hindsight Distillation for Cold-Start Prediction Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Task Head 
+
+Fusion Layer 
+
+Static 
+
+Encoder 
+
+Dynamic 
+
+Encoder 
+
+Semantic -
+
+Gated Encoder                   
+
+> 👤 User Profile
+> 📅 Event Sequence
+> (𝑺 𝒑𝒓𝒆 )
+> Region: SA
+> Gen: Male
+> Age: 25
+> Session 1:click_product →
+> add_to_cart →exit_app
+> Session 2 :add_to_cart →
+> exit_app
+> ...
+> Total: 35 events, 6 sessions
+> 📊 Past Behavior
+> Reasoning (𝒁 𝒑𝒓𝒆 )
+> -𝑫𝒊 𝒎 𝟏 :User generates
+> ~30 events over 4 days,
+> across 10 short…
+> -𝑫𝒊 𝒎 𝟐 : Median price
+> is below
+> regional benchmark, but
+> ~30% of interactions …
+> -𝑫𝒊 𝒎 𝒌 …
+
+Student Network (Online) Teacher Network (Training Only) 
+
+Static Encoder Dynamic Encoder Semantic -Gated Encoder 
+
+> Event,
+> Shop,
+> Times,
+> ….
+> Sequential
+> Behaviors
+> 𝑡 !
+> 𝑡 "
+> 𝑡 #
+> …
+> Self -Attention,
+> LayerNorm ,
+> Linear,
+> GELU
+> Pooling
+> 𝒕𝒆𝒙 𝒕 𝟏
+> 𝒕𝒆𝒙 𝒕 𝟐
+> 𝒕𝒆𝒙 𝒕 𝒌
+> …
+> Stack and Project
+> Embedding Layer
+> ⊕
+> ⊕
+> ⊕
+> ⊕
+> Text
+> Encoder
+
+𝑦 "!  
+
+> CrossNet
+> Linear,BN,GELU
+> Feature interaction
+> Linear,
+> BN ,
+> GELU
+> ResNet Blocks
+> Linear,
+> BN ,
+> GELU
+> Categorical
+> Indices
+> Numerical
+> Values
+> Embedding Layer
+> Project
+> Qwen
+> 0.6B
+> Embedding …
+> Semantic -
+> Gated Net
+
+Task Head 
+
+𝑦 ""
+
+Ground Truth ( 𝑦 )
+
+ℒ#$%& 
+
+Distillation Experts (Training Only) 
+
+⊕⊕
+
+> Expert 1
+> Expert 2
+> Expert N
+> Select network
+> Gumbel
+> Softmax
+
+… ℒ!"        
+
+> 𝛼 =[1,0,..,0]
+
+ℒ'( Fusion Layer 
+
+Static 
+
+Encoder 
+
+Dynamic 
+
+Encoder 
+
+Semantic -
+
+Gated Encoder                       
+
+> 👤 User Profile
+> 📅 Event Sequence
+> (𝑺 𝒑𝒓𝒆 +𝑺 𝒑𝒐𝒔𝒕 )
+> Region: SA
+> Gen: Male
+> Age: 25
+> Session 1 :click_product →
+> add_to_cart →exit_app
+> Session 2 :add_to_cart →
+> exit_app ...
+> Total: 110 events, 11
+> sessions
+> 📊 Past Behavior
+> Reasoning (𝒁 𝒇𝒖𝒔𝒆𝒅 )
+> -𝑫𝒊 𝒎 𝟏 :User generates
+> ~80 events, across 20
+> short…
+> -𝑫𝒊 𝒎 𝟐 :Mean price
+> is above
+> regional benchmark, but
+> ~10 % of interactions …
+> -𝑫𝒊 𝒎 𝒌 …
+
+Figure 4: Hindsight-Aware Distillation Network. Shared student/teacher encoders (Static, Dynamic, Semantic-Gated); student sees ( S𝑝𝑟𝑒 , Z𝑝𝑟𝑒 ), teacher sees ( S𝑝𝑟𝑒 ⊕ S𝑝𝑜𝑠𝑡 , Z𝑓 𝑢𝑠𝑒𝑑 ). Distillation Experts ( L𝐷𝐸 ) and logit KD ( L𝑘𝑑 ) transfer privileged knowledge. 
+
+with a frozen text embedder (Qwen-0.6B-Emb) and compute per-user importance weights: 
+
+e𝑘 = TextEmbed (t𝑘 ), w𝑔𝑎𝑡𝑒 = Softmax (MLP 𝑔𝑎𝑡𝑒 ([ e1, . . . , e𝐾 ])) 
+
+(6) The final semantic representation is the gate-weighted aggregation: 
+
+h𝑠𝑒𝑚 = MLP 𝑠𝑒𝑚 ([ 𝑤 𝑔𝑎𝑡𝑒, 1e1, . . . , 𝑤 𝑔𝑎𝑡𝑒,𝐾 e𝐾 ]) ∈ R𝑑 𝑠𝑒𝑚 (7) The gate weights w𝑔𝑎𝑡𝑒 also provide interpretability and serve as a post-hoc empirical utility score for the expert-defined dimensions (Section 4.1); per-dimension utilization is reported in Section 6.2. 
+
+5.3 Distillation Experts 
+
+Prior latent-alignment approaches (e.g., HAPFD [ 23 ]) transfer priv-ileged knowledge through a single shared projection pathway . This assumes that one student-to-teacher mapping is sufficient for all users, even though the teacher–student information gap can vary across users: for some users, post-conversion evidence may clarify pre-conversion ambiguity, while for others it may introduce signals that are difficult to infer from the student’s inputs. To avoid forcing these heterogeneous transfer patterns into one pathway, we adopt 
+
+Distillation Experts [ 7 ]: 𝑀 expert MLPs whose outputs are mixed by a Gumbel-softmax router conditioned on the teacher’s pooled representation, producing an expert-routed reconstruction of the teacher target: 
+
+ˆh𝑇 =
+
+𝑀 ∑︁ 
+
+𝑚 =1
+
+𝛼 𝑚 (sg (h𝑇 ,𝑑𝑦𝑛 ))· Expert 𝑚 (h𝑆,𝑑𝑦𝑛 ), L𝐷𝐸 = ∥ ˆh𝑇 −sg (h𝑇 ,𝑑𝑦𝑛 )∥ 22
+
+(8) where 𝛼 𝑚 (·) = GumbelSoftmax (MLP 𝑟𝑜𝑢𝑡𝑒𝑟 (·)) 𝑚 are the per-user routing weights. Following the original formulation [ 7 ], the router conditions on the (detached) teacher representation, allowing privi-leged information to choose among multiple reconstruction path-ways; the experts themselves operate on the student representation 
+
+h𝑆,𝑑𝑦𝑛 , so the reconstruction must remain achievable from S𝑝𝑟𝑒 . The experts and router are used only during training; the deployed stu-dent requires only its standard forward pass, so this added capacity incurs no serving cost. 
+
+5.4 Training Objective 
+
+SemRaD is trained per task : we optimize a single task loss at a time—Huber regression for LTV or Binary Cross-Entropy for CVR— training the two tasks as separate models that share the same aug-mented data ( Z𝑝𝑟𝑒 , Z𝑓 𝑢𝑠𝑒𝑑 ). For a given task, the Student and Teacher are trained jointly with a weighted sum of three terms: 
+
+L𝑡𝑜𝑡𝑎𝑙 = L𝑡𝑎𝑠𝑘 (S) + L 𝑡𝑎𝑠𝑘 (T ) 
+
+| {z }
+
+Supervised 
+
++ 𝜆 𝑘𝑑 L𝑘𝑑 
+
+| {z }
+
+Soft-Target KD 
+
++ 𝜆 𝐷𝐸 L𝐷𝐸 
+
+| {z }
+
+Experts 
+
+(9) where L𝑡𝑎𝑠𝑘 is the task-specific supervised loss (Huber for LTV, Binary Cross-Entropy for CVR); L𝑘𝑑 transfers the teacher’s soft targets to the student (MSE for LTV regression, temperature-scaled KL [ 5] for CVR classification); and L𝐷𝐸 is the expert-routed recon-struction loss from Section 5.3. By minimizing L𝑡𝑜𝑡𝑎𝑙 , the Teacher learns from the privileged future ( S𝑝𝑜𝑠𝑡 ) and pulls the Student to-wards this privileged manifold via both soft targets and per-user expert-routed reconstruction. 
+
+6 Experiments 6.1 Experimental Setup 
+
+Dataset. We use a real-world industrial dataset (collected June– August) with a strictly temporal split of 120,000 stratified users (100k/10k/10k train/val/test). Each user is anchored at first-conversion time 𝑡 0 with observed S𝑝𝑟𝑒 and privileged S𝑝𝑜𝑠𝑡 (training only), de-scribed by static and dynamic sequence features (Supplementary Material, § S3). 
+
+Metrics. We report the Normalized Gini Coefficient for LTV (re-gression; robust to label scale, emphasizing high-value ranking) and AUROC for CVR (classification). Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Le et al. 
+
+Table 1: Method comparison and SemRaD ablations (mean ± std). Top: augmentation/distillation strategies; bottom: loss-component ablations. Z𝑝𝑟𝑒 /Z𝑝𝑜𝑠𝑡 /Z𝑓 𝑢𝑠𝑒𝑑 : densified / privileged / hindsight profiles. Model / Variant Distill Z𝑝𝑟𝑒 Z𝑝𝑜𝑠𝑡 Z𝑓 𝑢𝑠𝑒𝑑 CVR (AUROC) LTV (Gini) 
+
+(A) Base ✗ ✗ ✗ ✗ 0.6335 ± 0.0056 0.2847 ± 0.0096 (B) Unstructured [10] ✗ ✓ ✗ ✗ 0.6308 ± 0.005 0.2826 ± 0.005 (C) Few-shot ✗ ✓ ✗ ✗ 0.6321 ± 0.004 0.2841 ± 0.005 (D) Sem. Des. (Ours) ✗ ✓ ✗ ✗ 0.6359 ± 0.0039 0.2894 ± 0.0084 (E) Self-distillation ✓ ✓ ✗ ✗ 0.6362 ± 0.0029 0.2889 ± 0.0056 (F) PFD [22] ✓ ✓ ✓ ✗ 0.6374 ± 0.0025 0.2881 ± 0.0032 (G) HAPFD [23] ✓ ✓ ✓ ✗ 0.6353 ± 0.0033 0.2858 ± 0.0068 
+
+SemRaD (Ours) ✓ ✗ ✗ ✓ 0.6396 ± 0.0027 0.2902 ± 0.0045 
+
+SemRaD ablations (share SemRaD input configuration): 
+
+w/o Semantic Gating — — — — 0.6362 ± 0.0025 0.2834 ± 0.0038 Logit KD only (no DE) — — — — 0.6374 ± 0.0025 0.2881 ± 0.0032 Distillation Experts only (no KD) — — — — 0.6362 ± 0.0029 0.2889 ± 0.0056 
+
+Baselines. All methods share the inference-time log S𝑝𝑟𝑒 and differ only in training-time augmentation and distillation (configurations in Table 1). Augmentation-only: (A) Base, (B) Unstructured [ 10 ], (C) Few-shot, (D) Sem. Des. (Ours). Distillation: (E) Self-distillation (teacher sees only Z𝑝𝑟𝑒 , isolating distillation architecture from privileged signal), (F) PFD [ 22 ], (G) HAPFD [ 23 ] (teacher sees 
+
+Z𝑝𝑟𝑒 ⊕ Z𝑝𝑜𝑠𝑡 ). SemRaD (Ours) adds the reconciled target Z𝑓 𝑢𝑠𝑒𝑑 
+
+and Distillation Experts. 
+
+Evaluation Protocol. We organize our evaluation around four questions: RQ1 —do the two components each improve cold-start prediction, and are they complementary (Section 6.2); RQ2 —why does hindsight fusion help, and does its benefit concentrate on cold users; RQ3 —does SemRaD generalize across tasks, backbones, and profiler LLMs; and RQ4 —is SemRaD deployable, i.e. data-efficient and effective in production. Extended results and additional abla-tions are provided in the Supplementary Material. 
+
+Implementation. SemRaD (PyTorch) combines a CrossNet-based Static Encoder, a Transformer Dynamic Encoder (2 layers, 4 heads), and a Semantic-Gated Encoder over Qwen-0.6B embeddings; pro-files are generated by GPT-OSS 120B. Full architecture and training hyperparameters are in the Supplementary Material (§ S1). 
+
+6.2 Main Results 
+
+Table 1 summarizes the main comparison. Structured semantic descriptions improve over the base and unstructured augmentation baselines, while the full SemRaD model achieves the best results on both tasks: +1.9% LTV Gini and +1.0% CVR AUROC over Base. The lower block gives a compact component check: removing semantic gating or using only one distillation loss weakens the full recipe, although the KD-vs.-expert differences are close to seed variance. We therefore use the table as the primary quantitative evidence and focus the remaining main-paper analysis on the two learned mechanisms that make the method interpretable. 
+
+Schema Utility via Gate Weights. The learned gate weights of the Semantic-Gated Encoder provide a post-hoc empirical utility score for each schema dimension (Section 4.1)—the Audit step of the discover–curate–audit workflow. Figure 5 shows that the gate is strongly dimension-selective—Navigation Intent Specificity dom-inates across all user segments while Transaction Magnitude is nearly suppressed—and that this ordering matches expert intuition. No dimension is consistently down-weighted enough to warrant pruning, confirming the schema is both interpretable and well-chosen. 
+
+Figure 5: Semantic gating weights per dimension, by LTV decile. 
+
+Post-hoc Expert Routing. Inspecting the learned Distillation Ex-pert router, we find that—without any group supervision—it con-verges to two dominant experts aligned with conversion outcome rather than with cold/warm or LTV strata (Figure 6): one pathway handles users whose privileged window confirms purchase, the other handles users with little post-conversion signal. 
+
+Information Gap Analysis. Beyond the post-hoc routing behavior, we ask whether hindsight fusion also makes privileged supervi-sion more reachable for the student. To answer RQ2, we quan-tify the information gap by measuring student-teacher prediction disagreement across user history buckets. Lower disagreement indicates higher distillability : when the privileged teacher’s pre-dictions are closer to what the student can achieve from sparse pre-conversion inputs, the teacher provides more transferable su-pervision rather than unattainable targets. We measure disagree-ment as absolute LTV difference |𝑦 𝑇 − 𝑦 𝑆 | and CVR logit difference 
+
+|logit (𝑝 𝑇 ) − logit (𝑝 𝑆 )| .Bridging the Information Gap: Semantic Densification and Hindsight Distillation for Cold-Start Prediction Conference acronym ’XX, June 03–05, 2018, Woodstock, NY E1 E2 E3 E4 E5 E6 E7 E8 E9 E10  
+
+> Distillation expert (M=10)
+> 0
+> 0.5
+> 1.0
+> Fraction within expert  67.5% users
+> 95.1% conv.
+> 32.4% users
+> 1.5% conv. Converter
+> Non-converter
+> Overall (0.647)
+> Experts with <=1% assignment are shown as faint baseline ticks.
+
+Figure 6: Post-hoc routing of Distillation Experts. Of 𝑀 =10 
+
+experts, two dominate ( > 1% assignment) and capture oppo-site conversion-outcome regimes. 
+
+Figure 7 shows that naive privileged distillation has the largest mismatch for cold-start users ( 𝑁 ≤ 5), with an LTV gap of 0.933 and a CVR logit gap of 4.07 . SemRaD reduces these gaps to 0.728 (−22% )and 3.67 (−10% ), respectively. This supports our hypothesis that hindsight fusion does not simply add more privileged information; it reconciles post-conversion evidence with pre-conversion signals, making the teacher’s guidance more reachable for the student, especially in the sparse-history regime. 
+
+Figure 7: Student-Teacher Predictive Disagreement. SemRaD reduces disagreement for cold-start users, improving distill-ability. 
+
+6.3 Generalization and Robustness 
+
+RQ3. Does SemRaD generalize across tasks, backbones, and profiler LLMs? SemRaD generalizes along two concrete axes (Ta-ble 2). First, replacing the Transformer sequence encoder with Avg-Pooling or DIN preserves the improvement, with the attention-based DIN benefiting most. Second, gains remain under alternative profiler LLMs, indicating that the effect comes from the structured semantic schema and hindsight fusion rather than a single upstream generator. 
+
+6.4 Production Deployment 
+
+RQ4. Is SemRaD deployable—data-efficient and effective in production? Data Efficiency. LTV labels are expensive and slow to collect, so we first ask whether structured reasoning can reduce dependence on large-scale supervision. In a small-data setting, Sem-RaD reaches production-level LTV quality using only 9% of the training data while improving CVR by 0.8% (Figure 1C), suggest-ing that the semantic profiles provide useful signal for new markets and other cold-start regimes. 
+
+Table 2: Robustness across student backbones and profiler LLMs (Transformer/GPT-OSS is the main-table setting). Configuration LTV (Gini) CVR (AUROC) 
+
+(a) Student backbone (w/o → w/ SemRaD) 
+
+Avg-Pooling .2710 → .2832 .6282 → .6382 
+
+DIN .2699 → .2898 .6268 → .6428 
+
+Transformer .2847 → .2902 .6335 → .6396 
+
+(b) Profiler LLM (Transformer backbone) 
+
+GPT-OSS 120B (ours) .2902 ± .0045 .6396 ± .0027 
+
+Qwen3.5-9B .2834 ± .0042 .6374 ± .0019 
+
+Qwen3.5-35B-A3B (MoE) .2820 ± .0098 .6360 ± .0052 
+
+Table 3: Online A/B at Keeta (4 weeks; 5% traffic; 10,000 users / 6,791 conversions). Production SemRaD Rel. gain 
+
+Outcome quality 
+
+LTV (Gini) 0.2612 0.2638 +1.0% 
+
+CVR (AUROC) 0.6270 0.6297 +0.43% 
+
+Offline LLM tokens (in / out per user; one-time, cached) 
+
+Z𝑝𝑟𝑒 (serving) — 5,790 / 451 
+
+Z𝑝𝑜𝑠𝑡 (train only) — 7,084 / 453 
+
+Z𝑓 𝑢𝑠𝑒𝑑 (train only) — 1,906 / 906 
+
+Serving latency (ms) 
+
+P50 28.9 31.1 +7.6% 
+
+P99 54.5 73.1 +34% 
+
+Online A/B Test. We deployed SemRaD to live traffic against the production baseline. Table 3 reports the headline A/B results to-gether with deployment cost and latency. SemRaD improves both online LTV ranking and CVR discrimination, while serving uses only the cached frozen embedding plus the gated MLP—no LLM, teacher, or fusion call is needed at inference time. All lifts are significant: Δlog-Gini +0.0141 (95% CI [+ 0.0027 , +0.0259 ])and ΔAUC +0.0089 ([+ 0.0022 , +0.0158 ]), under paired bootstrap (𝐵 =20 ,000 ), DeLong ( 𝑝 =0.0052 ), and paired-𝑡 on log-MSE ( 𝑝 <10 −6); the UV-CTR guardrail is non-regressing. Profiles are generated of-fline by a self-hosted GPT-OSS 120B (MXFP4, single 80GB GPU), invoked once on first conversion and cached. 
+
+7 Conclusion 
+
+We presented SemRaD, a Semantic Reasoning–aware Distillation framework for new-user cold-start prediction in e-commerce. SemRaD tackles sparsity by (i) using an LLM to densify pre-conversion 
+
+logs into structured semantic profiles, and (ii) distilling post-conversion 
+
+privileged signals into teacher targets that are transferable to an online student constrained to pre-conversion inputs. Experiments on a large-scale industrial dataset show consistent gains on both LTV and CVR tasks, and strong data efficiency : using only 9% of the training data, SemRaD reaches nearly the same LTV (within 1%) while improving CVR by 0.8%. A four-week online A/B test at Keeta confirms these gains in production ( +1.0% LTV, +0.43% Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Le et al. 
+
+CVR). Finally, the proposed framework is model-agnostic and can be integrated with common industrial backbones. 
+
+References 
+
+[1] Ke Bao, Jizhi Zhang, Yang Zhang, Ruobing Xie, and Xinyu Zhang. 2023. TALLRec: An Effective and Efficient Tuning Framework to Align Large Language Model with Recommendation. arXiv preprint arXiv:2305.12300. [2] Chunfeng Gao, Yongfeng Zhang, Fuzhen Zhuang, Yanchi Liu, Haoyuan Liu, Xiangnan He, and Qing Li. 2023. Chat-REC: Towards Interactive and Explainable Recommendation via Large Language Models. arXiv preprint arXiv:2305.14524. [3] Shijie Geng, Shuchang Liu, Zuohui Fu, Ye Yuan, Zhaochun Ren, and Gerard de Melo. 2022. Personalized Prompt for Recommendation. arXiv preprint arXiv:2203.13366. [4] Huifeng Guo, Ruiming Tang, Yunming Ye, Zhenguo Li, and Xiuqiang He. 2017. DeepFM: A Factorization-Machine based Neural Network for CTR Prediction. In Proceedings of the 26th International Joint Conference on Artificial Intelligence (IJCAI 2017) . 1725–1731. [5] Geoffrey Hinton, Oriol Vinyals, and Jeff Dean. 2015. Distilling the Knowledge in a Neural Network. arXiv preprint arXiv:1503.02531. [6] Ziwei Ji, Nayeon Lee, Rita Frieske, Tiezheng Yu, Dan Su, Yan Xu, Etsuko Ishii, Ye Jin Bang, Andrea Madotto, and Pascale Fung. 2023. Survey of Hallucination in Natural Language Generation. Comput. Surveys 55, 12 (2023), 1–38. doi:10.1145/ 3571730 [7] SeongKu Kang, Junyoung Hwang, Wonbin Kweon, and Hwanjo Yu. 2020. DE-RRD: A Knowledge Distillation Framework for Recommender System. In Proceedings of the 29th ACM International Conference on Information and Knowledge Management (CIKM ’20) . 605–614. doi:10.1145/3340531.3412005 [8] Wang-Cheng Kang and Julian McAuley. 2018. Self-Attentive Sequential Recom-mendation. arXiv preprint arXiv:1808.09781 (2018). [9] Jieyong Kim, Hyunseo Kim, Hyunjin Cho, SeongKu Kang, Buru Chang, Jiny-oung Yeo, and Dongha Lee. 2024. Review-driven Personalized Preference Rea-soning with Large Language Models for Recommendation. arXiv preprint arXiv:2408.06276. [10] Takeshi Kojima, Shixiang Shane Gu, Machel Reid, Yutaka Matsuo, and Yusuke Iwasawa. 2023. Large Language Models are Zero-Shot Reasoners. arXiv preprint arXiv:2205.11916. arXiv:2205.11916 [cs.CL] [11] David Lopez-Paz, Léon Bottou, Bernhard Schölkopf, and Vladimir Vapnik. 2016. Unifying distillation and privileged information. In International Conference on Learning Representations (ICLR) .[12] Jiaqi Ma, Zhe Zhao, Xinyang Yi, Jilin Chen, Lichan Hong, and Ed H. Chi. 2018. Entire Space Multi-Task Model: An Effective Approach for Estimating Post-Click Conversion Rate. arXiv preprint arXiv:1804.07931. [13] Adriana Romero, Nicolas Ballas, Samira Ebrahimi Kahou, Antoine Chassang, Carlo Gatta, and Yoshua Bengio. 2015. FitNets: Hints for Thin Deep Nets. In 
+
+International Conference on Learning Representations (ICLR) .[14] Andrew I. Schein, Alexandrin Popescul, Lyle H. Ungar, and David M. Pennock. 2002. Methods and Metrics for Cold-Start Recommendations. In Proceedings of the 25th Annual International ACM SIGIR Conference on Research and Development in Information Retrieval (SIGIR ’02) . 253–260. doi:10.1145/564376.564421 [15] Melanie Sclar, Yejin Choi, Yulia Tsvetkov, and Alane Suhr. 2024. Quantifying Language Models’ Sensitivity to Spurious Features in Prompt Design or: How I learned to start worrying about prompt formatting. In International Conference on Learning Representations (ICLR) .[16] Yunpeng Song. 2024. Predicting User Behavior in Smart Spaces with LLM-Enhanced Logs and Personalized Prompts (Data Description). arXiv preprint arXiv:2412.12653. doi:10.48550/arXiv.2412.12653 [17] Alicia Tsai, Adam Kraft, Long Jin, Chenwei Cai, Anahita Hosseini, Taibai Xu, Zemin Zhang, Lichan Hong, Ed H. Chi, and Xinyang Yi. 2024. Leveraging LLM Reasoning Enhances Personalized Recommender Systems. In Findings of the Association for Computational Linguistics: ACL 2024 . 13176–13188. doi:10.18653/ v1/2024.findings-acl.780 [18] Vladimir Vapnik and Akshay Vashist. 2009. A New Learning Paradigm: Learning Using Privileged Information. Neural Networks 22, 5–6 (2009), 544–557. doi:10. 1016/j.neunet.2009.06.042 [19] Maksims Volkovs, Guangwei Yu, and Tomi Poutanen. 2017. DropoutNet: Ad-dressing Cold Start in Recommender Systems. In Proceedings of the 11th ACM Conference on Recommender Systems (RecSys ’17) . 88–96. [20] Ruoxi Wang, Bin Fu, Gang Fu, and Mingliang Wang. 2017. Deep & Cross Network for Ad Click Predictions. In Proceedings of the 1st Workshop on Deep Learning for Recommender Systems (DLRS at RecSys 2017) .[21] Le Wu, Xiangnan He, Yunshan Ma, Liwei Chen, Shuqin Li, and Tat-Seng Chua. 2023. A Survey on Large Language Models for Recommender Systems. arXiv preprint arXiv:2305.19860. [22] Chen Xu, Quan Li, Junfeng Ge, Jinyang Gao, Xiaoyong Yang, Changhua Pei, Fei Sun, Jian Wu, Hanxiao Sun, and Wenwu Ou. 2020. Privileged Features Distillation at Taobao Recommendations. In Proceedings of the 26th ACM SIGKDD Conference on Knowledge Discovery and Data Mining (KDD ’20) . 2590–2598. doi:10.1145/ 3394486.3403309 [23] Huining Yuan, Wenpeng Zhang, Zijie Hao, and Zengde Deng. 2025. Hardness-aware Privileged Features Distillation with Latent Alignment for CVR Prediction. In Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining (KDD ’25) . 5182–5193. doi:10.1145/3711896.3737231 [24] Weiqi Yue, Yuyu Yin, Xin Zhang, Binbin Shi, Tingting Liang, and Jian Wan. 2025. CoT4Rec: Revealing User Preferences Through Chain of Thought for Recom-mender Systems. In Proceedings of the AAAI Conference on Artificial Intelligence ,Vol. 39. 13142–13151. doi:10.1609/aaai.v39i12.33434 [25] Guorui Zhou, Chengru Song, Xiaoqiang Zhu, Ying Fan, Han Zhu, Xiao Ma, Yanghui Yan, Junqi Jin, Han Li, and Kun Gai. 2018. Deep Interest Network for Click-Through Rate Prediction. In Proceedings of the 24th ACM SIGKDD International Conference on Knowledge Discovery & Data Mining (KDD ’18) . 1059– 1068. doi:10.1145/3219819.3219823 [26] Guorui Zhou, Xiaoqiang Zhu, Chenru Song, Ying Fan, Han Zhu, Xiao Ma, Yanghui Yan, Junqi Jin, Han Li, and Kun Gai. 2019. Deep Interest Evolution Network for Click-Through Rate Prediction. In Proceedings of the AAAI Conference on Artificial Intelligence .
+
+GenAI Usage Disclosure 
+
+We disclose two forms of generative AI usage in this work. (i) As a core methodology component. SemRaD relies on a large lan-guage model (GPT-OSS 120B) as an essential part of its pipeline: the LLM generates the Densified Semantic Profile from pre-conversion logs, the privileged future-behavior profile from post-conversion logs (training-only), and the Hindsight Distillation Target via the Fu-sion Compiler. All LLM calls and prompts are described in Section 4 and the Supplementary Material below. (ii) Authoring assistance. 
+
+The authors used generative AI tools to refine the writing of this pa-per (grammar, phrasing, and table formatting). All technical claims, experimental designs, and analyses are the original work of the authors and have been verified for correctness. Bridging the Information Gap: Semantic Densification and Hindsight Distillation for Cold-Start Prediction Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+Supplementary Material 
+
+This appendix provides the supplementary material for the paper: detailed implementation and training settings, full LLM prompts, feature-engineering and preprocessing details, and example gener-ated reasoning profiles. Section references of the form “Section X” in the main text refer to the numbered sections above; the “§ S 𝑘 ”pointers refer to the sections below. 
+
+S1 Implementation and Training Details S1.1 Model Architecture 
+
+We implement SemRaD using PyTorch with the following configu-rations: 
+
+• Static Encoder: A DNN based architecture containing a CrossNet (4 layers) and Deep Residual Blocks (2 blocks ×
+
+2 layers, hidden dim=1024) to capture feature interactions. The output dimension is 𝑑 𝑠𝑡𝑎𝑡 = 128 .
+
+• Dynamic Encoder: A Transformer Encoder with 2 layers, 4 attention heads, and a feed-forward dimension of 256. We employ Attention Pooling to compress the sequence into 
+
+𝑑 𝑑𝑦𝑛 = 128 .
+
+• Semantic-Gated Encoder: We utilize Qwen-0.6B-Emb to generate initial 1024-dimensional embeddings for each of the 𝐾 reasoning fields. These are processed by field-specific MLPs (Linear-BN-GELU) and projected to 𝑑 𝑎𝑢𝑔 = 512 .
+
+• Multimodal Fusion: The three views are concatenated (128 + 128 + 512 = 768 ) and fused via a projection MLP to a shared representation of size 128. 
+
+• Prediction Heads: Two separate DeepTaskHeads (3-layer MLPs) are used for LTV (regression) and CVR (sigmoid clas-sification). 
+
+S1.2 LLM Protocols 
+
+For semantic data generation, we utilize the open-source model 
+
+GPT-OSS 120B as the inference engine for both student densifi-cation and teacher hindsight generation. For the text embedding layer in the Semantic-Gated Encoder, we use the pre-trained Qwen-0.6B-Embedding model frozen during training. 
+
+S1.3 Training Configuration 
+
+We train the model for 50 epochs with a batch size of 64 using the AdamW optimizer. The base learning rate is set to 10 −3 accom-panied by a 5-epoch linear warmup and cosine annealing decay. Weight decay is set to 5 × 10 −4 for regularization. 
+
+S2 Prompt Engineering Details S2.1 Student Prompt (Densification) 
+
+The following system prompt is used to generate the Semantic Reasoning profile from the sparse S𝑝𝑟𝑒 history. System Prompt: Student Profile Generation 
+
+You are an expert user behavior analyst. Your goal is to infer latent user traits from sparse interaction logs. Input Context: - User Events: {sequence_logs} - Static Profile: {user_profile} Task: Analyze the user along the following dimensions: 1. Temporal Resolution: Analyze the latency between discovery and action. 2. Transaction Magnitude: Evaluate the relative value tier of interacted items. 3. Navigation Intent Specificity: Determine the linearity of the user journey. 4. Domain Entropy: Measure the distribution variance of interacted categories. 
+
+... 
+
+For each dimension, provide a specific Reasoning Rationale based on the evidence. Explain WHY you assigned the score. 
+
+S2.2 Teacher Prompt (Hindsight Fusion) 
+
+The following prompt is used to generate the “Ground Truth” rea-soning by fusing the pre-conversion hypothesis with the post-conversion outcome (as described in the Hindsight-Aware Fusion section of the main paper). System Prompt: Hindsight Reasoning Fusion 
+
+You are an omniscient analyst with access to the user’s future actions. Your goal is to resolve ambiguity in the user’s initial behavior. Input Context: - Initial Behavior (Pre): {pre_summary} - Future Outcome (Post): {post_summary} Task: Re-evaluate the user’s pre-conversion traits in light of the post-conversion outcomes. If the user hesitated in pre-conversion but converted in post-conversion, classify as "Cautious High-Intent." Explicitly explain how the future outcome clarifies the initial ambiguity. 
+
+S3 Feature Engineering and Preprocessing Details 
+
+This section formalizes the mathematical treatment of static and dy-namic features used in our framework, detailing the preprocessing transformations applied to ensure numerical stability and semantic preservation. 
+
+S3.1 Static Features 
+
+Static features Fstatic ∈ R𝑑 𝑠 represent time-invariant or slowly-changing user attributes captured at the first-conversion timestamp 
+
+𝑡 0. We partition these features into categorical and numerical sub-sets based on their cardinality threshold 𝜏 = 50 .Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Le et al. 
+
+Categorical Static Features. Let C = {𝑐 1, 𝑐 2, . . . , 𝑐 𝑚 } denote the set of categorical features where each 𝑐 𝑖 has cardinality |V 𝑐 𝑖 | < 𝜏 .The categorical feature set encompasses shop identifiers ( shop_id ), brand identifiers ( brand_id ), geographic area-of-region codes ( aor_id ), shop taxonomies ( shop_type ), and user marketing segments ( user_segment ). For each categorical feature 𝑐 𝑖 , we construct a vocabulary V𝑐 𝑖 =
+
+{𝑣 0, 𝑣 1, . . . , 𝑣 | V 𝑐 𝑖 | } from the training corpus, where 𝑣 0 is reserved for out-of-vocabulary tokens. We map each feature value to an embedding vector via a learnable transformation E𝑐 𝑖 : V𝑐 𝑖 → R𝑑 𝑒 ,where 𝑑 𝑒 = 16 by default. The unified categorical representation is obtained through concatenation: 
+
+Fcat = [E𝑐 1 (𝑣 1) ⊕ E𝑐 2 (𝑣 2) ⊕ · · · ⊕ E𝑐 𝑚 (𝑣 𝑚 )] ∈ R𝑚 ·𝑑 𝑒 (10) where ⊕ denotes vector concatenation. 
+
+Numerical Static Features. Let N = {𝑛 1, 𝑛 2, . . . , 𝑛 𝑘 } denote nu-merical features with cardinality |V 𝑛 𝑗 | ≥ 𝜏 . These include user tenure duration ( user_tenure_days ), pre-conversion session counts ( total_sessions_pre ), pre-conversion event counts ( total_events_pre ), average session duration ( avg_session_duration ), and first-visit-to-conversion temporal span (first_visit_to_conversion_days). For each numerical feature 𝑛 𝑗 ∈ N , we compute population statistics 𝜇 𝑛 𝑗 and 𝜎 𝑛 𝑗 from the training distribution and apply 𝑧 -score normalization: 
+
+𝑛 ′ 
+
+> 𝑗
+
+= 𝑛 𝑗 − 𝜇 𝑛 𝑗 
+
+𝜎 𝑛 𝑗 
+
+(11) To ensure gradient stability during training, we apply clipping to bound extreme outliers: 
+
+𝑛 ′′  
+
+> 𝑗
+
+= clip (𝑛 ′ 
+
+> 𝑗
+
+, −5, 5) = max (− 5, min (5, 𝑛 ′ 
+
+> 𝑗
+
+)) (12) The normalized numerical features are concatenated to form Fnum =
+
+[𝑛 ′′  
+
+> 1
+
+, 𝑛 ′′  
+
+> 2
+
+, . . . , 𝑛 ′′  
+
+> 𝑘
+
+] ∈ R𝑘 .
+
+S3.2 Dynamic Sequence Features 
+
+Dynamic features encode the temporal behavioral sequence S𝑝𝑟𝑒 =
+
+{e1, e2, . . . , e𝑇 } (pre-conversion) and S𝑝𝑜𝑠𝑡 (post-conversion, avail-able only during training). Each event e𝑡 at timestep 𝑡 is represented by a hybrid feature vector comprising categorical and numerical attributes. 
+
+Categorical Sequence Features. Each event e𝑡 is characterized by a tuple of categorical features (type 𝑡 , shop_type 𝑡 , shop_aoi 𝑡 ) where: type 𝑡 ∈ V type (13) shop_type 𝑡 ∈ V shop (14) shop_aoi 𝑡 ∈ V aoi (15) The event type vocabulary Vtype encompasses action primitives such as page_view , item_click , add_to_cart , search , filter_apply ,
+
+coupon_collect , and purchase . The shop type taxonomy Vshop in-cludes coarse-grained categories ( fashion , electronics , home_kitchen ,etc.), while Vaoi provides fine-grained shop location or brand cluster identifiers. Vocabularies are constructed from the union of all data splits to ensure complete coverage. Each categorical feature is mapped to a learned embedding space R𝑑 𝑠𝑒𝑞 where 𝑑 𝑠𝑒𝑞 = 64 , with index 0 reserved for padding tokens. The categorical event representation is then: 
+
+ecat  
+
+> 𝑡
+
+= [Etype (type 𝑡 )⊕ Eshop (shop_type 𝑡 )⊕ Eaoi (shop_aoi 𝑡 )] ∈ R3𝑑 𝑠𝑒𝑞 
+
+(16) 
+
+Numerical Sequence Features. Each event e𝑡 additionally contains numerical features x𝑡 = (aov 𝑡 , price 𝑡 , Δ𝑡 ,𝑇 𝑡 ) capturing transaction magnitudes and temporal dynamics. Let aov 𝑡 denote the shop’s average order value (price tier proxy), price 𝑡 the product unit price, 
+
+Δ𝑡 the inter-event time gap, and 𝑇 𝑡 the cumulative elapsed time from sequence initiation. To handle the wide dynamic range of these features, we apply log-compression followed by standardization: 
+
+𝑥 ′ 
+
+> 𝑡
+
+= log (1 + 𝑥 𝑡 ), 𝑥 ′′  
+
+> 𝑡
+
+= 𝑥 ′ 
+
+> 𝑡
+
+− 𝜇 𝑥 
+
+𝜎 𝑥 
+
+(17) where 𝜇 𝑥 and 𝜎 𝑥 are computed from the training sequence distribu-tion. Missing values are imputed with zero (the post-standardization mean). The normalized numerical event representation is enum  
+
+> 𝑡
+
+=
+
+[aov ′′  
+
+> 𝑡
+
+, price ′′  
+
+> 𝑡
+
+, Δ′′  
+
+> 𝑡
+
+,𝑇 ′′  
+
+> 𝑡
+
+] ∈ R4.
+
+S3.3 Sequence Segmentation and Padding 
+
+Session Segmentation. Raw event streams are partitioned into sessions using a temporal threshold 𝜏 session = 300 ,000 milliseconds (5 minutes). Formally, a session boundary is detected between con-secutive events e𝑡 and e𝑡 +1 when: 
+
+Δ𝑡 +1 = timestamp (e𝑡 +1) − timestamp (e𝑡 ) > 𝜏 session (18) This segmentation preserves the hierarchical temporal structure of user behavior, enabling the model to distinguish between intra-session engagement patterns and inter-session deliberation periods. 
+
+Sequence Length Management. To accommodate variable-length sequences within fixed-size batches, we impose a maximum se-quence length 𝐿 max = 5,600 . Let S = {e1, . . . , e𝑇 } denote a raw sequence with length 𝑇 . The processed sequence S′ and attention mask M ∈ { 0, 1}𝐿 max are constructed as: 
+
+S′ =
+
+(
+
+{e𝑇 −𝐿 max +1, . . . , e𝑇 } if 𝑇 > 𝐿 max (truncation) 
+
+{e1, . . . , e𝑇 , 0, . . . , 0} if 𝑇 ≤ 𝐿 max (padding) (19) 
+
+M𝑖 =
+
+(
+
+1 if 𝑖 ≤ min (𝑇 , 𝐿 max )
+
+0 otherwise (20) The attention mask M is consumed by Transformer layers to pre-vent attention computation over padding positions, ensuring that Attention (Q, K, V) assigns zero weight to masked positions. 
+
+S3.4 Data Splits and Alignment 
+
+Temporal Split Strategy. To prevent temporal leakage and ensure realistic evaluation, we partition the dataset D using a strictly chronological split based on first-conversion timestamps. Let Dtrain ,
+
+Dval , and Dtest denote the training, validation, and test sets with cardinalities |D train | = 100 ,000 , |D val | = 10 ,000 , and |D test | = 10 ,000 
+
+respectively, yielding a total of |D| = 120 ,000 stratified users. The temporal ordering ensures: 
+
+max  
+
+> 𝑢 ∈ D train
+
+𝑡 (𝑢 ) 
+
+> 0
+
+< min  
+
+> 𝑢 ∈ D val
+
+𝑡 (𝑢 ) 
+
+> 0
+
+< min  
+
+> 𝑢 ∈ D test
+
+𝑡 (𝑢 ) 
+
+> 0
+
+(21) Bridging the Information Gap: Semantic Densification and Hindsight Distillation for Cold-Start Prediction Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+where 𝑡 (𝑢 ) 
+
+> 0
+
+denotes the first-conversion timestamp for user 𝑢 . This prevents the model from training on future information during validation or testing. 
+
+Feature Alignment. For each user 𝑢 , we construct a unified fea-ture tuple (F(𝑢 )
+
+> static
+
+, S(𝑢 ) 
+
+> pre
+
+, S(𝑢 )
+
+> post
+
+, R(𝑢 ) ) where R(𝑢 ) represents the aug-mented semantic reasoning features. All components are aligned via the user identifier key, with missing components imputed us-ing zero vectors or padding sequences to ensure consistent batch construction across training and inference stages. 
+
+S4 Schema Discovery Prompts and Example Reasoning Profiles S4.1 Schema Discovery and Consolidation Prompts 
+
+We provide the two prompts used in the discover–curate–audit 
+
+schema-construction workflow (described in the main paper). The 
+
+Discover prompt asks the LLM to propose candidate behavioral dimensions from a stratified batch of users; the Curate prompt consolidates the deduplicated candidates into a small set of ranked finalists for expert review. System Prompt: Dimension Discovery 
+
+You are a behavioral analyst. Given a batch of {n} users (each with a sparse interaction log and an LTV/CVR outcome label), propose 3–6 behavioral dimensions that best discriminate high- from low-value users. Requirements per dimension: - Name (concise, interpretable). - Definition (what behavioral signal it captures). - Rationale (why it is predictive of LTV/CVR). Favor dimensions that are distinct from one another and computable from the available logs. 
+
+System Prompt: Dimension Consolidation 
+
+You are given {m} candidate behavioral dimensions (deduplicated across batches). Consolidate them into 6–8 ranked finalists .For each finalist: merge near-duplicates, give acanonical name and definition, and rank by expected predictive relevance and distinctness. Flag any candidate that is redundant or not computable from interaction logs. 
+
+S4.2 Example Generated Reasoning Profiles 
+
+We provide illustrative examples of the generated semantic reason-ing profiles for one representative validation user, along two di-mensions ( Temporal Resolution , Transaction Magnitude ). We present the three reasoning profiles produced by our LLM pipeline: (1) 
+
+Z𝑝𝑟𝑒 – student reasoning from pre-conversion logs only (available at serving time), (2) Z𝑝𝑜𝑠𝑡 – reasoning from post-conversion logs (training-time privileged information), and (3) Z𝑓 𝑢𝑠𝑒𝑑 – hindsight fusion that teaches the student what signals to trust in Z𝑝𝑟𝑒 .
+
+S4.3 Example 1: Student Reasoning from Pre-Conversion ( Z𝑝𝑟𝑒 )
+
+Dimension 1: Temporal Resolution 
+
+Reasoning Rationale ( Z𝑝𝑟𝑒 ): The user generated 35 events over a 46 - minute window, yielding <1 event per minute – well below the >6 events/minute threshold for a short decision. The activity is spread across 21 sessions, many of which end with app_quit, indicating a prolonged, fragmented decision process. 
+
+Label: Low Resolution (Prolonged Deliberation) 
+
+Dimension 2: Transaction Magnitude 
+
+Reasoning Rationale ( Z𝑝𝑟𝑒 ): The median price is below the regional average, and 71% of the price bucket share falls in the lower range. Although the 90th percentile reaches higher values, the overall consumption pattern leans toward lower - priced items, indicating low transaction magnitude. 
+
+Label: Low Magnitude (Budget-Tier) 
+
+S4.4 Example 2: Teacher Reasoning from Post-Conversion ( Z𝑝𝑜𝑠𝑡 )
+
+Dimension 1: Temporal Resolution 
+
+Reasoning Rationale ( Z𝑝𝑜𝑠𝑡 ): The user generated 110 events over a span of about 7.8 hours ( ≈468 minutes) across 28 sessions, yielding roughly 0.23 events per minute and only ∼3.9 events per session. This low events -per - minute ratio and the large number of separate sessions indicate a prolonged decision - making process rather than a quick, single-session purchase. 
+
+Label: Low Resolution (Prolonged Deliberation) 
+
+Dimension 2: Transaction Magnitude 
+
+Reasoning Rationale ( Z𝑝𝑜𝑠𝑡 ): The median price of items the user interacted with is well above the regional average, and the 90th - percentile price is also substantially higher. Moreover, over 60% of the price - bucket share falls into the premium tier, showing a clear preference for higher - priced products, which signals strong purchasing capacity. 
+
+Label: High Magnitude (Premium-Tier) Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Le et al. 
+
+S4.5 Example 3: Hindsight-Aware Fusion (Z𝑓 𝑢𝑠𝑒𝑑 )
+
+Dimension 1: Temporal Resolution 
+
+Reasoning Rationale ( Z𝑓 𝑢𝑠𝑒𝑑 ): The low event - per - minute rate observed in S𝑝𝑟𝑒 (≈0.015) correctly foreshadowed the prolonged deliberation revealed in S𝑝𝑜𝑠𝑡 (≈0.05) and the large number of sessions. Both stages show sparse activity spread over many hours, so the temporal resolution is genuinely slow. Teaching signal: 
+
+The teacher should teach the student to focus on the density of events (events/min) and the count of distinct sessions as primary predictors of Temporal Resolution. 
+
+Label: Low Resolution (Prolonged Deliberation) 
+
+Dimension 2: Transaction Magnitude 
+
+Reasoning Rationale ( Z𝑓 𝑢𝑠𝑒𝑑 ): The high price metrics in S𝑝𝑟𝑒 
+
+(median and 90th - percentile well above regional average) were misleading noise caused by a tiny sample of expensive items from a single shop. In S𝑝𝑜𝑠𝑡 the median price drops to well below re-gional average and the bulk of activity lies in lower price buckets, revealing low transaction magnitude. Teaching signal: The teacher should teach the student to give weight to the overall price distri-bution across all sessions rather than isolated high - price spikes, and to treat a concentrated high - price exposure as a weak signal. 
+
+Label: Low Magnitude (Budget-Tier) 
+
+S5 Extended Related Work 
+
+This section expands the discussion condensed in the main paper’s Related Work. 
+
+S5.1 Cold-Start Prediction 
+
+Classical collaborative-filtering and ID-based sequence models (DIN [ 25 ], DIEN [ 26 ], SASRec [ 8 ]) and feature-interaction models (DeepFM [ 4 ], DCN [ 20 ]) achieve strong warm-start accuracy but rely on dense in-teraction histories; under extreme sparsity their predictions regress toward population priors. Cold-start remedies fall into three fami-lies: (i) robustness methods such as DropoutNet [ 19 ] that randomly mask inputs to reduce over-reliance on dense features; (ii) meta-learning approaches that learn fast adaptation from few interac-tions; and (iii) self-supervised sequence objectives that pre-train representations. These mitigate the symptom of sparsity but do not inject external knowledge nor exploit privileged training-time outcomes—the two complementary levers SemRaD targets. 
+
+S5.2 LLMs for Recommendation and Reasoning 
+
+LLMs have been applied to recommendation through prompting and in-context formulations [ 2, 3], instruction tuning [ 1 ], and reasoning-centric pipelines that elicit natural-language rationales [ 9 ,17 , 21 , 24 ]. A recurring limitation is that free-form generations are sensitive to prompt phrasing [ 15 ] and prone to hallucination [ 6], which complicates validation and monitoring in production. Sem-RaD constrains generation to a curated behavioral schema, yielding structured, consistent rationales that are encoded by a frozen em-bedder at serving time so no LLM call is needed online. 
+
+S5.3 Privileged Information, Distillation, and Mixtures of Experts 
+
+Learning using privileged information (LUPI) [ 11 , 18 ] formalizes training-time-only signals, and is commonly realized via knowl-edge distillation [ 5 , 13 ]. In industrial recommendation, privileged-feature distillation (PFD [ 22 ]) and its hardness-aware extension (HAPFD [ 23 ]) feed post-conversion features to a teacher, but trans-fer through a single shared pathway. SemRaD differs in two ways: (i) it reconciles pre- and post-conversion reasoning into a self-consistent hindsight target Z𝑓 𝑢𝑠𝑒𝑑 rather than concatenating con-tradictory signals, and (ii) it routes transfer through per-user Distil-lation Experts [ 7], a mixture-of-experts mechanism that allocates reconstruction capacity to heterogeneous transfer regimes. 
+
+Received 20 February 2007; revised 12 March 2009; accepted 5 June 2009
