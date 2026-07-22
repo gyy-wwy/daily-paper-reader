@@ -6,37 +6,46 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-21
-- 运行时间：2026-07-21 21:34:58 UTC
+- 最新运行日期：2026-07-22
+- 运行时间：2026-07-22 21:35:18 UTC
 - 运行状态：成功
-- 本次总论文数：5
+- 本次总论文数：8
 - 精读区：3
-- 速读区：2
+- 速读区：5
 
 ### 今日简报（AI）
-今日精读两篇高分论文，分别聚焦LLM生成式推荐中的文本解码trie优化和多模态内容稀疏表示以增强冷物品推荐。  
-最值得关注的方向：一是通过优化trie结构突破固定深度和宽度的限制，提升LLM推荐效率；二是利用稀疏多模态表示有效缓解冷启动问题。  
-建议普通读者优先精读这两篇论文，重点关注其解决实际推荐瓶颈的创新思路，尤其是冷启动场景下的应用潜力。
-- 详情：[/202607/21/README](/202607/21/README)
+今日阅读5篇推荐系统论文，精读2篇高分研究，速读3篇相关工作。
+最值得关注的方向：多超图对比学习缓解对话推荐的马太效应，以及双层次去噪方法优化多模态序列推荐。
+建议跟进这两项高评分研究的具体实现，并关注其开源代码与数据集以深入理解。
+- 详情：[/202607/22/README](/202607/22/README)
 
 ### 精读区论文标签
-1. [Beyond Fixed Depths and Widths: Optimizing Textual Decoding Tries in LLM-based Generative Recommendation](/202607/21/2607.16633v1-beyond-fixed-depths-and-widths-optimizing-textual-decoding-tries-in-llm-based-generative-recommendation)  
+1. [Mitigating Matthew Effect: Multi-Hypergraph Boosted Multi-Interest Self-Supervised Learning for Conversational Recommendation](/202607/22/2607.18609v1-mitigating-matthew-effect-multi-hypergraph-boosted-multi-interest-self-supervised-learning-for-conversational-recommendation)  
    标签：评分：9.0/10、query:rec-sys
-   evidence：基于LLM的生成式推荐解码trie优化
-2. [Learning Sparse Representations of Multimodal Content for Enhanced Cold Item Recommendation](/202607/21/2607.17184v1-learning-sparse-representations-of-multimodal-content-for-enhanced-cold-item-recommendation)  
+   evidence：多超图增强的多兴趣自监督学习用于会话推荐
+2. [Beyond Noisy Signals: Dual-Level Denoising for Multi-modal Sequential Recommendation](/202607/22/2607.18786v1-beyond-noisy-signals-dual-level-denoising-for-multi-modal-sequential-recommendation)  
    标签：评分：9.0/10、query:rec-sys
-   evidence：通过多模态内容的稀疏表示解决冷启动问题
-3. [Bridging the Information Gap: Semantic Densification and Hindsight Distillation for Cold-Start Prediction](/202607/21/2607.17070v1-bridging-the-information-gap-semantic-densification-and-hindsight-distillation-for-cold-start-prediction)  
+   evidence：在多模态序列推荐中解决推荐意图去噪问题
+3. [Sequential Learner Modeling Using Multi-Relational Graph Convolutional Networks](/202607/22/2607.19253v1-sequential-learner-modeling-using-multi-relational-graph-convolutional-networks)  
    标签：评分：8.0/10、query:rec-sys
-   evidence：新用户冷启动预测，语义致密化与蒸馏
+   evidence：多关系图卷积网络用于个性化系统的用户建模
 
 ### 速读区论文标签
-1. [HyCoRec: Hypergraph-Enhanced Multi-Preference Learning for Alleviating Matthew Effect in Conversational Recommendation](/202607/21/2607.17461v1-hycorec-hypergraph-enhanced-multi-preference-learning-for-alleviating-matthew-effect-in-conversational-recommendation)  
+1. [WHALE: A Scalable Unified Model for Recommendation with Wukong-HSTU Architecture](/202607/22/2607.17017v1-whale-a-scalable-unified-model-for-recommendation-with-wukong-hstu-architecture)  
    标签：评分：7.0/10、query:rec-sys
-   evidence：利用超图学习缓解对话推荐中的马太效应
-2. [SR-Agent: An Experience-Driven Agentic Framework for Post-Ranking Strategies Refinement in E-Commerce Recommendation](/202607/21/2607.17719v1-sr-agent-an-experience-driven-agentic-framework-for-post-ranking-strategies-refinement-in-e-commerce-recommendation)  
+   evidence：可扩展的统一推荐模型，结合非序列和序列特征
+2. [Uncertainty as Remedy: Mitigating Satisfaction Label Bias in Short Video Multi-Objective Ensemble Ranking](/202607/22/2607.17092v1-uncertainty-as-remedy-mitigating-satisfaction-label-bias-in-short-video-multi-objective-ensemble-ranking)  
    标签：评分：7.0/10、query:rec-sys
-   evidence：基于LLM的智能体用于推荐后排序优化
+   evidence：解决短视频多目标推荐中的不确定性和标签偏差
+3. [SlimPer: Make Personalization Model Slim and Smart](/202607/22/2607.12281v1-slimper-make-personalization-model-slim-and-smart)  
+   标签：评分：6.0/10、query:rec-sys
+   evidence：通过迭代精炼实现个性化排序
+4. [jina-reranker-v3.5: An Efficient Listwise Reranker with Hybrid Attention and Self-Distillation](/202607/22/2607.18152v1-jina-reranker-v35-an-efficient-listwise-reranker-with-hybrid-attention-and-self-distillation)  
+   标签：评分：6.0/10、query:rec-sys
+   evidence：高效列表重排序器可应用于推荐排序
+5. [Topology-Aware Tokenization for Generative Recommendation](/202607/22/2607.18600v1-topology-aware-tokenization-for-generative-recommendation)  
+   标签：评分：6.0/10、query:rec-sys
+   evidence：生成式推荐中拓扑感知令牌化保留物品关系，与LLM增强推荐相关
 
 
 <div class="dpr-home-promo-card">

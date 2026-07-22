@@ -1,0 +1,1101 @@
+Title: Sequential Learner Modeling Using Multi-Relational Graph Convolutional Networks
+
+URL Source: https://arxiv.org/pdf/2607.19253v1
+
+Published Time: Wed, 22 Jul 2026 01:15:52 GMT
+
+Number of Pages: 49
+
+Markdown Content:
+# Sequential Learner Modeling Using Multi-Relational Graph Convolutional Networks 
+
+# Rawaa Alatrash, Mohamed Amine Chatti, Hong Yang, Yumeng Wang 
+
+Abstract 
+
+User modeling is a critical task in a variety of personalized systems. Recog-nizing their effectiveness in learning from graph-structured data, Graph Neural Networks (GNNs), particularly Graph Convolutional Networks (GCNs), are increasingly employed for user modeling. However, existing approaches typically treat different relation types in a graph as homogeneous, limiting their abil-ity to capture richer semantics and construct more informative user models. While multi-relational GNNs (MR-GNNs) have been adopted for representation learning and recommendation, their application for user modeling remains unex-plored. Moreover, existing GNN-based user modeling approaches ignore the user interaction sequence. To address these research gaps, in this work we propose MR-ConceptGCN, a novel fully unsupervised approach focused on concept-based sequential learner modeling using multi-relational GCNs (MR-GCNs). MR-ConceptGCN effecively combines Personal Knowledge Graphs (PKGs), MR-GCNs, and the pre-trained language model SBERT to obtain enhanced relation-and semantic-aware representations of the PKG items. The enriched embeddings of the knowledge concepts that a learner did not understand when interacting with learning materials in CourseMapper are then used to construct a sequential learner model that combines long-term and short-term learner interactions. We report the results of an online user study ( n = 31 ), demonstrating the benefits of MR-ConceptGCN in terms of several important user-centric aspects including accuracy, usefulness, diversity, and satisfaction with an educational recommender system. 
+
+Keywords: User Modeling, Learner Modeling, Sequential User Modeling, Personal Knowledge Graphs, Graph Neural Networks, Multi-Relational Graph Convolutional Networks 
+
+1arXiv:2607.19253v1 [cs.AI] 21 Jul 2026 1 Introduction 
+
+User modeling is a foundational task in a variety of applications, such as recommender systems and intelligent learning environments. It involves creating a representation of a user’s characteristics, preferences, and behaviors, called a user model. User mod-els are typically built using user interaction data, which may include past purchases, browsing history, search queries, and social media activity. By understanding users’ needs, behavior patterns, and preferences, systems can provide them with personal-ized services, ultimately improving user satisfaction and engagement. Recent work has shown that knowledge graphs (KGs) can effectively represent users’ interactions with a system for the purpose of user modeling (F. Yang, Yue, Li, Payne, & Man, 2023). However, many existing approaches suffer from limited availability of user-specific information, which constrains their ability to deliver genuinely personalized experi-ences (Skjæveland, Balog, Bernard, Lajewska, & Linjordet, 2024). Personal Knowledge Graphs (PKGs) address this challenge by extracting and organizing user-relevant enti-ties from a global KG and structuring them around an individual user. While PKGs have been widely explored in the health domain, their adoption and investigation within educational settings remain limited. The existing PKG-based learner model-ing approaches mainly rely on a single relation type between concepts in the PKG (i.e., RELATED TO) (Ain et al., 2024; Alatrash, Chatti, Ain, & Joarder, 2024). How-ever, PKGs in the educational domains inherently involve multiple meaningful relation types between concepts (e.g., PREREQUISITE TO), which are critical for accurate learner modeling and effective sequential recommendation. Since KGs can be used to structure and represent user attributes such as interests, preferences, age, and gender, Graph Neural Networks (GNNs) provide a powerful mechanism to get the represen-tation of user models (Purificato, Boratto, & De Luca, 2023). GNNs are well suited to capturing complex user interactions by modeling users as nodes in a graph, with edges representing behavioral connections to different items based on user interac-tions. Recognizing the effectiveness of GNNs in learning from graph-structured data, their application to user modeling has gained increasing attention in recent years, underscoring their ability to capture complex relational patterns in user–item inter-actions (Alatrash, Chatti, Ain, Fang, et al., 2024; Chen et al., 2019; Fan et al., 2022; Purificato et al., 2023; Z. Wang et al., 2020; Q. Yan, Zhang, Liu, Wu, & Wang, 2021; L. Yang et al., 2023). Prior work has combined KGs and GNNs to infer user inter-ests by approaching user modeling either as a link prediction task (Fan et al., 2022; H. Wang et al., 2018; Z. Wang et al., 2020; F. Yang et al., 2023) or as a node clas-sification task (Chen et al., 2023, 2019; S. Yan, Zhao, & Deng, 2022), primarily in e-commerce domain. In the educational domain, Alatrash, Chatti, Ain, Fang, et al. (2024) leveraged Graph Convolutional Networks (GCNs) to enrich the representa-tion of the different KG items and model the learner’s knowledge state as a weighted aggregation of the enhanced representation of the concepts that they did not under-stand. However, existing approaches fail to explicitly model heterogeneous relation types, limiting their ability to leverage multi-relational GNNs (MR-GNNs) for learn-ing richer and more informative user models. MR-GNNs focus on message passing between nodes in a graph according to relation type and direction, thereby enabling the learning of relation-aware embeddings. As a result, node representations encode 2not only structural connectivity but also the semantic characteristics of different rela-tionships. While MR-GNNs have been explored for representation learning (Degraeve, Vandewiele, Ongenae, & Hoecke, 2022; Schlichtkrull et al., 2018; Vashishth, Sanyal, Nitin, & Talukdar, 2019) and recommendation (H. Wang, Zhao, Xie, Li, & Guo, 2019; X. Wang, He, Cao, Liu, & Chua, 2019), their application for learner modeling remains untapped. Moreover, existing approaches for GNN-based learner modeling aggregate all historical learner interactions as a whole while ignoring the temporal order in the learner interaction sequence. Sequential user models have gained significant attention due to their ability to cap-ture the evolution of user interests over time (Boka, Niu, & Neupane, 2024; Pan, Pan, Wei, Yin, & Ming, 2025). The underlying sequential user modeling techniques are dom-inated by deep learning models, including GNNs and attention-based models. Most of the existing studies on sequential user modeling leverage temporal information in user interaction sequences to model long-term and short-term preferences. Attention mech-anisms have been widely applied to sequential user modeling, benefiting from their effectiveness in capturing both long-term and short-term dependencies among items in a sequence. However, existing sequential user modeling approaches are often supervised and require considerable computational resources. Moreover, they rely on complex attention mechanisms, which may increase model complexity. To address the afore-mentioned significant gaps in existing user modeling studies, in this work we present MR-ConceptGCN, a simple yet effective fully unsupervised approach for sequential learner modeling using multi-relational GCNs (MR-GCNs). MR-ConceptGCN con-structs a learner model based on the learner’s knowledge state corresponding to the set of concepts that the learner did not understand when interacting with learning materials in CourseMapper. Specifically, we construct PKGs that incorporate multiple relation types between concepts, namely RELATED TO and PREREQUISITE TO. To enhance the representations of PKG items, we adopt and adapt a propagation strategy inspired by RR-GCN (Degraeve et al., 2022) and CompGCN (Vashishth et al., 2019). During propagation, each neighbor embedding is transformed by the edge’s relation matrix and then scaled by the semantic similarity between the connected nodes using the pre-trained language model SBERT (Reimers & Gurevych, 2019), so mes-sages reflect both relation-specific transforms and semantic relatedness. The resulting relation- and semantic-aware item representations yield enhanced embeddings of the PKG items. We then use the enriched embeddings of the concepts that a learner did not understand to construct a sequential learner model that combines long-term and short-term learner interactions. We conducted an online user study ( n = 31) to eval-uate the effectiveness of MR-ConceptGCN, using recommendation as a downstream task. The evaluation results suggest that our sequential learner modeling approach is particularly effective in enhancing users’ perceptions in terms of several important user-centric aspects including accuracy, usefulness, diversity, and overall satisfaction with the educational recommender system. This work makes the following five main contributions: 
+
+• We propose MR-ConceptGCN, a fully unsupervised approach that combines PKGs and MR-GCNs to construct learner models based on multiple relationship types between concepts, namely RELATED TO and PREREQUISITE TO. 3• We present two unsupervised methods for representation learning of PKG items based on RRGCN and CompGCN. Both methods incorporate SBERT-based seman-tic similarity to modulate message passing, allowing structural propagation to be aligned with semantic relatedness between PKG items. 
+
+• We convert CompGCN into an unsupervised encoder by freezing relation rep-resentations while retaining node–relation composition, enabling relation-aware propagation without supervision. 
+
+• We propose a sequential learner modeling approach that integrates both struc-tural information in PKGs, semantic information (i.e., prerequisite and semantic relations), and temporal information (i.e., long-term and short-term interactions). 
+
+• We conduct an online user study to evaluate the effectiveness of our proposed sequential learner modeling approach in an educational recommender system. The remainder of this paper is structured as follows. We begin by reviewing three areas of related research, namely PKG-based, GNN-based, and sequential learner mod-eling in Section 2. Following this, we present the conceptual and technical details of our proposed approach, MR-ConceptGCN, in Section 3. Afterwards, we provide an overview of the online user study, followed by the presentation of our results along with the discussion of our findings in Section 4. Finally, in Section 5, we highlight the limitations, and then summarize the work and outline our future research plans in Section 6. 
+
+# 2 Background and Related Work 
+
+# 2.1 PKG-Based Learner Modeling 
+
+Knowledge Graphs (KGs) are widely adopted for user modeling. KGs can capture explicit interactions between users and items. The KG’s structural data can be used to describe user attributes, such as interests, preferences, age, and gender. However, their lack of user-specific information limits their ability to deliver truly personalized content aligned with individual preferences (Skjæveland et al., 2024). Personal Knowl-edge Graphs (PKGs) mitigate this limitation by selectively modeling only those KG entities that are relevant to a specific user and organizing them in a structured form. This structured organization enables PKGs to support personalized recommenda-tions by capturing users’ knowledge and interests (Balog & Kenter, 2019; Skjæveland et al., 2024). Researchers across Natural Language Processing (NLP), Information Retrieval (IR), and the Semantic Web are actively exploring PKGs for personal data management and utilizing user-specific KG information as a source for personalized services (Schr¨ oder, Jilek, & Dengel, 2022). Despite existing applications of PKGs in the health domain (Skjæveland et al., 2024), their application in education con-text remains limited. Ilkou (2022) suggested that integrating PKGs into e-learning platforms can empower researchers to develop personalized, explainable systems, pro-vide tailored recommendations, and generate user and group-specific data. Deng, Lu, Huang, Chung, and Lin (2019) constructed PKGs for students, focusing on knowledge acquisition through lab experiences. This PKG, automatically updated with lab com-pletions for each student, is utilized to represent and visualize a student’s lab-based 4knowledge acquisition for tracking learning progress. Ain et al. (2024) and Alatrash, Chatti, Ain, and Joarder (2024) leveraged PKGs for learner modeling in a MOOC environment. In their approach, a PKG is constructed for each learner by integrat-ing learning resources, educational concepts and their semantically related concepts, along with learner–resource interaction data, into a structured graph. This PKG rep-resentation captures the relationships among learners, resources, and related concepts, enabling the system to reflect individual learner interests at the concept level. These studies highlight the potential of PKGs for learner modeling. They primarily model PKGs using a single concept–concept relationship (i.e., RELATED TO). However, the educational domain naturally involves multiple pedagogically meaningful relationship types between concepts, such as PREREQUISITE TO, which are crucial for learner modeling. Our work extends PKGs by explicitly incorporating multiple relationship types between concepts, namely RELATED TO and PREREQUISITE TO, thereby preserving richer semantics. By modeling learners within such multi-relation PKGs, our approach captures more informative relationships among concepts, enabling richer learner modeling and more effective support for downstream educational tasks, such as recommendation of knowledge concepts and learning materials. 
+
+# 2.2 GNN-based Learner Modeling 
+
+Graph Neural Networks (GNNs) have emerged as a powerful tool that utilizes KG structure to learn and enhance the representation of various entities in the KG. GNNs excel at capturing complex user interactions by representing users as nodes in a graph, where edges depict the connections with different items based on user behavior. These connections allow GNNs to (1) pass messages between two connected nodes, and (2) learn and enhance the representations of nodes by aggregating information from multi-hop neighboring nodes (He et al., 2020; Wu, Sun, Zhang, Xie, & Cui, 2022). Several studies used KGs and GNNs to predict user interests and preferences based on their interactions. These studies approached user modeling primarily as a link prediction task. For example, F. Yang et al. (2023) proposed a knowledge-enhanced user multi-interest modeling for recommender systems (KEMIM), an approach that harnesses a KG to enrich user multi-interest modeling. H. Wang et al. (2018) leveraged KGs and GNNs to model user preferences. Their method utilizes KG preference propaga-tion, where user preferences are propagated through the relationships between entities and the user-item interaction path in the KG to infer potential user interests beyond explicit interactions and create a more comprehensive user profile. It is worth men-tioning that modeling long-term user-item interactions may lead to overly diverse items, and modeling short-term user-item interactions may not be sufficient to fully represent a user’s preferences. This issue has been addressed by Z. Wang et al. (2020) who proposed GCE-GNN that employed GNN to learn the representations of different items by aggregating information from the two levels (local and global user’s behav-ioral patterns). Fan et al. (2022) explored this avenue by proposing a framework that leverages user successive behavior graph for user preference modeling by incorporating both local and global user behavioral interactions (purchases). Other recent studies approached user modeling primarily as a node classification task using KGs and GNNs. These studies mainly aimed to categorize user attributes 5(such as gender and age) using textual or behavioral data in e-commerce domain (Chen et al., 2023, 2019; S. Yan et al., 2022). The intuition in these studies is that users that have similar co-purchase behaviors in e-commerce are likely to be in the same age range and fall in the same gender category. Thus, the neighborhood features could provide valuable semi-supervised signals that are beneficial to infer user models. For example, Chen et al. (2019) introduced a user modeling approach as a semi-supervised node clas-sification task using heterogeneous graph attention networks (HGAT) to predict user age and gender. The authors used user interactions, co-clicks, and co-purchases as semi-supervised signals to improve the inference of user models. Chen et al. (2023) argued that focusing on the importance of interaction types and ignoring categorical features may lead to suboptimal user/item representation. To address this issue, the authors introduced CatGCN, an approach that focuses on node classification tasks to predict user attributes such as age, city, and purchase level. CatGCN improves user represen-tations by integrating two types of explicit interactions between the user’s categorical features (e.g., celebrities, organizations, and groups). In the same context, S. Yan et al. (2022) introduced an approach called Interaction-aware Hypergraph Neural Networks (IHNN) to improve node classification performance in user modeling. They combined hypergraphs with meta-path-based heterogeneous graphs to capture both implicit and explicit high-order interactions, resulting in enhanced user representations that lead to improved performance in gender and age prediction tasks. Only few studies focused on GNN-based user modeling in the educational domain. For example, Alatrash, Chatti, Ain, and Joarder (2024) and Alatrash, Chatti, Ain, Fang, et al. (2024) proposed ConceptGCN, a learner modeling approach that leverages Graph Convolutional Networks (GCNs) and transformer sentence encoders (SBERT) to model the learner knowledge state at the concept level based on an enhanced repre-sentation of knowledge concepts that a learner marks as ’Did Not Understand’ (DNU). The learner model is then represented as a weighted average of the learner’s DNU concepts. ConceptGCN, however, does not capture multiple relation types between concepts. Moreover, it ignores the learner interaction sequence. While GNNs have been adopted for user modeling, the existing approaches do not explicitly model heterogeneous relation types in KGs to learn richer and more informa-tive user models. When different relation types in a KG are treated as homogeneous, relation semantics are collapsed, leading to diminished representation quality (Hu, Dong, Wang, & Sun, 2020; Huang, Li, Ye, & Ng, 2021; Shi, Li, Zhang, Sun, & Yu, 2017). Motivated by this limitation, different studies exploited multi-relational GNNs (MR-GNNs) to model heterogeneous relation types. MR-GNNs modulate message passing based on relation type and direction to yield relation-aware node embeddings that reflect how nodes are connected, not only that they are connected. These node embed-dings preserve semantics and enhance the node’s representation quality. Different studies have applied MR-GNNs for representation learning on relational graphs. For instance, Relational Graph Convolutional Networks (R-GCNs) learn relation-specific transformation matrices to perform relation-aware propagation on heterogeneous knowledge graphs (HKGs) (Schlichtkrull et al., 2018). R-GCNs deal with all rela-tion types separately in the propagation process. It aggregates the neighboring nodes according to their relation type, applying a relation-specific transformation and adding 6these contributions along with a self-loop term. To keep the number of parameters reasonable in the case of many relation types, R-GCNs use a basis (or block) decom-position method that expresses each relation matrix in terms of the linear combination of a small set of common basis matrices. Analysis suggests that R-GCNs are efficient for entity classification. They are also effective as encoders (producing latent fea-ture representations of entities) for link prediction when combined with factorization decoders. Random R-GCNs (RR-GCNs) (Degraeve et al., 2022) preserve R-GCN’s message-passing form but randomly initializes all relation transformation matrices and then freezes them. The encoder therefore aggregates neighbor messages transformed by fixed, random relation matrices; no relation parameters are learned and the encoder is not trained end-to-end. The work shows that these random encoders often beat fully trained R-GCNs on node-classification and link-prediction benchmarks. However, assigning a full matrix to each relation leads to large parameter growth for HKGs and increases computational cost. CompGCN addresses these issues (Vashishth et al., 2019). Rather than a fully learned matrix per relation, CompGCN uses a small set of shared projection matrices (e.g., inbound, outbound, self-loop) together with lightweight composition operators that combine entity and relation embeddings dur-ing propagation. The composed messages are aggregated to update node embeddings, preserving relation semantics while reducing parameters and improving scalability. MR-GNNs have been leveraged in recommender systems, where relation-aware embeddings are integrated into ranking mechanisms to model complex interactions among users, items, and entities. For example, Knowledge Graph Attention Network (KGAT) (X. Wang et al., 2019) aims to embed the relationships by learning a rela-tion embedding and a relation-specific projection for each edge type, then computing attention and messages in the relation’s space . Thus, neighbor weights and transforma-tions are explicitly relation-aware —i.e., both the attention score and the propagated message are conditioned on the specific relation type, improving multi-hop represen-tation learning for top-N recommendation. Knowledge Graph Convolutional Networks (KGCN) (H. Wang et al., 2019) attempts to operationalize GCN to learn relation-aware neighborhood representations. KGCN samples a fixed-size neighborhood for each node as its receptive field to calculate the representation of KG entities. The receptive field can be extended to multiple hops to model high-order entity dependen-cies and capture users’ long-distance interests. KGCN computes a user–relation score and uses this score to weight neighbors, producing relation-aware entity representa-tions per user, which characterize both the semantic information of the KG and users’ personalized interests. While MR-GNNs have been explored for representation learning and recommen-dation, their application for user modeling remains largely unexplored. For example, Q. Yan et al. (2021) proposed a semi-supervised relation-aware HKGs approach for inferring user attributes such as age and gender in e-commerce domain. The authors emphasized the importance of distinguishing interaction types (e.g., user clicks an item versus user purchases an item), noting that different relations can provide com-plementary and informative signals for user modeling. Their approach employs a message-passing mechanism that conditions neighborhood aggregation on relation types and incorporates an attention mechanism to learn the relative importance of 7different interaction semantics. Rather than learning embeddings for individual edges, the model assigns attention scores at the relation-type level, enabling it to prioritize more informative interaction types and produce more effective user representations. Our work differs from existing studies in that it focuses on sequential user modeling in the educational domain using MR-GNNs. To this end, we propose MR-ConceptGCN, an unsupervised framework for sequential learner modeling that represents a learner’s knowledge state using multi-relational GCNs (MR-GCNs). The knowledge state corresponds to the set of concepts that the learner did not under-stand when interacting with learning materials in CourseMapper. We adopt RR-GCN by initializing relation-specific matrices at random and keeping them frozen, and we adapt CompGCN’s node–relation composition while likewise freezing relation vectors. During propagation, each neighbor embedding is transformed by the edge’s (random, frozen) relation matrix and then scaled by the SBERT cosine similarity between the connected nodes, so messages reflect both relation-specific transforms and semantic relatedness. Adjacency and prerequisite matrices encode explicit relationship types and modulate aggregation according to dependency strength. The resulting relation-and semantic-aware item representations yield accurate embeddings of the PKG items. These embeddings are then used to construct a sequential learner model that combines long-term and short-term learner interactions. 
+
+# 2.3 Sequential Learner Modeling 
+
+User modeling aims to learn a latent representation of a user from available behav-ioral data, such as user–item interactions, item features, or response records. Early representation learning approaches were formulated in a static manner, where a user was represented using static interaction data (S. Wang et al., 2019). These static approaches mainly include matrix factorization and deep neural network-based meth-ods (S. Li & Zhao, 2020), and graph-based neural models (Alatrash, Chatti, Ain, Fang, et al., 2024). Although these methods are useful for capturing general user preferences, they are limited because temporal information is unavailable or ignored. In real-world scenarios, user behavior and interactions are sequential in nature, where actions are ordered by the time at which they occur. Since user preferences may change over time, leveraging temporal information is crucial for understanding users’ dynamic behav-ior (S. Li & Zhao, 2020). This limitation motivates the transition to sequential user modeling. 
+
+2.3.1 Techniques 
+
+Sequential user models have gained significant attention due to their ability to capture the chronological order of user–item interactions and learn users’ sequential prefer-ences from these interactions to capture the evolution of user interests over time. The underlying sequential user modeling techniques are dominated by deep learning mod-els. These include recurrent neural networks (RNNs), convolutional neural networks (CNNs), GNNs, and attention-based models (Boka et al., 2024; Fang, Zhang, Shu, & Guo, 2020; S. Li & Zhao, 2020; Z. Li et al., 2024; Nasir & Ezeife, 2023; Pan et al., 2025; S. Wang et al., 2019). RNN-based models were among the earliest approaches proposed 8for sequential user modeling, due to their natural ability to process sequential data. They learn from previous interactions in a sequence to predict future interactions. Long Short-Term Memory (LSTM)-based RNNs and Gated Recurrent Unit (GRU)-based RNNs were introduced to better capture longer-range dependencies and alleviate the vanishing gradient problem in basic RNN (Boka et al., 2024; Pan et al., 2025). Despite their effectiveness, RNN-based models exhibit several limitations. First, they tend to overemphasize neighboring interactions, potentially introducing false dependencies by assuming that adjacent interactions are strongly related. Second, they primarily cap-ture point-wise dependencies between individual interactions, making it difficult to model collective dependencies where multiple interactions jointly influence the next action. Third, their sequential computation makes training and hyperparameter opti-mization more difficult (Nasir & Ezeife, 2023; S. Wang et al., 2019). Although LSTM and GRU improve the modeling of long-term dependencies, capturing dependencies in long sequences remains challenging as sequence length increases. CNN-based models have been explored to overcome the drawbacks of RNN-based models to some extent. Given a sequence of user–item interactions, CNN-based models put all the embeddings of these interactions into a matrix, and treat such a matrix as an image in the time and latent spaces. They then use convolutional filters to scan this matrix and learn sequential patterns, allowing them to model both local and global dependencies among different areas in the matrix. However, CNN-based models are limited in capturing long-term dependencies, as the fixed-size convolutional filters can only model patterns within a restricted interaction window which limits their applications (Boka et al., 2024; Nasir & Ezeife, 2023; S. Wang et al., 2019). Furthermore, GNN-based models have been adapted for sequential user modeling. GNNs can model complex relationships and transitions among user–item interactions. These models represent interacted items as nodes and the observed transitions between them as edges, allowing each user interaction sequence to be mapped to a path in the graph (Boka et al., 2024; Nasir & Ezeife, 2023; S. Wang et al., 2019). GNN-based models can capture multi-hop contextual information between items through informa-tion propagation and aggregation. Moreover, they can capture complex transactions between interacted items as well as collaborative signals from a global perspective. Consequently, they are capable of modeling learners’ long-term preferences. However, GNN-based models may not fully capture the exact sequential patterns of interac-tions and are often computationally expensive (Pan et al., 2025). Moreover, stacking multiple graph layers may lead to the over-smoothing problem, where the learned representations of different nodes become increasingly similar. A common problem in sequential user modeling is that most of the interaction sequence itself contains noisy or irrelevant interactions within the input sequence (Nasir & Ezeife, 2023; S. Wang et al., 2019; P. Zhou et al., 2023). In practice, user–item interaction sequences are often not clean, as they may contain irrelevant or weakly related interactions that interfere with next-interaction prediction. While some his-torical interactions are highly relevant to the next interaction, others may contribute little or even introduce noise. Therefore, a key challenge in sequential user modeling is how to effectively reduce the noisy information from the irrelevant interactions. To this end, it is crucial to learn dependencies attentively and discriminatively by identifying 9which interactions should be emphasized and which should be suppressed (S. Wang et al., 2019). Attention mechanisms have been widely applied to sequential user modeling to address this issue by assigning different importance weights to previous interac-tions according to their relevance to the current prediction or next item. This enables the model to focus on the most informative historical interactions and reduce the influence of noisy or irrelevant ones (Nasir & Ezeife, 2023; S. Wang et al., 2019). Self-attention is a special kind of attention that models the relationships within the same sequence, enabling the model to capture item–item relationships and long-range dependencies (Zhang, Tay, Yao, & Sun, 2018). The self-attention mechanism can iden-tify crucial information by calculating attention scores between items in the sequence (Pan et al., 2025). Largely due to their self-attention mechanism, Transformers have obtained increasing interest in sequential user modeling to capture both short-term and long-term dependencies among items in the interaction sequence (P. Zhou et al., 2023). However, transformer-based sequential user models have some shortcomings. The large weights produced by the attention mechanism might be assigned to less relevant items, which can result in inaccurate recommendations. Moreover, the perfor-mance of the user modeling task may be negatively influenced by positional encoding and is prone to overfitting on noisy input (P. Zhou et al., 2023). Additionally, they suffer from quadratic computational complexity, as their time complexity is related to the length of interaction sequences (Pan et al., 2025). The aforementioned models for sequential user modeling leverage temporal infor-mation in user interaction sequences to model long-term and/or short-term preferences to support the construction of informative user representations. Long-term prefer-ences are derived from the user’s entire sequential interaction history and reflect the user’s general or relatively stable interests. Short-term preferences capture dynamic and temporary interests based on recent interactions. In particular, session-based rec-ommendation specializes more on short-term preferences and aims at making more dynamic and timely recommendations based on users’ current interaction behaviors in the ongoing session (Z. Li et al., 2024). 
+
+2.3.2 Long-Term Preferences 
+
+Prior research has explored attention mechanisms to model long-term preferences from users’ historical interactions. For example, Donkers, Loepp, and Ziegler (2017) pro-posed a GRU-based model integrating attention to capture the temporal dynamics along the user’s historical interactions to model long-term interests for personalized next item recommendations. Deep Interest Network (DIN) (G. Zhou et al., 2018) uses target attention to weigh each item by its relevance to the target item (can-didate ad) and takes a weighted sum pooling to obtain the adaptive representation of user interests with respect to a given ad. Following this direction, Deep Interest Evolution Network (DIEN) (G. Zhou et al., 2019) constructs the user representation in two modules. First, an interest extractor layer uses GRU to extract latent tem-poral interest states from the user’s historical behavior sequence. Then, an interest evolving layer employs GRU with attention update gate (AUGRU) to model the evo-lution of these interests relative to the target item. C. Zhou et al. (2018) proposed an attention-based user behavior modeling framework called ATRank that considers 10 heterogeneous user behaviors and uses self-attention to capture influence among the behaviors. Pancha, Zhai, Leskovec, and Rosenberg (2022) proposed PinnerFormer, an end-to-end transformer-based sequential user modeling architecture designed to pre-dict a user’s long-term future actions rather than next-action prediction. It learns each user’s embedding from their pin engagement over the past year to predict pos-itive engagements (e.g., pin saves, clicks, reactions, comments) over a 14 day future window, using a dense all-action loss as training objective. 
+
+2.3.3 Short-Term Preferences 
+
+Different methods have been employed to model short-term user preferences. Early works introduced sequential user models based on RNNs to encode short-term behavior sequences. For instance, Hidasi, Karatzoglou, Baltrunas, and Tikk (2016) proposed GRU4Rec, one of the earliest RNN-based models for capturing user preferences within the current session. The model processes the ordered sequence of clicked items using GRUs, where the hidden state is updated after each interaction and used to predict the next item in the session. Later, Hidasi and Karatzoglou (2018) improved GRU4Rec by refining its training and ranking loss functions, further strengthening GRU-based session recommendation. Another line of work introduces sequential user models based on CNNs to encode short-term behavior sequences. For instance, Tuan and Phuong (2017) proposed a 3D CNN-based model that jointly learns the sequential patterns of past clicks of the current session and the associated item content features to predict add-to-cart items. Each clicked item is represented using its ID, name, and category, and the clicked items are arranged into a three-dimensional input, allowing the 3D convolutional layers to preserve temporal information across layers. NextItNet (Yuan, Karatzoglou, Arapakis, Jose, & He, 2019) adopts stacked dilated CNNs by dilating convolutional filters with zeros. This enables a much larger receptive field with the same number of stacks and without introducing more parameters. GRec (Yuan et al., 2020) extends NextItNet to model a user’s sequential data within a session by utilizing a gap-filling-based encoder-decoder framework with masked-convolution operations to jointly consider the past and future contexts (data) without the data leakage issue. Other studies proposed GNN-based short-term sequential user modeling. For example, Session-based Recommendation with Graph Neural Networks (SR-GNN) is designed to capture short-term preferences within the current session (Wu et al., 2019). It constructs a session graph from each session sequence and applies a GNN to learn representations of the items included in that session. These item representations are then used to derive a session representation for predicting the next clicked item. The attention mechanism is also applied for short-term sequential user modeling. For instance, J. Li et al. (2017) proposed NARM that applies a GRU-based hybrid encoder with an attention mechanism to model the user’s sequential behavior (global encoder) and capture the user’s major interests in the current session (local encoder), which are then combined as a unified session representation. Different from NARM, which does not explicitly capture the importance of last click, Short-Term Atten-tion/Memory Priority (STAMP) (Liu, Zeng, Mokhosi, & Zhang, 2018) emphasizes the current interest reflected by the last click to capture both current and general interests 11 from previous clicks. To model the user’s interests in general, STAMP uses an atten-tion mechanism that explicitly considers correlation between each historical click and the last click. Xia et al. (2023) proposed TransAct, a transformer-based realtime user action sequential model that captures users’ short-term preferences from their most recent actions. The encoded user action sequence is represented by a concatenation of the embeddings of the user action type, the content of the pin, and the candidate pin. Then, a standard transformer encoder is employed to aggregate all the information in the user action sequence to represent the user’s short-term preference. 
+
+2.3.4 Long-Term and Short-Term Preferences 
+
+Recognizing that users’ long-term and short-term preferences should be captured simultaneously to provide a more comprehensive view of users’ interests and support the construction of a more informative user representation, many studies jointly model long-term and short-term interests, combining stable preference patterns with recent user preferences (Z. Yu, Lian, Mahmoody, Liu, & Xie, 2019). A first group of works adopted RNN-based models to encode long-term and short-term user interactions. For example, Quadrana, Karatzoglou, Hidasi, and Cremonesi (2017) constructed the user representation through a hierarchical RNN architecture (HRNN) to capture both intra- and inter-session dependencies. Specifically, the model consists of two level-based GRU: a session-level GRU and a user-level GRU. The session-level GRU models user interactions within a session and predicts the next item in the session. The user-level GRU models the user activity across sessions and tracks the evolution of the user interests over time. The user-level GRU propagates information to the session-level GRU, allowing the recommendations to be influenced by the the users’ past sessions. Z. Li et al. (2018) proposed BINN to discriminatively learn session behaviors and preference behaviors from the users’ interactive behaviors over time for next-item recommendation. The Session Behaviors Learning (SBL) can model the short-term session behaviors by revealing the users’ present consumption motivations using Con-textual LSTM (CLSTM). The reference Behaviors Learning (PBL) learns long-term historical stable user preferences using bidirectional CLSTM. Kumar, Zhang, and Leskovec (2019) proposed JODIE, which employs coupled RNNs to learn the embed-ding trajectories of a user and an item from an ordered sequence of temporal user-item interactions. Each user and item is assigned static and dynamic embeddings. Static embedding remains unchanged over time to represent long-term stationary properties of users and items. Dynamic embeddings change over time and represent time-varying properties of users and items. A second group of works adopted CNN-based models to encode long-term and short-term user interactions. For example, Tang and Wang (2018) proposed Caser, which uses convolutional filters for capturing both general preferences and sequential patterns to predict what users will interact with next. General preferences are modeled through user embeddings based on interacted items. Sequential patterns are learned as local features from the image by embedding a sequence of recent item interactions into an image in the time and latent spaces using convolutional filters. 12 Other works combined RNN and CNN-based models for long-term and short-term sequential user modeling. For example, You et al. (2019) proposed Hierarchical Tem-poral Convolutional Networks (HierTCN), a hierarchical deep learning architecture for modeling users’ sequential interactions. It consists of two levels of models: The high-level model uses RNN to aggregate users’ evolving long-term interests across sessions, while the low-level model is implemented with Temporal Convolutional Net-works (TCN), utilizing both the long-term interests and the short-term interactions within sessions to predict the next interaction. Another group of works adopted GNN-based models to to capture both the long-and short-term user interests. For instance, MA-GNN (Ma et al., 2020) applies a GNN for modeling item contextual information in the short-term period, while using a shared memory network to capture long-range dependencies between items. These representations are then adaptively combined through a gating mechanism to form the final user representation. In the same vein, Chang et al. (2021) proposed SURGE to construct user representations from long-term and short-term behavior sequences. The model first reconstructs a user behavior sequence into an item–item interest graph. Related items are then clustered to represent users’ core interests. Then, an attentive GNN aggregates implicit signals from user behaviors into explicit preference signals that more accurately reflect user preferences. Finally, dynamic graph pooling is applied to extract users’ current activated core interests from noisy historical behaviors. Another category of works leverages attention mechanisms to model long-term and short-term preferences. For example, L. Yu, Zhang, Liang, and Zhang (2019) proposed MARank, a multi-order attentive ranking model that decomposes users’ consuming behavior into long-term and short-term motivations. The long-term pref-erence is modeled through user–item similarity. The short-term preference is captured by extending the user embedding with recent items and modeling individual- and union-level item–item dependencies from multiple views to predict what a user prefers to interact with in the near future. Following this direction, SLi-Rec (Z. Yu et al., 2019) constructs user model by integrating long-term and short-term preference rep-resentations. Long-term preference captures the users’ general historical interactions through user-item interaction signals, whereas short-term preference is learned from recent behavior sequences using a time-aware and content-aware RNN. The final user representation is generated by adaptively fusing these two components through an attention-based mechanism. The ability of the self-attention mechanism to capture dependencies among items in the interaction sequence has led to the increasing use of transformer-based mod-els to capture both long-term and short-term preferences. For instance, Hsu and Li (2021) introduced Relational Temporal Attentive Graph Neural Networks (RetaGNN) for next-item recommendation. It first forms target user–item pairs by pairing each user with their interacted items at different time frames. For each pair, it extracts a local graph around the user and the item. The complete session is used to model the user’s long-term preference, while sub-sessions are used to model short-term prefer-ence. These local graphs are passed through a relation-attentive GNN to learn user and item representations. Then, sequential self-attention captures the temporal patterns in both long-term and short-term user preferences and learns the sequential correlation 13 between items within the given session for the final user and item embeddings. Zhang et al. (2018) proposed AttRec, a self-attention-based sequential recommendation model that combines self-attention to model user short-term intent, and a metric learning component to model user long-term preference. SASRec (Kang & McAuley, 2018) also uses a self-attention mechanism to balance short-term intent and long-term preference. It seeks to capture long-term dependencies from the user’s interaction history while focusing on the most relevant past actions for next-item prediction. As an improved version of SASRec, BERT4Rec (Sun et al., 2019) adopts transformer-based sequential user modeling by constructing the user representation through a bidirectional self-attention network that encodes the user behavior sequence to model long-term and short-term preferences. TiSASRec (J. Li, Wang, & McAuley, 2020) improves SASRec by incorporating time-interval information between interactions into the self-attention mechanism. In addition to modeling the sequential order of interacted items, it con-structs a time-interval relation for each user based on the time gaps between every pair of items in the historical sequence. P. Zhou et al. (2023) further extended SASRec by proposing Attention Calibration for Transformer-based Sequential Recommenda-tion (AC-TSR). AC-TSR replaces the standard self-attention layer with an Attention Calibration (AC) layer, which consists of two calibrators: a Spatial Calibrator (SPC) and an Adversarial Calibrator (ADC). SPC incorporates spatial information, includ-ing item order and distance, into the attention matrix. ADC mitigates the effect of noisy input by redistributing the attention weights based on each item’s contribution to the next-item prediction. FISSA (Lin, Pan, & Ming, 2020) follows SASRec to cap-ture users’ dynamic preferences from their latest interacted item sequence through a local representation learning module. To capture users’ global preferences, FISSA fur-ther proposes a global representation learning module that applies a location-based attention layer to weigh items by considering their relations to the candidate item. Then, a gating module balances the local and global representations by taking the information of the candidate items into account. Similarly, SDM (Lv et al., 2019) uses multi-head self-attention to model short-term user behaviors by capturing multiple user interests in a session. Long-term user preference is encoded through attention and dense fully connected networks based on various types of side information. The model particularly uses a gated fusion module to merge users’ short-term and long-term pref-erences. Xia et al. (2023) proposed a real-time–batch hybrid ranking approach that encodes user action history. The approach combines TransAct, a transformer-based model for capturing users’ real-time recent actions, with PinnerFormer a transformer-based model which provides batch user embeddings learned over a longer time period. This combination enables to model both short-term and long-term user preferences. 
+
+2.3.5 Limitations and our Contribution 
+
+Despite their powerful ability for sequential user modeling and recommendation across a wide spectrum of applications, existing approaches remain limited in our specific educational context. Given a user’s interaction sequence, a typical sequential user modeling and recommendation model aims to predict and recommend the next likely-to-be-preferred items for this user. Our recommendation goal is different in that we aim to construct a sequential learner model based on the knowledge concepts that 14 a learner did not understand (referred to as DNU concepts) when interacting with a learning material. This learner model is then used to recommend other concepts that can help learners understand their DNU concepts, rather than recommending the next DNU concept in the sequence. Moreover, many existing sequential user mod-eling approaches are supervised, which often requires labeled data, model training, and considerable computational resources. Furthermore, many of these models do not sufficiently consider item features and semantic information, as they often represent items mainly through item IDs. Additionally, the attention-based approaches rely on complex attention mechanisms to model user interests, which may increase model complexity. To address these limitations, in this paper, we propose MR-ConceptGCN as a novel unsupervised sequential learner modeling approach for educational settings. MR-ConceptGCN aims to construct a learner representation that supports the rec-ommendation of concepts to help learners understand or master their DNU concepts. Since the model is unsupervised, it does not require labeled data or supervised train-ing, which reduces computational time and costs. Moreover, as text information, e.g., lecture slide content, concept name, and Wikipedia articles could contain useful seman-tic information about items’ features and users’ interests, MR-ConceptGCN adopts SBERT to generate item embeddings. Furthermore, MR-ConceptGCN incorporates semantic information by using multi-relational graph representation learning to cap-ture relations among concepts, including RELATED TO and PREREQUISITE TO relationships. In addition, instead of relying on complex attention mechanisms, MR-ConceptGCN uses cosine-based semantic similarity between sequentially interacted items to emphasize relevant concepts, capture dependencies between distant interac-tions, and downplay less relevant items in the learner’s interaction history. Although multi-hop item representations provide useful structural and semantic information, they may be insufficient for modeling fine-grained learner preferences when used alone. Therefore, the representations of the items interacted with by each learner are fur-ther refined by incorporating temporal information and semantic relatedness from the learner’s sequential interactions. Concretely, MR-ConceptGCN integrates multi-relational graph representation learning with learners’ sequential interactions, allowing the learner model to capture both structural-semantic relations among concepts and the temporal evolution of learner preferences. To model this temporal evolution, MR-ConceptGCN adopts both long-term and short-term learner interests, where each component captures a different aspect of the learner’s interaction history. The long-term component captures stable preference patterns by modeling semantic relatedness and sequential dependencies among all historically interacted items. Specifically, cosine similarity is used to estimate the relatedness between interacted concepts, allowing greater importance to be assigned to semantically related items. In addition, a mask matrix is employed to preserve chronological order, ensuring that future interactions do not influence past ones while past interactions can contribute to later represen-tations. As a result, the learner representation captures long-term preferences over semantically and sequentially related items. To capture short-term preferences, MR-ConceptGCN introduces a position-based weighting mechanism that assigns greater importance to more recent interactions in the learner’s history. Consequently, the final 15 learner representation incorporates both correlation-based information and position-based information from the learner’s interacted items, enabling the model to represent both long-term and short-term learner interests. 
+
+# 3 Methodology 
+
+In this section, we present the conceptual and technical details of our proposed approach, MR-ConceptGCN. As depicted in Figure 1, MR-ConceptGCN is divided into two phases, offline and online. The offline phase comprises two key steps: (1) PKG construction and (2) representation learning of PKG items using MR-GCN. The online phase consists of the sequential learner modeling step based on learner’s long-term and short-term interactions. 
+
+Fig. 1 : Conceptual Architecture of MR-ConceptGCN 
+
+# 3.1 PKG Construction 
+
+Our PKG contains different nodes representing the following entities: Learner (L), Learning Material (LM), Slide (S), Main Concept (MC), Related Concept (RC), Category (Cat) and edges representing the following relationships: (LM, CON-SISTS OF , S), (S, CONTAINS , MC), (MC, RELATED TO , RC), (MC, PREREQUI-SITE TO , MC), (MC, PREREQUISITE TO , RC), (MC, HAS CATEGORY , Cat), (L, 16 HAS READ , S), (L, DID NOT UNDERSTAND (DNU) , MC), (L, UNDERSTOOD (U) , MC). The weight of the edges CONSISTS OF , CONTAINS , RELATED TO , and 
+
+HAS CATEGORY are determined based on the cosine similarity between the two node embeddings using SBERT (Reimers & Gurevych, 2019). The weight of the edge 
+
+PREREQUISITE TO is computed based on a multi-criteria approach that combines the contributions of different features to effectively extract prerequisite relationships, as proposed in (Alatrash, Chatti, Wibowo, & Ain, 2025). The pipeline for constructing the PKG is illustrated in Figure 2. Following (Ain et al., 2025), the process starts once the teacher uploads the LM, a set of slides, to CourseMapper. Then, the system creates a Slide-KG for each slide, and the combined slide-KGs constitute an LM-KG. During this process, the textual content of a slide in the LM is extracted by the python library PDFMiner. Then, the top 15 keyphrases are extracted from each slide using the SIF Rank SqueezeBERT algorithm (Ain, Chatti, Bakar, Joarder, & Alatrash, 2023). After that, these keyphrases are linked to specific entities in the DBpedia Spotlight knowledge base (Mendes, Jakob, Garc´ ıa-Silva, & Bizer, 2011) to identify the MCs. Next, these MCs are filtered and sorted based on their importance to both Slide and LM. This filtering step employs SBERT to gen-erate the initial representation of each entity in the PKG. Then, based on the initial representation, the cosine similarity scores are calculated between the MCs and the slide, as well as between the MCs and the LM, ensuring that the top 5 MCs with the highest importance to the slide and LM are selected. After that, using a locally hosted Wikipedia dump, these MCs undergo an expansion operation to get RCs and Cats based on three steps, namely candidate set creation, candidate set weighting, and candidate pruning. As a result of the concept expansion phase, the top 20 RCs and top 3 Cats for each MC are retained and added to the PKG. Finally, to infer prereq-uisites relationships, we follow (Alatrash et al., 2025) who proposed a multi-criteria unsupervised approach for automatically inferring concept prerequisites relationships without relying on labeled data. This approach uses ten criteria based on document-based, Wikipedia hyperlink-based, graph-based, and text-based features, and combines them using a voting algorithm to determine the likelihood of one concept being a prerequisite of another one. Using this approach, we infer possible prerequisite rela-tionships among all concept pairs (MC or RC) and update the PKG with all found PREREQUISITE TO relationships. In this work, we address multiple relationship types between concepts, namely 
+
+RELATED TO and PREREQUISITE TO , since we believe that they play a critical role for accurate concept-based learning modeling. Incorporating prerequisite relation-ships between concepts would ensure that learners have the necessary foundational knowledge before learning advanced concepts. After constructing the PKG, we enhance the representations of all PKG items using MR-GCN which considers various relation-ship types, as discussed in detail in the next section. The enhanced representations of the concepts that a learner did not understand are then utilized by our proposed MR-ConceptGCN model to construct a sequential learner model that combines long-term and short-term learner interactions (see Section 3.3). 17 Fig. 2 : Personal Knowledge Graph (PKG) Construction 
+
+# 3.2 Representation Learning using MR-GCN 
+
+The goal of this step is to design an MR-GCN model that enhances the representations of PKG items by taking into account various relationships. To this end, we propose and compare two methods: MR-GCN RRGCN and MR-GCN CompGCN. 
+
+3.2.1 MR-GCN RRGCN 
+
+We refer to the first method of the MR-GCN model inspired by RR-GCN (Degraeve et al., 2022) as MR-GCN RRGCN. In this method, we adapt RR-GCN, which explicitly accounts for multiple relationship types, to enhance the representations of PKG items. Compared to RR-GCN, in MR-GCN RRGCN, we use two matrices (i.e., adjacency matrix and prerequisite matrix) and we incorporate SBERT-based semantic similarity, allowing structural propagation to be aligned with semantic relatedness between PKG items. Enhancing the representation of PKG items in MR-GCN RRGCN is mainly achieved through the following steps: (1) construct the initial embedding matrix, (2) construct the adjacency matrix and prerequisite matrix, (3) construct relation-specific weight matrices, and (4) construct the final embedding matrix, as illustrated in Figure 3. 18 Fig. 3 : Enhanced Representation of PKG Items using MR-GCN RRGCN 
+
+3.2.1.1 Construct the Initial Embedding Matrix 
+
+Following (Alatrash, Chatti, Ain, Fang, et al., 2024), the initial embedding matrix for PKG items is constructed using an SBERT-based method (Reimers & Gurevych, 2019). This method aims to provide initial representations (embeddings) for different PKG items, namely slide (S), main concept (MC), related concept (RC), and category (Cat), that can capture their semantic information, as follows: 
+
+s = {s1, s 2, s 3, ..., s n} (1) where s is the set of slide nodes and n is the number of slides belonging to the LM. The embedding of each slide sn can be represented by applying SBERT on the slide textual content: 
+
+esn = SBERT {slide content n} (2) Then, the set of main concepts ( mc i) identified from a slide sn as well as their expanded related concepts ( rc j ) and categories ( cat k) are represented as follows: 
+
+mc = {mc 1, mc 2, ..., mc i} (3) 19 rc = {rc 1, rc 2, rc 3, ..., rc j } (4) 
+
+cat = {cat 1, cat 2, ..., cat k} (5) The embeddings of mc i and rc j are derived from the abstracts of their Wikipedia articles and the embedding of cat k is generated based on the category name using SBERT: 
+
+emc i = SBERT {W ikipedia abstract i} (6) 
+
+erc j = SBERT {W ikipedia abstract j } (7) 
+
+ecat k = SBERT {category name k} (8) 
+
+3.2.1.2 Construct the Adjacency Matrix and the Prerequisite Matrix 
+
+We adopt the approach of ConceptGCN (Alatrash, Chatti, Ain, Fang, et al., 2024) for constructing the adjacency matrix ( ADJ ) of all PKG items that are connected through different relationships except the PREREQUISITE TO relationship that will be calculated separately in the prerequisite matrix ( P RE ). The adjacency matrix is represented by the neighbor connection and the self-connection sub-matrices. The varying degrees of influence exerted by direct neighbors are captured through a simple score function, which can be viewed as an “attention mechanism”. This function com-bines the symmetric square-root normalization introduced in LightGCN (He et al., 2020) with an SBERT-based semantic similarity measure. The resulting score reflects the importance of the relationship between two nodes: higher similarity indicates stronger influence from the neighbor, while lower similarity indicates weaker influence. For a directly connected pair of nodes u and v in the PKG, their importance ADJ u,v 
+
+in the adjacency matrix is calculated as follows: 
+
+ADJ u,v =
+
+
+
+1 if u = v 
+
+> cos (eu,e v)
+
+√|Nu|| Nv | if v ∈ Nu
+
+0 otherwise (9) where eu represents the embedding of node u, ev represents the embedding of node 
+
+v, cos is the cosine similarity between these two embedding vectors, |Nu| and |Nv |
+
+represent the degree of nodes u and v, respectively, that is, the number of directly connected neighbor nodes to u and v. If nodes u and v are not directly connected, the corresponding value is 0. We propose a similar approach to construct a prerequisite matrix P RE for PRE-REQUISITE TO relationships between a pair of nodes u and v in the PKG. It is important to note that prerequisite relationships are asymmetric and exclude self-connections. If u and v are both concept nodes (MC or RC) and u is a prerequisite of v, then the corresponding entry P RE [u][ v] in the prerequisite matrix is SP re u,v ; oth-erwise, the value is 0. Due to asymmetry, the reverse entry P RE [v][ u] is always 0. Similarly, because a concept cannot be a prerequisite of itself, SP re u,u is also set to 0. 20 The prerequisite matrix is calculated as follows: 
+
+P RE u,v =
+
+(
+
+SP re u,v if v is a prerequisite of u
+
+0, otherwise (10) where SP re u,v is a score representing the likelihood that node u is a prerequisite of node 
+
+v, as proposed in (Alatrash et al., 2025), with values ranging between 0 and 1. A value closer to 1 indicates a higher likelihood that u is a prerequisite of v, while a value closer to 0 indicates a lower likelihood. 
+
+3.2.1.3 Construct Relation-Specific Weight Matrices 
+
+Inspired by RR-GCN (Degraeve et al., 2022), we generate random relation-specific weight matrices using the Glorot method (Glorot & Bengio, 2010), to capture the distinct roles of different relationship types between PKG items. Glorot uniform ini-tialization method is a method for initializing the weights of a neural network to avoid gradient explosion or gradient disappearance during training. This method is applied at each layer to support effective learning of higher-level feature represen-tations. For the semantic and structural relationships CONTAINS , CONSISTS OF ,
+
+HAS CATEGORY , and RELATED TO , we generate one random relation-specific weight matrix Wrelated to . This is because these relationships share a similar mech-anism for calculating weights between nodes, and our objective is to differentiate between distinct types of relationships among concepts, namely RELATED TO and 
+
+PREREQUISITE TO . We model the PREREQUISITE TO relationship separately due to its directional and asymmetric nature. For this relation, we generate a dedi-cated random relation-specific weight matrix Wprerequisite to . Additionally, we include a self-loop weight matrix Wself , to preserve each node’s inherent features during mes-sage passing. To avoid parameter updates during training, all relation-specific weight matrices are fixed after Glorot initialization. This method greatly reduces computa-tional overhead, does not require backpropagation to train the network, and avoids the problem of overfitting the model on small-scale data sets (Degraeve et al., 2022). The relation-specific weight matrices are constructed as follows for each layer l = {1, 2}:
+
+W lself = Glorot unif orm (weight size, weight size ) (11) 
+
+W lrelated to = Glorot unif orm (weight size, weight size ) (12) 
+
+W lprerequisite to = Glorot unif orm (weight size, weight size ) (13) where weight size is the size of the node embedding vector and, in our case, we consider a two-layer receptive field. 
+
+3.2.1.4 Construct the Final Embedding Matrix 
+
+In MR-GCN RRGCN, we use the embedding of the last layer as the final embedding of PKG items, and in our case, the last layer will be the second layer. Figure 4 shows an 21 (a) Sample PKG Structure 
+
+(b) A Two-Layer Receptive Field Example of Item M C 1 in the PKG 
+
+Fig. 4 : Sample PKG and a Two-Layer Receptive Field used to Enhance the Embed-ding of the Target Node M C 1
+
+illustrative example of a two-layer receptive field for the target node M C 1. In the left subgraph of this example, we can see that the slide ( S1) CONTAINS three main con-cepts ( M C 1, M C 2, and M C 3), which are associated with three related concepts ( RC 1,
+
+RC 2, and RC 3) through RELATED TO relationships, and has one category ( Cat 1). Also, M C 1 is a PREREQUISITE TO RC 1, and RC 2 is a PREREQUISITE TO M C 1.Learner ( L) did not understand ( DNU ) M C 1 and M C 2, but understood ( U ) M C 3.The right subgraph of this example shows a two-layer receptive field for the target node M C 1, which describes the path between M C 1 and its neighbors within two hops by considering different relationship types in the PKG. This high-order connectivity can capture deep semantic information and help generate a richer representation of 
+
+M C 1 through propagation and message passing. Specifically, in the ( l + 1) th layer, the representation of the node u is updated by aggregating information from its neighbors through considering different relationship types. This aggregation combines the weighted embedding information from the node neighbors in the lth layer and the representation of the node itself (i.e., self-connection). The final node representation is calculated as follows: 
+
+e(l+1)  
+
+> u
+
+= W (l+1)  
+
+> self
+
+(ADJ u,u elu + P RE u,u elu) + W (l+1) 
+
+> related to
+
+X
+
+> v∈Nu(related to )
+
+ADJ u,v elv
+
++ W (l+1) 
+
+> prerequisiste to
+
+X
+
+> v∈Nu(prerequisiste to )
+
+P RE u,v elv
+
+(14) This equation consists of three parts: 
+
+• Self-connection part: 
+
+W (l+1)  
+
+> self
+
+(ADJ u,u elu + P RE u,u elu)22 where W l+1  
+
+> self
+
+is randomly generated by the Glorot method. For the RELATED TO 
+
+relationship, ADJ u,u = 1 by definition of the self-connection relationship. For the 
+
+PREREQUISITE TO relationship, a concept cannot be a prerequisite of itself, therefore, P RE u,u = 0. 
+
+• Relationships between PKG items, excluding PREREQUISITE TO relationships: 
+
+W l+1 
+
+> related to
+
+X
+
+> v∈Nu(related to )
+
+ADJ u,v elv
+
+where W l+1  
+
+> related to
+
+represents the relation-specific weight matrix for relationships between PKG items, except PREREQUISITE TO relationships. ADJ u,v repre-sents the strength of the relationship between node u and node v, elv represents the embedding of node v in previous layer, and Nu(related to ) represents the set of all neighbor nodes connected to u through various relationships, except the 
+
+PREREQUISITE TO relationship. 
+
+• PREREQUISITE TO relationships between concept items in the PKG: 
+
+W l+1 
+
+> prerequisiste to
+
+X
+
+> v∈Nu(prerequisiste to )
+
+P RE u,v elv
+
+where W l+1  
+
+> prerequisiste to
+
+represents the relation-specific weight matrix for the PRE-REQUISITE TO relationship. P RE u,v is used to quantify the likelihood of the existence of PREREQUISITE TO relationship between concept u and concept v, elv
+
+represents the embedding of concept v in the previous layer, and Nu(prerequisiste to )
+
+represents the set of all neighbors connected to u through PREREQUISITE TO 
+
+relationships. Considering that in self-connection part ADJ u,u = 1 and P RE u,u = 0, the equation can be rewritten as follows: 
+
+e(l+1)  
+
+> u
+
+= W (l+1)  
+
+> self
+
+elu+W (l+1) 
+
+> related to
+
+X
+
+> v∈Nu(related to )
+
+ADJ u,v elv +W (l+1) 
+
+> prerequisiste to
+
+X
+
+> v∈Nu(prerequisiste to )
+
+P RE u,v elv
+
+(15) It is worth noting that, in each layer l = {1, 2}, we use the three relation-specific weight matrices of the corresponding layer as mentioned earlier in Section 3.2.1.3. In our example, the final embedding of M C 2 at layer 2 is calculated as follows: 
+
+e2 
+
+> M C 1
+
+= W 2 
+
+> self
+
+e1 
+
+> M C 1
+
++ W 2
+
+> related to
+
+(ADJ M C 1,S 1 e1 
+
+> S1
+
++ ADJ M C 1,M C 2 e1 
+
+> M C 2
+
++ ADJ M C 1,RC 1 e1 
+
+> RC 1
+
++ ADJ M C 1,RC 2 e1 
+
+> RC 2
+
+)+W 2
+
+> prerequisiste to
+
+(P RE M C 1,RC 2 e1 
+
+> RC 2
+
+)
+
+3.2.2 MR-GCN CompGCN 
+
+The MR-GCN RRGCN method discussed above relies on relation-specific weight matrices that are randomly generated for each relationship type at each layer, which might lead to increased model complexity and computation time. In our work, we 23 only differentiate between two types of relationships between concepts, along with self-connections. Therefore, the number of relation-specific weight matrices in our model is relatively small. However, if we introduce more relation types into our model in future work, the number of relation-specific weight matrices will increase. In this case, the number of parameters will be large, which might lead to over-parameterization problems. To overcome this issue, CompGCN (Vashishth et al., 2019) limits the num-ber of relation-specific weight matrices by generating three relation-specific matrices, namely the Input relation matrix WI , the Output relation matrix WO, and the Self-connection relation matrix WS , and updates them during training. As our approach is fully unsupervised, we converted CompGCN into an unsupervised method by freez-ing relation representations while retaining node–relation composition. To this end, we discuss next MR-GCN CompGCN, our second proposed method of the MR-GCN model. In MR-GCN CompGCN, embeddings are enriched for both nodes and edges to better capture the semantic information within the node representations. Moreover, we incorporate SBERT-based semantic similarity to modulate message passing, allowing structural propagation to be aligned with semantic relatedness between PKG items. MR-GCN CompGCN is mainly achieved through the following steps: (1) construct the initial embedding matrices for PKG items and edges, (2) update the embedding representation of each item in the PKG, and (3) update the embedding representation of each edge in the PKG, as depicted in Figure 5. 
+
+Fig. 5 : Enhanced Representation of PKG Items using MR-GCN CompGCN 24 3.2.2.1 Construct the Initial Embedding Matrices for Items and Edges 
+
+Firstly, we compute the initial embeddings for all PKG items (S, MC, RC, and Cat) using SBERT (Reimers & Gurevych, 2019), following the procedure described in Section 3.2.1.1. Secondly, we compute the initial embeddings for all edges between PKG items. However, since CompGCN requires training and is therefore not directly applicable to our unlabeled setting, we adapt CompGCN by removing the trainable components and reformulating it into an unsupervised approach. Concretely, we pro-pose a way to generate an initial embedding for each edge er that leverages the weights of different relationships wr between PKG items, derived from the adjacency matrix 
+
+ADJ and prerequisite matrix P RE introduced in Section 3.2.1.2. These relationship weights are multiplied by a transformation matrix winitialize randomly initialized using the Glorot method (Glorot & Bengio, 2010) to obtain customized initial embeddings for each edge er , as follows: 
+
+er = wr ∗ winitialize (16) where winitialize is randomly generated using Glorot method as given in equation 17, 
+
+weight size is is the size of the node embedding vector, wr is the relationship weight. In case of different relationship types except PREREQUISITE TO , the correspond-ing weight value is obtained from the adjacency matrix ADJ , otherwise from the prerequisite matrix P RE , as given in equation 18. 
+
+winitialize = Glorot unif orm (1 , weight size ) (17) 
+
+wr =
+
+(
+
+P RE r , if r is a PREREQUISITE TO relationship 
+
+ADJ r , otherwise (18) After obtaining the initial embedding matrices for all PKG items and edges, the next step is to use these embeddings to update the representations of the PKG items. 
+
+3.2.2.2 Update the Embedding Representation of Items 
+
+To update the embeddings of PKG items, we randomly generate three weight matrices 
+
+WI , WO, and WS at each layer l > 0, using the Glorot method (Glorot & Bengio, 2010). These matrices, collectively referred to as direction matrices and denoted by 
+
+Wλ, are constructed as follows: 
+
+W lλ = Glorot unif orm (weight size, weight size ) (19) where weight size is the size of the node embedding vector. The embedding of a PKG item u is then updated as follows: 
+
+e(l+1)  
+
+> u
+
+= X 
+
+> (v,r )∈N(u)
+
+W (l+1)  
+
+> λ(r)
+
+ϕ(elv , e lr) (20) 25 where N (u) is the set of neighbors that are connected to u through various relation-ships (Input, Output, and Self-connection) and r is the relationship edge between u
+
+and v. At each layer l > 0, the direction matrix Wλ is defined as follows: 
+
+W lλ(r) =
+
+
+
+W lI , if r is an input edge to node uW lO, if r is a output edge to node uW lS , if r is a self-connection (21) The entity-relation composition operation is defined as follows: 
+
+eo = ϕ(es, e r ) (22) where ϕ is the composition operator and (s, r, and o) represent (subject, relation, and object) in the knowledge graph. The entity-relation composition operator ϕ enables the combination of node and relation embeddings to preserve relational semantics during message passing (Bordes, Usunier, Garcia-Dur´ an, Weston, & Yakhnenko, 2013). We adopt the multiplication operator (B. Yang, tau Yih, He, Gao, & Deng, 2014) because it achieves the best performance on the link prediction task (Vashishth et al., 2019). (equation 23). 
+
+ϕ(elv , e lr ) = elv ∗ elr (23) In the following example, we show how to update the embedding representation of the PKG item M C 1 according to equation 20 at layer 1. As shown in Figure 6, there are three nodes, namely M C 1, RC 1, and RC 3 that are connected through 6 edges. It is 
+
+Fig. 6 : Example MR-GCN CompGCN important to mention that different types of PKG relationships except PREREQUI-SITE TO are bidirectional, which means that these edges can be divided into output direction and input direction. The relationships in this example PKG can be expressed as follows: 
+
+• r1: M C 1RELATED TO 
+
+−−−−−−−−−→ M C 1
+
+26 • r2: M C 1RELATED TO 
+
+−−−−−−−−−→ RC 3
+
+• r3: M C 1RELATED TO 
+
+←−−−−−−−−− RC 3
+
+• r4: M C 1PREREQUISITE TO 
+
+←−−−−−−−−−−−−− RC 3
+
+• r5: M C 1RELATED TO 
+
+−−−−−−−−−→ RC 1
+
+• r6: M C 1RELATED TO 
+
+←−−−−−−−−− RC 1
+
+Therefore, the set of neighbors that are connected to M C 1 is: 
+
+N(M C 1) = [( M C 1, r 1), (RC 3, r 2), (RC 3, r 3), (RC 3, r 4), (RC 1, r 5), (RC 1, r 6)]. The updated embeddings of M C 1 at layer 1 can be achieved as follows: 
+
+e1 
+
+> M C 1
+
+=W 1 
+
+> S
+
+ϕ(e0 
+
+> M C 1
+
+, e 0 
+
+> r1
+
+) + W 1
+
+> O
+
+ϕ(e0 
+
+> RC 3
+
+, e 0 
+
+> r2
+
+) + W 1 
+
+> I
+
+ϕ(e0 
+
+> RC 3
+
+, e 0 
+
+> r3
+
+)+ 
+
+W 1 
+
+> I
+
+ϕ(e0 
+
+> RC 3
+
+, e 0 
+
+> r4
+
+) + W 1
+
+> O
+
+ϕ(e0 
+
+> RC 1
+
+, e 0 
+
+> r5
+
+) + W 1 
+
+> I
+
+ϕ(e0 
+
+> RC 1
+
+, e 0 
+
+> r6
+
+)where e0 
+
+> M C i
+
+and e0 
+
+> RC j
+
+are the initial embeddings for each node, and e0 
+
+> rk
+
+is the initial embedding for each edge, as computed in Section 3.2.2.1. 
+
+3.2.2.3 Update the Embedding Representation of Edges 
+
+Prior to propagating to the next layer, edge representations are updated to ensure their effectiveness in subsequent node updates. Similar to CompGCN, each edge embedding is multiplied by a relation weight matrix Wrelation . In contrast to CompGCN, where 
+
+Wrelation is a learnable parameter, in our model it is randomly initialized using the Glorot method (Glorot & Bengio, 2010) as given in equation 25, and kept fixed during propagation. This design choice enables applicability in unlabeled settings and alle-viates the challenges of parameter optimization. The edge update is formally defined as: 
+
+e(l+1)  
+
+> r
+
+= Wrelation elr (24) 
+
+Wrelation = Glorot unif orm (weight size, weight size ) (25) where weight size is the size of the node embedding vector. Here, Wrelation is not generated separately for each relationship type (i.e., Input, Output, Self-connection) or for each layer; instead, a single Wrelation is shared across all edges and layers, and is multiplied with the corresponding edge embeddings from the previous layer. 
+
+# 3.3 Learner Modeling based on Sequential Learner Interactions 
+
+Following ConceptGCN (Alatrash, Chatti, Ain, Fang, et al., 2024), we adopt the idea of constructing a learner model based on the concepts that a learner understood (U) or did not understand (DNU) and extend it by capturing multiple relationships between concepts and integrating temporal information from learner interactions with these concepts. In ConceptGCN, the learner model is primarily constructed based on U and DNU concepts. Given that concepts already understood by the learner are assigned a value of zero, the learner model can be constructed exclusively from DNU concepts. Accordingly, the learner model is represented as a weighted average of the learner’s 27 DNU concepts, where each weight is computed as the cosine similarity between the corresponding concept embedding and the learning material embedding as follows: 
+
+eL =
+
+"
+
+1
+
+ωsum 
+
+X
+
+> c∈DN U
+
+ωc ec
+
+#
+
+; ωc = cos (ec, e lm ); ωsum = X
+
+> c∈DN U
+
+ωc (26) where ec is the embedding of concept c and ωc is its weight in the learning material 
+
+lm . However, the learner model in ConceptGCN is limited in that it does not cap-ture multiple relationships between concepts. Moreover, it fails to incorporate both long-term and short-term learner interactions with the concepts. We argue that tem-poral information from learner interactions is crucial for capturing sequential learning behaviors and for more accurate dynamic learner modeling. Temporal information is the timestamp in which the learner interacted with the concepts. In practice, learners’ interests and needs evolve dynamically over time. Static interest modeling is there-fore insufficient to capture these changes. By incorporating temporal information, the learner model can distinguish between long-term interests (historical interactions) and short-term interests (recent interactions), thereby enabling more accurate learner mod-eling (Hsu & Li, 2021; Z. Yu et al., 2019). Although our proposed MR-GCN methods (see Section 3.2) are sufficient to produce final embeddings, multi-hop concept repre-sentations alone may be insufficient to capture learners’ fine-grained interests, which can lead to less accurate learner models. Therefore, we further refine the representa-tions of DNU concepts obtained from the preceding offline phase using our MR-GCN model by incorporating sequential interaction signals in the online phase. Accord-ingly, in our proposed approach MR-ConceptGCN, the learner model embedding is generated in the online phase by leveraging individual learners’ long and short-term interactions to further enhance the embeddings of the DNU concepts that build the base of the learner model. In this phase, learners interact with learning materials in CourseMapper by explicitly marking concepts as U or DNU. Based on this feed-back, a learner model ( L) is constructed to capture the learner’s knowledge state, derived from interacted U and DNU concepts. After that, the learner model embed-ding ( eL) is generated based on the sequential order of DNU concepts. This allows to integrate time information from learner interactions and to capture both learner’s long-term and short-term interests. The long-term interests are calculated based on the semantic correlation and the sequential order between DNU concepts in a given learner-concept interaction sequence. The short-term interactions are the DNU con-cepts most recently marked by a learner, which are more representative of their current interests. To achieve this, our learner modeling approach involves three steps: (1) con-struct the learner model based on learner’s historical interactions with the concepts, (2) calculate the learner’s long-term interests and update the DNU concept embed-dings based on semantic and sequential information, and (3) calculate the learner’s short-term interests and generate the final learner model embedding. 
+
+3.3.1 Construct the Learner Model based on Historical Interactions 
+
+As described earlier, the learner model L is constructed based on the learner’s U and DNU concepts. The model is represented as a binary vector, where each concept 28 is assigned a value of 1 if marked as DNU and 0 if marked as U. The timestamp information is incorporated into the representation of the learner model. For each interaction in which a learner marks a concept as DNU, a timestamp is recorded to capture the time of interaction. This temporal information allows the model to differentiate between short-term interests (recent interactions) and long-term interests (historical interactions). In the example given below, the learner did not understand concepts M C 3, M C 1, and M C 2, but understood concept M C 4. Thus, the learner model L can be represented as follows: 
+
+L = [(1 , t 1)C3 , (1 , t 2)C1 , (0 , −)C4 , (1 , t 3)C2 ]Here, t1, t2, and t3 denote the timestamps at which the learner marked M C 3, M C 1,and M C 2 as DNU, respectively, while M C 4 (marked as U) does not have an associated timestamp. Incorporating this temporal information provides a clearer view of the learner’s evolving needs. The learner model can also be represented only by DNU concepts, which can be expressed as follows: 
+
+LDN U = [(1 , t 1)C3 , (1 , t 2)C1 , (1 , t 3)C2 ] (27) 
+
+3.3.2 Calculate the Learner’s Long-Term Interests 
+
+Our goal is to capture learners’ long-term interests based on DNU concepts in a given learner-concept interaction sequence. To dynamically update the learner model and capture long-term interactions, we employ a sequential matrix. The sequential matrix integrates a correlation matrix and a mask matrix to update the embeddings of DNU concepts. This mechanism captures both the semantic correlation and the sequential order between DNU concepts in the learner model. The use of a correlation matrix enables the capture of a learner’s topical focus by assigning greater importance to semantically related concepts. This matrix leverages cosine similarity to infer the degree of semantic relatedness among DNU concepts, allowing the model to give more weight to concepts from the same category. For example, suppose the learner’s list of DNU concepts include ”supervised learning”, ”IoT”, and ”Bayesian classifier”. By calculating cosine similarity, we find that ”supervised learning” and ”Bayesian clas-sifier” have a high similarity, indicating they belong to the same category machine learning (ML). In contrast, ”IoT” has a low similarity to these two concepts, as it belongs to a different category. This suggests that the learner may be more interested in the ML category. Accordingly, when constructing the learner model embedding, ”supervised learning” and ”Bayesian classifier” will receive more importance so that they contribute more to the final learner representation. In this way, the recommen-dation of new concepts or new learning resources that can help the learner understand the marked DNU concepts would contain items more closely related to ”supervised learning” and ”Bayesian classifier”. Furthermore, the use of a mask matrix preserves the temporal consistency of learner interactions. This matrix ensures that the sequential order of a learner’s inter-action history (marking concepts as DNU) adheres to the natural causal rule: past events can influence the future, but future events cannot influence the past. Inspired 29 by RetaGNN (Hsu & Li, 2021), the mask matrix is used to restrict the flow of infor-mation in the sequence data, preventing future interactions from affecting past ones, while past interactions affect the future. For example, suppose a learner first marks ”supervised learning” as DNU, then ”IoT”, and later ”Bayesian classifier”. The mask matrix is used to prevent that ”supervised learning” is affected by ”IoT” and ”Bayesian classifier”, while still allowing past interactions (”supervised learning” and ”IoT”) to influence ”Bayesian classifier”. When updating embeddings of the DNU concepts in the learner model, the mask matrix guarantees that the representation of ”supervised learning” contains information from ”IoT” and ”Bayesian classifier”, so that the rec-ommendation of new items that can help the learner understand the marked DNU concepts would contain items more closely related to the more recent concepts ”IoT” and ”Bayesian classifier”. By enforcing this temporal constraint, the mask matrix helps to capture the sequential order of interaction events more faithfully, thereby improving its ability to model dynamic learner interactions. The sequential matrix which integrates a correlation matrix and a mask matrix thus ensures giving higher importance to a recent DNU concept that is semantically related to other DNU concepts in the learner model. In our example, using a sequential matrix to update the embeddings of the chronologically ordered DNU concepts ”supervised learning”, ”IoT”, and ”Bayesian classifier” ensures that the recommendation of new items that can help the learner understand the DNU concepts would contain items more closely related to ”Bayesian classifier”. Formally, we update the embeddings of the DNU concepts in LDN U by using a sequential matrix β, as follows: 
+
+eDN U = β · V T (28) where, 
+
+• eDN U denotes the output matrix, composed of the updated concept embeddings (eC1 , e C2 , e C3 ). 
+
+• V represents the embeddings of the time-ordered DNU concepts obtained using MR-GCN that incorporates multiple relationship types between concepts. V can be represented as: 
+
+V = [ eC3 
+
+> t1
+
+, e C1 
+
+> t2
+
+, e C2 
+
+> t3
+
+] (29) 
+
+• β represents the sequential matrix of learner’s DNU concepts. It can be calculated as follows: 
+
+β = C + I (30) and replace each entry −∞ in β with 0. C represents the correlation matrix con-sisting of cosine similarities ( cos ) between all pairs of concepts in the DNU list 
+
+LDN U .
+
+Cij = cos  ecx 
+
+> ti
+
+, e cy
+
+> tj
+
+ (31) where ecx 
+
+> ti
+
+and ecy 
+
+> tj
+
+denote the embeddings e of the DNU concepts cx and cy marked by the learner at timestamps ti and tj , respectively. 30 I represents the mask matrix, calculated as follows: 
+
+Ititj =
+
+(
+
+0, ti <= tj
+
+−∞ , ti > t j
+
+(32) Referring to the concept embeddings and their timestamps in the list of DNU concepts V , we can explain the mask matrix as follows: – t1 < t 2 < t 3 time order in which the concepts concepts C3, C1, and C2 are marked as DNU: – It1t2 : Can an interaction ( L − DN U − > C 3) that happened at t1 influence an interaction ( L − DN U − > C 1) that happened at t2? The answer is yes, because 
+
+t1 < t 2, which means that interaction ( L − DN U − > C 3) occurs earlier than interaction ( L − DN U − > C 1), so interaction ( L − DN U − > C 3) can affect interaction ( L − DN U − > C 1). The value of It1t2 in the mask matrix will be then 0; – It2t1 : Can an interaction ( L − DN U − > C 1) that happened at t2 influence an interaction ( L − DN U − > C 3) that happened at t1? The answer is no, because 
+
+t2 > t 1, which means that interaction ( L − DN U − > C 1) occurs later than interaction ( L − DN U − > C 3), so interaction ( L − DN U − > C 1) as a future interaction cannot affect the past interaction ( L − DN U − > C 3). The value of 
+
+It2t1 in the mask matrix will be then −∞ ;The following example illustrates how the embeddings of the DNU concepts C3, C1,and C2 with timestamps t1, t2, and t3, respectively, are updated. 1. Step 1: Take the embeddings of C3, C1, and C2 as calculated in the offline phase using MR-GCN CompGCN to form V , according to equation 29. 2. Step 2: Calculate the correlation matrix C, according to equation 31: 
+
+C =
+
+
+
+1 cos (eC3 
+
+> t1
+
+, e C1 
+
+> t2
+
+) cos (eC3 
+
+> t1
+
+, e C2 
+
+> t3
+
+)
+
+cos (eC1 
+
+> t2
+
+, e C3 
+
+> t1
+
+) 1 cos (eC1 
+
+> t2
+
+, e C2 
+
+> t3
+
+)
+
+cos (eC2 
+
+> t3
+
+, e C3 
+
+> t1
+
+) cos (eC2 
+
+> t3
+
+, e C1 
+
+> t2
+
+) 1
+
+ (33) 3. Step 3: Calculate the mask matrix I, according to equation 32: 
+
+I =
+
+ 0 0 0
+
+−∞ 0 0
+
+−∞ −∞ 0
+
+ (34) 31 4. Step 4: Calculate the sequential matrix β, according to equation 30: 
+
+β = C + I
+
+=
+
+
+
+1 cos (eC3 
+
+> t1
+
+, e C1 
+
+> t2
+
+) cos (eC3 
+
+> t1
+
+, e C2 
+
+> t3
+
+)
+
+cos (eC1 
+
+> t2
+
+, e C3 
+
+> t1
+
+) 1 cos (eC1 
+
+> t2
+
+, e C2 
+
+> t3
+
+)
+
+cos (eC2 
+
+> t3
+
+, e C3 
+
+> t1
+
+) cos (eC2 
+
+> t3
+
+, e C1 
+
+> t2
+
+) 1
+
+ +
+
+ 0 0 0
+
+−∞ 0 0
+
+−∞ −∞ 0
+
+
+
+=
+
+ 1 cos (eC3 
+
+> t1
+
+, e C1 
+
+> t2
+
+) cos (eC3 
+
+> t1
+
+, e C2 
+
+> t3
+
+)
+
+−∞ 1 cos (eC1 
+
+> t2
+
+, e C2 
+
+> t3
+
+)
+
+−∞ −∞ 1
+
+
+
+(35) and then replace each entry −∞ in β with 0: 
+
+β =
+
+1 cos (eC3 
+
+> t1
+
+, e C1 
+
+> t2
+
+) cos (eC3 
+
+> t1
+
+, e C2 
+
+> t3
+
+)0 1 cos (eC1 
+
+> t2
+
+, e C2 
+
+> t3
+
+)0 0 1
+
+ (36) 5. Step 5: Multiply β and V T to get the updated embeddings of the DNU concepts, according to equation 28. After the above series of operations, we have successfully captured the learner’s long-term interests based on the semantic correlation and the sequential order among DNU concepts in the learner model. Next, we will calculate the learner’s short-term interests and combine them with the learner’s long-term interests to generate the final learner model embedding. 
+
+3.3.3 Calculate the Learner’s Short-Term Interests and Generate the Learner Model Embedding 
+
+Our approach for generating the learner model embedding eL is inspired by Concept-GCN (Alatrash, Chatti, Ain, Fang, et al., 2024), which we extend by incorporating temporal information to model long-term and short-term interests. We assume that the DNU concepts most recently marked by a learner are more representative of their current interests. This reflects the intuition that recent DNU concepts are more crit-ical for the learner to understand, and therefore should contribute more strongly to the learner’s representation. To better capture the learner’s short-term interests when generating eL, we introduce a position weight wpos , determined by the chronologi-cal order of concepts in the DNU list. The position weight wpos reflects the order in which each DNU concept is interacted with by the learner, giving a higher weight to the most recently marked concepts, thereby better capturing the learner’s current interests. The position weight wpos i is defined as: 
+
+wpos i = iN − 1 (37) where i represents the position index of the DNU concept in the interaction sequence. 
+
+N is the total number of concepts marked as DNU by the learner. In the list of 32 DNU concepts LDN U in our example, the position i of C3 ”supervised learning” in timestamp t1 is 0 (and wpos 1 is 0), the position i of C1 ”IoT” in timestamp t2 is 1 (and wpos 2 is 12 ), and the position i of C2 ”Bayesian classifier” in timestamp t3 is 2 (and wpos 3 is 1). Accordingly, when constructing the learner model embedding, ”IoT” and ”Bayesian classifier” will receive more importance so that they contribute more to the final learner representation. In this way, the recommendation of new items that can help the learner understand the marked DNU concepts would contain many items closely related to ”Bayesian classifier” and also few items related to ”IoT”, although ”IoT” does not belong to the same category as ”Bayesian classifier” and ”supervised learning”. Thus, taking learner’s short-term interests into account ensures that items from different categories can be recommended. Finally, based on the learner’s long-term interests, as calculated in Section 3.3.2, together with the incorporation of positional weights wpos to capture the learner’s short-term interests, we construct the learner model eL as a weighted average of the learner’s DNU concept embeddings. Formally, the final embedding of the learner model is defined as: 
+
+eL = 1
+
+wsum 
+
+X
+
+> C∈LDN U
+
+wC eC ; wC = 12 (wcos + wpos ); wsum = X
+
+> C∈LDN U
+
+wC (38) where eC denotes the embedding of DNU concept C after calculating the long-term interest. wcos is the cosine similarity weight between the concept embedding and the learning material embedding. wpos is the position-based weight reflecting recency. 
+
+wsum is the normalization factor. wC is the weight of each concept which integrates both semantic relatedness (via wcos ) and temporal recency (via wpos ), ensuring that concepts closely related to the learning material and recently marked as DNU receive higher importance. In summary, our proposed approach MR-ConceptGCN constructs a sequential learner model that captures both learner’s long-term and short-term interests by considering multiple relationship types between concepts and combining semantic relatedness, sequential information, and positional order. 
+
+# 4 Evaluation and Results 
+
+We conducted an online user study ( n=31) to collect users’ opinions regarding our proposed approach MR-ConceptGCN for sequential learner modeling. We evaluated three sequential learner models constructed using concept embeddings generated by MR-GCN CompGCN, MR-GCN RRGCN, and ConceptGCN (Alatrash, Chatti, Ain, Fang, et al., 2024). Unlike MR-GCN CompGCN and MR-GCN RRGCN, Concept-GCN does not take into account different relation types (i.e., RELATED TO and PREREQUISITE TO) when enhancing the concept embeddings. The evaluation is conducted indirectly by assessing the quality of the recommendations of new concepts that can help learners understand their marked DNU concepts. Since these recommen-dations are generated based on the constructed learner models, their quality serves as an indicator of how accurately the sequential learner models capture user characteris-tics. We anticipate that more accurate learner model representations will enhance the 33 relevance and impact of the recommendations. We developed an educational recom-mender system in CourseMapper to recommend concepts that best align with a user’s sequential learner model. To this end, we first compute the cosine similarity between the learner model embedding eL and the embedding of each candidate concept. A candidate concept may be either a main concept or a related concept, provided that it has not already been marked by the learner as understood (U) or not understood (DNU). The ten concepts with the highest similarity scores are then recommended. Finally, we identify and visualize all existing PREREQUISITE TO paths among the recommended concepts. 
+
+# 4.1 Study Design 
+
+The study involved 31 participants from various age groups and academic backgrounds. As summarized in Table 1, 16 participants were female and 15 were male. Only two participants were over 35 years old, while the remaining participants were between 18 and 35. Their educational backgrounds included Bachelor’s, Master’s, and Ph.D. degrees. Most participants were studying Computer Engineering or Computer Science, and reported good familiarity with recommender systems and machine learning. The study was conducted online using screen sharing via Microsoft Teams and Zoom, and took approximately one hour for each participant. The participants’ answers were recorded, and their consent was obtained to record the session. All collected data were kept confidential and were not shared with third parties. All personally identifiable information was anonymized. In the initial phase, participants were provided with a comprehensive explanation of the purpose and content of the evaluation. Subsequently, they were introduced to the system through an interactive video. After confirming their understanding, they were asked to complete their demographic profiles. Participants then performed a task on CourseMapper via remote screen control. The task involved reading a learn-ing material on “Machine Learning / Data Mining in Learning Analytics” sourced from a course offered by our department. The material consisted of a combination of text, images, mathematical formulas, code snippets. During the task, participants were asked to identify three concepts within the learning material that they did not under-stand (DNU concepts). After that, the system recommends ten concepts intended to support participants in understanding their marked DNU concepts and visualizes any existing prerequisite relationships among the recommended concepts, as shown in Figure 7. Participants were then instructed to review the recommended concepts, read their corresponding Wikipedia descriptions, and complete a questionnaire to assess the quality of the recommended concepts. This process was repeated for all three learner models, meaning that each participant received recommendations generated by each model. We randomized the order of models to prevent order effects in a within-subject design. The questionnaire was administered using Google Forms. We utilized the ResQue evaluation framework (Pu, Chen, & Hu, 2011) to provide a comprehensive evaluation of the recommendation performance, which serves as an implicit assessment of the learner model quality. Concretely, we evaluated users’ perceived benefits in terms of perceived system qualities (perceived accuracy, diversity, information sufficiency), users’ beliefs 34 Fig. 7 : Recommendation of Ten Concepts Including Existing Prerequisite Relation-ships (perceived usefulness), users’ attitudes (overall satisfaction), and behavioral intentions (use intention), on a 5-point Likert scale. One question was designed for each construct, using statements adapted from the ResQue framework. 
+
+• Perceived Accuracy: The concepts recommended to me matched my interests. 
+
+• Diversity: The concepts recommended to me are diverse. 
+
+• Information Sufficiency: The information provided for the recommended items is sufficient for me to understand my ”Not Understood” concepts. 
+
+• Perceived Usefulness: The recommender system gave me good suggestions. 
+
+• Overall Satisfaction: Overall, I am satisfied with the provided recommendations. 
+
+• Use Intention: I will use this recommender system frequently. In addition to the items taken from the ResQue framework, for each model we asked participants “How many of the recommended concepts do you feel are relevant?”. The responses to this question were used to calculate the precision (Precision@10) for each model. We used the Friedman test, which is appropriate for comparing more than two related conditions when the variable of interest is ordinal. We tested for statistical significance at α = 0 .05 level. In the end of the session, we asked the participants two open-ended questions to gather their suggestions for potential improvements. These were: (1) Which information provided for the recommended items helped you under-stand your “Not Understood” concepts? And why? (2) What additional information do you expect that can help you understand your “Not Understood” concepts? 
+
+# 4.2 Results and Analysis 
+
+We evaluated the performance of the three sequential learner models constructed using concept embeddings generated with MR-GCN CompGCN, MR-GCN RRGCN, 35 Table 1 : Demographic information of the participants                                          
+
+> Demography Category Frequency Age 18–20 121–25 10 26–30 16 31–35 2Above 35 2
+> Gender Female 16 Male 15
+> Education Level Bachelor 5Master 20 Ph.D. 6
+> Field of Study Applied Computer Science 1Automation and Safety 1Business Administration 1Chemistry 3Computer Engineering 10 Computer Science 7Data Science 1Embedded Systems Engineering 2Informatik 1Logistics 1Software Engineering 1Teaching Mathematics and Physics 1Telecommunications 1
+> Recommender System Familiarity Not at all 3A few 3Average 5Quite 9Very 11
+> Machine Learning Familiarity Not at all 4A few 4Average 6Quite 14 Very 3
+
+and ConceptGCN by assessing the potential impact of the recommendations gener-ated based on the three models on system accuracy as well as users’ perceptions of the recommender system in terms of several important user-centric aspects including perceived accuracy, diversity, information sufficiency, perceived usefulness, overall sat-isfaction, and use intention. To measure system accuracy, we calculated Precision@10 for the three models using participants’ responses to the question “How many of the recommended concepts do you feel are relevant?”. The results indicate that all models 36 achieved high precision scores, implying their provision of relevant recommendations. Specifically, ConceptGCN obtained the highest precision score (68%), followed by MR-GCN CompGCN (64%) and MR-GCN RRGCN (63%). To assess users’ perceived benefits, all participants evaluated the same set of criteria across the three models. The evaluation results and comparisons between the models across each criterion are presented in Table 2 and Figure 8. The Friedman test results are reported using the chi-square statistic χ2, the p-value, and Kendall’s coefficient of concordance ( W ) as the effect size measure. Overall, the ResQue evaluation results indicate that all criteria scored high for the three models, demonstrating the bene-fits of a recommendation system based on our proposed sequential learner modeling approach. Moreover, the results indicate no statistically significant differences between the three models across any of the evaluated criteria, as shown in Table 3. Specifi-cally, no significant differences were observed for perceived accuracy ( χ2(2) = 3 .88, 
+
+p = .144, W = .06), diversity ( χ2(2) = 0 .93, p = .627, W = .02), information suffi-ciency ( χ2(2) = 3 .03, p = .220, W = .05), perceived usefulness ( χ2(2) = 5 .26, p = .072, 
+
+W = .08), overall satisfaction ( χ2(2) = 3 .04, p = .219, W = .05), and use intention (χ2(2) = 2 .47, p = .291, W = .04). The effect sizes, as measured by Kendall’s W, were consistently small across all criteria, indicating a low magnitude of differences between models. These findings suggest that the three models exhibit comparable performance across all evaluated criteria. This indicates that whether or not to take different rela-tion types into account when enhancing the concept embeddings does not critically impact the perceived performance of the recommender system. Similar to the results related to system accuracy, participants perceived the rec-ommendation accuracy high. Concretely, ConceptGCN obtained the highest rating (M = 3 .87, SD = 0 .81), followed by MR-GCN CompGCN ( M = 3 .65, SD = 0 .80) and MR-GCN RRGCN ( M = 3 .45, SD = 1 .03). A relatively high number of partic-ipants found that the recommended concepts matched their interests. This indicates that the recommender system has well understood the users’ preferences and that the underlying sequential learner model is accurate in capturing users’ interests. Regarding perceived usefulness, it is particularly worth noting that a relatively high number of participants found that the provided recommendations were useful to them. ConceptGCN achieved the highest rating ( M = 3 .90, SD = 0 .65), followed by MR-GCN CompGCN ( M = 3 .74, SD = 0 .82) and MR-GCN RRGCN ( M = 3 .42, 
+
+SD = 1 .15). Perceived usefulness of a recommender system is the extent to which a user finds that using the system would improve their performance, compared with their experiences without its help (Pu et al., 2011). The fact that the majority of participants agreed that the recommender system gave them good suggestions reflects the effectiveness of the underlying sequential learner model. A similar pattern is observed for recommendation diversity, where ConceptGCN ranked highest ( M = 3 .74, SD = 1 .03), followed by MR-GCN CompGCN ( M = 3 .65, 
+
+SD = 1 .08) and MR-GCN RRGCN ( M = 3 .55, SD = 1 .18). A large number of participants found the recommended concepts to be diverse. We posit that the reason for this result was that taking learner’s short-term interests into account has ensured that concepts from different categories were recommended. Another reason we deem responsible for this result is that DNU concepts were gathered by examining multiple 37 slides. Consequently, the generated sequential learner model comprised more diverse concepts that didn’t necessarily correlate, generating recommendations for concepts that were not very similar to each other, thus leading to higher diversity. The ResQue evaluation results further show that participants were in general satis-fied with the recommender system. For overall satisfaction, ConceptGCN received the highest rating ( M = 3 .74, SD = 1 .00), followed by MR-GCN CompGCN ( M = 3 .55, 
+
+SD = 0 .96) and MR-GCN RRGCN ( M = 3 .48, SD = 1 .18). This result can be attributed to the the usefulness of the recommended concepts, as pointed out by Pu et al. (2011) who found that perceived usefulness significantly influences users’ attitudes, including overall satisfaction. Compared to accuracy, usefulness, diversity, and overall satisfaction, information sufficiency received relatively lower scores. ConceptGCN achieved the highest score (M = 3 .55, SD = 0 .81), followed by MR-GCN RRGCN ( M = 3 .42, SD = 1 .18) and MR-GCN CompGCN ( M = 3 .29, SD = 0 .90). This result shows that many partici-pants found the information provided for the recommended concepts not sufficient for them to understand their DNU concepts. When we asked participants about which information provided for the recommended concepts helped them understand their DNU concepts, most participants mentioned that the Wikipedia abstracts and articles helped them form an initial understanding of the recommended items. However, they also noted that these descriptions were often too general for actual learning purposes and might be outdated, since the update frequency is relatively low. Regarding the recommended sequences, i.e., the prerequisite relations among concepts, most partici-pants considered them helpful because they provide a clear starting point for learning. However, some participants found them less helpful, mainly because not all recom-mended concepts were connected through prerequisite relations. As a result, beyond the sequences provided, they still did not know how to approach the isolated recom-mended concepts. Answering the question about what additional information do they expect that can help them understand their DNU concepts, participants had varied opinions and thoughts which can be classified into two groups. The first group focuses on providing more learning resources, such as videos, diagrams, and examples. The second group emphasizes the connections between DNU concepts and recommended concepts. Participants in this group provided suggestions like distinguishing different categories by using different colors or explicitly illustrating these connections on the recommendation page. A comparable trend is observed for use intention, where ConceptGCN achieved the highest score ( M = 3 .52, SD = 0 .89), while MR-GCN CompGCN ( M = 3 .26, 
+
+SD = 1 .00) slightly outperformed MR-GCN RRGCN ( M = 3 .23, SD = 1 .23). Similar to information sufficiency, use intention received relatively lower scores. This result can be attributed to the lack of additional information (e.g., videos, examples) provided for the recommended concepts which can help users better understand their DNU concepts. The ResQue evaluation results further show that ConceptGCN achieved the highest mean scores across all criteria. One possible explanation is that the PKG constructed from the learning material used in the study was not sufficiently complex. In partic-ular, it contained relatively few PREREQUISITE TO relationships compared with 38 RELATED TO relationships. As a result, the advantages of multi-relational GCN models may not have been fully leveraged. This result may also indicate that, in the recommendation task, the semantic relatedness between concepts plays a more impor-tant role than different relation types. However, further experiments are required to validate these interpretations. In addition, the ResQue evaluation results reveal that MR-GCN CompGCN performed slightly better than MR-GCN RRGCN. This indicates that integrating edge embeddings can improve node representations, as edges encode additional relational information. Furthermore, explicitly modeling rela-tionship direction (e.g., input, output) can produce richer and more semantically informative node representations. In summary, the findings demonstrate that our proposed approach MR-ConceptGCN for sequential learner modeling is effective in increasing the accuracy of the recommendations and promoting users’ perceptions of the recommender system in terms of perceived system qualities (perceived accuracy, diversity, information suf-ficiency), users’ beliefs (perceived usefulness), users’ attitudes (overall satisfaction), and behavioral intentions (use intention). In particular, the findings indicate that inte-grating semantic relationships among concepts while jointly modeling users’ long-term and short-term interests positively influences perceived accuracy, usefulness, diversity, and overall satisfaction with the educational recommender system. 
+
+Table 2: Descriptive statistics (Mean and Standard Deviation) for all evaluation criteria                                        
+
+> Criterion Model MSD
+> Perceived Accuracy ConceptGCN 3.87 0.81 MR-GCN RRGCN 3.45 1.03 MR-GCN CompGCN 3.65 0.80 Diversity ConceptGCN 3.74 1.03 MR-GCN RRGCN 3.55 1.18 MR-GCN CompGCN 3.65 1.08 Information Sufficiency ConceptGCN 3.55 0.81 MR-GCN RRGCN 3.42 1.18 MR-GCN CompGCN 3.29 0.90 Perceived Usefulness ConceptGCN 3.90 0.65 MR-GCN RRGCN 3.42 1.15 MR-GCN CompGCN 3.74 0.82 Overall Satisfaction ConceptGCN 3.74 1.00 MR-GCN RRGCN 3.48 1.18 MR-GCN CompGCN 3.55 0.96 Use Intention ConceptGCN 3.52 0.89 MR-GCN RRGCN 3.23 1.23 MR-GCN CompGCN 3.26 1.00
+
+# 5 Limitations 
+
+While this research highlights the potential benefits of sequntial learner modeling using multi-relational GCNs, this study is not without limitations. The sample size was 39 ConceptGCN MR-GCN_RRGCN MR-GCN_CompGCN 
+
+Models 
+
+0
+
+1
+
+2
+
+3
+
+4
+
+5
+
+6
+
+> Perceived Accuracy
+
+Perceived Accuracy ConceptGCN MR-GCN_RRGCN MR-GCN_CompGCN 
+
+Models 
+
+0
+
+1
+
+2
+
+3
+
+4
+
+5
+
+6 
+
+> Diversity
+
+Diversity ConceptGCN MR-GCN_RRGCN MR-GCN_CompGCN 
+
+Models 
+
+0
+
+1
+
+2
+
+3
+
+4
+
+5
+
+6
+
+> Information Sufficiency
+
+Information Sufficiency 
+
+(a) Perceived System Qualities ConceptGCN MR-GCN_RRGCN MR-GCN_CompGCN 
+
+Models 
+
+0
+
+1
+
+2
+
+3
+
+4
+
+5
+
+6
+
+> Perceived Usefulness
+
+Perceived Usefulness 
+
+(b) Users’ Beliefs ConceptGCN MR-GCN_RRGCN MR-GCN_CompGCN 
+
+Models 
+
+0
+
+1
+
+2
+
+3
+
+4
+
+5
+
+6
+
+> Overall Satisfaction
+
+Overall Satisfaction 
+
+(c) Users’ Attitudes ConceptGCN MR-GCN_RRGCN MR-GCN_CompGCN 
+
+Models 
+
+0
+
+1
+
+2
+
+3
+
+4
+
+5
+
+6
+
+> Use Intention
+
+Use Intention 
+
+(d) Behavioral Intentions 
+
+Fig. 8 : Evaluation Results Grouped According to the ResQue Framework 40 Table 3 : Friedman test results and effect sizes                        
+
+> Criterion χ2(df )pKendall’s W
+> Perceived Accuracy 3.88 (2) .144 .06 Diversity 0.93 (2) .627 .02 Information Sufficiency 3.03 (2) .220 .05 Perceived Usefulness 5.26 (2) .072 .08 Overall Satisfaction 3.04 (2) .219 .05 Use intention 2.47 (2) .291 .04
+
+moderate and participants were drawn from a limited set of geographical regions, which may limit generalizability. In addition, the study was conducted in the MOOC platform CourseMapper, within a short-term session setting based on a single learning material. While this provided a controlled environment for systematic testing, it remains to be seen whether the findings generalize to other educational environments, or to longer-term use of different learning materials with more PREREQUISITE TO relationships. 
+
+# 6 Conclusion and Future Work 
+
+Personal Knowledge Graphs (PKGs) and Graph Neural Networks (GNNs), partic-ularly Graph Convolutional Networks (GCNs), have gained increasing interest as foundation for user modeling. However, existing approaches do not model hetero-geneous relation types in PKGs to learn richer and more informative user models. Additionally, they ignore the user interaction sequence. To address these issues, in this work we presented MR-ConceptGCN, a novel fully unsupervised approach focused on concept-based sequential learner modeling using multi-relational GCNs (MR-GCNs). We constructed PKGs that incorporate multiple relationship types between con-cepts, namely RELATED TO and PREREQUISITE TO. Moreover, we presented two unsupervised methods for representation learning of PKG items based on RRGCN and CompGCN. Both methods combine MR-GCNs and SBERT to obtain enhanced relation- and semantic-aware representations of the PKG items. Furthermore, build-ing on the enhanced embeddings of the concepts that a learner did not understand, we constructed a sequential learner model that captures both long-term and short-term learner interests by combining semantic correlation, sequential order, and positional signals. We conducted an online user study to investigate the impact of an educa-tional recommender system based on MR-ConceptGCN on users’ perceptions of several important user-centric aspects. The evaluation results indicate that our approach for sequential learner modeling is particularly effective in improving users’ perceptions of accuracy, usefulness, diversity, and overall satisfaction with the recommender sys-tem. In future work, we plan to explore richer semantic interaction functions beyond cosine similarity, and more robust handling of noisy or sparse relations. Moreover, we will conduct a more extensive user study to compare MR-ConceptGCN with a static learner modeling approach that does not take sequential information into account. 41 References 
+
+Ain, Q.U., Chatti, M.A., Bakar, K.G.C., Joarder, S., Alatrash, R. (2023). Auto-matic construction of educational knowledge graphs: A word embedding-based approach. Information , 14 (10), 526, https://doi.org/10.3390/info14100526 Ain, Q.U., Chatti, M.A., Meteng Kamdem, P.A., Alatrash, R., Joarder, S., Siep-mann, C. (2024). Learner modeling and recommendation of learning resources using personal knowledge graphs. Proceedings of the 14th learning analytics and knowledge conference (pp. 273–283). Ain, Q.U., Chatti, M.A., Qussa, J., Shakhshir, A., Alatrash, R., Joarder, S. (2025). An optimized pipeline for automatic educational knowledge graph construction. 
+
+Knowledge graphs: 14th international joint conference, ijckg 2025, heraklion, crete, greece, october 15–17, 2025, proceedings (p. 271–287). Berlin, Heidelberg: Springer-Verlag. Alatrash, R., Chatti, M.A., Ain, Q.U., Fang, Y., Joarder, S., Siepmann, C. (2024). Conceptgcn: Knowledge concept recommendation in moocs based on knowledge graph convolutional networks and sbert. Computers and Education: Artificial Intelligence , 6 , 100193, https://doi.org/10.1016/j.caeai.2023.100193 Alatrash, R., Chatti, M.A., Ain, Q.U., Joarder, S. (2024). Transparent learner knowledge state modeling using personal knowledge graphs and graph neural networks. Adjunct proceedings of the 32nd acm conference on user modeling, adaptation and personalization (p. 591–596). New York, NY, USA: Association for Computing Machinery. Alatrash, R., Chatti, M.A., Wibowo, N., Ain, Q.U. (2025). Inferring prerequisite knowledge concepts in educational knowledge graphs: A multi-criteria approach. 
+
+International joint conference on knowledge graphs (pp. 288–303). Balog, K., & Kenter, T. (2019). Personal knowledge graphs: A research agenda. 
+
+Proceedings of the 2019 acm sigir international conference on theory of infor-mation retrieval (p. 217–220). New York, NY, USA: Association for Computing Machinery. Boka, T.F., Niu, Z., Neupane, R.B. (2024). A survey of sequential recommendation systems: Techniques, evaluation, and future directions. Information Systems ,
+
+125 , 102427, https://doi.org/10.1016/j.is.2024.102427 Bordes, A., Usunier, N., Garcia-Dur´ an, A., Weston, J., Yakhnenko, O. (2013). Trans-lating embeddings for modeling multi-relational data. Proceedings of the 27th international conference on neural information processing systems - volume 2 
+
+42 (p. 2787–2795). Red Hook, NY, USA: Curran Associates Inc. Chang, J., Gao, C., Zheng, Y., Hui, Y., Niu, Y., Song, Y., . . . Li, Y. (2021). Sequential recommendation with graph neural networks. Proceedings of the 44th interna-tional acm sigir conference on research and development in information retrieval 
+
+(p. 378–387). New York, NY, USA: Association for Computing Machinery. Chen, W., Feng, F., Wang, Q., He, X., Song, C., Ling, G., Zhang, Y. (2023, April). Catgcn: Graph convolutional networks with categorical node features. IEEE Trans. on Knowl. and Data Eng. , 35 (4), 3500–3511, https://doi.org/10.1109/ TKDE.2021.3133013 Chen, W., Gu, Y., Ren, Z., He, X., Xie, H., Guo, T., . . . Zhang, Y. (2019). Semi-supervised user profiling with heterogeneous graph attention networks. 
+
+Proceedings of the 28th international joint conference on artificial intelligence 
+
+(p. 2116–2122). AAAI Press. Degraeve, V., Vandewiele, G., Ongenae, F., Hoecke, S.V. (2022). R-gcn: The r could stand for random. arXiv preprint arXiv:2203.02424 , , Deng, Y., Lu, D., Huang, D., Chung, C.-J., Lin, F. (2019). Knowledge graph based learning guidance for cybersecurity hands-on labs. Proceedings of the acm con-ference on global computing education (p. 194–200). New York, NY, USA: Association for Computing Machinery. Donkers, T., Loepp, B., Ziegler, J. (2017). Sequential user-based recurrent neural network recommendations. Proceedings of the eleventh acm conference on recom-mender systems (p. 152–160). New York, NY, USA: Association for Computing Machinery. Fan, L., Li, Q., Liu, B., Wu, X.-M., Zhang, X., Lv, F., . . . Yang, K. (2022). Modeling user behavior with graph convolution for personalized product search. Pro-ceedings of the acm web conference 2022 (p. 203–212). New York, NY, USA: Association for Computing Machinery. Fang, H., Zhang, D., Shu, Y., Guo, G. (2020, nov). Deep learning for sequential recommendation: Algorithms, influential factors, and evaluations. ACM Trans. Inf. Syst. , 39 (1), 42, https://doi.org/10.1145/3426723 Glorot, X., & Bengio, Y. (2010). Understanding the difficulty of training deep feed-forward neural networks. Proceedings of the thirteenth international conference on artificial intelligence and statistics (pp. 249–256). 43 He, X., Deng, K., Wang, X., Li, Y., Zhang, Y., Wang, M. (2020). Lightgcn: Simplify-ing and powering graph convolution network for recommendation. Proceedings of the 43rd international acm sigir conference on research and development in information retrieval (pp. 639–648). Hidasi, B., & Karatzoglou, A. (2018). Recurrent neural networks with top-k gains for session-based recommendations. Proceedings of the 27th acm international conference on information and knowledge management (p. 843–852). New York, NY, USA: Association for Computing Machinery. Hidasi, B., Karatzoglou, A., Baltrunas, L., Tikk, D. (2016). Session-based recom-mendations with recurrent neural networks. Y. Bengio & Y. LeCun (Eds.), 
+
+4th international conference on learning representations, ICLR 2016, san juan, puerto rico, may 2-4, 2016, conference track proceedings. 
+
+Hsu, C., & Li, C.-T. (2021). Retagnn: Relational temporal attentive graph neural networks for holistic sequential recommendation. Proceedings of the web con-ference 2021 (p. 2968–2979). New York, NY, USA: Association for Computing Machinery. Hu, Z., Dong, Y., Wang, K., Sun, Y. (2020). Heterogeneous graph transformer. 
+
+Proceedings of the web conference 2020 (p. 2704–2710). New York, NY, USA: Association for Computing Machinery. Huang, Z., Li, X., Ye, Y., Ng, M.K. (2021). Mr-gcn: multi-relational graph con-volutional networks based on generalized tensor product. Proceedings of the twenty-ninth international joint conference on artificial intelligence. 
+
+Ilkou, E. (2022). Personal knowledge graphs: Use cases in e-learning platforms. Com-panion proceedings of the web conference 2022 (p. 344–348). New York, NY, USA: Association for Computing Machinery. Kang, W.-C., & McAuley, J. (2018, November). Self-Attentive Sequential Recommen-dation . 2018 ieee international conference on data mining (icdm) (p. 197-206). Los Alamitos, CA, USA: IEEE Computer Society. Kumar, S., Zhang, X., Leskovec, J. (2019). Predicting dynamic embedding trajectory in temporal interaction networks. Proceedings of the 25th acm sigkdd interna-tional conference on knowledge discovery & data mining (p. 1269–1278). New York, NY, USA: Association for Computing Machinery. Li, J., Ren, P., Chen, Z., Ren, Z., Lian, T., Ma, J. (2017). Neural attentive session-based recommendation. Proceedings of the 2017 acm on conference on information and knowledge management (p. 1419–1428). New York, NY, USA: Association for Computing Machinery. 44 Li, J., Wang, Y., McAuley, J. (2020). Time interval aware self-attention for sequential recommendation. Proceedings of the 13th international conference on web search and data mining (p. 322–330). New York, NY, USA: Association for Computing Machinery. Li, S., & Zhao, H. (2020, 7). A survey on representation learning for user modeling. C. Bessiere (Ed.), Proceedings of the twenty-ninth international joint confer-ence on artificial intelligence, IJCAI-20 (pp. 4997–5003). International Joint Conferences on Artificial Intelligence Organization. (Survey track) Li, Z., Yang, C., Chen, Y., Wang, X., Chen, H., Xu, G., . . . Sheng, M. (2024, Novem-ber). Graph and sequential neural networks in session-based recommendation: A survey. ACM Comput. Surv. , 57 (2), 37, https://doi.org/10.1145/3696413 Li, Z., Zhao, H., Liu, Q., Huang, Z., Mei, T., Chen, E. (2018). Learning from history and present: Next-item recommendation via discriminatively exploiting user behaviors. Proceedings of the 24th acm sigkdd international conference on knowledge discovery & data mining (pp. 1734–1743). Lin, J., Pan, W., Ming, Z. (2020). Fissa: Fusing item similarity models with self-attention networks for sequential recommendation. Proceedings of the 14th acm conference on recommender systems (p. 130–139). New York, NY, USA: Association for Computing Machinery. Liu, Q., Zeng, Y., Mokhosi, R., Zhang, H. (2018). Stamp: Short-term attention/mem-ory priority model for session-based recommendation. Proceedings of the 24th acm sigkdd international conference on knowledge discovery & data mining 
+
+(p. 1831–1839). New York, NY, USA: Association for Computing Machinery. Lv, F., Jin, T., Yu, C., Sun, F., Lin, Q., Yang, K., Ng, W. (2019). Sdm: Sequential deep matching model for online large-scale recommender system. Proceedings of the 28th acm international conference on information and knowledge management 
+
+(p. 2635–2643). New York, NY, USA: Association for Computing Machinery. Ma, C., Ma, L., Zhang, Y., Sun, J., Liu, X., Coates, M. (2020). Memory augmented graph neural networks for sequential recommendation. Proceedings of the aaai conference on artificial intelligence (Vol. 34, pp. 5045–5052). Mendes, P.N., Jakob, M., Garc´ ıa-Silva, A., Bizer, C. (2011). Dbpedia spotlight: shedding light on the web of documents. Proceedings of the 7th international conference on semantic systems (p. 1–8). New York, NY, USA: Association for Computing Machinery. Nasir, M., & Ezeife, C.I. (2023, September). A survey and taxonomy of sequential recommender systems for e-commerce product recommendation. SN Comput. Sci. , 4 (6), 708, https://doi.org/10.1007/s42979-023-02166-5 45 Pan, L.-W., Pan, W.-K., Wei, M.-Y., Yin, H.-Z., Ming, Z. (2025, October). A survey on sequential recommendation. Front. Comput. Sci. , 20 (3), 32, https://doi.org/ 10.1007/s11704-025-41329-w Pancha, N., Zhai, A., Leskovec, J., Rosenberg, C. (2022). Pinnerformer: Sequence modeling for user representation at pinterest. Proceedings of the 28th acm sigkdd conference on knowledge discovery and data mining (p. 3702–3712). New York, NY, USA: Association for Computing Machinery. Pu, P., Chen, L., Hu, R. (2011, October). A user-centric evaluation framework for recommender systems. Proceedings of the fifth ACM conference on Recom-mender systems (pp. 157–164). New York, NY, USA: Association for Computing Machinery. Purificato, E., Boratto, L., De Luca, E.W. (2023). Tutorial on user profiling with graph neural networks and related beyond-accuracy perspectives. Proceedings of the 31st acm conference on user modeling, adaptation and personalization 
+
+(p. 309–312). New York, NY, USA: Association for Computing Machinery. Quadrana, M., Karatzoglou, A., Hidasi, B., Cremonesi, P. (2017). Personal-izing session-based recommendations with hierarchical recurrent neural net-works. Proceedings of the eleventh acm conference on recommender systems 
+
+(p. 130–137). New York, NY, USA: Association for Computing Machinery. Reimers, N., & Gurevych, I. (2019). Sentence-bert: Sentence embeddings using siamese bert-networks. ArXiv , abs/1908.10084 , , Schlichtkrull, M., Kipf, T.N., Bloem, P., Van Den Berg, R., Titov, I., Welling, M. (2018). Modeling relational data with graph convolutional networks. The seman-tic web: 15th international conference, eswc 2018, heraklion, crete, greece, june 3–7, 2018, proceedings 15 (pp. 593–607). Schr¨ oder, M., Jilek, C., Dengel, A. (2022). A human-in-the-loop approach for per-sonal knowledge graph construction from file names. Proceedings of the 3rd international workshop on knowledge graph construction. 
+
+Shi, C., Li, Y., Zhang, J., Sun, Y., Yu, P.S. (2017, January). A survey of heterogeneous information network analysis. IEEE Trans. on Knowl. and Data Eng. , 29 (1), 17–37, https://doi.org/10.1109/TKDE.2016.2598561 Skjæveland, M.G., Balog, K., Bernard, N., Lajewska, W., Linjordet, T. (2024). An ecosystem for personal knowledge graphs: A survey and research roadmap. AI 
+
+46 Open , 5 , 55-69, https://doi.org/10.1016/j.aiopen.2024.01.003 Sun, F., Liu, J., Wu, J., Pei, C., Lin, X., Ou, W., Jiang, P. (2019). Bert4rec: Sequential recommendation with bidirectional encoder representations from transformer. 
+
+Proceedings of the 28th acm international conference on information and knowledge management (pp. 1441–1450). Tang, J., & Wang, K. (2018). Personalized top-n sequential recommendation via con-volutional sequence embedding. Proceedings of the eleventh acm international conference on web search and data mining (pp. 565–573). Tuan, T.X., & Phuong, T.M. (2017). 3d convolutional networks for session-based rec-ommendation with content features. Proceedings of the eleventh acm conference on recommender systems (pp. 138–146). Vashishth, S., Sanyal, S., Nitin, V., Talukdar, P.P. (2019). Composition-based multi-relational graph convolutional networks. CoRR , abs/1911.03082 , , 1911.03082 Wang, H., Zhang, F., Wang, J., Zhao, M., Li, W., Xie, X., Guo, M. (2018). Rip-plenet: Propagating user preferences on the knowledge graph for recommender systems. Proceedings of the 27th acm international conference on information and knowledge management (pp. 417–426). Wang, H., Zhao, M., Xie, X., Li, W., Guo, M. (2019). Knowledge graph convo-lutional networks for recommender systems. The world wide web conference 
+
+(p. 3307–3313). New York, NY, USA: Association for Computing Machinery. Wang, S., Hu, L., Wang, Y., Cao, L., Sheng, Q.Z., Orgun, M. (2019, 7). Sequen-tial recommender systems: Challenges, progress and prospects. Proceedings of the twenty-eighth international joint conference on artificial intelligence, IJCAI-19 (pp. 6332–6338). International Joint Conferences on Artificial Intelligence Organization. Wang, X., He, X., Cao, Y., Liu, M., Chua, T.-S. (2019). Kgat: Knowledge graph attention network for recommendation. Proceedings of the 25th acm sigkdd inter-national conference on knowledge discovery & data mining (p. 950–958). New York, NY, USA: Association for Computing Machinery. Wang, Z., Wei, W., Cong, G., Li, X.-L., Mao, X.-L., Qiu, M. (2020). Global context enhanced graph neural networks for session-based recommendation. Proceed-ings of the 43rd international acm sigir conference on research and development in information retrieval (p. 169–178). New York, NY, USA: Association for Computing Machinery. Wu, S., Sun, F., Zhang, W., Xie, X., Cui, B. (2022, December). Graph neural networks in recommender systems: A survey. ACM Comput. Surv. , 55 (5), 37, https:// 47 doi.org/10.1145/3535101 Wu, S., Tang, Y., Zhu, Y., Wang, L., Xie, X., Tan, T. (2019). Session-based recommendation with graph neural networks. Proceedings of the thirty-third aaai conference on artificial intelligence and thirty-first innovative applications of artificial intelligence conference and ninth aaai symposium on educational advances in artificial intelligence. AAAI Press. Xia, X., Eksombatchai, P., Pancha, N., Badani, D.D., Wang, P.-W., Gu, N., . . . Zhai, A. (2023). Transact: Transformer-based realtime user action model for rec-ommendation at pinterest. Proceedings of the 29th acm sigkdd conference on knowledge discovery and data mining (p. 5249–5259). New York, NY, USA: Association for Computing Machinery. Yan, Q., Zhang, Y., Liu, Q., Wu, S., Wang, L. (2021). Relation-aware heterogeneous graph for user profiling. Proceedings of the 30th acm international conference on information & knowledge management (p. 3573–3577). New York, NY, USA: Association for Computing Machinery. Yan, S., Zhao, T., Deng, J. (2022). Interaction-aware hypergraph neural networks for user profiling. 2022 ieee 9th international conference on data science and advanced analytics (dsaa) (p. 1-10). Yang, B., tau Yih, W., He, X., Gao, J., Deng, L. (2014). Embedding entities and relations for learning and inference in knowledge bases. International conference on learning representations. 
+
+Yang, F., Yue, Y., Li, G., Payne, T.R., Man, K.L. (2023). Kemim: Knowledge-enhanced user multi-interest modeling for recommender systems. IEEE Access ,
+
+11 , 55425-55434, https://doi.org/10.1109/ACCESS.2023.3264550 Yang, L., Wang, S., Tao, Y., Sun, J., Liu, X., Yu, P.S., Wang, T. (2023). Dgrec: Graph neural network for recommendation with diversified embedding genera-tion. Proceedings of the sixteenth acm international conference on web search and data mining (p. 661–669). New York, NY, USA: Association for Computing Machinery. You, J., Wang, Y., Pal, A., Eksombatchai, P., Rosenburg, C., Leskovec, J. (2019). Hierarchical temporal convolutional networks for dynamic recommender sys-tems. The world wide web conference (p. 2236–2246). New York, NY, USA: Association for Computing Machinery. Yu, L., Zhang, C., Liang, S., Zhang, X. (2019). Multi-order attentive ranking model for sequential recommendation. Proceedings of the thirty-third aaai conference on 
+
+48 artificial intelligence and thirty-first innovative applications of artificial intelli-gence conference and ninth aaai symposium on educational advances in artificial intelligence. AAAI Press. Yu, Z., Lian, J., Mahmoody, A., Liu, G., Xie, X. (2019). Adaptive user modeling with long and short-term preferences for personalized recommendation. Proceedings of the 28th international joint conference on artificial intelligence (p. 4213–4219). AAAI Press. Yuan, F., He, X., Jiang, H., Guo, G., Xiong, J., Xu, Z., Xiong, Y. (2020). Future data helps training: Modeling future contexts for session-based recommendation. 
+
+Proceedings of the web conference 2020 (p. 303–313). New York, NY, USA: Association for Computing Machinery. Yuan, F., Karatzoglou, A., Arapakis, I., Jose, J.M., He, X. (2019). A simple convolutional generative network for next item recommendation. Proceedings of the twelfth acm international conference on web search and data mining 
+
+(p. 582–590). New York, NY, USA: Association for Computing Machinery. Zhang, S., Tay, Y., Yao, L., Sun, A. (2018). Next item recommendation with self-attention. ArXiv , abs/1808.06414 , , Zhou, C., Bai, J., Song, J., Liu, X., Zhao, Z., Chen, X., Gao, J. (2018). Atrank: an attention-based user behavior modeling framework for recommendation. 
+
+Proceedings of the thirty-second aaai conference on artificial intelligence and thirtieth innovative applications of artificial intelligence conference and eighth aaai symposium on educational advances in artificial intelligence. AAAI Press. Zhou, G., Mou, N., Fan, Y., Pi, Q., Bian, W., Zhou, C., . . . Gai, K. (2019). Deep interest evolution network for click-through rate prediction. Proceedings of the thirty-third aaai conference on artificial intelligence and thirty-first innovative applications of artificial intelligence conference and ninth aaai symposium on educational advances in artificial intelligence. AAAI Press. Zhou, G., Zhu, X., Song, C., Fan, Y., Zhu, H., Ma, X., . . . Gai, K. (2018). Deep interest network for click-through rate prediction. Proceedings of the 24th acm sigkdd international conference on knowledge discovery & data mining (p. 1059–1068). New York, NY, USA: Association for Computing Machinery. Zhou, P., Ye, Q., Xie, Y., Gao, J., Wang, S., Kim, J.B., . . . Kim, S. (2023). Attention calibration for transformer-based sequential recommendation. Proceedings of the 32nd acm international conference on information and knowledge management 
+
+(p. 3595–3605). New York, NY, USA: Association for Computing Machinery. 49

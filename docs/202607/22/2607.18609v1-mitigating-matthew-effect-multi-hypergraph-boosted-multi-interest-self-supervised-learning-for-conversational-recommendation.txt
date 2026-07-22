@@ -1,0 +1,914 @@
+Title: Mitigating Matthew Effect: Multi-Hypergraph Boosted Multi-Interest Self-Supervised Learning for Conversational Recommendation
+
+URL Source: https://arxiv.org/pdf/2607.18609v1
+
+Published Time: Wed, 22 Jul 2026 00:21:57 GMT
+
+Number of Pages: 13
+
+Markdown Content:
+# Mitigating Matthew Effect: Multi-Hypergraph Boosted Multi-Interest Self-Supervised Learning for Conversational Recommendation 
+
+Yongsen Zheng 1,2 , Ruilin Xu 3, Guohua Wang 4† , Liang Lin 3,5 , Kwok-Yan Lam 1,2† 1Nanyang Technological University, Singapore 2Digital Trust Centre Singapore 
+
+> 3
+
+Sun Yat-sen University 4South China Agricultural University 5Peng Cheng Laboratory {yongsen.zheng, kwokyan.lam}@ntu.edu.sg, xurlin5@mail2.sysu.edu.cn wangguohua@scau.edu.cn, linliang@ieee.org 
+
+Abstract 
+
+The Matthew effect is a big challenge in Rec-ommender Systems (RSs), where popular items tend to receive increasing attention, while less popular ones are often overlooked, perpetuating existing disparities. Although many existing methods attempt to mitigate Matthew effect in the static or quasi-static recommendation sce-narios, such issue will be more pronounced as users engage with the system over time. To this end, we propose a novel framework, Multi-Hypergraph Boosted Multi-Interest Self-Supervised Learning for Conversational Rec-ommendation (HiCore), aiming to address Matthew effect in the Conversational Recom-mender System (CRS) involving the dynamic user-system feedback loop. It devotes to learn multi-level user interests by building a set of hypergraphs ( i.e. , item-, entity-, word-oriented multiple-channel hypergraphs) to alleviate the Matthew effec. Extensive experiments on four CRS-based datasets showcase that HiCore at-tains a new state-of-the-art performance, un-derscoring its superiority in mitigating the Matthew effect effectively. Our code is avail-able at https://github.com/zysensmile/HiCore. 
+
+1 Introduction 
+
+Engaging users in ongoing conversations for per-sonalized recommendations, Conversational Rec-ommendation Systems (CRSs) (Qin et al., 2023; Mishra et al., 2023) have become a prevalent strat-egy utilized in diverse fields (Liu et al., 2023; Epure and Hennequin, 2023). However, CRSs often face a big challenge known as Matthew effect (Liu and Huang, 2021), captured by the adage "the privi-leged gain more privilege, while the underprivi-leged fall further behind." This observation under-scores that well-received items or categories in past records garner heightened visibility in future sug-gestions, whereas less preferred ones frequently face neglect or marginalization. 
+
+> †Corresponding author.
+
+Lately, a multitude of studies have focused on investigating the Matthew effect in relatively un-changing offline recommendation scenarios (Liu and Huang, 2021; Anderson et al., 2020), identify-ing two root causes for its occurrence. One cause (Liang et al., 2021; Zheng et al., 2021b; Hansen et al., 2021; Anderson et al., 2020) is the height-ened vulnerability of individuals with narrower and uniform preferences or interests to succumb to the pervasive influence of the Matthew effect. This susceptibility often stems from a tendency towards familiarity and comfort, leading to a reinforcement of existing patterns and a limited exploration of diverse alternatives. Another cause (Zheng et al., 2021c) arises from the pervasive favoritism towards mainstream items, resulting in a perpetual rein-forcement of their prominence, while lesser-known alternatives linger in the shadows. This bias to-wards popular choices not only perpetuates existing trends but also limits the discoverability of niche or underappreciated options. Thus, the amplifica-tion of visibility for widely favored items can over-shadow the potential value and diversity offered by less popular but equally deserving alternatives. Despite their effectiveness, most existing meth-ods still suffer from two major limitations. 1) Inter-active Strategy . While many methods have offered valuable insights into the Matthew effect, they of-ten overlook the adverse effects originating from the dynamic user-system feedback loop (Zhang et al., 2021), as they primarily focus on mitigating the Matthew effect in relatively stable offline rec-ommendation settings. In fact, the Matthew effect can intensify as users interact more actively with the system over time, potentially exacerbating con-cerns such as echo chambers (Ge et al., 2020) and filter bubbles (Steck, 2018). Hence, it is important to address the Matthew effect in the CRS. 
+
+2) Interest Exploration . Considering that the root cause of the Matthew effect lies in the confinement of user interests (Zheng et al., arXiv:2607.18609v1 [cs.IR] 21 Jul 2026 2021b; Liang et al., 2021; Hansen et al., 2021; Anderson et al., 2020), most existing methods focus on leveraging hypergraphs to unveil complex high-order user relationship patterns for exploring user interests. However, these hypergraphs often remain single-channel, constraining their capacity to capture diverse user relation patterns since each hypergraph can only represent a specific type of user patterns. Moreover, these single-channel hypergraphs may risk evolving into traditional Knowledge Graphs (KGs) due to the scarcity of user-item interaction data. Thus, the construction of multi-channel hypergraphs is paramount for exploring multi-level user interests. To address these limitations, we propose the novel framework, Multi-Hypergraph Boosted Multi-Interest Self-Supervised Learning for 
+
+Co nversational Re commendation ( HiCore ), which aims to mitigate the negative impact of Matthew effect when users engage with the system over time in the CRS. It is comprised of Multi-Hypergraph Boosted Multi-Interest Self-Supervised Learning and Interest-Boosted CRS. The former devotes to construct multi-hypergraph ( i.e. , item-oriented, entity-oriented, and word-oriented triple-channel hypergraphs) to learn multi-level user interests ( i.e. ,item-level, entity-level, word-level triple-channel interests), where triple channels contain the group, joint, and purchase channels. The latter aims to utilize the multi-level interests to enhance both conversation and recommendation tasks when users chat with system over time. Concretely, multi-level user interests are used to effectively generate next utterances in the conversational task, and accurately predict users’ interested items in the recommendation task. Extensive experimental results on four benchmarks show that HiCore achieves a new state-of-the-art performance compared all the baselines, and the effectiveness of mitigating Matthew effect in the CRS. Overall, our main contributions are included: • To the best of our knowledge, this is the first work to build multi-hypergraph from triple-channel settings for learning multi-interest to mitigate Matthew effect in the CRS. • We proposed a novel end-to-end framework HiCore, aiming to use multi-interest enhance both recommendation and conversation tasks. • Quantitative and qualitative experimental results show the effectiveness of HiCore and the superi-ority of HiCore in mitigating Matthew effect. 
+
+2 Related Work 
+
+2.1 Matthew Effect in Recommendation 
+
+The Matthew effect poses a formidable challenge in recommendation systems. To combat this issue, there are two primary research lines. One line of re-search focuses on understanding a diverse range of user interests to enhance recommendation diversifi-cation (Anderson et al., 2020; Hansen et al., 2021; Liang et al., 2021; Zheng et al., 2021b). The other line of research (Zheng et al., 2021c) is dedicated to mitigating popularity bias to ensure a balanced exposure of items across various categories. For ex-ample, Wang et al. (Wang et al., 2019) conducted a meticulous quantitative analysis, providing valu-able insights into the quantitative characteristics of the Matthew effect in collaborative-based rec-ommender systems. Liu et al. (Liu and Huang, 2021) have confirmed the presence and impact of the Matthew effect within the intricate algorithms of YouTube’s recommendation system. However, these methods primarily concentrate on exploring the Matthew effect in static recommendation envi-ronments, overlooking the crucial interplay of the user-system feedback loop. 
+
+2.2 Conversational Recommender System 
+
+Unlike traditional static recommendation methods (Zheng et al., 2021a, 2024d; Jin et al., 2023) and interactive recommendation methods (Zheng et al., 2024b, 2026a), Conversational Recommendation System (Qian et al., 2023; Zheng et al., 2024c,a,f) aims to uncover users’ genuine intentions and in-terests through natural language dialogues, thereby offering top-notch recommendations to users. Cur-rently, CRS-based methods can be categorized into two main groups. 1) Attribute-based CRS (Deng et al., 2021a; Zheng et al., 2025a; Lei et al., 2020; Ren et al., 2021; Xu et al., 2021), which seeks to delve into user interests by posing queries about items or their attributes. However, this approach primarily relies on predefined templates for re-sponse generation, often falling short in producing fluent, human-like natural language expressions. 2) Generated-based CRS (Zheng et al., 2025b, 2024e, 2026b; Li et al., 2022; Zhou et al., 2020a, 2022; Shang et al., 2023), which can address the short-comings of attribute-centric CRS by utilizing the Seq2Seq architecture (Vaswani et al., 2017a) to integrate a conversation component and a recom-mendation component, resulting in the creation of smooth and coherent human-like responses. De-Figure 1: Overview of our HiCore framework. It consists of Multi-Hypergraph Boosted Multi-Interest Self-Supervised Learning and Interested-Boosted CRS. The former aims to learn multi-level user interests, while the latter devotes to generate responses in the conversation module and predict items in the recommendation module. 
+
+spite their effectiveness, they face challenges in grasping the varied interests of users because of the restricted and scarce character of user-item interac-tion data. 
+
+3 HiCore 
+
+Most existing methods (Hussein et al., 2020; Liu et al., 2021a; Nguyen et al., 2014) have consistently revealed that individuals with constrained interests are greatly impacted by Matthew effect. Thus, we propose a novel framework, HiCore, which is comprised of Multi-Hypergraph Boosted Multi-Interest Self-Supervised Learning and Interest-Boosted CRS. The overall pipeline of the proposed HiCore is illustrated in Fig.1. 
+
+3.1 Multi-Hypergraph Boosted Multi-Interest Self-Supervised Learning 
+
+In this section, we will establish multi-hypergraph to learn multi-level user interests to mitigate Matthew effect in the CRS. 
+
+3.1.1 Multi-Hypergraph Boosts Multi-Interest 
+
+Instead of linking only two nodes per edge as in traditional KGs, hypergraphs extend the notion of edges to connect more than two nodes. By utiliz-ing diverse hypergraphs to encode various high-order user relation patterns, we construct multiple 
+
+> Figure 2: Triangle motifs used in our proposed HiCore.
+
+knowledge-oriented triple-channel hypergraphs. 
+
+Item-oriented triple-channel Hypergraphs. We first build item-oriented hypergraphs from triple channels, i.e. , ‘ Group Channel (g) ’, ‘ Joint Chan-nel (j) ’ , and ‘ Purchase Channel (p) ’ via the Motif 
+
+(Milo et al., 2002; Yu et al., 2021), a commonly utilized tool for capturing complex local structures involving multiple nodes, as illustrated in Fig.2. 
+
+Group-channel hypergraph. Group-channel hypergraphs aim to analyze users’ social relations to unveil the dynamics among individuals based on their shared interests, preferences, and char-acteristics. Understanding group preferences not only consolidates individual tastes but also facil-itates collective decisions that benefit the entire group. Formally, we utilize a set of triangular mo-tifs (Milo et al., 2002; Yu et al., 2021) to build the item-oriented group-channel hypergraphs G(i) 
+
+> g
+
+as: 
+
+G(i) 
+
+> g
+
+= ( V(i) 
+
+> g
+
+, N (i) 
+
+> g
+
+, A(i) 
+
+> Mgk
+
+). (1) Here V(i) 
+
+> g
+
+represents the set of items derived from the historical conversations, while N (i) 
+
+> g
+
+=
+
+{M gk|1 ≤ k ≤ 7} denotes the collection of hy-peredges, with each hyperedge representing an occurrence of the specified motif M gk in Fig.2. 
+
+A(i) 
+
+> Mgk
+
+∈ |V (i) 
+
+> g
+
+| × |N (i) 
+
+> g
+
+| is the group-motif-induced adjacency matrices. Firstly, we need to define the matrix computation of each type of motif. Let H(i)
+
+> k
+
+be the matrix computation of the motif M gk, then we can obtain: 
+
+
+
+H(i)1 = ( IT J) ⊗ IT + ( JI ) ⊗ I + ( II T ) ⊗ J,
+
+H(i)2 = ( IJ ) ⊗ I + ( JI T ) ⊗ IT + ( IT I) ⊗ J,
+
+H(i)3 = ( II ) ⊗ I + ( II T ) ⊗ I + ( IT I) ⊗ I,
+
+H(i)4 = ( JJ ) ⊗ J,
+
+H(i)5 = ( JJ ) ⊗ I + ( JI ) ⊗ J + ( I · J) ⊗ J,
+
+H(i)6 = ( JI ) ⊗ IT + ( IJ ) ⊗ IT + ( II ) ⊗ J,
+
+H(i)7 = ( II ) ⊗ IT ,
+
+(2) where ⊗ is the element-wise product, S denote the relation matrix (Yu et al., 2021). J = S ⊗ S,and I = S − J specify the adjacency matrices of the bidirectional and unidirectional social networks (i.e. , group motif), respectively. Then, the group-motif-induced adjacency matrices A(i) 
+
+> Mgk
+
+is: 
+
+A(i) 
+
+> Mgk
+
+=
+
+
+
+H(i)1 , if M g
+
+> 1
+
+,
+
+H(i)2 , if M g
+
+> 2
+
+,
+
+H(i)3 + ( H(i)5 )T , if M g
+
+> 3
+
+,
+
+H(i)4 , if M g
+
+> 4
+
+,
+
+H(i)5 + ( H(i)3 )T , if M g
+
+> 5
+
+,
+
+H(i)6 + ( H(i)2 )T , if M g
+
+> 6
+
+,
+
+H(i)7 + ( H(i)1 )T , if M g
+
+> 7
+
+.
+
+(3) If (A(i) 
+
+> Mgk
+
+)n,r = 1, it signifies that the node 
+
+n and the node r co-occur in a single in-stance of M gk. When two nodes appear in multiple instances, it turns to be (A(i) 
+
+> Mgk
+
+)n,r =#( n, r occur in the same instance of M gk).
+
+Joint-channel hypergraph. The joint channel reflects the scenario of shared behaviors among friends in a social network. When friends purchase the same items, it not only suggests similarities in tastes and interests but also hints at deeper levels of interaction and trust. This phenomenon of "friends purchasing the same item" may facilitate informa-tion dissemination and interaction within the social network, strengthening social relationships, and to some extent, reflecting influence and collective be-havior within the social network. Therefore, by identifying and analyzing the joint motifs, the item-oriented joint-channel hypergraph G(i) 
+
+> j
+
+is: 
+
+
+
+G(i) 
+
+> j
+
+= ( V(i) 
+
+> j
+
+, N (i) 
+
+> j
+
+, A(i) 
+
+> Mjk
+
+),
+
+H(i)8 = ( RR T ) ⊗ J,
+
+H(i)9 = ( RR T ) ⊗ I,
+
+A(i) 
+
+> Mjk
+
+= H(i)8 , if M j
+
+> 8
+
+,
+
+A(i) 
+
+> Mjk
+
+= H(i)9 + [ H(i)9 ]T , if M j
+
+> 9
+
+,
+
+(4) where V(i) 
+
+> j
+
+, and N (i) 
+
+> j
+
+= {M jk |8 ≤ k ≤ 9} denote the item set, and the hyperedge set, respectively. Each hyperedge is induced from each type of joint motif, depicted in Fig.2. R is a binary matrix that records user-item interactions, and A(i) 
+
+> Mjk
+
+denotes the joint-motif-induced adjacency matrices. 
+
+Purchase-channel hypergraph. Additionally, we should also take into account users who do not have explicit social connections. Therefore, the analysis is non-exclusive and delineates the im-plicit higher-order social relationships among users who lack direct social ties but still purchase the same items. By considering these users without overt social links, we can uncover hidden patterns of social influence and affiliation that transcend tra-ditional network structures. Thus, the item-oriented purchase-channel hypergraph G(i) 
+
+> p
+
+can be induced from the purchase motif M p 
+
+> 10
+
+as follows: 
+
+G(i) 
+
+> p
+
+= ( V(i) 
+
+> p
+
+, N (i) 
+
+> p
+
+, A(i) 
+
+> Mpk
+
+),
+
+A(i) 
+
+> Mpk
+
+= H(i)10 = RR T , if M p
+
+> 10
+
+,
+
+(5) here V(i) 
+
+> p
+
+and N (i) 
+
+> p
+
+= {M pk |k = 10 } are the item set and hyperedge set, respectively. Specifically, the hyperedge set, depicted in Fig.2. A(i) 
+
+> Mpk
+
+is the purchase-motif-induced adjacency matrices. 
+
+Entity-oriented triple-channel hypergraphs. To tackle the sparsity and constraints inherent in his-torical user-item interaction data, we leverage the rich DBpedia KG (Auer et al., 2007) to build an entity-oriented hypergraph. More precisely, we identify individual items referenced in historical conversations as entities and their k-hop neighbors to construct each hyperedge. This method enables us to capture shared semantic nuances among the broader network of neighbors. Similar to item-oriented triple-channel hypergraphs, we build the entity-oriented hypergraphs from triple channel set-ting. Formally, the entity-oriented hypergraphs 
+
+G(e) 
+
+> c
+
+from triple-channel c can be given as: 
+
+G(e) 
+
+> c
+
+= ( V(e) 
+
+> c
+
+, N (e) 
+
+> c
+
+, A(e) 
+
+> Mck
+
+). (6) Here c ∈ { g, j, p } represents triple channels ( i.e. ,group, joint, and purchase channel). V(e) 
+
+> c
+
+denotes the entities from triple-channel setting. These enti-ties are k-hop neighbors extracted from the histor-ical conversations. N (e) 
+
+> c
+
+means the hyperedge set induced from different motifs. Each hyperedge is an instance of the Motif. A(e) 
+
+> Mck
+
+represents the group-channel, joint-channel, and purchase-channel adja-cency matrices, they are defined as Eq.(3), Eq.(4), and Eq.(5), respectively. 
+
+Word-oriented triple-channel hypergraphs. The significance of keywords exchanged during con-versations is paramount in grasping users’ require-ments. By scrutinizing notable words, we can pin-point specific inclinations, a critical aspect in mod-eling an array of user tastes. To realize this ob-jective, we construct a lexeme-centric hypergraph utilizing the lexicon-focused ConceptNet (Speer et al., 2017) KG to unveil semantic associations such as synonymy, antonyms, and co-occurrence. Based on these analysis, the word-oriented hyper-graphs from group-, joint-, and purchase-channel can be expressed as: 
+
+G(w) 
+
+> c
+
+= ( V(w) 
+
+> c
+
+, N (w) 
+
+> c
+
+, A(w) 
+
+> Mck
+
+), (7) where V(w) 
+
+> c
+
+is the words from k-hop neighbors. 
+
+N (w) 
+
+> c
+
+denotes the hyperedge set from different mo-tifs, including group, joint, purchase motifs. A(w) 
+
+> Mck
+
+are the word-oriented adjacency matrices induced from triple channels, illustrated in Eq.(3) ∼ Eq.(5). 
+
+3.1.2 Multi-Interest Self-Supervised Learning 
+
+After constructing a series of hypergraphs from triple-channel setting, we will construct multi-level user interests via the hypergraph convolution net-work (Yu et al., 2021), which can be written as: 
+
+P (l+1)  
+
+> c
+
+= D−1 
+
+> c
+
+KcL−1 
+
+> c
+
+KTc P (l) 
+
+> c
+
+= bD−1 
+
+> c
+
+A(i) 
+
+> c
+
+P (l) 
+
+> c
+
+,
+
+(8) where P (l) 
+
+> c
+
+and P (l+1)  
+
+> c
+
+represent the output of the 
+
+l-th and (l + 1) -th layers, respectively. Specifically, the base user embedding is P (0)  
+
+> c
+
+= f c
+
+> gate
+
+(P (0) ),and f c
+
+> gate
+
+(·) is self-gating units (SGUs) to control the information flow to different channel from the base user embedding P (0) . Dc is the degree matrix of Ac, which is the summation of the motifs with-out considering self-connections (Yu et al., 2021). In terms of the group motifs, it can be defined as A(i) 
+
+> c
+
+= P7 
+
+> k=1
+
+A(i) 
+
+> Mk
+
+, in terms of joint motifs, 
+
+A(i) 
+
+> c
+
+= A(i) 
+
+> M8
+
++ A(i) 
+
+> M9
+
+, and from the point of the purchase motifs, A(i) 
+
+> c
+
+= A(i) 
+
+> M10
+
+− (A(i) 
+
+> M8
+
++ A(i) 
+
+> M9
+
+).Based on these analysis, the item-level interests from triple channel setting ( i.e. , X(i) 
+
+> g
+
+, X(i) 
+
+> j
+
+, X(i) 
+
+> p
+
+), the entity-level interests from triple channel set-ting ( i.e. , X(e) 
+
+> g
+
+, X(e) 
+
+> j
+
+, X(e) 
+
+> p
+
+), the word-level inter-ests from triple channel setting ( i.e. , X(w) 
+
+> g
+
+, X(w) 
+
+> j
+
+,
+
+X(w) 
+
+> p
+
+) can be defined as: 
+
+X(h) 
+
+> g
+
+= bD−1 
+
+> g
+
+(
+
+> 7
+
+X
+
+> k=1
+
+A(h) 
+
+> Mgk
+
+)P (L) 
+
+> g
+
+;
+
+X(h) 
+
+> j
+
+= bD−1 
+
+> j
+
+(A(h) 
+
+> Mj
+> 8
+
++ A(h) 
+
+> Mj
+> 9
+
+)P (L) 
+
+> j
+
+;
+
+X(h) 
+
+> p
+
+= bD−1 
+
+> p
+
+(A(h) 
+
+> Mp
+> 10
+
+− (A(h) 
+
+> Mj
+> 8
+
++ A(h) 
+
+> Mj
+> 9
+
+)) P (L) 
+
+> p
+
+.
+
+(9) Here h ∈ { i, e, w }, and L is the last hypergraph convolution layer. Then, we adopt the attention network Atta (·) and graph convolution GConv (·)
+
+to learn final multi-interest Xm as: 
+
+Xi = GConv (Atta (X(i) 
+
+> g
+
+; X(i) 
+
+> j
+
+; X(i) 
+
+> p
+
+)) ,
+
+Xe = GConv (Atta (X(e) 
+
+> g
+
+; X(e) 
+
+> j
+
+; X(e) 
+
+> p
+
+)) ,
+
+Xw = GConv (Atta X(w) 
+
+> g
+
+; X(w) 
+
+> j
+
+; X(w) 
+
+> p
+
+)) ,
+
+Xm = Atta (Xi; Xe; Xw).
+
+(10) Here ; is the concatenation operation. Finally, we use InfoNCE (Yu et al., 2021) as our learning ob-jective to conduct the self-supervised learning as: 
+
+Ls = − X
+
+> h
+
+n X 
+
+> u∈U
+
+log σ(f (Xm), z hu ) − f (Xm, ˆzhu )) + X
+
+> u∈U
+
+log σ(f (zhu , kh) − f (ˆ zhu , kh)
+
+o
+
+.
+
+(11) Here zhu = f h
+
+> gate
+
+(fs(Xh; phu), fs(·) is the sum op-eration, ˆzhu is the negative example by shuffling both rows and columns of zhu , and h is defined as Eq.(9). f (·) ∈ Rd×d serves as the discriminator, evaluating the alignment between two input vectors. Specifically, kh = fout (Zh), where Zh and Xm
+
+are ground truths for each other, and fout (·) aims to perform permutation invariant (Yu et al., 2021). 
+
+3.2 Interest-Boosted CRS 
+
+To mitigate Matthew effect in the CRS, we employ multi-interest Xm to enhance both recommenda-tion and conversation tasks. 
+
+3.2.1 Recommendation Module 
+
+Recommendation module is to precisely forecast items for users via dynamic natural conversations. To improve recommendation diversity, we use Xm
+
+to select target items as Prec = Xm × V cand ,where V cand is the embeddings of all candidate items. Finally, we adopt cross-entropy loss (Shang et al., 2023) to learn the recommendation task: 
+
+Lrec = −
+
+> B
+
+X
+
+> b=1
+> |I|
+
+X
+
+> a=1
+
+n
+
+− (1 − Yab ) · log(1 − P(b)rec (a)) + Yab · log( P(b)rec (a)) 
+
+o
+
+,
+
+(12) where Yab ∈ { 0, 1}, B, and |I| are the target label, mini-batch size, the size of item set, respectively. 
+
+3.2.2 Conversation Module 
+
+Conversation module centers on crafting appropri-ate dialogue responses. Next, we use multi-interest 
+
+Xm to fed into Transformer MHA (·) to produce informative responses. Suppose Yn−1 is the output of the last time unit, then the current one Yn is: 
+
+An 
+
+> 0
+
+= MHA (Yn−1, Yn−1, Yn−1),
+
+An 
+
+> 1
+
+= MHA (An 
+
+> 0
+
+, Xm, Xm),
+
+An 
+
+> 2
+
+= MHA (An 
+
+> 1
+
+, Xcur , Xcur ),
+
+An 
+
+> 3
+
+= MHA (An 
+
+> 1
+
+, Xhis , Xhis ),
+
+An 
+
+> 4
+
+= β · An 
+
+> 2
+
++ (1 − β) · An 
+
+> 3
+
+,
+
+Yn = FFN (An 
+
+> 4
+
+),
+
+(13) where Xcur and Xhis are the current and historical conversations, respectively. β is hyper-parameters to control the information flow. Then, we use cross-entropy loss to learn the conversation task: 
+
+Lconv = −
+
+> B
+
+X
+
+> b=1
+> T
+
+X
+
+> t=1
+
+log( Pconv (st|{ st−1})) ,
+
+Pconv (·) = p1(st|Yi) + p2(st|Prec ) + p3(st|Prec ),
+
+(14) where Pconv (·) is the probability of the next token when given a sequence {st−1} = s1, s 2, · · · , s t−1,where st signifies the t-th utterance. p1(·), p2(·),and p3(·) denote the vocabulary probability, vocab-ulary bias, and copy probability, respectively. T is the truncated length of utterances. 
+
+3.3 Challenges Discussion 
+
+Throughout the developmental journey of hyper-graphs, we surmounted several significant chal-lenges, elaborated upon below: 
+
+1) Hypergraph Construction Challenge: During the project’s initial stages, the real-time construc-tion of hypergraphs presented a bottleneck, result-ing in delays. Through the strategic repositioning of this operation to the data preprocessing phase, we adeptly extracted essential subgraphs, leading to a noteworthy reduction in training time. This adjustment enhanced efficiency, streamlined pro-cesses, and improved performance. 
+
+2) Graph Storage Challenge: The transition to sparse graph storage mechanisms is pivotal in en-hancing efficiency, streamlining computation time, and optimizing memory utilization. Embracing this shift not only boosts the system’s performance but also establishes a robust foundation for scalable and resource-efficient operations. 
+
+3) Model Training Challenge: With the emer-gence of a series of hypergraphs, optimizing the efficiency of model training becomes paramount. Consequently, we redefined our strategy by dispers-ing hypergraphs across multiple computing cards, enabling parallel computation and achieving a sig-nificant boost in the model’s runtime speed. 
+
+4 Experiments and Analyses 
+
+To fully evaluate the proposed HiCore, we conduct experiments to answer the following questions: • RQ1: How does HiCore perform compared with all baselines in the recommendation task? • RQ2: How does HiCore perform compared with all baselines in the conversation task? • RQ3: How does HiCore mitigate Matthew effect in the CRS? Model REDIAL TG-REDIAL R@10 R@50 M@10 M@50 N@10 N@50 R@10 R@50 M@10 M@50 N@10 N@50 TextCNN 0.0644 0.1821 0.0235 0.0285 0.0328 0.0580 0.0097 0.0208 0.0040 0.0045 0.0053 0.0077 SASRec 0.1117 0.2329 0.0540 0.0593 0.0674 0.0936 0.0043 0.0178 0.0011 0.0017 0.0019 0.0047 BERT4Rec 0.1285 0.3032 0.0475 0.0555 0.0663 0.1045 0.0043 0.0226 0.0013 0.0020 0.0020 0.0058 KGSF 0.1785 0.3690 0.0705 0.0796 0.0956 0.1379 0.0215 0.0643 0.0069 0.0087 0.0103 0.0194 TG-ReDial 0.1679 0.3327 0.0694 0.0771 0.0924 0.1286 0.0110 0.0174 0.0048 0.0050 0.0062 0.0076 ReDial 0.1705 0.3077 0.0677 0.0738 0.0925 0.1222 0.0038 0.0165 0.0012 0.0017 0.0018 0.0045 KBRD 0.1796 0.3421 0.0722 0.0800 0.0972 0.1333 0.0201 0.0501 0.0077 0.0090 0.0106 0.0171 BART 0.1693 0.3783 0.0646 0.0744 0.0888 0.1350 0.0047 0.0187 0.0012 0.0017 0.0020 0.0048 BERT 0.1608 0.3525 0.0597 0.0688 0.0831 0.1255 0.0040 0.0194 0.0011 0.0017 0.0018 0.0050 XLNet 0.1569 0.3590 0.0583 0.0677 0.0811 0.1255 0.0040 0.0187 0.0011 0.0017 0.0017 0.0048 KGConvRec 0.1819 0.3587 0.0711 0.0794 0.0969 0.1358 0.0220 0.0524 0.0088 0.0102 0.0119 0.0185 MHIM 0.1966 0.3832 0.0742 0.0830 0.1027 0.1440 0.0300 0.0783 0.0108 0.0129 0.0152 0.0256             
+
+> HiCore* 0.2192 0.4163 0.0775 0.0874 0.1107 0.1558 0.0270 0.0769 0.0880 0.1074 0.0152 0.0225
+
+Table 1: Recommendation results on REDIAL and TG-REDIAL datasets. * indicates statistically significant improvement ( p < 0.05) over all baselines. 
+
+• RQ4: How do parameters affect our HiCore? • RQ5: How do different hypergraphs contribute to the performance? 
+
+4.1 Experimental Protocol Datasets. We assess the effectiveness of our pro-posed HiCore through comprehensive evaluations on four CRS-based benchmarks: REDIAL (Li et al., 2018b), TG-REDIAL (Zhou et al., 2020b), OpenDialKG (Moon et al., 2019), and DuRecDial (Liu et al., 2021b). The REDIAL dataset com-prises 11,348 dialogues involving 956 users and 6,924 items, while the TG-REDIAL dataset en-compasses 10,000 dialogues with 1,482 users and 33,834 items. To provide a holistic evaluation of our proposed methodology, we integrate two cross-domain datasets, OpenDialKG and DuRec-Dial, which cover a wide array of domains includ-ing movies, music, books, sports, restaurants, news, and culinary experiences. 
+
+Baselines. We compared our HiCore with the fol-lowing state-of-the-art methods TextCNN (Kim, 2014), SASRec (Kang and McAuley, 2018), 
+
+BERT4Rec (Sun et al., 2019), KBRD (Chen et al., 2019), Trans. (Vaswani et al., 2017b), ReDial (Li et al., 2018a), KGSF (Zhou et al., 2020a), KG-ConvRec (Sarkar et al., 2020), XLNet (Yang et al., 2019), BART (Lewis et al., 2020), BERT (Devlin et al., 2019), DialoGPT (Zhang et al., 2020), Uni-CRS (Deng et al., 2021b), GPT-3 (Brown et al., 2020), C2-CRS (Zhou et al., 2022), LOT-CRS 
+
+(Zhao et al., 2023), MHIM (Shang et al., 2023), and HyCoRec (Zheng et al., 2024e).                                                           
+
+> Model OpenDialKG DuRecDial R@1 R@10 R@1 R@10 KBRD 0.1448 0.3162 0.0618 0.3971 KGSF 0.0626 0.1757 0.1395 0.4367 ReDial 0.0008 0.0134 0.0005 0.0336 TGReDial 0.2149 0.4035 0.0956 0.4882 HyCoRec 0.2742 0.4490 0.1279 0.4750
+> HiCore* 0.2628 0.4526 0.1735 0.5471 Model OpenDialKG DuRecDial Dist-2 Dist-3 Dist-2 Dist-3 KBRD 0.3192 1.7660 0.5180 1.5500 KGSF 0.1687 0.5387 0.1389 0.3862 ReDial 0.1579 0.5808 0.1095 0.3981 TGReDial 0.4836 2.1430 0.5453 2.0030 HyCoRec 2.8190 4.7710 1.0820 2.4440
+> HiCore* 2.8430 4.8120 1.0940 2.4280
+
+Table 2: Results on both recommendation and conver-sation tasks on OpenDialKG and DuRecDial datasets involving various domains. * indicates statistically sig-nificant improvement ( p < 0.05) over all baselines. 
+
+4.2 Recommendation Performance (RQ1) 
+
+In accordance with (Shang et al., 2023), we uti-lize Recall@ K (R@ K), MRR@ K (M@ K), and NDCG@ K (N@ K) ( K=1, 10, 50) to assess the rec-ommendation task. Analyzing the results presented in Table 1 and Table 2, it is evident that our pro-posed method, HiCore, consistently outperforms all the comparison baselines. There exist multiple crucial facets contribut-ing to the advancement of our proposed HiCore method: (a) Diversification of hypergraphs: we introduced a diverse set of hypergraphs, including item-oriented, entity-oriented, and word-oriented hypergraphs. This expansion aims to go beyond the traditional pairwise interactions, broadening the scope of user interest modeling by incorpo-Model REDIAL TG-REDIAL Dist-2 Dist-3 Dist-4 Dist-2 Dist-3 Dist-4 ReDial 0.0214 0.0659 0.1333 0.2178 0.5136 0.7960 Trans. 0.0538 0.1574 0.2696 0.2362 0.7063 1.1800 KGSF 0.0572 0.2483 0.4349 0.3891 0.8868 1.3337 KBRD 0.0765 0.3344 0.6100 0.8013 1.7840 2.5977 DialoGPT 0.3542 0.6209 0.9482 1.1881 2.4269 3.9824 GPT-3 0.3604 0.6399 0.9511 1.2255 2.5713 4.0713 UniCRS 0.2464 0.4273 0.5290 0.6252 2.2352 2.5194 C2-CRS 0.2623 0.3891 0.6202 0.5235 1.9961 2.9236 LOT-CRS 0.3312 0.6155 0.9248 0.9287 2.4880 3.4972 MHIM 0.3278 0.6204 0.9629 1.1100 2.3520 3.8200   
+
+> HiCore* 0.5871 1.1170 1.7500 2.8610 5.7440 8.4160
+
+Table 3: Conversation results on REDIAL and TG-REDIAL datasets. * indicates statistically significant improvement ( p < 0.05) over all baselines. 
+
+rating interactions among multiple nodes. (b) Exploration of hypergraph configurations: mov-ing beyond the conventional triple-channel model, we delved into various hypergraph configurations like group-channel, joint-channel, and purchase-channel. These configurations were designed to cater not only to social connections but also indi-vidual preferences, enhancing the system’s adapt-ability. (c) Integration of multi-level user interests: transitioning from the triple-channel structure, we integrated these hypergraphs to capture multi-level user interests. This strategic shift helps alleviate the Matthew effect in the CRS involving the dynamic user-system feedback loop. This comprehensive approach highlights the innovation and adaptabil-ity of HiCore in addressing the intricacies of user interest modeling and enhancing recommendation system performance. 
+
+4.3 Conversational Performance (RQ2) 
+
+For the conversation task, we use Distinct n-gram (Dist-n) (Shang et al., 2023) ( n=2,3,4) to estimate the conversation task. Table 2 and Table 3 indicate a significant performance superiority of our HiCore. For example, HiCore gains 123.83%, 138.27%, 77.26%, 65.75%, 62.90%, and 79.10% improve-ments on Dist-2 against the strong baselines in-cluding, C2-CRS, UniCRS, LOT-CRS, DialoGPT, GPT-3, and MHIM on the REDIAL dataset, respec-tively. It also gains 446.51%, 357.61%, 208.07%, 140.80%, 133.46%, and 157.75% improvements on Dist-2 against the strong baselines including, C2-CRS, UniCRS, LOT-CRS, DialoGPT, GPT-3, and MHIM on the REDIAL dataset, respectively. The improvement in HiCore can be attributed to the following reasons: (a) Our HiCore focuses on 
+
+Figure 3: Coverage results of C@k metric. 
+
+constructing a diverse set of hypergraphs, encom-passing item-oriented, entity-oriented, and word-oriented triple-channel hypergraphs. These struc-tures effectively capture intricate local patterns through motif analysis, enabling the exploration of high-order user behaviors. This proves invalu-able in generating informative and high-quality re-sponse utterances. (b) HiCore is dedicated to miti-gating the Matthew effect that may occur as users engage with the system over time. By learning multi-level user interests from the hypergraphs, the system can adapt to users’ evolving preferences. This strategic approach enables the CRS to pro-vide a varied array of responses that align with the diverse interests of the users. 
+
+4.4 Study on Matthew Effect (RQ3) 
+
+Given our goal of mitigating the Matthew effect that may arise as users interact with the system over time, we engage in a series of experiments comparing the proposed method with the most robust baselines. This investigation seeks to de-termine the efficacy of HiCore in effectively alle-viating the Matthew effect. Considering the key strategy to mitigate Matthew effect is to improve the recommendation diversification, and thus we use the diversify-based evaluation metrics Cover-age @k (C@k), Average Popularity (A@K) of Rec-ommended Items and Long Tail Recommendation Ratio (L@K) to comprehensively evaluate the ef-ficacy of our proposed method in mitigating the Matthew Effect. Fig.3 illustrates the experimental outcomes, showcasing the consistent superiority of HiCore in achieving the highest levels of Coverage across all datasets in comparison to the most robust base-lines. The heightened coverage metric highlights its exceptional ability to encompass a broad spec-trum of the recommendation space by incorporat-ing items from diverse categories. Additionally, as outlined in Table 4, our proposed method demon-Model OpenDialKG DuRecDial A@5 A@15 A@30 A@5 A@15 A@30 KBRD 0.0025 0.0025 0.0088 0.0318 0.0562 0.0938 KGSF 0.0051 0.0108 0.0182 0.0276 0.0534 0.0952 ReDial 1.0000 0.9375 0.8333 1.0000 0.8824 0.9677 TGReDial 0.0022 0.0043 0.0070 0.0137 0.0399 0.0796 MHIM 0.0022 0.0044 0.0075 0.0228 0.0434 0.0789 HiCore 0.0017 0.0043 0.0065 0.0226 0.0423 0.0751 Model OpenDialKG DuRecDial L@5 L@15 L@30 L@5 L@15 L@30 KBRD 0.2921 0.2782 0.2782 0.3758 0.4149 0.3406 KGSF 0.2398 0.2482 0.3343 0.3314 0.4243 0.3302 ReDial 1.0000 0.8750 0.8333 1.0000 0.8235 0.9677 TGReDial 0.2737 0.2482 0.2757 0.3654 0.3803 0.3846 MHIM 0.1919 0.2343 0.2617 0.3315 0.3488 0.2706   
+
+> HiCore* 0.1906 0.2092 0.2343 0.3122 0.3267 0.2666
+
+Table 4: Results of Average Popularity (A@K) and Long Tail Ratio (L@K). 
+
+Figure 4: Impact of different hyperparameteres. 
+
+strates the lowest values for Average Popularity and 
+
+Long Tail Ratio . This evidence suggests that our method effectively mitigates the adverse effects of item popularity on recommendation outcomes and successfully addresses the long tail distribution of items. These results validate the effectiveness of our proposed approach in combating the Matthew effect in the CRS as users interact with the system over time, attributed to its capability to learn multi-level user interests through a series of hypergraphs from triple-channel setting, including group, joint, and purchase channels. 
+
+4.5 Hyperparameters Analysis (RQ4) 
+
+Hyperparameters are parameters in a machine learning algorithm that need to be manually set and tuned to optimize model performance, distinct from the parameters that the model learns during training. Next, we will delve into the research on                                                       
+
+> Model REDIAL TG-REDIAL R@10 R@50 R@10 R@50
+> HiCore 0.2192 0.4163 0.0270 0.0769
+> w/o G(i)
+> g0.2075 0.4160 0.0234 0.0742 w/o G(i)
+> j0.2012 0.4026 0.0217 0.0706 w/o G(i)
+> p0.1939 0.4096 0.0220 0.0739 w/o G(e)
+> g0.2067 0.4044 0.0247 0.0713 w/o G(e)
+> j0.2142 0.4122 0.0253 0.0756 w/o G(e)
+> p0.1971 0.4110 0.0243 0.0693 w/o G(w)
+> g0.2067 0.4142 0.0264 0.0761 w/o G(w)
+> j0.2151 0.4145 0.0223 0.0733 w/o G(w)
+> p0.2067 0.3974 0.0263 0.0759
+
+Table 5: Ablation studies on the recommendation task. 
+
+how various hyperparameters influence the perfor-mance of recommendations, including the embed-ding dimension d, comparative learning weight β,hypergraph convolution layers N , and the hyper-edge threshold P . From Fig.4, we can obtain: (1) Elevating the feature dimensionality enhances out-comes, as higher dimensions can encapsulate more intricate features effectively; (2) Having too few hy-peredges may hinder the capture of intricate local patterns, whereas an excess of hyperedges could impede the model’s convergence; (3) A lower beta value signifies a reduced weight for the comparison term, which show that the recommendation term exerts a more significant influence on the results; (4) A two-layer hyperconv network is sufficient to encode high-level features for enhancing recom-mendation performance. 
+
+4.6 Ablation Studies (RQ5) 
+
+To assess the efficacy of each component within the proposed method, we perform ablation experiments using various iterations of Hicore, including: 1) w/o Gig, w/o Gij , w/o Gip: removing item-oriented group-channel, joint-channel, purchase-channel hypergraph, respectively; 2) w/o Geg, w/o Gej ,w/o Gip: removing entity-oriented group-channel, joint-channel, purchase-channel hypergraph, re-spectively; 3) w/o Gwg , w/o Gwj , w/o Gwp : remov-ing word-oriented group-channel, joint-channel, purchase-channel hypergraph, respectively. Table 5 outlines the experimental findings, in-dicating that the removal of any hypergraph type results in a performance decrease. This highlights the effectiveness of each hypergraph type and un-derscores the superiority of HiCore in learning multi-level user interests through a collection of hypergraphs to mitigate Matthew effect in the CRS. 5 Conclusion 
+
+The Matthew effect poses a significant challenge in the CRS due to the dynamic user-system feedback loop, which tends to escalate over time as users engage with the system. In response to these chal-lenges, we proposed a novel framework, HiCore, aimed at mitigating the Matthew effect by capturing multi-level user interests through a variety of hy-pergraphs, including item-oriented, entity-oriented, and word-oriented triple-channel hypergraphs. Ex-tensive experiments validate that HiCore outper-forms all baselines, demonstrating the effectiveness of HiCore in addressing the Matthew effect as users chat with the system over time in the CRS. 
+
+6 Limitations 
+
+While our HiCore has achieved a remarkable state-of-the-art performance, it does come with certain limitations. Firstly, triple-channel hypergraphs may present challenges due to their computational com-plexity, interpretational intricacies, and potential issues with sparse data. Secondly, scaling these hypergraphs to larger datasets could introduce scal-ability hurdles, with a risk of overfitting when the model becomes excessively fine-tuned to the train-ing data. Furthermore, ensuring generalizability and handling resource-intensive computations are crucial factors to consider when leveraging multi-channel hypergraphs. 
+
+7 Ethics Statement 
+
+The data used in this paper are sourced from open-access repositories, and do not pose any privacy concerns. We are confident that our research ad-heres to the ethical standards set forth by EMNLP. 
+
+8 Acknowledgements 
+
+This research / project is supported by the National Research Foundation, Singapore and Infocomm Media Development Authority under its Trust Tech Funding Initiative. Any opinions, findings and con-clusions or recommendations expressed in this ma-terial are those of the author(s) and do not reflect the views of National Research Foundation, Singa-pore and Infocomm Media Development Authority. 
+
+References 
+
+Ashton Anderson, Lucas Maystre, Ian Anderson, Rishabh Mehrotra, and Mounia Lalmas. 2020. Al-gorithmic effects on the diversity of consumption on spotify. In The Web Conference , pages 2155–2165. Sören Auer, Christian Bizer, Georgi Kobilarov, Jens Lehmann, Richard Cyganiak, and Zachary G. Ives. 2007. Dbpedia: A nucleus for a web of open data. In International Semantic Web Conference/Asian Se-mantic Web Conference , volume 4825, pages 722– 735. Tom B. Brown, Benjamin Mann, Nick Ryder, Melanie Subbiah, Jared Kaplan, Prafulla Dhariwal, Arvind Neelakantan, Pranav Shyam, Girish Sastry, Amanda Askell, Sandhini Agarwal, Ariel Herbert-Voss, Gretchen Krueger, Tom Henighan, Rewon Child, Aditya Ramesh, Daniel M. Ziegler, Jeffrey Wu, Clemens Winter, Christopher Hesse, Mark Chen, Eric Sigler, Mateusz Litwin, Scott Gray, Benjamin Chess, Jack Clark, Christopher Berner, Sam McCandlish, Alec Radford, Ilya Sutskever, and Dario Amodei. 2020. Language models are few-shot learners. In 
+
+Conference on Neural Information Processing Sys-tems .Qibin Chen, Junyang Lin, Yichang Zhang, Ming Ding, Yukuo Cen, Hongxia Yang, and Jie Tang. 2019. To-wards knowledge-based recommender dialog system. 
+
+arXiv preprint arXiv:1908.05391 .Yang Deng, Yaliang Li, Fei Sun, Bolin Ding, and Wai Lam. 2021a. Unified conversational recommenda-tion policy learning via graph-based reinforcement learning. In Conference on Research and Develop-ment in Information Retrieval , pages 1431–1441. Yang Deng, Yaliang Li, Fei Sun, Bolin Ding, and Wai Lam. 2021b. Unified conversational recommenda-tion policy learning via graph-based reinforcement learning. In Conference on Research and Develop-ment in Information Retrieval , pages 1431–1441. Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova. 2019. BERT: pre-training of deep bidirectional transformers for language under-standing. In the North American Chapter of the Asso-ciation for Computational Linguistics: Human Lan-guage Technologies , pages 4171–4186. Association for Computational Linguistics. Elena V. Epure and Romain Hennequin. 2023. A human subject study of named entity recognition in conversa-tional music recommendation queries. In European Chapter of the Association for Computational Lin-guistics , pages 1273–1288. Yingqiang Ge, Shuya Zhao, Honglu Zhou, Changhua Pei, Fei Sun, Wenwu Ou, and Yongfeng Zhang. 2020. Understanding echo chambers in e-commerce rec-ommender systems. In Conference on Research and Development in Information Retrieval , pages 2261– 2270. ACM. Christian Hansen, Rishabh Mehrotra, Casper Hansen, Brian Brost, Lucas Maystre, and Mounia Lalmas. 2021. Shifting consumption towards diverse content on music streaming platforms. In Conference on Web Search and Data Mining , pages 238–246. ACM. Eslam Hussein, Prerna Juneja, and Tanushree Mitra. 2020. Measuring misinformation in video search platforms: An audit study on youtube. ACM on Human-Computer Interaction , 4(CSCW):048:1– 048:27. Xin Jin, Wu Zhou, Jinyu Wang, Duo Xu, and Yongsen Zheng. 2023. An order-complexity aesthetic assess-ment model for aesthetic-aware music recommenda-tion. In Proceedings of the 31st ACM International Conference on Multimedia , pages 6938–6947. Wang-Cheng Kang and Julian J. McAuley. 2018. Self-attentive sequential recommendation. In IEEE In-ternational Conference on Data Mining , pages 197– 206. Yoon Kim. 2014. Convolutional neural networks for sentence classification. In Empirical Methods in Nat-ural Language Processing (Demonstrations) , pages 1746–1751. Wenqiang Lei, Gangyi Zhang, Xiangnan He, Yisong Miao, Xiang Wang, Liang Chen, and Tat-Seng Chua. 2020. Interactive path reasoning on graph for con-versational recommendation. In International Con-ference on Knowledge Discovery and Data Mining ,pages 2073–2083. Mike Lewis, Yinhan Liu, Naman Goyal, Marjan Ghazvininejad, Abdelrahman Mohamed, Omer Levy, Veselin Stoyanov, and Luke Zettlemoyer. 2020. BART: denoising sequence-to-sequence pre-training for natural language generation, translation, and com-prehension. In the Association for Computational Linguistics , pages 7871–7880. Association for Com-putational Linguistics. Raymond Li, Samira Ebrahimi Kahou, Hannes Schulz, Vincent Michalski, Laurent Charlin, and Chris Pal. 2018a. Towards deep conversational recommenda-tions. Advances in Neural Information Processing Systems , 31. Raymond Li, Samira Ebrahimi Kahou, Hannes Schulz, Vincent Michalski, Laurent Charlin, and Chris Pal. 2018b. Towards deep conversational recommenda-tions. In Advances in Neural Information Processing Systems , pages 9748–9758. Shuokai Li, Ruobing Xie, Yongchun Zhu, Xiang Ao, Fuzhen Zhuang, and Qing He. 2022. User-centric conversational recommendation with multi-aspect user modeling. In Conference on Research and De-velopment in Information Retrieval , pages 223–233. Yile Liang, Tieyun Qian, Qing Li, and Hongzhi Yin. 2021. Enhancing domain-level and user-level adap-tivity in diversified recommendation. In Conference on Research and Development in Information Re-trieval , pages 747–756. ACM. Ping Liu, Karthik Shivaram, Aron Culotta, Matthew A. Shapiro, and Mustafa Bilgic. 2021a. The interaction between political typology and filter bubbles in news recommendation algorithms. In The Web Conference ,pages 3791–3801. Ying Chieh Liu and Min Qi Huang. 2021. Examin-ing the matthew effect on youtube recommendation system. In Conference on Technologies and Applica-tions of Artificial Intelligence , pages 146–148. Yuanxing Liu, Weinan Zhang, Baohua Dong, Yan Fan, Hang Wang, Fan Feng, Yifan Chen, Ziyu Zhuang, Hengbin Cui, Yongbin Li, and Wanxiang Che. 2023. U-NEED: A fine-grained dataset for user needs-centric e-commerce conversational recommendation. In Conference on Research and Development in In-formation Retrieval , pages 2723–2732. ACM. Zeming Liu, Haifeng Wang, Zhengyu Niu, Hua Wu, and Wanxiang Che. 2021b. Durecdial 2.0: A bilingual parallel corpus for conversational recommendation. In Conference on Empirical Methods in Natural Lan-guage Processing EMNLP , pages 4335–4347. Asso-ciation for Computational Linguistics. R. Milo, S. Shen-Orr, S. Itzkovitz, N. Kashtan, D. Chklovskii, and U. Alon. 2002. Network mo-tifs: Simple building blocks of complex networks. 
+
+Science , 298(5594):824–827. Kshitij Mishra, Priyanshu Priya, and Asif Ekbal. 2023. Help me heal: A reinforced polite and empathetic mental health and legal counseling dialogue system for crime victims. In Association for the Advance-ment of Artificial Intelligence , pages 14408–14416. Seungwhan Moon, Pararth Shah, Anuj Kumar, and Ra-jen Subba. 2019. Opendialkg: Explainable conver-sational reasoning with attention-based walks over knowledge graphs. In Conference of the Association for Computational Linguistics ACL , pages 845–854. Association for Computational Linguistics. Tien T. Nguyen, Pik-Mai Hui, F. Maxwell Harper, Loren G. Terveen, and Joseph A. Konstan. 2014. Ex-ploring the filter bubble: the effect of using recom-mender systems on content diversity. In The Web Conference , pages 677–686. ACM. Mingjie Qian, Yongsen Zheng, Jinghui Qin, and Liang Lin. 2023. HutCRS: Hierarchical user-interest track-ing for conversational recommender system. In Pro-ceedings of the 2023 Conference on Empirical Meth-ods in Natural Language Processing , pages 10281– 10290, Singapore. Association for Computational Linguistics. Libo Qin, Zhouyang Li, Qiying Yu, Lehan Wang, and Wanxiang Che. 2023. Towards complex scenarios: Building end-to-end task-oriented dialogue system across multiple knowledge bases. In Association for the Advancement of Artificial Intelligence , pages 13483–13491. Xuhui Ren, Hongzhi Yin, Tong Chen, Hao Wang, Zi Huang, and Kai Zheng. 2021. Learning to ask appropriate questions in conversational recommenda-tion. In Conference on Research and Development in Information Retrieval , pages 808–817. Rajdeep Sarkar, Koustava Goswami, Mihael Arcan, and John Philip McCrae. 2020. Suggest me a movie for tonight: Leveraging knowledge graphs for conversa-tional recommendation. In Conference on Computa-tional Linguistics , pages 4179–4189. Chenzhan Shang, Yupeng Hou, Wayne Xin Zhao, Yaliang Li, and Jing Zhang. 2023. Multi-grained hypergraph interest modeling for conversational rec-ommendation. AI Open , 4:154–164. Robyn Speer, Joshua Chin, and Catherine Havasi. 2017. Conceptnet 5.5: An open multilingual graph of gen-eral knowledge. In Association for the Advancement of Artificial Intelligence , pages 4444–4451. Harald Steck. 2018. Calibrated recommendations. In 
+
+Conference on Recommender Systems , pages 154– 162. Fei Sun, Jun Liu, Jian Wu, Changhua Pei, Xiao Lin, Wenwu Ou, and Peng Jiang. 2019. Bert4rec: Se-quential recommendation with bidirectional encoder representations from transformer. In International Conference on Information and Knowledge Manage-ment , pages 1441–1450. ACM. Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N Gomez, Ł ukasz Kaiser, and Illia Polosukhin. 2017a. Attention is all you need. Advances in neural information processing systems , 30. Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Lukasz Kaiser, and Illia Polosukhin. 2017b. Attention is all you need. In Advances in Neural Information Processing Systems , pages 5998–6008. Hao Wang, Zonghu Wang, and Weishi Zhang. 2019. Quantitative analysis of matthew effect and sparsity problem of recommender systems. CoRR .Kerui Xu, Jingxuan Yang, Jun Xu, Sheng Gao, Jun Guo, and Ji-Rong Wen. 2021. Adapting user preference to online feedback in conversational recommendation. In Web Search and Data Mining , pages 364–372. Zhilin Yang, Zihang Dai, Yiming Yang, Jaime G. Car-bonell, Ruslan Salakhutdinov, and Quoc V. Le. 2019. Xlnet: Generalized autoregressive pretraining for lan-guage understanding. In Advances in Neural Infor-mation Processing Systems , pages 5754–5764. Junliang Yu, Hongzhi Yin, Jundong Li, Qinyong Wang, Nguyen Quoc Viet Hung, and Xiangliang Zhang. 2021. Self-supervised multi-channel hypergraph convolutional network for social recommendation. In World Wide Web WWW , pages 413–424. ACM / IW3C2. Yang Zhang, Fuli Feng, Xiangnan He, Tianxin Wei, Chonggang Song, Guohui Ling, and Yongdong Zhang. 2021. Causal intervention for leveraging pop-ularity bias in recommendation. In Conference on Research and Development in Information Retrieval ,pages 11–20. ACM. Yizhe Zhang, Siqi Sun, Michel Galley, Yen-Chun Chen, Chris Brockett, Xiang Gao, Jianfeng Gao, Jingjing Liu, and Bill Dolan. 2020. DIALOGPT : Large-scale generative pre-training for conversational response generation. In the Association for Computational Linguistics , pages 270–278. Association for Compu-tational Linguistics. Zhipeng Zhao, Kun Zhou, Xiaolei Wang, Wayne Xin Zhao, Fan Pan, Zhao Cao, and Ji-Rong Wen. 2023. Alleviating the long-tail problem in conversational recommender systems. In ACM Conference on Rec-ommender Systems , pages 374–385. ACM. Yongsen Zheng, Ziliang Chen, Jinghui Qin, and Liang Lin. 2024a. Facetcrs: multi-faceted preference learn-ing for pricking filter bubbles in conversational rec-ommender system. In Proceedings of the Thirty-Eighth AAAI Conference on Artificial Intelligence and Thirty-Sixth Conference on Innovative Applica-tions of Artificial Intelligence and Fourteenth Sym-posium on Educational Advances in Artificial Intelli-gence , AAAI’24/IAAI’24/EAAI’24. AAAI Press. Yongsen Zheng, Mingjie Qian, Guohua Wang, Yang Liu, Ziliang Chen, Mingzhi Mao, Liang Lin, and Kwok-Yan Lam. 2025a. HyperCRS: Hypergraph-aware multi-grained preference learning to burst filter bubbles in conversational recommendation system. In Findings of the Association for Computational Linguistics: ACL 2025 , pages 5597–5608, Vienna, Austria. Association for Computational Linguistics. Yongsen Zheng, Jinghui Qin, Pengxu Wei, Ziliang Chen, and Liang Lin. 2024b. Cipl: Counterfactual interac-tive policy learning to eliminate popularity bias for online recommendation. IEEE Transactions on Neu-ral Networks and Learning Systems , 35(12):17123– 17136. Yongsen Zheng, Guohua Wang, Yang Liu, and Liang Lin. 2024c. Diversity matters: User-centric multi-interest learning for conversational movie recommen-dation. In Proceedings of the 32nd ACM Interna-tional Conference on Multimedia , MM ’24, page 9515–9524, New York, NY, USA. Association for Computing Machinery. Yongsen Zheng, Guohua Wang, Jinghui Qin, Ziliang Chen, Junfan Lin, Pengxu Wei, Liang Lin, and Kwok-Yan Lam. 2026a. Cirec: Causal intervention-inspired policy learning to mitigate exposure bias for interac-tive recommendation. IEEE Transactions on Knowl-edge and Data Engineering , 38(1):123–137. Yongsen Zheng, Pengxu Wei, Ziliang Chen, Yang Cao, and Liang Lin. 2021a. Graph-convolved factorization machines for personalized recommendation. IEEE Transactions on Knowledge and Data Engineering ,35(2):1567–1580. Yongsen Zheng, Pengxu Wei, Ziliang Chen, Chengpei Tang, and Liang Lin. 2024d. Routing user-interest markov tree for scalable personalized knowledge-aware recommendation. IEEE Transactions on Neu-ral Networks and Learning Systems , 35(10):14233– 14246. Yongsen Zheng, Zongxuan Xie, Guohua Wang, Ziyao Liu, Liang Lin, and Kwok-Yan Lam. 2025b. Why multi-interest fairness matters: Hypergraph con-trastive multi-interest learning for fair conversational recommender system. In Findings of the Associa-tion for Computational Linguistics: ACL 2025 , pages 25673–25684, Vienna, Austria. Association for Com-putational Linguistics. Yongsen Zheng, Ruilin Xu, Ziliang Chen, Guohua Wang, Mingjie Qian, Jinghui Qin, and Liang Lin. 2024e. Hycorec: Hypergraph-enhanced multi-preference learning for alleviating matthew effect in conversational recommendation. In the Associa-tion for Computational Linguistics ACL , pages 2526– 2537. Association for Computational Linguistics. Yongsen Zheng, Ruilin Xu, Ye Ma, Guohua Wang, Liang Lin, and Kwok-Yan Lam. 2026b. Diversity is all you need: Self-supervised hypergraph learn-ing for mitigating popularity bias in conversational recommender system. In ICASSP 2026-2026 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) , pages 16602–16606. IEEE. Yongsen Zheng, Ruilin Xu, Guohua Wang, Liang Lin, and Kwok-Yan Lam. 2024f. Mitigating matthew effect: Multi-hypergraph boosted multi-interest self-supervised learning for conversational recommen-dation. In Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing ,pages 1455–1466, Miami, Florida, USA. Association for Computational Linguistics. Yu Zheng, Chen Gao, Liang Chen, Depeng Jin, and Yong Li. 2021b. DGCN: diversified recommenda-tion with graph convolutional networks. In The Web Conference , pages 401–412. Yu Zheng, Chen Gao, Xiang Li, Xiangnan He, Yong Li, and Depeng Jin. 2021c. Disentangling user interest and conformity for recommendation with causal em-bedding. In The Web Conference , pages 2980–2991. Kun Zhou, Wayne Xin Zhao, Shuqing Bian, Yuanhang Zhou, Ji-Rong Wen, and Jingsong Yu. 2020a. Im-proving conversational recommender systems via knowledge graph based semantic fusion. In Inter-national Conference on Knowledge Discovery and Data Mining , pages 1006–1014. Kun Zhou, Yuanhang Zhou, Wayne Xin Zhao, Xiaoke Wang, and Ji-Rong Wen. 2020b. Towards topic-guided conversational recommender system. In Inter-national Conference on Computational Linguistics ,pages 4128–4139. Yuanhang Zhou, Kun Zhou, Wayne Xin Zhao, Cheng Wang, Peng Jiang, and He Hu. 2022. C 2-crs: Coarse-to-fine contrastive learning for conversational recom-mender system. In Web Search and Data Mining ,pages 1488–1496. ACM.
