@@ -1,0 +1,482 @@
+Title: RAMP: Robust Ad Recommendation Under Limited Personalized-Feature Availability via Masking and Alignment Pathways
+
+URL Source: https://arxiv.org/pdf/2607.17473v1
+
+Published Time: Tue, 21 Jul 2026 01:23:32 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+# RAMP: Robust Ad Recommendation Under Limited Personalized-Feature Availability via Masking and Alignment Pathways 
+
+# Dairui Liu ∗
+
+# Zhongyi Lu ∗
+
+dairui.liu@ucd.ie zhongyi.lu@ucd.ie University College Dublin Dublin, Ireland 
+
+# Roger Zhe Li 
+
+roger.zhe.li@huawei.com Huawei Ireland Research Center Dublin, Ireland 
+
+# Changhong Jin Jitao Lu 
+
+changhong.jin@ucd.ie jitao.lu@ucd.ie University College Dublin Dublin, Ireland 
+
+# Xinyang Shao 
+
+xinyang.shao@huawei-partners.com Huawei Ireland Research Center Dublin, Ireland 
+
+# Bichen Shi 
+
+bichen.shi@huawei-partners.com Huawei Ireland Research Center Dublin, Ireland 
+
+# Mete Sertkan 
+
+mete.sertkan@h-partners.com Huawei Ireland Research Center Dublin, Ireland 
+
+# Aghiles Salah 
+
+aghiles.salah@h-partners.com Huawei Ireland Research Center Dublin, Ireland 
+
+# Aonghus Lawlor 
+
+aonghus.lawlor@ucd.ie University College Dublin Dublin, Ireland 
+
+# Barry Smyth 
+
+barry.smyth@ucd.ie University College Dublin Dublin, Ireland 
+
+# Tri Kurniawan Wijaya 
+
+tri.kurniawan.wijaya@huawei.com Huawei Ireland Research Center Dublin, Ireland 
+
+# Ruihai Dong 
+
+ruihai.dong@ucd.ie University College Dublin Dublin, Ireland 
+
+# Xingsheng Guo 
+
+xingsheng.guo1@huawei-partners.com Huawei Ireland Research Center Dublin, Ireland 
+
+## Abstract 
+
+Click-through rate (CTR) and conversion rate (CVR) prediction are fundamental tasks in online advertising, aiming to estimate the likelihood of user interactions based on various features. While personalized attributes such as age and gender can significantly enhance predictive accuracy, their use is increasingly restricted by privacy regulations, thereby limiting available data for both train-ing and inference. To address this challenge, we propose RAMP (Robust Ad Recommendation Under Limited Personalized-Feature Availability via Masking and Alignment Pathways), which is de-signed to improve CTR/CVR prediction accuracy when personal-ized features are not accessible, thus supporting deployment in privacy-constrained settings. RAMP consists of (i) a personalized pathway built upon a dual-tower component with identical in-puts but independent parameters, where output masking separates predictions for personalized and non-personalized signals, (ii) a separate non-personalized pathway trained with non-personalized features only, and (iii) a distillation-inspired prediction-alignment architecture between (i) and (ii) that improves prediction when  
+
+> ∗Both authors contributed equally to this research.
+> This work is licensed under a Creative Commons Attribution 4.0 International License.
+> ICTIR ’26, Melbourne, VIC, Australia
+> ©2026 Copyright held by the owner/author(s). ACM ISBN 979-8-4007-2600-2/2026/07 https://doi.org/10.1145/3805713.3820399
+
+personalized features are unavailable. We conduct comprehensive experiments using both public benchmarks and industrial datasets to evaluate the performance of RAMP. Our evaluation spans mul-tiple backbone models and different settings: with and without access to personalized features. The results show that RAMP con-sistently outperforms state-of-the-art methods when personalized features are missing, while maintaining competitive performance when all features are available. Our code is publicly available at https://github.com/Ruixinhua/RAMP. 
+
+## CCS Concepts 
+
+• Information systems → Recommender systems .
+
+## Keywords 
+
+Privacy Preserving, Non-Personalized Ads Recommendation 
+
+ACM Reference Format: 
+
+Dairui Liu, Zhongyi Lu, Roger Zhe Li, Changhong Jin, Jitao Lu, Xinyang Shao, Bichen Shi, Mete Sertkan, Aghiles Salah, Aonghus Lawlor, Barry Smyth, Tri Kurniawan Wijaya, Ruihai Dong, and Xingsheng Guo. 2026. RAMP: Robust Ad Recommendation Under Limited Personalized-Feature Availability via Masking and Alignment Pathways. In Proceedings of the 2026 International ACM SIGIR Conference on Innovative Concepts and Theories in Information Retrieval (ICTIR) (ICTIR ’26), July 25, 2026, Melbourne, VIC, Australia. ACM, New York, NY, USA, 12 pages. https://doi.org/10.1145/ 3805713.3820399 arXiv:2607.17473v1 [cs.IR] 20 Jul 2026 ICTIR ’26, July 25, 2026, Melbourne, VIC, Australia Dairui Liu et al. 
+
+Figure 1: Motivation study based on the CriteoPrivateAd dataset. Removing personalized features causes a substantial performance drop for strong CTR/CVR baselines (PNN [ 41 ], FCN [ 24 ], FINAL [ 36 ]). Applying RAMP on top of each backbone partially recovers the lost accuracy, narrowing the gap under limited personalized features. 
+
+## 1 Introduction 
+
+Online advertising relies on predicting user responses, such as click-through rate (CTR) and conversion rate (CVR), to guide ad delivery and optimize performance [ 55 , 59 ]. These predictions estimate the likelihood of user interactions along the typical behavioral sequence of impression → click → conversion [ 35 ], and play a central role in improving both user experience and business outcomes [ 1 , 2, 24 ]. However, in practice, these models often rely on personalized user features, which may be partially or entirely unavailable due to user consent constraints. This results in a feature-missing scenario that can significantly degrade prediction accuracy. Deep neural networks have become the de facto choice for CTR/CVR prediction because they capture high-order feature in-teractions and scale to industrial data volumes [ 24 , 58 ]. Their accu-racy, however, often hinges on leveraging rich user- (e.g., gender ), context- (e.g., site_id ), and ad-side (e.g., campaign_id ) features; especially signals tied to user identity. Integrating such sensitive information via complex, opaque interactions raises privacy and compliance concerns [ 28 ] under regulations such as the GDPR and China’s Personal Information Protection Law. 
+
+Personalized vs. non-personalized. We distinguish features by whether they are user-linked and thus subject to consent con-straints. Personalized features include user IDs, device/account at-tributes, and behavioral history, while non-personalized features 
+
+include context (e.g., query/page), coarse time/location, and item attributes. In practice, systems face feature-availability constraints ,where personalized features may be missing during training or inference (e.g., non-consented traffic), reducing feature coverage and potentially degrading prediction performance (Figure 1). We call traffic personalized when both feature types are available, and 
+
+non-personalized when only non-personalized features are used. In our offline experiments on public datasets, non-personalized traffic is approximated by masking personalized features, which serves as a practical simulation of feature unavailability under consent constraints, although it may not fully capture all characteristics of real non-consented traffic. Despite these concerns, relatively little work has explicitly focused on improving CTR/CVR prediction when only non-personalized features are available. Existing privacy-oriented ap-proaches primarily focus on ensuring data privacy or compliance, rather than maintaining prediction performance under feature-availability constraints. For example, system-level paradigms such as federated learning [ 7, 14 , 34 ] enable collaborative training with-out centralized data sharing, but focus on privacy preservation and introduce additional system complexity in practice. Other ap-proaches target specific application scenarios [ 42 ], which may limit their generalizability across platforms and feature spaces. In parallel, preprocessing-based data augmentation methods, such as injecting structured knowledge via knowledge graphs [ 31 , 34 ], can partially compensate for missing user signals, but typically require substan-tial curation and depend on the coverage and quality of external knowledge. Importantly, our goal is not to provide formal privacy guarantees, but to maintain robust prediction performance when consent-dependent personalized features are unavailable. 
+
+Why a dual-tower design for personalized pathway. This gap motivates an in-processing approach that improves learning under feature-availability constraints without system changes. The key challenge is the mixed regimes—personalized traffic with full inputs and non-personalized traffic with restricted inputs—so the model effectively faces two related but different prediction prob-lems. A single network trained across both regimes (e.g., by feature masking) can suffer from negative transfer, as gradients originating from personalized and non-personalized traffic may optimize rep-resentations toward different objectives. Consequently, the shared model tends to overfit interactions that depend on personalized signals, leading to degraded performance when such signals are absent. We address this with a personalized pathway containing two towers. Both towers share the same embedding layer and training feature set but use independent prediction networks. Leveraging output masking based on traffic’s personalization preference, we maintain a tower dedicated to personalized prediction while the other is dedicated to non-personalized prediction. This separation reduces cross-regime interference but does not fully close the performance gap on non-personalized traffic, where the model operates under a reduced feature set. To directly address this setting, we introduce an additional non-personalized pathway, which is trained using only non-personalized features. This separate pathway allows the model to learn knowledge when a controlled network where only non-personalized features are accessible and acts as an enhancement to the dual-tower component. We apply a lightweight loss to align the personalized and the non-personalized pathways, enabling the knowledge from richer signals while remaining fully usable without personalized features. This mechanism shares many similarities to the concept of knowledge distillation, which allows the behavior of two models to be match-ing. Therefore, we name this as a distillation-inspired prediction-alignment architecture. In the proposed architecture, both path-ways use the same input, which contains personalized and non-personalized traffic. The non-personalized pathway is used while training but is not required for online inference. Building on these ideas, we propose a model-agnostic Robust 
+
+Ad recommendation under limited Personalized-Feature availabil-ity via Masking and alignment Pathways (RAMP) architecture for CTR/CVR prediction under personalized-feature constraints. RAMP combines (i) a personalized pathway built upon a personalization-gated dual-tower foundation that separates supervision for person-alized and non-personalized traffic, (ii) a non-personalized pathway RAMP: Robust Ad Recommendation Under Limited Personalized-Feature Availability via Masking and Alignment Pathways ICTIR ’26, July 25, 2026, Melbourne, VIC, Australia 
+
+trained with non-personalized features only, and (iii) a knowledge-distillation-inspired architecture between (i) and (ii) that enables accurate prediction when personalized features are constrained. Experiments on public benchmarks and a large-scale industrial dataset show that RAMP improves non-personalized performance for both CTR and CVR prediction while remaining competitive when personalized signals are available. The contributions of our work are summarized as follows: 
+
+• We propose a personalized pathway built upon a dual-tower component trained on the same data. Using selective mask-ing conditioned on user’s personalization preference, one tower specializes in personalized prediction while the other focuses on non-personalized prediction; 
+
+• We introduce a non-personalized pathway that is only trained with non-personalized features, enhancing the dual-tower component when only non-personalized features are available. 
+
+• We introduce a distillation-inspired prediction alignment architecture between the personalized and the non-personalized pathway. By minimizing the discrepancy be-tween their predictions, the behavior of the two pathways converges, which improves prediction accuracy on samples with only non-personalized features. 
+
+• We conduct extensive experiments on widely used bench-mark datasets and a large-scale industrial dataset (covering both CTR and CVR), and further evaluate non-personalized recommendation scenarios to demonstrate the effectiveness of RAMP for privacy-aware advertising prediction. 
+
+## 2 Related Work 2.1 Deep Learning-based CTR/CVR Prediction 
+
+CTR/CVR prediction is a closely related task in computational advertising. Although CVR involves task-specific challenges (e.g., delayed feedback and data sparsity), it shares the same core setup as CTR prediction, and many CTR models can be adapted to CVR prediction with minor modifications. Deep models are now the dominant paradigm for CTR/CVR prediction due to their ability to represent heterogeneous features and capture high-order interactions [ 58 ]. Existing methods can be broadly grouped into: (i) interaction modeling , which explicitly parameterizes high-order feature crosses (e.g., Wide & Deep [ 3], DeepFM [ 12 ], xDeepFM [ 26 ], DCN/DCNv2 [ 50 , 51 ], AutoInt [ 45 ]); (ii) feature importance/selection , which learns to reweight or se-lect informative fields (e.g., FiBiNet [ 19 ], MaskNet [ 53 ], FCN [ 24 ], FinalMLP [ 36 ]); and (iii) representation enhancement , which im-proves embeddings or feature encoders for sparse categorical in-puts [ 5 , 15 , 48 ]. In addition, multi-task and multi-scenario learning has become increasingly popular for CTR/CVR prediction to share information across related labels or traffic segments [8, 30, 32]. These methods perform well with rich user-linked signals, but prioritize full feature utilization and do not explicitly address feature availability constraints , leading to degraded performance when personalized features are missing for part of the traffic. In recent years, knowledge distillation has been widely adopted in recommender systems to transfer knowledge from complex teacher models to efficient students under practical constraints [ 21 ]. It can be broadly categorized into several paradigms: prediction-level distillation for soft-target transfer, as introduced in the seminal work by Geoffrey Hinton et al. [ 16 ] and extended in recommen-dation scenarios [ 27 ]; representation-level distillation for align-ing latent embeddings [ 21 ], including recent advances that lever-age latent alignment under privileged information settings [ 57 ]; structure-level distillation for preserving user–item or item–item relations [ 33 ]; bias-aware or group-wise distillation to address pop-ularity bias [ 29 ]; and data- or teacher-enhanced distillation with external supervision signals, such as those incorporating privileged features in large-scale industrial systems [9, 54]. Our method shares commonalities with prediction-level knowl-edge distillation but does not fall into the standard teacher-student structure. Instead, our two pathways, the personalized and the non-personalized pathways, align knowledge with each other to enhance CTR/CVR prediction when personalized features are constrained. 
+
+## 2.2 Non-Personalized Recommendation 
+
+Recommender systems have long relied on personalization to match users with content [ 25 ]. In practice, however, privacy reg-ulations and consent constraints increasingly limit the collection and use of user-linked signals [ 38 ], yielding traffic where only non-personalized context and item/ad attributes are available. This “non-personalized traffic” creates a distinct accuracy challenge in advertising prediction. Prior work related to non-personalized recommendation often focuses on bias mitigation [ 20 ] or beyond-accuracy objectives [ 43 ]. Comparatively less attention has been paid to accuracy-oriented 
+
+modeling that explicitly bridges the gap between personalized and non-personalized feature regimes in computational advertising. Our work complements existing privacy-preserving directions by focus-ing on model-side learning objectives and structured knowledge transfer under feature-availability constraints. We note that while federated recommendations [ 40 , 56 ] and on-device learning [ 11 , 14 ]provide decentralized privacy solutions, they typically incur ex-tra communication overheads and require compatible client-side infrastructure. Our approach, in contrast, targets server-side robust-ness against missing features, making it orthogonal to distributed training paradigms and directly applicable to standard low-latency serving environments. 
+
+## 3 Methodology 
+
+The overview of RAMP is shown in Figure 2. The model consists of two components: (i) a personalized pathway built upon a dual-tower component (pink block), comprising a personalized tower (Tower-A) and a non-personalized tower (Tower-B); (ii) a parallel non-personalized pathway (yellow block), which is trained solely on non-personalized features; and (iii) a distillation-inspired prediction-alignment architecture between (i) and (ii) (purple block). We detail each component in the following subsections. 
+
+## 3.1 Personalized Pathway 
+
+To address the mismatch in feature availability between personal-ized and non-personalized settings, we introduce a personalized pathway built upon a dual-tower component that separates their learning processes, thereby reducing cross-regime interference. ICTIR ’26, July 25, 2026, Melbourne, VIC, Australia Dairui Liu et al. 
+
+Figure 2: The proposed RAMP. The personalized and the non-personalized pathways are trained jointly. A lightweight loss is adopted to enable the distillation-inspired architecture that allows knowledge to be aligned between the two components. 
+
+Specifically, both towers use the same input and features for train-ing. However, the prediction of the towers is selectively masked based on personalized and non-personalized traffic. The pathway is model-agnostic and follows the standard design of deep CTR/CVR models, consisting of an embedding layer, a feature interaction (FI) layer, and a prediction layer [49]. 
+
+3.1.1 Embedding Layer. The embedding layer transforms both dense and sparse (one-hot encoded) features into low-dimensional dense representations. To mitigate data sparsity and promote cross-feature learning across personalized and non-personalized regimes, we adopt a shared embedding layer for all samples. This design is model-agnostic and can be readily integrated with various CTR/CVR backbone models. 
+
+3.1.2 FI Layer. The FI layer captures relationships among features using various interaction modules, such as Wide&Deep-style mod-els [2, 24, 47, 50] and MLP-based architectures [37, 61]. Following prior work such as [ 26 ], FI can be broadly categorized as implicit and explicit. Implicit interactions, typically modeled by MLPs, learn high-order feature relationships in a vector-wise manner, where interactions are entangled and not explicitly param-eterized (e.g., complex dependencies among user history, context, and item features). In contrast, explicit interactions directly model bounded-order feature crosses in a bit-wise manner, where interac-tions are explicitly constructed and controlled (e.g., second-order user–item or user–context feature combinations), leading to im-proved interpretability [ 24 ]. By combining both types of interac-tions, the FI network can capture complementary feature patterns and enhance prediction performance. The FI network in the personalized pathway consists of two parallel towers, 𝐹 𝐼 𝐴 and 𝐹 𝐼 𝐵 , which serve as the backbone model. We adopt independent towers with identical architectures, as this configuration yields the best empirical results. We leave further exploration of architecture and parameter sharing for future work. Both towers use the same embeddings for all features. For data with-out personalized features, we apply mode-based padding and freeze the weights of the padded embeddings, which preserves a unified input space across samples with different feature availability. 
+
+3.1.3 Prediction Layers. The prediction layers estimate the proba-bility of interaction ˆ𝑦 based on the output of the feature layer. In the proposed design, the prediction layers, 𝑃𝐿 𝐴 and 𝑃𝐿 𝐵 (respectively), of the dual-tower component specialize in different types of traffic: personalized and non-personalized (respectively). More formally, let m = (𝑚 1, . . . , 𝑚 𝑏 ) denote a mask over a batch of 𝑏 samples, indicating whether 𝑖 𝑡ℎ sample is personalized, i.e., 
+
+𝑚 𝑖 = 1, or not 𝑚 𝑖 = 0. The prediction of tower A is as follows, 
+
+ˆy𝐴 = ˆy𝑃𝐿 𝐴 ⊙ m, (1) where ˆy𝑃𝐿 𝐴 = ( ˆ𝑦 1 
+
+> 𝑃𝐿 𝐴
+
+, . . . , ˆ𝑦 𝑏 𝑃𝐿 𝐴 ) represents the prediction made by tower A before masking, and ⊙ denotes element-wise product. Conversely, the prediction of tower B handling non-personalized traffic is given by: 
+
+ˆy𝐵 = ˆy𝑃𝐿 𝐵 ⊙ ( 1 − m), (2) where 1 denotes a vector whose elements are all equal to 1.The final prediction of the personalized pathway combines the already gated outputs from the personalized ( ˆy𝐴 ) and non-personalized ( ˆy𝐵 ) towers via a regime-dependent mask-based aggre-gation, as defined in Equation 3, rather than a generic summation. 
+
+ˆy = ˆy𝐴 + ˆy𝐵 . (3) Since ˆy𝐴 and ˆy𝐵 are produced after mask-based gating, their supports are disjoint across traffic regimes, making the above summation equivalent to a selection over personalized and non-personalized inputs without requiring additional normalization to lie within [0, 1]. At inference time, Tower-A is applied to personal-ized traffic while Tower-B handles non-personalized traffic within the dual-tower component. Finally, a loss function is adopted to minimize the difference between the predicted labels ˆy and the true labels y, namely the base loss: 
+
+L𝑏𝑎𝑠𝑒 = 1
+
+𝑏 
+
+> 𝑏
+
+∑︁ 
+
+> 𝑖 =1
+
+ℓ ( ˆy𝑖 , y𝑖 ), (4) where, ℓ (·) represents the loss function, and y𝑖 denotes the ground-truth label. Without loss of generality, in this paper, we adopt the commonly used binary cross-entropy (BCE) loss. 
+
+## 3.2 Non-Personalized Pathway 
+
+To fully explore the scenario where only non-personalized features are available, we introduce a non-personalized pathway that takes RAMP: Robust Ad Recommendation Under Limited Personalized-Feature Availability via Masking and Alignment Pathways ICTIR ’26, July 25, 2026, Melbourne, VIC, Australia 
+
+only non-personalized features as input and produces predictions 
+
+ˆy𝑛𝑝 via a dedicated FI network 𝐹 𝐼 𝑁 𝑃 and the corresponding pre-diction layer 𝑃𝐿 𝑁 𝑃 . Non-personalized features can be collected without user consent, as they are not considered sensitive and do not pose a risk of leaking personal data. As shown in Figure 2, 𝐹 𝐼 𝑁 𝑃 provides a configurable feature inter-action channel to form an additional view over non-personalized inputs. We train this pipeline on all samples but using only non-personalized features . This pathway is trained jointly with the foun-dational dual-tower component, as detailed in Algorithm 1. 
+
+## 3.3 Distillation-Inspired Prediction-Alignment 
+
+With both pathways in place, our goal is to align their behavior using a knowledge-distillation-inspired objective. Let ˆ˜y𝑛𝑝 and ˆ˜y
+
+denote the logits (before the Sigmoid activation) corresponding to the predictions ˆy𝑛𝑝 and ˆy respectively. We then quantify the discrepancy between the two pathways as follows: 
+
+D𝑑𝑖𝑠 = 1
+
+𝑏 𝑛𝑝 𝑏 𝑛𝑝 ∑︁ 
+
+> 𝑖 =1
+
+∥ ˆ˜y𝑖 − ˆ˜y𝑛𝑝 𝑖 ∥1, (5) where 𝑏 𝑛𝑝 is the number of non-personalized samples in a batch. Since CTR/CVR predictions are scalar probabilities in [0, 1], the per-sample discrepancy is naturally bounded, making D𝑑𝑖𝑠 a stable alignment signal. 
+
+Choice of design (loss on the discrepancy). A natural option would be to directly minimize the L1 discrepancy between the two path-ways. Instead, we apply a cross-entropy-style objective to D𝑑𝑖𝑠 ,name it as the distance loss L𝑑𝑖𝑠 , which can be interpreted through an energy-based view of alignment: distances serve as an “en-ergy” measuring mismatch between two views, and logistic / cross-entropy losses provide a smooth mechanism to shape this energy during training [ 13 , 18 , 23 ]. Empirically, this formulation yielded stronger and more stable improvements on non-personalized traf-fic, which we attribute to its well-behaved gradients and implicit re-weighting across samples in large-scale noisy recommendation data. This objective is also closely related in spirit to knowledge distillation, especially as the behaviors of the two components are aligning [17, 18]. We also explored alternative objectives on the feature level that (i) decouple the semantic spaces of personalized and non-personalized features (field uniformity), or (ii) explicitly align non-personalized features to personalized ones (feature alignment). Empirically, both were less effective, suggesting that knowledge-distillation-inspired actions on prediction logits is a more reliable mechanism. One possible explanation is that both objectives intervene directly in the representation space, either encouraging excessive separation or enforcing overly strict correspondence between the two path-ways. In contrast, logit-level alignment regularizes only the final predictive behavior, preserving the flexibility of each pathway to learn task-specific representations while still transferring useful knowledge. 
+
+Algorithm 1 RAMP Training Algorithm 
+
+Input: Training dataset D = {( x𝑖 , 𝑦 𝑖 , 𝑚 𝑖 )} 𝑁 𝑖 =1, learning rate 𝜂 ,batch size 𝑏 , number of non-personalized samples in a batch 
+
+𝑏 𝑛𝑝 , embedding layer E, feature interaction networks 𝐹 𝐼 𝐴 , 𝐹 𝐼 𝐵 ,
+
+𝐹 𝐼 𝑁 𝑃 , prediction layers 𝑃𝐿 𝐴 , 𝑃𝐿 𝐵 , 𝑃𝐿 𝑁 𝑃 
+
+Output: Optimized model parameters Θ 
+
+> 1:
+
+for each epoch do  
+
+> 2:
+
+for each mini-batch B = {( x𝑖 , 𝑦 𝑖 , 𝑚 𝑖 )} 𝑏 𝑖 =1 in D do  
+
+> 3:
+
+E ← E ( x𝑖 ) for all 𝑖 ∈ B ⊲ Embedding Layer  
+
+> 4:
+
+H𝐴 ← 𝐹 𝐼 𝐴 (E) ⊲ Tower A: input processing  
+
+> 5:
+
+H𝐵 ← 𝐹 𝐼 𝐵 (E) ⊲ Tower B: input processing  
+
+> 6:
+
+ˆy𝑃𝐿 𝐴 ← 𝑃𝐿 𝐴 (H𝐴 ) ⊲ Tower A Prediction  
+
+> 7:
+
+ˆy𝑃𝐿 𝐵 ← 𝑃𝐿 𝐵 (H𝐵 ) ⊲ Tower B Prediction  
+
+> 8:
+
+m ← ( 𝑚 1, 𝑚 2, . . . , 𝑚 𝑏 )𝑇 ⊲ Personalized mask  
+
+> 9:
+
+ˆy𝐴 ← ˆy𝑃𝐿 𝐴 ⊙ m ⊲ Tower A masked prediction  
+
+> 10:
+
+ˆy𝐵 ← ˆy𝑃𝐿 𝐵 ⊙ ( 1 − m) ⊲ Tower B masked prediction  
+
+> 11:
+
+ˆy ← ˆy𝐴 + ˆy𝐵 ⊲ Combined prediction  
+
+> 12:
+
+x𝑛𝑝 𝑖 ← x𝑖 if 𝑚 𝑖 = 0 ⊲ Non-PER samples  
+
+> 13:
+
+E𝑛𝑝 ← E ( x𝑛𝑝 𝑖 ) ⊲ Reuse embedding layer  
+
+> 14:
+
+H𝑁 𝑃 ← 𝐹 𝐼 𝑁 𝑃 (E𝑛𝑝 ) ⊲ Separate FI for knowledge distillation  
+
+> 15:
+
+ˆy𝑛𝑝 ← 𝑃𝐿 𝑁 𝑃 (H𝑁 𝑃 ) 
+
+> 16:
+
+Ddis ← 1
+
+> 𝑏 𝑛𝑝
+
+Í𝑏 𝑛𝑝  
+
+> 𝑖 =1
+
+∥ ˆ˜𝑦 𝑖 − ˆ˜𝑦 𝑛𝑝,𝑖 ∥1 ⊲ L1 distance  
+
+> 17:
+
+Lbase ← 1
+
+> 𝑏
+
+Í𝑏 𝑖 =1 BCE ( ˆ𝑦 𝑖 , 𝑦 𝑖 ) 
+
+> 18:
+
+Loverall ← 𝛼 · L base + 𝛽 · L dis  
+
+> 19:
+
+Update all parameters: Θ ← Θ − 𝜂 · ∇ Θ Loverall  
+
+> 20:
+
+end for  
+
+> 21:
+
+end for  
+
+> 22:
+
+return Trained model parameters Θ
+
+## 3.4 The Combined Loss 
+
+We combine the distillation-inspired prediction-alignment archi-tecture to the foundational CTR/CVR prediction task through joint optimization of an overall loss, defined as: 
+
+L𝑜𝑣𝑒𝑟𝑎𝑙𝑙 = 𝛼 · L 𝑏𝑎𝑠𝑒 + 𝛽 · L 𝑑𝑖𝑠 , (6) where L𝑜𝑣𝑒𝑟𝑎𝑙𝑙 denotes the overall loss. 𝛼 and 𝛽 are assigned to 
+
+L𝑏𝑎𝑠𝑒 and L𝑑𝑖𝑠 as hyperparameters to control the relative impor-tance of loss components. 𝛽 is 0 if the prediction-alignment ar-chitecture is not activated. For the simplicity of hyper-parameter search, we fix the value of 𝛼 to 1, and control the relative impor-tance between two loss components by altering the value of 𝛽 .We use logit-level alignment instead of feature-level alignment because the two pathways rely on different feature sets. Feature-level alignment may force incompatible representations to become similar, weakening pathway specialization. Logit-level alignment transfers predictive behavior while preserving feature-specific rep-resentations. Algorithm 1 depicts the full training procedure of the proposed RAMP model. 
+
+## 4 Experiments 
+
+In this section, we present experimental results on real-world datasets for both CTR and CVR prediction tasks, and answer the following research questions. ICTIR ’26, July 25, 2026, Melbourne, VIC, Australia Dairui Liu et al. 
+
+Table 1: Statistics of datasets. #Features is the total count of unique feature values. #PER.Fields and #Non-PER.Fields represent the number of personalized (PER) and non-personalized (Non-PER) feature fields with corresponding examples followed.                                    
+
+> Dataset Task #Samples #Features #PER.Fields PER.Example #Non-PER.Fields Non-PER.Example
+> Avazu CTR 40,428,967 3,750,999 5device_ip 19 app_id TaobaoAd CTR 26,557,961 1,295,076 12 userid 8adgroup_id CriteoPrivateAd CVR 103,862,032 4,015,683 32 user_id 18 campaign_id IndustryAd CVR 27,424,619 1,229,008 30 app_click_id 30 site_id
+
+• RQ1: How does RAMP compare to established deep CTR/CVR baseline models on prediction accuracy, especially for data with-out personalized features available? 
+
+• RQ2: Do the key components of the proposed RAMP effectively contribute to the improvement in performance? 
+
+• RQ3: Can our proposed RAMP framework learn effective repre-sentations of personalized and non-personalized features? 
+
+## 4.1 Experimental Setup 
+
+4.1.1 Datasets. We conduct extensive experiments on four real-world datasets, as summarized in Table 1, including: (i) two public CTR datasets (Avazu [ 52 ] and TaobaoAd [ 10 ]); and (ii) two CVR datasets (CriteoPrivateAd 1 [ 44 ] and a private industrial dataset IndustryAd). These datasets span diverse scales and feature compo-sitions, with varying numbers of personalized and non-personalized feature fields as detailed in Table 1, enabling comprehensive evalu-ation of our proposed framework across different prediction tasks. 
+
+4.1.2 Data Preprocessing. We adopt a well-established method-ology [ 62 ] widely used for benchmarking CTR/CVR prediction models to preprocess all four datasets. The preprocessing pipeline consists of standard procedures: categorical features are mapped to unique integer IDs and subsequently embedded into dense vectors, while numerical features undergo standard normalization to miti-gate the impact of outliers. To manage feature sparsity and reduce dimensionality, infrequent categorical features appearing below a certain threshold are mapped to a special “Out-of-Vocabulary” (OOV) token. Specifically, this frequency threshold is set to 10 for the TaobaoAd, CriteoPrivateAd, and IndustryAd datasets, and 2 for the Avazu dataset. Each dataset is partitioned into training, vali-dation, and test sets to ensure robust evaluation. For Avazu and TaobaoAd, we adhere to the predefined splits from the original datasets. For CriteoPrivateAd and our private IndustryAd dataset, we perform a chronological split based on timestamps to simulate the real-world deployment scenario and prevent data leakage. To systematically evaluate model prediction performance under personalized-feature constraints, we construct both personalized and non-personalized versions of the three public datasets (Avazu, TaobaoAd, and CriteoPrivateAd) based on the feature categoriza-tion presented in Table 1. For each dataset, we create a pure non-personalized dataset by masking all personalized feature fields, while retaining only non-personalized features. This masking procedure is consistently applied to training, validation, and test sets. The orig-inal datasets, containing both personalized and non-personalized features, serve as the personalized datasets . For all experiments re-ported in this section, we utilize the mixed dataset that combines 
+
+> 1From https://huggingface.co/datasets/criteo/CriteoPrivateAd.
+
+samples from both the personalized and non-personalized datasets. In contrast, the private IndustryAd dataset naturally contains a realistic mixture in production environments, with 20% of samples having missing personalized features (non-personalized traffic) and 80% containing complete personalized features, which can be used directly without additional masking. We acknowledge that feature masking simulates feature absence 
+
+rather than fully capturing the potential distributional differences between consenting and non-consenting users. In practice, users who decline consent may exhibit behavioral patterns that differ from those of users with available personalized features. Following prior work, we adopt feature masking as a controlled protocol to isolate the impact of feature availability on model performance. To partially bridge the gap to real-world deployments, we additionally evaluate on the IndustryAd dataset, which contains a naturally oc-curring 80:20 traffic split without synthetic masking. The consistent improvements observed on both the public benchmark datasets and IndustryAd suggest that RAMP remains effective under both syn-thetic and naturally occurring feature-availability constraints (see Table 2), although exploring more pronounced distribution shifts remains an important direction for future work. 
+
+4.1.3 Baselines. To demonstrate the effectiveness of RAMP, we compare its performance against a comprehensive set of state-of-the-art deep learning models for CTR/CVR prediction. These base-lines represent various architectural designs and feature interaction mechanisms. We include MLP-based models such as DNN [6] and FINAL [ 61 ], which primarily rely on multi-layer perceptrons. We also compare our approach with FM-based models like DeepFM [ 12 ]and xDeepFM [ 26 ], which combine the strengths of factorization machines with deep neural networks for high-order feature in-teractions. Furthermore, we select several high-performance and even higher-order interaction-focused models, including PNN [ 41 ], Wide & Deep [ 3 ], DCN [ 50 ], AutoInt [ 45 ], AFN [ 4], FiBiNet [ 19 ], EDCN [ 2], GDCN [ 47 ], EulerNet [ 46 ], DCNv2 [ 51 ], MaskNet [ 53 ], and FCN [ 24 ], which introduce various mechanisms (including and not limited to gate control and adaptive feature importance learning) to capture complex feature interactions. Although these models are not inherently privacy-preserving, we adapt them for non-personalized evaluation by masking personalized inputs, es-tablishing them as robust non-private baselines. To evaluate the performance of RAMP, we compared it with existing knowledge distillation baselines, which will be discussed later in Section 4.3.2. 
+
+4.1.4 Implementation Details. We implement all models using Py-Torch [ 39 ] based on the FuxiCTR framework and benchmarking methods [ 60 , 62 ]. We employ the Adam [ 22 ] to optimize all models, with a default learning rate set to 0.001. To prevent overfitting, RAMP: Robust Ad Recommendation Under Limited Personalized-Feature Availability via Masking and Alignment Pathways ICTIR ’26, July 25, 2026, Melbourne, VIC, Australia 
+
+Table 2: Non-PER performance comparison (LogLoss ↓, AUC ↑). PP/RAMP use the backbone that yields the best PP/RAMP result on each dataset (PNN for TaobaoAd/CriteoPrivateAd; FCN for Avazu/IndustryAd). Δ𝑎𝑏𝑠 and Δ𝑟𝑒𝑙 report RAMP’s improvement over the best baseline.                                                                                                                                                                                 
+
+> ∗indicates a statistically significant difference between RAMP and the best baseline under a two-tailed t-test at significance level 𝛼 =0.001 .RAMP significantly outperforms all baselines.
+> Models Avazu TaobaoAd CriteoPrivateAd IndustryAd LogLoss ↓AUC(%) ↑LogLoss ↓AUC(%) ↑LogLoss ↓AUC(%) ↑LogLoss ↓AUC(%) ↑
+> DNN [6] 0.3934 75.42 0.1978 58.55 0.4209 77.70 0.0884 80.17 PNN [41] 0.3929 75.50 0.1970 59.17 0.4136 78.17 0.0894 80.15 Wide & Deep [3] 0.3933 75.43 0.1989 58.50 0.4137 78.19 0.0884 79.76 DeepFM [12] 0.3932 75.45 0.1994 58.37 0.4140 78.37 0.0916 80.48 DCN [50] 0.3933 75.45 0.1982 58.48 0.4133 78.40 0.0982 79.61 xDeepFM [26] 0.3934 75.44 0.1984 58.11 0.4130 78.12 0.0875 80.83 AutoInt [45] 0.3933 75.43 0.1976 58.42 0.4146 78.19 0.0888 80.03 AFN [4] 0.3926 75.56 0.1977 58.47 0.4135 78.37 0.1188 72.69 FiBiNet [19] 0.3932 75.45 0.1983 58.31 0.4155 78.19 0.0891 80.50 EDCN [2] 0.3916 75.72 0.1976 58.50 0.4134 78.32 0.0872 80.93 GDCN [47] 0.3936 75.42 0.2005 58.78 0.4123 78.39 0.0867 81.38 EulerNet [46] 0.3923 75.60 0.1979 58.33 0.4127 78.12 0.0898 80.36 DCNv2 [51] 0.3928 75.52 0.1978 58.60 0.4104 78.60 0.0873 81.16 MaskNet [53] 0.3928 75.55 0.2005 58.49 0.4131 78.46 0.0887 80.52 FINAL [61] 0.3916 75.74 0.1974 58.94 0.4097 78.55 0.0901 80.27 FCN [24] 0.3926 75.56 0.1980 58.79 0.4101 78.65 0.0870 81.12 PP 0.3911 75.82 0.1968 59.33 0.4098 79.03 0.0866 81.39 RAMP 0.3910* 75.84* 0.1968* 59.39* 0.4035* 79.52* 0.0865* 81.49*
+> Δ𝑎𝑏𝑠 -0.0006 +0.10 -0.0002 +0.22 -0.0066 +0.87 -0.0002 +0.11
+> Δ𝑟𝑒𝑙 (%) -0.15 +0.13 -0.10 +0.37 -1.61 +1.11 -0.23 +0.14
+
+we employ early stopping with a patience value of 2. The embed-ding dimension is tuned per dataset and per baseline model based on validation performance: 32 is generally best for the TaobaoAd dataset and 16 for the remaining datasets. The batch size is set to 10,000 for all datasets after tuning, as it achieves the optimal performance. Hyperparameters for all baseline models are con-figured and fine-tuned following the optimal values reported in their original publications and established benchmarks. The pro-posed framework is evaluated in three configurations based on the backbone model: PP (the foundational personalized pathway) and RAMP (the full framework incorporating knowledge distillation). Regarding the choice of backbone model, we select a backbone based on validation performance for each dataset, and evaluate both Personalized Pathway and RAMP using the same backbone; robustness across different backbones is reported separately: PNN for TaobaoAd and CriteoPrivateAd, and FCN for Avazu and Indus-tryAd. A comparison across different backbones (PNN, FCN, FINAL) is provided in Section 4.3.1. Notably, during validation and testing, only the foundational dual-tower component is used for prediction. The non-personalized pathway (Section 3.2) and the distillation-inspired prediction-alignment architecture (Section 3.3) are only activated during training. The non-personalized pathway is thus not required during inference, and its benefits are incorporated into the personalized pathway as the behavior of these two pathways is aligned. All experiments are conducted on a single NVIDIA Tesla H100 GPU with five fixed random seeds for reproducibility. The training cost of the method is introduced in Appendix ?? .
+
+4.1.5 Evaluation Metrics. Following the practice of the community, we employ two metrics: LogLoss and Area Under the ROC Curve (AUC) [ 55 ]. Following prior work [ 45 , 51 ], even a 0.1% improve-ment in AUC can have a substantial practical impact in compu-tational advertising at scale, provided that the gain is statistically supported. To ensure reliable evaluation, all results are averaged over 5 runs with different random seeds. Since our training data contains both personalized and non-personalized samples, as de-scribed in Section 4.1.1, we evaluate model performance separately on these two subsets to assess their effectiveness under different privacy scenarios. Specifically, we report performance from two perspectives: 1) the performance on the non-personalized subset using non-personalized features only, evaluated with the entire architecture, denoted as Non-PER AUC and Non-PER LogLoss; and 2) the performance on the personalized subset with all features, evaluated with the entire architecture, denoted as PER AUC and PER LogLoss. Our primary focus is on the non-personalized performance , as it represents the most challenging and practically relevant scenario for privacy-preserving advertising systems. 
+
+4.1.6 Privacy Compliance. RAMP is designed to support deploy-ment under consent-driven feature restrictions, in line with data protection regulations. During online inference (only the dual-tower component is used during inference), the system adapts to feature availability: when personalized features are available (i.e., consented traffic), both pathways are used; when such features are unavailable, only the non-personalized pathway is activated, relying exclusively on non-user-linked attributes (e.g., context, ad properties). Prediction alignment is applied only during training on data with available personalized features, enabling alignment without requiring access to personalized data during inference on non-consented traffic. ICTIR ’26, July 25, 2026, Melbourne, VIC, Australia Dairui Liu et al. 
+
+Table 3: Performance on personalized data (PER AUC) for representative baseline models using all features.                                 
+
+> Models Avazu TaobaoAd CriteoPrivateAd IndustryAd PNN 79.69 65.14 81.51 83.60 DCNv2 79.52 64.96 81.95 84.29 FINAL 79.53 64.81 81.89 83.66 FiBiNet 79.26 64.86 81.69 83.60 MaskNet 79.54 64.78 81.92 83.77 FCN 79.86 65.04 82.09 84.38 RAMP 79.83 65.18 82.10 84.26
+
+## 4.2 Main Results (RQ1) 
+
+Table 2 shows the comprehensive non-personalized performance comparison, which is our main focus of evaluation. Among the baseline models, we observe considerable performance variations across datasets. FINAL, PNN and FCN demonstrate relatively com-petitive performance on smaller datasets (Avazu and TaobaoAd), while GDCN and FCN achieve the best baseline results on larger datasets (IndustryAd and CriteoPrivateAd). Notably, simpler archi-tectures like PNN occasionally outperform more complex models, suggesting that model complexity does not always translate to bet-ter non-personalized performance. This observation highlights the inherent challenge of non-personalized prediction, where conven-tional feature interaction mechanisms struggle to compensate for missing personalized signals, motivating our dual-tower compo-nent design with explicit prediction alignment. PP consistently improves upon the best baseline models across all datasets, with AUC improvements of up to +0.38% (on Criteo-PrivateAd), validating the effectiveness of the dual-tower compo-nent in learning from mixed personalized and non-personalized training data. Building upon this foundation, RAMP achieves fur-ther improvements, obtaining the best results among the evaluated methods with AUC gains of +0.10% to +0.87% over previous best models. Particularly noteworthy, we achieve the most significant performance gain on the CriteoPrivateAd dataset (+0.87% AUC), indicating that the proposed method remains effective even in large-scale scenarios. All improvements are statistically significant (𝑝 < 1𝑒 −3) and exceed the 0.1% threshold considered meaningful in computational advertising [ 45 ]. Moreover, RAMP was A/B tested in industry production for CVR prediction, the total advertiser value (TAV) improved over 3% (See Appendix ?? ). We also evaluate the performance of representative baseline models on personalized data (PER AUC), where all models have access to complete personalized features. As shown in Table 3, base-line models achieve reasonable performance on personalized data, with FCN demonstrating competitive results across most datasets. Overall, these results demonstrate that RAMP improves pre-diction under personalized-feature constraints by enabling the non-personalized pathway to effectively learn from the dual-tower foundation, yielding strong gains on non-personalized AUC while remaining competitive on personalized AUC. 
+
+## 4.3 Impact of Different Components (RQ2) 
+
+4.3.1 Effect of Our Architecture Across Different Backbones. Given the model-agnostic nature of RAMP, we seek to investigate the effect of our architecture across different backbones. We use 
+
+Table 4: Non-PER performance comparison of RAMP with different backbone models using only non-personalized features. Base de-notes the original baseline model, PP denotes using the personalized pathway only, and RAMP denotes the full framework.                                          
+
+> Models TaobaoAd CriteoPrivateAd LogLoss ↓AUC(%) ↑LogLoss ↓AUC(%) ↑
+> PNN-Base 0.1970 59.17 0.4146 78.13 PP-PNN 0.1968 59.33 0.4087 78.77 RAMP-PNN 0.1968 59.39 0.4035 79.52 FCN-Base 0.1980 58.79 0.4101 78.65 PP-FCN 0.1972 58.94 0.4098 79.03 RAMP-FCN 0.1969 59.28 0.4073 79.21 FINAL-Base 0.1974 58.94 0.4097 78.55 PP-FINAL 0.1972 59.17 0.4084 78.83 RAMP-FINAL 0.1970 59.29 0.4079 78.89
+
+TaobaoAd and CriteoPrivateAd for this experiment. One is a CTR dataset with a relatively balanced personalized-to-non-personalized feature ratio, while the other is a large-scale CVR dataset. The results are reported in Table 4. Looking at the baseline models (backbone-only), PNN excels on TaobaoAd and FCN on CriteoPri-vateAd. The dual-tower component consistently improves all back-bones, with improvement magnitudes varying by model capacity— PP-PNN gains +0.64% AUC on CriteoPrivateAd while PP-FCN gains +0.38%, suggesting the component particularly benefits models with initially limited non-personalized performance. The complete RAMP framework further improves overall performance– RAMP-PNN gains +1.39% AUC on CriteoPrivateAd compared to PNN-Base and +0.75% AUC over PP-PNN. 
+
+4.3.2 Comparison with Knowledge Distillation Baselines. To further validate the effectiveness of RAMP’s prediction alignment module, we compare it against representative knowledge distillation meth-ods, all integrated into the same dual-tower component to ensure a fair comparison. All methods share the same backbone (FINAL for Avazu, PNN for TaobaoAd), training data, student input (non-personalized features only), and optimization budget; they differ only in the distillation objective used to train the non-personalized student model. The compared methods are: (1) KD [17 ], which applies standard KL-divergence distillation from the dual-tower teacher; (2) PFD [ 54 ], which employs privileged feature distillation with feature-level alignment; and (3) HAPFD [57 ], which extends PFD with heterogeneous-aware focal weighting to rebalance distil-lation across sample types. 
+
+Table 5: Comparison across knowledge distillation baselines on Non-PER performance. Best results bolded, second-best underlined .                                           
+
+> Method Avazu TaobaoAd LogLoss ↓AUC(%) ↑LogLoss ↓AUC(%) ↑
+> Backbone 0.3916 75.74 0.1970 59.17 KD [17] 0.3913 75.78 0.1969 59.27 PFD [54] 0.3914 75.78 0.1969 59.29 HAPFD [57] 0.3913 75.80 0.1968 59.30 RAMP 0.3910 75.84 0.1968 59.39 RAMP: Robust Ad Recommendation Under Limited Personalized-Feature Availability via Masking and Alignment Pathways ICTIR ’26, July 25, 2026, Melbourne, VIC, Australia 020 40 60 80 100 150 200
+> Distance Loss Weight
+> 58.9
+> 59.0
+> 59.1
+> 59.2
+> AUC (%)
+> TaobaoAd
+> 010 20 30 40 50 60 70 80 90 100
+> Distance Loss Weight
+> 78.6
+> 78.8
+> 79.0
+> 79.2
+> 79.4
+> CriteoPrivateAd
+> 0.19690
+> 0.19695
+> 0.19700
+> 0.19705
+> 0.19710
+> 0.19715
+> 0.19720
+> 0.404
+> 0.405
+> 0.406
+> 0.407
+> 0.408
+> LogLoss
+
+(a) 0 10 21 32  
+
+> # Dropped Personalized Features
+> 79.15
+> 79.20
+> 79.25
+> 79.30
+> 79.35
+> 79.40
+> 79.45
+> 79.50
+> AUC (%)
+> CriteoPrivateAd
+> 0.4036
+> 0.4038
+> 0.4040
+> 0.4042
+> 0.4044
+> 0.4046
+> 0.4048
+> 0.4050
+> LogLoss
+
+(b) 
+
+Figure 3: Ablation results for RAMP. (a) Effect of the distance-loss weight 𝛽 on Non-PER performance: Non-PER AUC (blue crosses) and LogLoss (red dots) for RAMP-FCN on TaobaoAd (left) and RAMP-PNN on CriteoPrivateAd (right) across 𝛽 values. (b) Effect of dropping an increasing number of personalized feature fields on CriteoPrivateAd: Non-PER AUC (blue crosses) and LogLoss (red dots) for RAMP-PNN. 
+
+As shown in Table 5, RAMP consistently outperforms all KD base-lines on both datasets. On Avazu, RAMP achieves 75.84% AUC com-pared to 75.80% for the next-best method (HAPFD); on TaobaoAd, RAMP reaches 59.39% AUC versus 59.30% for HAPFD. We report results on Avazu and TaobaoAd as they use different backbone configurations (FINAL and PNN respectively), providing evidence of generalization across architectures; extending this comparison to additional datasets is left for future work. 
+
+4.3.3 Sensitivity to Distance Loss Weight. To investigate the sensi-tivity of RAMP to the distance loss weight hyperparameter 𝛽 , we conduct experiments using RAMP-FCN on TaobaoAd and RAMP-PNN on CriteoPrivateAd, as illustrated in Figure 3a. These ex-periments are based on the best-performing PP models identified through a hyperparameter search. We adopt a coarse-to-fine search strategy to identify the optimal 𝛽 values, which first identify the approximate effective range for each dataset, then perform fine-grained weight tuning within these ranges as shown in Figure 3a. The results reveal a consistent inverted-U pattern, attributed to the trade-off between the effectiveness of prediction alignment and training stability. We select these two combinations as they corre-spond to the best-performing PP configurations on each dataset as discussed in Table 4. When 𝛽 is too small (e.g., 0-20), the distilled knowledge provides insufficient guidance for the non-personalized pipeline to effectively learn from the dual-tower foundation, result-ing in limited knowledge transfer. As 𝛽 increases to the optimal range (80-150), the knowledge learned by the personalized pathway is successfully distilled and transferred, enabling the model to learn better feature representations for non-personalized data. However, when 𝛽 becomes excessively large (>150), the distance loss domi-nates the overall training objective, potentially causing the model to overfit on the knowledge distillation task at the expense of the primary prediction objective, leading to performance degradation. The final 𝛽 values, selected at the peak points in Figure 3a, are 150 for TaobaoAd and 80 for CriteoPrivateAd. 
+
+## 4.4 Robustness to Per. Feature Availability 
+
+To evaluate RAMP’s robustness under varying degrees of person-alized feature availability, we conduct a feature ablation study on CriteoPrivateAd, which contains the largest number of personalized features (32 fields) among the evaluated datasets. We select the best-performing RAMP-PNN model from Section 4.3.3 and progressively remove personalized features during training to observe the Non-PER performance. Rather than removing features randomly, we adopt an importance-based removal strategy. Feature importance is determined by training the PNN backbone on personalized data and measuring the AUC degradation when each personalized feature is individually removed; features causing larger drops are considered more important. We use the PNN backbone for this ranking as it is the same architecture underlying RAMP-PNN. Features are then removed in descending order of importance. Crucially, this experiment assesses how the quality of the training-time teacher signal from the personalized tower degrades as fewer personalized features are available; the Non-PER inference pathway itself always uses only non-personalized features. As illustrated in Figure 3b, RAMP-PNN demonstrates remarkable resilience to personalized feature reduction. Starting from a baseline performance of 79.52% AUC with all 32 features, removing the top 10 most important features (keep 22 personalized features) results in a modest decline to 79.35% AUC (0.17% decrease). Even when 21 features are removed (only 11 remained), the model maintains competitive performance at 79.31% AUC (0.21% degradation). This robustness can be attributed to the synergistic design of RAMP. First, the dual-tower component enables simultaneous learning from both personalized and non-personalized training samples, allowing the non-personalized tower to develop robust representations indepen-dent of personalized feature availability. Second, the two-pathway architecture facilitates knowledge distillation from the remaining personalized features to the non-personalized pipeline, effectively compensating for the reduced personalized signal. 
+
+## 4.5 Feature Representation Visualization (RQ3) 
+
+To provide qualitative evidence of improved feature learning, we visualize the learned embeddings on CriteoPrivateAd. Specifically, we concatenate all feature embeddings from personalized and non-personalized fields separately, apply PCA to extract the top 50 principal components, and further reduce to 2 dimensions using t-SNE for visualization. Figure 4 presents the resulting embedding spaces for baseline models versus RAMP variants. The baseline models (Figures 4a and 4c) exhibit substantial overlap between personalized (blue) and non-personalized (orange) feature embed-dings, with the two types heavily intermingled and forming largely indistinguishable clusters. In contrast, RAMP variants (Figures 4b and 4d) demonstrate markedly improved feature separation, with ICTIR ’26, July 25, 2026, Melbourne, VIC, Australia Dairui Liu et al. Personalized Features Non-personalized Features   
+
+> (a) PNN (b) RAMP-PNN
+> (c) FCN (d) RAMP-FCN
+
+Figure 4: Visualization of feature separation on CriteoPrivateAd using PCA and t-SNE with 10,000 random samples. 
+
+personalized and non-personalized features forming distinct, well-separated clusters in different regions of the embedding space. Each cluster also exhibits tighter intra-class cohesion with reduced disper-sion. This enhanced discriminability can be attributed to RAMP’s dual mechanisms: the dual-tower component with output mask-ing encourages each tower to specialize in its respective feature type, while the two-pathway architecture explicitly guides the non-personalized tower to learn distilled representations that are both informative and distinct from personalized knowledge. The clearer feature boundaries enable better handling of scenarios with missing personalized features, as non-personalized embeddings maintain se-mantic coherence independently, contributing to RAMP’s superior performance in privacy-preserving settings. 
+
+## 5 Conclusion and Future Directions 
+
+In this paper, we addressed the challenge of effective advertising under modern privacy constraints by proposing a novel robust ad recommendation under limited personalized-feature availability via masking and alignment pathways (RAMP) to enhance CTR/CVR prediction for non-personalized data. Our approach integrates a personalized pathway built upon a dual-tower component, which utilizes output masking to effectively learn from both personalized and non-personalized data streams; a non-personalized pathway trained with non-personalized features; and a distillation-inspired architecture that aligns the prediction of these two pathways. Exten-sive experiments on public and industrial datasets demonstrate that RAMP significantly outperforms state-of-the-art baselines, particu-larly on non-personalized data, while maintaining strong perfor-mance in personalized scenarios. The component analysis further validates the distinct contributions of the two pathways, confirming their roles in enhancing overall model robustness and specifically boosting non-personalized prediction accuracy. Our work offers a practical and flexible solution for developing high-performance recommender systems that respect user privacy. Beyond the demonstrated superiority of RAMP in predictive accuracy, there are still several directions for future work. First, non-personalized features are generally closer related to item or ad attributes. It is beneficial to enhance the item side feature quality with auxiliary data sources such as structured information from the knowledge graph. Second, while we simulate non-personalized traffic through feature masking to isolate the impact of feature availability, real non-consented users may also exhibit distribution shifts. Extending RAMP to jointly address feature-availability mis-match and distribution mismatch remains an important direction for future research. Finally, as a model-agnostic framework, RAMP can be further integrated with MoE-based architectures (e.g., PLE and MMoE) and enriched item-side information sources, such as knowledge graphs, to further improve performance. 
+
+## Acknowledgments 
+
+This work was supported by Science Foundation Ireland through the Insight Centre for Data Analytics (Grant No. SFI/12/RC/2289_P2) and Huawei Ireland Research Center. We also acknowledge the computational facilities and support provided by the Irish Centre for High-End Computing (ICHEC). RAMP: Robust Ad Recommendation Under Limited Personalized-Feature Availability via Masking and Alignment Pathways ICTIR ’26, July 25, 2026, Melbourne, VIC, Australia 
+
+## References 
+
+[1] Jianxin Chang, Chenbin Zhang, Zhiyi Fu, Xiaoxue Zang, Lin Guan, Jing Lu, Yiqun Hui, Dewei Leng, Yanan Niu, Yang Song, and Kun Gai. 2023. TWIN: TWo-stage Interest Network for Lifelong User Behavior Modeling in CTR Prediction at Kuaishou. In Proceedings of the 29th ACM SIGKDD Conference on Knowledge Discovery and Data Mining (Long Beach, CA, USA) (KDD ’23) . Association for Computing Machinery, New York, NY, USA, 3785–3794. doi:10.1145/3580305. 3599922 [2] Bo Chen, Yichao Wang, Zhirong Liu, Ruiming Tang, Wei Guo, Hongkun Zheng, Weiwei Yao, Muyu Zhang, and Xiuqiang He. 2021. Enhancing Explicit and Implicit Feature Interactions via Information Sharing for Parallel Deep CTR Models. In 
+
+Proceedings of the 30th ACM International Conference on Information & Knowledge Management (Virtual Event, Queensland, Australia) (CIKM ’21) . Association for Computing Machinery, New York, NY, USA, 3757–3766. doi:10.1145/3459637. 3481915 [3] Heng-Tze Cheng, Levent Koc, Jeremiah Harmsen, Tal Shaked, Tushar Chandra, Hrishi Aradhye, Glen Anderson, Greg Corrado, Wei Chai, Mustafa Ispir, Rohan Anil, Zakaria Haque, Lichan Hong, Vihan Jain, Xiaobing Liu, and Hemal Shah. 2016. Wide & Deep Learning for Recommender Systems. In Proceedings of the 1st Workshop on Deep Learning for Recommender Systems (Boston, MA, USA) 
+
+(DLRS 2016) . Association for Computing Machinery, New York, NY, USA, 7–10. doi:10.1145/2988450.2988454 [4] Weiyu Cheng, Yanyan Shen, and Linpeng Huang. 2020. Adaptive factorization network: Learning adaptive-order feature interactions. In Proceedings of the AAAI Conference on Artificial Intelligence , Vol. 34. 3609–3616. [5] Yuan Cheng. 2022. Dynamic Explicit Embedding Representation for Numerical Features in Deep CTR Prediction. In CIKM . ACM, 3888–3892. [6] Paul Covington, Jay Adams, and Emre Sargin. 2016. Deep neural networks for youtube recommendations. In Proceedings of the 10th ACM conference on recommender systems . 191–198. [7] Yongheng Deng, Guanbo Wang, Sheng Yue, Wei Rao, Qin Zu, Wenjie Wang, Shuai Chen, Ju Ren, and Yaoxue Zhang. 2024. RelayRec: Empowering Privacy-Preserving CTR Prediction via Cloud-Device Relay Learning. In 2024 23rd ACM/IEEE International Conference on Information Processing in Sensor Networks (IPSN) . 188–199. doi:10.1109/IPSN61024.2024.00020 [8] Yuval Dishi, Ophir Friedler, Yonatan Karni, Natalia Silberstein, and Yulia Stolin. 2025. Practical Multi-Task Learning for Rare Conversions in Ad Tech. In RecSys .ACM, 1042–1045. [9] Yingpeng Du, Zhu Sun, Ziyan Wang, Haoyan Chua, Jie Zhang, and Yew-Soon Ong. 2025. Active Large Language Model-Based Knowledge Distillation for Session-Based Recommendation. In Thirty-Ninth AAAI Conference on Artificial Intelligence, Thirty-Seventh Conference on Innovative Applications of Artificial Intelligence, Fifteenth Symposium on Educational Advances in Artificial Intelligence, AAAI 2025, Philadelphia, PA, USA, February 25 - March 4, 2025 , Toby Walsh, Julie Shah, and Zico Kolter (Eds.). AAAI Press, 11607–11615. doi:10.1609/AAAI.V39I11.33263 [10] Yufei Feng, Fuyu Lv, Weichen Shen, Menghan Wang, Fei Sun, Yu Zhu, and Keping Yang. 2019. Deep session interest network for click-through rate prediction. In 
+
+Proceedings of the 28th International Joint Conference on Artificial Intelligence 
+
+(Macao, China) (IJCAI’19) . AAAI Press, 2301–2307. [11] Yu Gong, Ziwen Jiang, Yufei Feng, Binbin Hu, Kaiqi Zhao, Qingwen Liu, and Wenwu Ou. 2020. EdgeRec: recommender system on edge in Mobile Taobao. In 
+
+Proceedings of the 29th ACM International Conference on Information & Knowledge Management . 2477–2484. [12] Huifeng Guo, Ruiming Tang, Yunming Ye, Zhenguo Li, and Xiuqiang He. 2017. DeepFM: a factorization-machine based neural network for CTR prediction. In 
+
+Proceedings of the 26th International Joint Conference on Artificial Intelligence 
+
+(Melbourne, Australia) (IJCAI’17) . AAAI Press, 1725–1731. [13] Raia Hadsell, Sumit Chopra, and Yann LeCun. 2006. Dimensionality Reduction by Learning an Invariant Mapping. In 2006 IEEE Computer Society Conference on Computer Vision and Pattern Recognition (CVPR’06) . IEEE, 1735–1742. doi:10. 1109/CVPR.2006.100 [14] Jialiang Han, Yun Ma, Qiaozhu Mei, and Xuanzhe Liu. 2021. DeepRec: On-device Deep Learning for Privacy-Preserving Sequential Recommendation in Mobile Commerce. In Proceedings of the Web Conference 2021 (Ljubljana, Slovenia) 
+
+(WWW ’21) . Association for Computing Machinery, New York, NY, USA, 900–911. doi:10.1145/3442381.3449942 [15] Li He, Hongxu Chen, Dingxian Wang, Shoaib Jameel, Philip S. Yu, and Guandong Xu. 2021. Click-Through Rate Prediction with Multi-Modal Hypergraphs. In 
+
+CIKM . ACM, 690–699. [16] Geoffrey Hinton, Oriol Vinyals, and Jeff Dean. 2015. Distilling the Knowledge in a Neural Network. arXiv:1503.02531 [cs.LG] https://arxiv.org/abs/1503.02531 [17] Geoffrey E. Hinton, Oriol Vinyals, and Jeffrey Dean. 2015. Distilling the Knowl-edge in a Neural Network. CoRR abs/1503.02531 (2015). [18] Sebastian Hofstätter, Sophia Althammer, Michael Schröder, Mete Sertkan, and Allan Hanbury. 2020. Improving Efficient Neural Ranking Models with Cross-Architecture Knowledge Distillation. arXiv:2010.02666 [cs.IR] doi:10.48550/arXiv. 2010.02666 [19] Tongwen Huang, Zhiqi Zhang, and Junlin Zhang. 2019. FiBiNET: combining fea-ture importance and bilinear feature interaction for click-through rate prediction. In Proceedings of the 13th ACM Conference on Recommender Systems (Copenhagen, Denmark) (RecSys ’19) . Association for Computing Machinery, New York, NY, USA, 169–177. doi:10.1145/3298689.3347043 [20] Jiazheng Jing, Yinan Zhang, Xin Zhou, and Zhiqi Shen. 2023. Capturing Pop-ularity Trends: A Simplistic Non-Personalized Approach for Enhanced Item Recommendation. In CIKM . ACM, 1014–1024. [21] SeongKu Kang, Junyoung Hwang, Wonbin Kweon, and Hwanjo Yu. 2020. DE-RRD: A Knowledge Distillation Framework for Recommender System. In CIKM ’20: The 29th ACM International Conference on Information and Knowledge Management, Virtual Event, Ireland, October 19-23, 2020 , Mathieu d’Aquin, Stefan Dietze, Claudia Hauff, Edward Curry, and Philippe Cudré-Mauroux (Eds.). ACM, 605–614. doi:10. 1145/3340531.3412005 [22] Diederik P. Kingma and Jimmy Ba. 2015. Adam: A Method for Stochastic Opti-mization. In ICLR (Poster) .[23] Yann LeCun, Sumit Chopra, Raia Hadsell, Marc’Aurelio Ranzato, and Fu-Jie Huang. 2006. A Tutorial on Energy-Based Learning. In Predicting Structured Data ,Gökhan Bakir, Thomas Hofmann, Bernhard Schölkopf, Alexander J. Smola, and Ben Taskar (Eds.). MIT Press, Cambridge, MA. doi:10.7551/mitpress/7443.003.0014 [24] Honghao Li, Yiwen Zhang, Yi Zhang, Hanwei Li, Lei Sang, and Jieming Zhu. 2025. FCN: Fusing Exponential and Linear Cross Network for Click-Through Rate Prediction. arXiv:2407.13349 [cs.IR] https://arxiv.org/abs/2407.13349 [25] Yang Li, Kangbo Liu, Ranjan Satapathy, Suhang Wang, and Erik Cambria. 2024. Recent Developments in Recommender Systems: A Survey [Review Article]. IEEE Computational Intelligence Magazine 19, 2 (2024), 78–95. doi:10.1109/MCI.2024. 3363984 [26] Jianxun Lian, Xiaohuan Zhou, Fuzheng Zhang, Zhongxia Chen, Xing Xie, and Guangzhong Sun. 2018. xDeepFM: Combining Explicit and Implicit Feature Interactions for Recommender Systems. In Proceedings of the 24th ACM SIGKDD International Conference on Knowledge Discovery & Data Mining (London, United Kingdom) (KDD ’18) . Association for Computing Machinery, New York, NY, USA, 1754–1763. doi:10.1145/3219819.3220023 [27] Mingfu Liang, Xi Liu, Rong Jin, Boyang Liu, Qiuling Suo, Qinghai Zhou, Song Zhou, Laming Chen, Hua Zheng, Zhiyuan Li, Shali Jiang, Jiyan Yang, Xiaozhen Xia, Fan Yang, Yasmine Badr, Ellie Wen, Shuyu Xu, Hansey Chen, Zhengyu Zhang, Jade Nie, Chunzhi Yang, Zhichen Zeng, Weilin Zhang, Xingliang Huang, Qianru Li, Shiquan Wang, Evelyn Lyu, Wenjing Lu, Rui Zhang, Wenjun Wang, Jason Rudy, Mengyue Hang, Kai Wang, Bo Long, Wenlin Chen, Santanu Kolay, and Huayu Li. 2025. External Large Foundation Model: How to Efficiently Serve Trillions of Parameters for Online Ads Recommendation. In Companion Proceedings of the ACM on Web Conference 2025, WWW 2025, Sydney, NSW, Australia, 28 April 2025 - 2 May 2025 , Guodong Long, Michale Blumestein, Yi Chang, Liane Lewin-Eytan, Zi Helen Huang, and Elad Yom-Tov (Eds.). ACM, 344–353. doi:10.1145/3701716. 3715223 [28] Bo Liu, Ming Ding, Sina Shaham, Wenny Rahayu, Farhad Farokhi, and Zihuai Lin. 2022. When Machine Learning Meets Privacy: A Survey and Outlook. ACM Comput. Surv. 54, 2 (2022), 31:1–31:36. [29] Congcong Liu, Yuejiang Li, Jian Zhu, Fei Teng, Xiwei Zhao, Changping Peng, Zhangang Lin, and Jingping Shao. 2022. Position Awareness Modeling with Knowledge Distillation for CTR Prediction. In RecSys ’22: Sixteenth ACM Confer-ence on Recommender Systems, Seattle, WA, USA, September 18 - 23, 2022 , Jennifer Golbeck, F. Maxwell Harper, Vanessa Murdock, Michael D. Ekstrand, Bracha Shapira, Justin Basilico, Keld T. Lundgaard, and Even Oldridge (Eds.). ACM, 562–566. doi:10.1145/3523227.3551475 [30] Jie Liu, Yinrui Li, Jiankai Sun, Kungang Li, Han Sun, Sihan Wang, Huasen Wu, Siyuan Gao, Paulo Soares, Nan Li, Zhifang Liu, Haoyang Li, Siping Ji, Ling Leng, and Prathibha Deshikachar. 2025. Decoupled Entity Representation Learning for Pinterest Ads Ranking. In RecSys . ACM, 940–944. [31] Jing Liu, Litao Shang, Yuting Su, Weizhi Nie, Xin Wen, and Anan Liu. 2024. Privacy-preserving Multi-source Cross-domain Recommendation Based on Knowledge Graph. ACM Trans. Multim. Comput. Commun. Appl. 20, 5 (2024), 148:1–148:18. [32] Xiaofan Liu, Qinglin Jia, Chuhan Wu, Jingjie Li, Quanyu Dai, Lin Bo, Rui Zhang, and Ruiming Tang. 2023. Task Adaptive Multi-learner Network for Joint CTR and CVR Estimation. In WWW (Companion Volume) . ACM, 490–494. [33] Wenyu Ma, Hongbin Xia, and Yuan Liu. 2025. DiffKD: collaborative graph diffusion with knowledge distillation for multimodal recommendation. J. Intell. Inf. Syst. 63, 5 (2025), 1487–1510. doi:10.1007/S10844-025-00946-4 [34] Xiao Ma, Hongyu Zhang, Jiangfeng Zeng, Yiqi Duan, and Xuan Wen. 2024. FedKGRec: privacy-preserving federated knowledge graph aware recommender system. Appl. Intell. 54, 19 (2024), 9028–9044. [35] Xiao Ma, Liqin Zhao, Guan Huang, Zhi Wang, Zelin Hu, Xiaoqiang Zhu, and Kun Gai. 2018. Entire Space Multi-Task Model: An Effective Approach for Estimating Post-Click Conversion Rate. In The 41st International ACM SIGIR Conference on Research & Development in Information Retrieval (Ann Arbor, MI, USA) (SIGIR ’18) . Association for Computing Machinery, New York, NY, USA, 1137–1140. doi:10.1145/3209978.3210104 ICTIR ’26, July 25, 2026, Melbourne, VIC, Australia Dairui Liu et al. 
+
+[36] Kelong Mao, Jieming Zhu, Liangcai Su, Guohao Cai, Yuru Li, and Zhenhua Dong. 2023. FinalMLP: an enhanced two-stream MLP model for CTR pre-diction. In Proceedings of the Thirty-Seventh AAAI Conference on Artificial Intelligence and Thirty-Fifth Conference on Innovative Applications of Artifi-cial Intelligence and Thirteenth Symposium on Educational Advances in Artifi-cial Intelligence (AAAI’23/IAAI’23/EAAI’23) . AAAI Press, Article 508, 9 pages. doi:10.1609/aaai.v37i4.25577 [37] Kelong Mao, Jieming Zhu, Liangcai Su, Guohao Cai, Yuru Li, and Zhenhua Dong. 2023. FinalMLP: An Enhanced Two-Stream MLP Model for CTR Prediction. arXiv:2304.00902 (Nov. 2023). doi:10.48550/arXiv.2304.00902 arXiv:2304.00902 [cs]. [38] Peter Müllner. 2023. User Privacy in Recommender Systems. In ECIR (3) (Lecture Notes in Computer Science, Vol. 13982) . Springer, 456–461. [39] Adam Paszke, Sam Gross, Francisco Massa, Adam Lerer, James Bradbury, Gregory Chanan, Trevor Killeen, Zeming Lin, Natalia Gimelshein, Luca Antiga, et al . 2019. Pytorch: An imperative style, high-performance deep learning library. Advances in neural information processing systems 32 (2019). [40] Liang Qu, Wei Yuan, Ruiqi Zheng, Lizhen Cui, Yuhui Shi, and Hongzhi Yin. 2024. Towards personalized privacy: User-governed data contribution for federated rec-ommendation. In Proceedings of the ACM Web Conference 2024 . ACM, Singapore, 3910–3918. [41] Yanru Qu, Han Cai, Kan Ren, Weinan Zhang, Yong Yu, Ying Wen, and Jun Wang. 2016. Product-Based Neural Networks for User Response Prediction. In ICDM .IEEE Computer Society, 1149–1154. [42] Omid Rafieian and Hema Yoganarasimhan. 2020. Targeting and Privacy in Mobile Advertising. Marketing Science (Dec. 2020). doi:10.1287/mksc.2020.1235 [43] Arpit Rana, Scott Sanner, Mohamed Reda Bouadjenek, Ronald Di Carlantonio, and Gary Farmaner. 2024. User Experience and the Role of Personalization in Critiquing-Based Conversational Recommendation. ACM Trans. Web 18, 4 (2024), 43:1–43:21. [44] Mehdi Sebbar, Corentin Odic, Mathieu Léchine, Aloïs Bissuel, Nicolas Chrysan-thos, Anthony D’Amato, Alexandre Gilotte, Fabian Höring, Sarah Nogueira, and Maxime Vono. 2025. CriteoPrivateAds: A Real-World Bidding Dataset to Design Private Advertising Systems. arXiv preprint arXiv:2502.12103 (2025). [45] Weiping Song, Chence Shi, Zhiping Xiao, Zhijian Duan, Yewen Xu, Ming Zhang, and Jian Tang. 2019. Autoint: Automatic feature interaction learning via self-attentive neural networks. In Proceedings of the 28th ACM international conference on information and knowledge management . 1161–1170. [46] Zhen Tian, Ting Bai, Wayne Xin Zhao, Ji-Rong Wen, and Zhao Cao. 2023. Euler-net: Adaptive feature interaction learning via euler’s formula for ctr prediction. In Proceedings of the 46th international ACM SIGIR conference on research and development in information retrieval . 1376–1385. [47] Fangye Wang, Hansu Gu, Dongsheng Li, Tun Lu, Peng Zhang, and Ning Gu. 2023. Towards Deeper, Lighter and Interpretable Cross Network for CTR Prediction. In Proceedings of the 32nd ACM International Conference on Information and Knowledge Management (Birmingham, United Kingdom) (CIKM ’23) . Association for Computing Machinery, New York, NY, USA, 2523–2533. doi:10.1145/3583780. 3615089 [48] Fangye Wang, Yingxu Wang, Dongsheng Li, Hansu Gu, Tun Lu, Peng Zhang, and Ning Gu. 2022. Enhancing CTR Prediction with Context-Aware Feature Representation Learning. In SIGIR . ACM, 343–352. [49] Fangye Wang, Yingxu Wang, Dongsheng Li, Hansu Gu, Tun Lu, Peng Zhang, and Ning Gu. 2023. CL4CTR: A Contrastive Learning Framework for CTR Prediction. In WSDM . ACM, Singapore, 805–813. [50] Ruoxi Wang, Bin Fu, Gang Fu, and Mingliang Wang. 2017. Deep & Cross Network for Ad Click Predictions. In Proceedings of the ADKDD’17 (Halifax, NS, Canada) 
+
+(ADKDD’17) . Association for Computing Machinery, New York, NY, USA, Article 12, 7 pages. doi:10.1145/3124749.3124754 [51] Ruoxi Wang, Rakesh Shivanna, Derek Cheng, Sagar Jain, Dong Lin, Lichan Hong, and Ed Chi. 2021. DCN V2: Improved Deep & Cross Network and Practical Lessons for Web-scale Learning to Rank Systems. In Proceedings of the Web Conference 2021 (Ljubljana, Slovenia) (WWW ’21) . Association for Computing Machinery, New York, NY, USA, 1785–1797. doi:10.1145/3442381.3450078 [52] Steve Wang and Will Cukierski. 2014. Click-Through Rate Prediction. Kaggle competition. https://kaggle.com/competitions/avazu-ctr-prediction. [53] Zhiqiang Wang, Qingyun She, and Junlin Zhang. 2021. MaskNet: Introducing Feature-Wise Multiplication to CTR Ranking Models by Instance-Guided Mask. arXiv:2102.07619 [cs.IR] https://arxiv.org/abs/2102.07619 [54] Chen Xu, Quan Li, Junfeng Ge, Jinyang Gao, Xiaoyong Yang, Changhua Pei, Fei Sun, Jian Wu, Hanxiao Sun, and Wenwu Ou. 2020. Privileged Features Distillation at Taobao Recommendations. In KDD ’20: The 26th ACM SIGKDD Conference on Knowledge Discovery and Data Mining, Virtual Event, CA, USA, August 23-27, 2020 , Rajesh Gupta, Yan Liu, Jiliang Tang, and B. Aditya Prakash (Eds.). ACM, 2590–2598. doi:10.1145/3394486.3403309 [55] Yanwu Yang and Panyu Zhai. 2022. Click-through rate prediction in online advertising: A literature review. Information Processing & Management 59, 2 (2022), 102853. doi:10.1016/j.ipm.2021.102853 [56] Jiangchao Yao, Feng Wang, Kunyang Jia, Bo Han, Jingren Zhou, and Hongxia Yang. 2021. Device-cloud collaborative learning for recommendation. In Proceedings of the 27th ACM SIGKDD Conference on Knowledge Discovery & Data Mining .3865–3874. [57] Huining Yuan, Wenpeng Zhang, Zijie Hao, and Zengde Deng. 2025. Hardness-aware Privileged Features Distillation with Latent Alignment for CVR Prediction. In Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining, V.2, KDD 2025, Toronto ON, Canada, August 3-7, 2025 , Luiza Antonie, Jian Pei, Xiaohui Yu, Flavio Chierichetti, Hady W. Lauw, Yizhou Sun, and Srinivasan Parthasarathy (Eds.). ACM, 5182–5193. doi:10.1145/3711896.3737231 [58] Weinan Zhang, Jiarui Qin, Wei Guo, Ruiming Tang, and Xiuqiang He. 2021. Deep Learning for Click-Through Rate Estimation. In IJCAI . ijcai.org, 4695–4703. [59] Han Zhu, Junqi Jin, Chang Tan, Fei Pan, Yifan Zeng, Han Li, and Kun Gai. 2017. Optimized Cost per Click in Taobao Display Advertising. In Proceedings of the 23rd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining (Halifax, NS, Canada) (KDD ’17) . Association for Computing Machinery, New York, NY, USA, 2191–2200. doi:10.1145/3097983.3098134 [60] Jieming Zhu, Quanyu Dai, Liangcai Su, Rong Ma, Jinyang Liu, Guohao Cai, Xi Xiao, and Rui Zhang. 2022. BARS: Towards Open Benchmarking for Recom-mender Systems. In SIGIR ’22: The 45th International ACM SIGIR Conference on Research and Development in Information Retrieval, Madrid, Spain, July 11 - 15, 2022 ,Enrique Amigó, Pablo Castells, Julio Gonzalo, Ben Carterette, J. Shane Culpepper, and Gabriella Kazai (Eds.). ACM, 2912–2923. doi:10.1145/3477495.3531723 [61] Jieming Zhu, Qinglin Jia, Guohao Cai, Quanyu Dai, Jingjie Li, Zhenhua Dong, Ruiming Tang, and Rui Zhang. 2023. FINAL: Factorized Interaction Layer for CTR Prediction. In Proceedings of the 46th International ACM SIGIR Conference on Research and Development in Information Retrieval (Taipei, Taiwan) (SIGIR ’23) . Association for Computing Machinery, New York, NY, USA, 2006–2010. doi:10.1145/3539618.3591988 [62] Jieming Zhu, Jinyang Liu, Shuai Yang, Qi Zhang, and Xiuqiang He. 2021. Open Benchmarking for Click-Through Rate Prediction. In CIKM ’21: The 30th ACM International Conference on Information and Knowledge Management, Virtual Event, Queensland, Australia, November 1 - 5, 2021 , Gianluca Demartini, Guido Zuccon, J. Shane Culpepper, Zi Huang, and Hanghang Tong (Eds.). ACM, 2759– 2769. doi:10.1145/3459637.3482486

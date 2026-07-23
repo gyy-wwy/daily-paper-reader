@@ -1,0 +1,460 @@
+Title: Zero-Observation User Reactivation with Gap-Driven Dimensional Gating
+
+URL Source: https://arxiv.org/pdf/2607.19802v1
+
+Published Time: Thu, 23 Jul 2026 00:29:27 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Zero-Observation User Reactivation with Gap-Driven Dimensional Gating 
+
+# Jiandong Ding ∗
+
+Fudan University Shanghai, China jdding@fudan.edu.cn 
+
+# Tianying Liu 
+
+Huawei Technologies Shanghai, China liutianying2@huawei.com 
+
+# Fuyuan Liu 
+
+Huawei Technologies Shanghai, China liufuyuan2@huawei.com 
+
+# Huijie Qin 
+
+Huawei Technologies Shanghai, China qinhuijie@huawei.com 
+
+# Tiandeng Wu 
+
+Huawei Technologies Shanghai, China wutiandeng1@huawei.com 
+
+## Abstract 
+
+Sequential recommendation (SR) models capture continuously ob-served behavior, but a returning user may have no interactions for months or years. We define this setting as Zero-Observation Reacti-vation : the user has a pre-gap history, while the platform observes no behavioral signals during a macro-gap Δ𝑡 . Under a chronologi-cally aligned Gap-Synthesize Protocol on three Amazon datasets (Video Games, CDs & Vinyl, and Movies & TV), Hit@10 decreases monotonically across the evaluated gap buckets and reaches its lowest level beyond one year. The pattern appears across recurrent, unidirectional, and bidirectional SR backbones. We propose DeltaGate , a lightweight output-layer plugin that keeps the backbone frozen and routes each representation dimen-sion between the personalized history and a learned, zero-initialized global prior. The gate is conditioned jointly on Δ𝑡 and the person-alized representation. In a controlled diagnostic, we hold the per-sonalized representation fixed and vary Δ𝑡 to isolate the trained gate’s response to the gap input. In the >365d Video Games bucket, DG-SASRec reaches 0.047 Hit@10 versus 0.031 for SASRec, while DG-BERT4Rec reaches 0.046 versus 0.025 for BERT4Rec, with 66K trainable parameters (2–4% overhead). End-to-end retraining attains higher absolute accuracy but changes the backbone embeddings; the frozen plugin preserves zero backbone drift, uses about 40 ×
+
+fewer trainable parameters, and retains observable dimension-wise routing. The source code is available at https://github.com/jdding/ DeltaGate. 
+
+## CCS Concepts 
+
+• Information systems → Recommender systems .
+
+## Keywords 
+
+Sequential Recommendation, User Reactivation, Gap-Driven Rout-ing, Cold-Start, Dimensional Gating  
+
+> ∗Corresponding author.
+> This work is licensed under a Creative Commons Attribution 4.0 International License.
+> RecSys ’26, Minneapolis, MN, USA
+> ©2026 Copyright held by the owner/author(s). ACM ISBN 979-8-4007-2284-4/2026/09 https://doi.org/10.1145/3773078.3831771
+
+ACM Reference Format: 
+
+Jiandong Ding, Tianying Liu, Fuyuan Liu, Huijie Qin, and Tiandeng Wu. 2026. Zero-Observation User Reactivation with Gap-Driven Dimensional Gating. In 20th ACM Conference on Recommender Systems (RecSys ’26), Sep-tember 27–October 02, 2026, Minneapolis, MN, USA. ACM, New York, NY, USA, 8 pages. https://doi.org/10.1145/3773078.3831771 
+
+## 1 Introduction 
+
+Sequential recommendation systems model users from ordered interaction histories [ 11 , 23 , 26 ]. Most evaluations, however, treat the final observed state as current regardless of how long the user has been absent. Temporal interaction studies such as JODIE [ 13 ]show that latent states evolve over time. After a long period without observations, the reliability of a pre-gap representation is therefore uncertain. Consider a user who is absent from a platform for over a year and then returns. Unlike traditional new-user cold-start scenarios [ 2, 30 ], returning users may have substantial pre-gap histories. Yet, unlike continuously active users, they generate no observations during the gap. We call this setting the Zero-Observation Reactivation problem. We evaluate this setting on three Amazon categories [ 18 ] using user-level chronological leave-one-out targets and natural-gap strat-ification. Across the tested buckets, performance declines mono-tonically and is lowest beyond 365 days (Figure 1). This pattern occurs for GRU4Rec, SASRec, and BERT4Rec. TiSASRec [ 14 ], which models time intervals within the observed sequence, provides only limited recovery in this macro-gap regime. DeltaGate rests on the hypothesis that representation dimen-sions may encode interests with different temporal stability. The diagnostic in Figure 2 holds the history representation fixed and varies only Δ𝑡 . The resulting trajectories show a dimension-specific response to the gap input. This intervention diagnoses the trained gate’s input sensitivity; it is neither a training objective nor an estimate of a population-level causal effect. DeltaGate operationalizes this hypothesis through gap-driven routing at the representation output layer. It computes an element-wise gate from Δ𝑡 and the personalized history, then interpolates between that history and a learned global prior initialized at zero. Our contributions are summarized as follows: arXiv:2607.19802v1 [cs.IR] 22 Jul 2026 RecSys ’26, September 27–October 02, 2026, Minneapolis, MN, USA Jiandong Ding, Tianying Liu, Fuyuan Liu, Huijie Qin, and Tiandeng Wu 
+
+Figure 1: Hit@10 across gap buckets on Movies & TV. All evaluated baselines decline as the gap widens, while DG-SASRec recovers part of the loss beyond 365 days. 0d 180 d 730 d   
+
+> 0
+> 0.5
+> 1
+> 0
+> 0.96 0.97 1
+> 0.55 0.49
+> Supplied gap Δ𝑡
+> Gate value  𝑔 𝑖
+> Dim. 115 (increasing)
+> Dim. 37 (decreasing)
+
+Figure 2: Controlled gate diagnostic with a fixed user-history representation and varied Δ𝑡 (DG-BERT4Rec, Movies & TV, seed 42). From 0 to 730 days, Dimension 115’s history weight increases from 0.00 to 0.97, while Dimension 37’s decreases from 1.00 to 0.49. 
+
+• We define Zero-Observation Reactivation and document mono-tonic performance decay across gap buckets for three SR back-bones on three Amazon categories. 
+
+• We introduce a frozen-backbone, dimension-wise gate condi-tioned on both the inactivity gap and the user’s pre-gap represen-tation; routing-component controls compare the learned route with its personalized-history and shared-prior endpoints. 
+
+• We compare frozen-plugin and end-to-end adaptation. Full re-training yields the highest accuracy, while the plugin retains zero backbone drift, higher parameter efficiency, and interpretable gate behavior. 
+
+## 2 Related Work 2.1 Sequential Recommendation 
+
+Sequential recommendation predicts the next item from an ordered history. Representative encoders include Markov-chain models [ 21 ], recurrent models such as GRU4Rec [ 8 ], convolutional models such as Caser [ 25 ], graph models such as SR-GNN [ 29 ], and self-attention models such as SASRec [ 11 ]. Self-supervised objectives further improve sequence representations [ 33 ]. These methods encode the observed sequence but do not explicitly recalibrate the final user state according to a subsequent observation-free gap. 
+
+## 2.2 Time-Aware Sequential Recommendation 
+
+Time-LSTM [ 34 ] and MEANTIME [ 6] incorporate intervals into recurrent or attention-based sequence encoders. TiSASRec [ 14 ]models absolute and relative intervals between observed items, while TGSRec [ 7] extends temporal modeling to continuous-time graphs. RPE4Rec [ 5] uses relative-position signals to capture short-term co-occurrence for dynamic item retrieval. These methods model timing within the observed interaction process. DeltaGate instead recalibrates the final representation using the observation-free gap after the last recorded interaction, without modifying the encoder internals. 
+
+## 2.3 Long-term Interest vs. Long-gap Reactivation 
+
+Lifelong models such as SIM [ 20 ], TWIN [ 3 ], Mamba4Rec [ 15 ], and hierarchical generative recommenders [ 4 ] increase the amount or structure of observed history that a model can use. Their fo-cus is representation learning within long observed sequences. Zero-Observation Reactivation instead asks how strongly to re-tain the resulting representation after no new behavior has been observed for an extended period. DeltaGate operates at this output-representation level and is evaluated with three backbone families (Section 5). 
+
+## 2.4 User Reactivation and Cold-Start 
+
+Cold-start recommendation typically addresses new users with lit-tle or no history [ 2, 30 ]. Reactivated users differ because a sub-stantial pre-gap history exists, but its current reliability is un-known. LLM-based recommenders provide richer semantic repre-sentations [ 1, 28 ]. DeltaGate’s output-level interface is compatible in principle with systems that expose a final dense user representa-tion for scoring, but this setting is not evaluated here. TASIF [ 16 ]uses frequency-aware fusion within observed sequences, whereas DeltaGate conditions on the gap after the last observation. 
+
+## 2.5 Popularity Debiasing and Causal Inference 
+
+Routing uncertain dimensions toward a global prior is related to popularity-bias research. Prior work separates user interest from conformity [ 32 ] or uses causal adjustment and counterfactual rea-soning to reduce popularity effects [ 19 , 27 , 31 ]. DeltaGate does not estimate a causal recommendation effect or remove popularity bias. It uses the learned global prior as one endpoint of a dimension-wise interpolation and examines the resulting personalization–coverage trade-off in RQ5. Zero-Observation User Reactivation with Gap-Driven Dimensional Gating RecSys ’26, September 27–October 02, 2026, Minneapolis, MN, USA 
+
+Figure 3: DeltaGate architecture. One selected frozen backbone produces hpers . The personalized state and the independently observed gap enter a trainable dimension-wise gate, whose output fuses hpers with a learned global prior initialized at zero. BERT4Rec exposes its final user state through an appended [MASK] token. 
+
+## 3 Problem Formulation and Protocol 3.1 The Scale and Severity of Macro-Gaps 
+
+We first measure long-gap prevalence in Amazon Video Games after 5-core filtering. Table 1 reports the test users in each Δ𝑡 bucket. This distribution motivates the macro-gap cohort studied below, but the estimate is specific to this dataset and should not be generalized to other platforms. 
+
+Table 1: Distribution of test users across temporal gap buckets on Amazon Video Games. 
+
+Δ𝑡 Bucket Test Users Proportion 
+
+<30d (Active) 28,245 51.1% 30–90d 5,147 9.3% 90–180d 4,875 8.8% 180–365d 6,357 11.5% 
+
+>365d (Macro-Gap) 10,596 19.2% The >365d cohort contains 10,596 users , or 19.2% of the Video Games test users, making it a substantial macro-gap slice in this dataset. As a non-personalized reference, Time-Decay Popularity (TDP) ranks items by recency-weighted global interaction frequency. Its Hit@10 rounds to 0.001 in the >365d bucket. The uniform-random reference, 10 /17 ,408 , also rounds to 0.001; both remain well below the sequential baselines in Table 3. 
+
+## 3.2 The Zero-Observation Reactivation Problem 
+
+Let U and I denote the sets of users and items, respectively. For a user 𝑢 ∈ U , their chronologically ordered historical interaction sequence is S𝑝𝑟𝑒 = (( 𝑖 1, 𝑡 1), . . . , (𝑖 𝑘 , 𝑡 𝑘 )) , where 𝑖 𝑟 ∈ I and 𝑡 𝑟 are the item and timestamp of interaction 𝑟 . The user returns to interact with a target item 𝑖 𝑡𝑎𝑟𝑔𝑒𝑡 at time 𝑡 𝑡𝑎𝑟𝑔𝑒𝑡 .Standard sequential recommenders estimate the next-item prob-ability from S𝑝𝑟𝑒 without conditioning the final representation on the subsequent inactivity duration. The observation-free gap is 
+
+Δ𝑡 = 𝑡 𝑡𝑎𝑟𝑔𝑒𝑡 − 𝑡 𝑘 . We study the gap-conditioned prediction problem: 
+
+𝑃 (𝑖 𝑡𝑎𝑟𝑔𝑒𝑡 | S 𝑝𝑟𝑒 , Δ𝑡 ), Δ𝑡 ≥ 0 (1) No interactions from user 𝑢 are observed within this interval. At prediction time, Δ𝑡 is the elapsed time since the last recorded in-teraction, observed when the user initiates the return session; the target item remains unknown. The model must therefore combine a potentially stale pre-gap representation with the known gap du-ration when predicting 𝑖 𝑡𝑎𝑟𝑔𝑒𝑡 .
+
+## 3.3 The Gap-Synthesize Evaluation Protocol 
+
+Gap cohorts can differ in both user history and calendar-time effects such as catalog or popularity drift. Our Gap-Synthesize Protocol constructs gap-conditioned evaluation cohorts from naturally ob-served terminal gaps; it does not alter timestamps or synthesize user interactions. The protocol uses user-level chronological targets and natural-gap stratification to make the gap comparison consistent while avoiding a single global time cutoff: 
+
+• User-level leave-one-out. For each user, the chronologically last interaction is the target 𝑖 𝑡𝑎𝑟𝑔𝑒𝑡 and preceding interactions form S𝑝𝑟𝑒 .
+
+• Natural-gap identification and masking. The natural interval before 𝑖 𝑡𝑎𝑟𝑔𝑒𝑡 defines Δ𝑡 . Interactions unavailable at prediction time are excluded, and users must satisfy |S 𝑝𝑟𝑒 | ≥ 5.
+
+• Bucket stratification. Users are grouped by Δ𝑡 : <30d , 30-90d ,
+
+90-180d , 180-365d , and >365d .RecSys ’26, September 27–October 02, 2026, Minneapolis, MN, USA Jiandong Ding, Tianying Liu, Fuyuan Liu, Huijie Qin, and Tiandeng Wu 
+
+All models are evaluated by full ranking over the item vocabulary 
+
+I. This avoids the sensitivity of sampled metrics to the negative-sampling protocol [ 12 ]. The protocol does not remove catalog drift within long natural gaps; we return to this limitation in Section 6. 
+
+## 4 Methodology 
+
+Inspired by Parameter-Efficient Fine-Tuning (PEFT) [ 9 , 10 , 24 ], Delt-aGate attaches to the output of different sequence backbones. It does not alter their internal layers. 
+
+## 4.1 Sequence Encoding & Bidirectional Adaptation 
+
+We adopt standard sequential architectures to encode the user’s pre-gap history S𝑝𝑟𝑒 . To test the same output-level plugin across backbone families, we employ three representative paradigms: 
+
+Unidirectional Attention (SASRec). The history is converted into an embedding sequence E ∈ R𝑘 ×𝑑 . SASRec stacks causal self-attention blocks to capture sequential dependencies. Writing LN 
+
+for layer normalization and M for the causal attention mask, one block is 
+
+eF(𝑙 ) = F(𝑙 −1) + MHA 
+
+
+
+LN (F(𝑙 −1) ); M
+
+
+
+,
+
+F(𝑙 ) = eF(𝑙 ) + FFN 
+
+
+
+LN (eF(𝑙 ) )
+
+
+
+.
+
+(2) Here F(0) = E + P includes positional embeddings, and MHA and 
+
+FFN denote masked multi-head attention and a feed-forward net-work, respectively. The implementation applies a final layer nor-malization after the stacked blocks. The output corresponding to the 𝑘 -th item serves as the personalized representation hpers ∈ R𝑑 
+
+(set to 𝑑 = 128 in our implementation). 
+
+Recurrent Networks (GRU4Rec). The sequence is processed iteratively via a Gated Recurrent Unit: 
+
+h𝑡 = GRU (e𝑖 𝑡 , h𝑡 −1) (3) where the final hidden state h𝑘 naturally encapsulates the entire trajectory, yielding hpers = h𝑘 .
+
+BERT4Rec extraction. The Cloze objective does not provide the same final-state convention as a unidirectional encoder. During training and inference, we append a [MASK] token at the chrono-logical end of the input and extract its final-layer hidden state: 
+
+hpers = Transformer (S 𝑝𝑟𝑒 ⊕ [MASK] )| S 𝑝𝑟𝑒 |+ 1 (4) This extraction exposes one final representation to DeltaGate with-out modifying BERT4Rec’s internal layers. 
+
+## 4.2 Gap-Driven Dimensional Gating 
+
+Alongside hpers , we introduce a learned global prior hglobal ∈ R𝑑 .It is initialized to 0 and updated with the gate parameters during plugin training. Unlike multi-task routing mechanisms (e.g., MMoE [ 17 ]) that rely on dense feature fields, DeltaGate uses one continuous signal, Δ𝑡 , to compute a dimension-wise routing gate g ∈ ( 0, 1)𝑑 . Each gate value determines the retention weight of one latent dimension across the gap. We concatenate the log-transformed gap duration with the personalized history and pass the result through a two-layer MLP: 
+
+g = 𝜎  MLP ([ log (1 + Δ𝑡 ) ∥ hpers ])  (5) where 𝜎 is the sigmoid activation function, and MLP : R𝑑 +1 →
+
+R2𝑑 → R𝑑 is a two-layer feed-forward network with a ReLU hidden layer. Here Δ𝑡 is measured in days. Using log (1 + Δ𝑡 ) rather than raw Δ𝑡 compresses the observed range (30 to 2,000+ days). Combining Δ𝑡 with hpers makes the retention weights user-conditioned: two users with the same gap can retain different di-mensions of their historical representations. The final reactivation representation hfinal is computed via a dimension-wise Hadamard product ( ⊙): 
+
+hfinal = g ⊙ hpers + ( 1 − g) ⊙ hglobal (6) A large 𝑔 𝑖 places more weight on the personalized history in dimension 𝑖 , while a small 𝑔 𝑖 places more weight on the global prior. Because hpers is also an input to the gate, two users with the same Δ𝑡 can receive different gate vectors. The item score is 
+
+ˆ𝑦 𝑗 = h⊤
+
+> final
+
+e𝑗 + 𝑏 𝑗 , where 𝑏 𝑗 is the frozen backbone’s output bias and is zero for backbones without one. Plugin training minimizes full-catalog cross-entropy, 
+
+L = −∑︁ 
+
+> 𝑢
+
+log exp ( ˆ𝑦 𝑢,𝑖 𝑢 )
+
+Í𝑗 ∈ I exp ( ˆ𝑦 𝑢,𝑗 ) , (7) updating only the gate MLP and hglobal .
+
+## 4.3 Theoretical Analysis of Alternative Plugins 
+
+We compare the representational constraints of dimensional vector gating with two simpler frozen-backbone plugins. 
+
+Scalar gating. A scalar gate 𝑔 ∈ ( 0, 1) restricts the output to the one-dimensional line segment between hpers and hglobal . Every channel therefore receives the same mixture coefficient, so the plugin cannot preserve one subset of history dimensions while replacing another. 
+
+Linear concatenation. With hfinal = W[hpers ∥ log (1 + Δ𝑡 )] + b,the gap contributes an additive direction to the latent state. It does not directly parameterize a gap-dependent retention coefficient for each history dimension. DeltaGate supplies those coefficients through the Hadamard mixture in Equation 6. 
+
+## 4.4 Interpretation: The Gate as a Confidence Index 
+
+The channel-wise mean of g summarizes how much weight the model assigns to the pre-gap representation. We call this quantity the Historical Confidence Index :
+
+𝑐 (hpers , Δ𝑡 ) = 1
+
+𝑑 
+
+> 𝑑
+
+∑︁ 
+
+> 𝑖 =1
+
+𝑔 𝑖 (hpers , Δ𝑡 ) = 1
+
+𝑑 ∥g∥1 (8) This value lies in (0, 1). For compact notation, we write 𝑐 (Δ𝑡 ) when 
+
+hpers is either held fixed, as in Figure 2, or averaged over users within a gap bucket, as in Table 7. 
+
+## 4.5 Computational Complexity and Parameter Efficiency 
+
+We next quantify the plugin’s time and parameter overhead relative to the sequence encoder. 
+
+Time Complexity. For sequence length 𝑁 , embedding dimen-sion 𝑑 , and 𝐿 layers, a Transformer encoder costs O( 𝐿 (𝑁 2𝑑 + 𝑁𝑑 2)) 
+
+when attention projections and feed-forward blocks are included. Zero-Observation User Reactivation with Gap-Driven Dimensional Gating RecSys ’26, September 27–October 02, 2026, Minneapolis, MN, USA 
+
+Algorithm 1 DeltaGate Inference for User Reactivation 
+
+Require: Pre-gap sequence S𝑝𝑟𝑒 ; observed gap Δ𝑡 ≥ 0; frozen encoder F𝜃 
+
+Require: Gate MLP; learned prior h𝑔𝑙𝑜𝑏𝑎𝑙 ; frozen scorer (E, b)
+
+Ensure: Prediction scores ˆy over the item vocabulary I 
+
+> 1:
+
+S𝑖𝑛 ← S 𝑝𝑟𝑒  
+
+> 2:
+
+if F𝜃 is a bidirectional masked encoder then  
+
+> 3:
+
+S𝑖𝑛 ← S 𝑖𝑛 ⊕ [MASK]  
+
+> 4:
+
+end if  
+
+> 5:
+
+h𝑝𝑒𝑟𝑠 ← F 𝜃 (S 𝑖𝑛 ) [− 1] 
+
+> 6:
+
+z ← [ log (1 + Δ𝑡 ) ∥ h𝑝𝑒𝑟𝑠 ] 
+
+> 7:
+
+g ← 𝜎 (MLP (z))  
+
+> 8:
+
+h𝑓 𝑖𝑛𝑎𝑙 ← g ⊙ h𝑝𝑒𝑟𝑠 + ( 1 − g) ⊙ h𝑔𝑙𝑜𝑏𝑎𝑙  
+
+> 9:
+
+ˆy ← Eh 𝑓 𝑖𝑛𝑎𝑙 + b 
+
+> 10:
+
+return ˆy
+
+Pairwise temporal attention adds sequence-length-dependent work inside its layers. DeltaGate instead operates once outside the en-coder: DeltaGate: O( 𝑑 2)
+
+|{z} 
+
+> MLP
+
++ O( 𝑑 )
+
+|{z} 
+
+> Hadamard
+
+= O( 𝑑 2) (9) The two gate linear maps require 129 × 256 + 256 × 128 = 65 ,792 
+
+multiply-accumulates at 𝑑 = 128 , plus linear-time activations and fusion; this overhead is independent of 𝑁 and 𝐿 .
+
+Parameter Overhead. With 𝑑 = 128 and a hidden dimension of 2𝑑 = 256 , DeltaGate introduces: 
+
+• Gate MLP Layer 1: (129 × 256 + 256 ) = 33 ,280 parameters 
+
+• Gate MLP Layer 2: (256 × 128 + 128 ) = 32 ,896 parameters 
+
+• Global prior hglobal : 128 parameters yielding 66,304 parameters. Relative to backbone sizes from ∼1.7M(Video Games) to ∼3.0M (CDs & Vinyl), this is a 2–4% overhead. The plugin cost is paid once at the encoder output rather than inside each attention layer. 
+
+## 5 Experiments 5.1 Experimental Setup 
+
+Datasets. We use three categories from Amazon Product Reviews (2018): Video Games , CDs & Vinyl , and Movies & TV . We apply iterative 5-core filtering before constructing the pre-gap sequences. Table 2 summarizes the resulting data under the Gap-Synthesize Protocol. 
+
+Table 2: Dataset statistics under the Gap-Synthesize Protocol.                 
+
+> Dataset Users Items Train Interactions Test Targets Video Games 55,220 17,408 387,125 55,220 CDs & Vinyl 112,319 73,713 1,218,826 112,319 Movies & TV 297,498 60,175 2,814,911 297,498
+
+Baselines & Implementation. We compare four sequential base-lines: SASRec (unidirectional attention), GRU4Rec (recurrent), 
+
+BERT4Rec (bidirectional masked attention), and TiSASRec (time-aware attention). TimeConcat is an end-to-end comparator that concatenates log (1 + Δ𝑡 ) with the SASRec input and retrains all 
+
+∼2.6M parameters. We append DeltaGate to SASRec, GRU4Rec, and BERT4Rec to test the same output-layer interface across backbone families. All models use embedding dimension 𝑑 = 128 , batch size 128, maximum sequence length 50, Adam with learning rate 10 −3, and dropout 0.2. In plugin mode, the backbone is trained first and then frozen; only the gate MLP and hglobal are updated. Results are means 
+
+± standard deviations over five random seeds. To remain compa-rable with the accepted-paper pipeline, we select checkpoints by mean Hit@10 over the four non-active buckets of the held-out leave-one-out set. Because that set is also reported, these results are descriptive under the historical protocol rather than unbiased final-test estimates. 
+
+## 5.2 RQ1: Effectiveness across Backbones 
+
+How does DeltaGate compare to standard baselines and end-to-end retraining for reactivating dormant users? 
+
+Table 3 and Figure 1 support five observations. 
+
+Monotonic decay across buckets. Each standard baseline de-creases as Δ𝑡 moves through the five evaluated buckets. The pattern is present for recurrent, unidirectional, and bidirectional encoders, although their absolute values differ. 
+
+Limited macro-gap recovery from intra-sequence timing. 
+
+In the >365d Movies & TV bucket, TiSASRec reaches 0.025 Hit@10 versus 0.021 for SASRec. This small absolute difference does not close the decline from the short-gap bucket. 
+
+Macro-gap recovery with a frozen backbone. In the >365d bucket, DeltaGate raises SASRec Hit@10 from 0.031 to 0.047 on Video Games, from 0.022 to 0.040 on CDs & Vinyl, and from 0.021 to 0.034 on Movies & TV. The BERT4Rec path shows a similar matched-backbone pattern, improving from 0.025 to 0.046 on Video Games and from 0.026 to 0.041 on CDs & Vinyl ( 𝑝 < 0.01 for audited DG-BERT4Rec cells). 
+
+Accuracy versus updates. TimeConcat reaches 0.080 Hit@10 in the >365d Video Games bucket and improves all five buckets (Table 6). Relative to the frozen DG-SASRec plugin, it is 68% higher in this bucket but updates about 40 × more parameters and produces 139.7% embedding drift. Section 5.4 examines this trade-off. 
+
+Short-gap behavior. At 30–90d, both DG-BERT4Rec and DG-SASRec improve over their matched Video Games backbones; DG-SASRec also improves over SASRec on the other two datasets. Delt-aGate’s main target remains the macro-gap regime. 
+
+## 5.3 RQ2: Routing Components 
+
+Does the learned dimension-wise route outperform its fallback com-ponents? 
+
+Table 4 separates the learned route from its two endpoints in the 
+
+>365d bucket. Using only the shared prior ( 𝑔 = 0) gives 0.005–0.008 Hit@10, substantially below the corrected SASRec backbone. The learned dimension-wise route improves over both the personalized-history endpoint and the shared-prior endpoint on all three datasets. Thus, the gain does not come from replacing personalization with one global vector. RecSys ’26, September 27–October 02, 2026, Minneapolis, MN, USA Jiandong Ding, Tianying Liu, Fuyuan Liu, Huijie Qin, and Tiandeng Wu 
+
+Table 3: Hit@10 and NDCG@10 performance at the temporal extremes: Short-Gap (30–90d) and Macro-Gap ( >365d). Results are averaged over 5 random seeds and shown to three decimals. Column-best values are determined before rounding and boldfaced. ** indicates statistical significance at 𝑝 < 0.01 against the respective backbone where paired audit tests are available. Video Games CDs & Vinyl Movies & TV                                                                                                      
+
+> 30–90d (Short-Gap) >365d (Macro-Gap) 30–90d (Short-Gap) >365d (Macro-Gap) 30–90d (Short-Gap) >365d (Macro-Gap)
+> Model Hit@10 NDCG@10 Hit@10 NDCG@10 Hit@10 NDCG@10 Hit@10 NDCG@10 Hit@10 NDCG@10 Hit@10 NDCG@10 SASRec 0.091 0.046 0.031 0.015 0.050 0.026 0.022 0.011 0.067 0.040 0.021 0.011 GRU4Rec 0.100 0.049 0.028 0.013 0.071 0.036 0.029 0.014 0.097 0.054 0.022 0.011 TiSASRec 0.110 0.054 0.031 0.014 0.086 0.042 0.035 0.017 0.102 0.056 0.025 0.012 BERT4Rec 0.098 0.050 0.025 0.012 0.071 0.037 0.026 0.013 0.091 0.050 0.024 0.012 DG-SASRec 0.104 0.053 0.047 0.023 0.076 0.039 0.040 0.021 0.092 0.052 0.034 0.018 DG-GRU4Rec 0.101 0.050 0.032 0.014 0.071 0.036 0.029 0.014 0.097 0.054 0.034 0.017 DG-BERT4Rec 0.111 ** 0.057 ** 0.046** 0.023 ** 0.076 0.040** 0.041 ** 0.021 ** 0.094 0.052 0.035 ** 0.018 **
+
+Table 4: Routing-component controls in the >365d bucket (Hit@10).                                 
+
+> Model Variant Video Games CDs & Vinyl Movies & TV SASRec (history endpoint) 0.031 ±0.002 0.022 ±0.006 0.021 ±0.003
+> Ablation-Prior ( 𝑔 =0)0.008 ±0.001 0.005 ±0.000 0.007 ±0.000
+> DG-SASRec (Ours) 0.047 ±0.002 0.040 ±0.003 0.034 ±0.002
+
+## 5.4 RQ3: Adaptation Strategies Under Deployment Constraints 
+
+How does DeltaGate compare to end-to-end retraining, and when should each strategy be preferred? 
+
+Using SASRec as the common backbone, we compare TimeCon-cat E2E, DeltaGate E2E, and DeltaGate Plugin on Video Games. TimeConcat E2E retrains all parameters, DeltaGate E2E jointly re-trains the backbone and gate, and DeltaGate Plugin trains only the gate with a frozen backbone. Table 5 reports Hit@10 to three deci-mals in the >365d bucket. Gain/1M divides the unrounded Hit@10 improvement over SASRec by the number of trainable parameters in millions; Gate Sat. is the percentage of gate values above 0.9. 
+
+Table 5: Adaptation strategies on Video Games in the >365d bucket.                           
+
+> Strategy >365d Hit@10 Params Emb. Drift Gain/1M Gate Sat. SASRec (no Δ𝑡 )0.031 ————TimeConcat E2E 0.080 2.6M 139.7% 0.018 N/A DeltaGate E2E 0.057 2.6M 103.4% 0.010 82.0%
+> DeltaGate Plugin 0.047 66K 0% 0.245 —
+
+Table 6 reports five-seed averages for TimeConcat across all five Video Games buckets. Metric values are shown to three deci-mals, while relative changes use unrounded values. From 30–90d onward, TimeConcat’s relative Hit@10 gain increases from 33.6% to 156.3%, showing that the gap feature becomes increasingly useful as inactivity lengthens. 
+
+Table 6: TimeConcat E2E vs. SASRec across gap buckets on Video Games. 
+
+Bucket SASRec TimeConcat Δ Hit Δ NDCG 
+
+<30d 0.185 0.233 +26.3% +16.3% 30–90d 0.091 0.121 +33.6% +20.8% 90–180d 0.084 0.115 +37.6% +25.6% 180–365d 0.066 0.109 +64.5% +62.7% 
+
+>365d 0.031 0.080 +156.3% +172.5% 
+
+Gate saturation. Under DeltaGate E2E training, 82.0% of gate values exceed 0.9 in the >365d bucket. The jointly updated backbone can absorb temporal information, leaving little variation at the gate. Freezing the backbone preserves the gate as the plugin’s explicit temporal adaptation mechanism. 
+
+Parameter efficiency and stability. DeltaGate Plugin reaches 0.047 Hit@10 with about 40 × fewer trainable parameters than end-to-end alternatives (66K vs. 2.6M). Its gain per million trainable pa-rameters is 0.245, compared with 0.018 for TimeConcat. TimeConcat E2E produces 139.7% item-embedding L2 drift. Such changes matter when embeddings are shared by retrieval, ranking, or related-item services [22]. DeltaGate has zero backbone drift by construction. 
+
+Complementary deployment regimes. TimeConcat E2E pro-vides the highest accuracy in this comparison when full retraining is acceptable. DeltaGate Plugin recovers 33% of its macro-gap gain with zero backbone drift and about 40 × fewer trainable parameters. The relevant choice therefore depends on whether the backbone and its embeddings can be updated independently of other services. 
+
+## 5.5 RQ4: Working Mechanism and Interpretability 
+
+How does the trained gate respond as the inactivity gap widens? 
+
+We inspect individual gate dimensions under a controlled post-training sweep and summarize gate values over the natural-gap cohorts. This diagnostic is not part of the loss. We extract hpers 
+
+from one fixed test history and vary only the supplied Δ𝑡 . Among dimensions monotone over all seven supplied gaps, we select the largest positive and negative endpoint changes; Figure 2 shows three representative gaps. Dimension 115 increases from 𝑔 = 0.00 
+
+to 𝑔 = 0.97 , while Dimension 37 decreases from 𝑔 = 1.00 to 𝑔 = 0.49 .Zero-Observation User Reactivation with Gap-Driven Dimensional Gating RecSys ’26, September 27–October 02, 2026, Minneapolis, MN, USA 
+
+Because the history input is unchanged, these trajectories isolate the trained gate’s sensitivity to the supplied gap value. Table 7 reports the Historical Confidence Index from DG-SASRec over the natural-gap buckets. The mean gate value is high across datasets, decreases on Video Games, stays nearly flat on CDs & Vinyl, and increases mildly on Movies & TV. This aggregate re-sponse is therefore not a universal monotone decay curve. These values describe model behavior; they do not by themselves identify why preferences differ across categories. 
+
+Table 7: Historical Confidence Index 𝑐 (Δ𝑡 ) (mean gate value) across natural-gap buckets, shown to three decimals. 
+
+Dataset < 30 d 30–90d 90–180d 180–365d > 365 dVideo Games 0.882 0.879 0.879 0.871 0.843 
+
+CDs & Vinyl 0.861 0.861 0.861 0.861 0.854 
+
+Movies & TV 0.815 0.820 0.825 0.828 0.832 
+
+## 5.6 RQ5: Recommendation Characteristics 
+
+Does routing to a global prior collapse the model into a pure popularity recommender? 
+
+Catalog Coverage. Table 8 shows that DeltaGate increases cat-alog coverage on all three datasets in this diagnostic. This pattern is inconsistent with collapse into a narrower popularity list. 
+
+Table 8: Overall Catalog Coverage. 
+
+Model Video Games CDs & Vinyl Movies & TV SASRec 43.97% 46.71% 51.63% DG-SASRec 59.75% 67.73% 73.37% 
+
+Exclusive Hits. Table 9 characterizes method-exclusive hits in the > 365 d bucket by their average training frequency. DG-SASRec produces more exclusive hits than SASRec on all three datasets. Its exclusive hits are higher-frequency on Video Games but lower-frequency on CDs & Vinyl and Movies & TV. Thus, the recovered items are not uniformly more popular or more long-tail across datasets. 
+
+Table 9: Exclusive Hits in the > 365 d bucket. Lower Avg. Freq = more long-tail. DG-SASRec Exclusive SASRec Exclusive 
+
+Dataset Count Avg. Freq Count Avg. Freq Video Games 278 213.9 106 179.8 CDs & Vinyl 581 124.3 129 238.3 Movies & TV 1019 1273.0 403 1804.3 
+
+## 6 Discussion and Limitations 
+
+Practical scope. The >365d cohort contains 19.2% of the Video Games test users, and DeltaGate adds only 66K trainable param-eters while leaving the backbone unchanged. These observations motivate reactivation as a distinct evaluation slice. They do not establish cohort prevalence or online business impact outside the studied data. 
+
+Personalization and coverage. The shared prior does not re-duce every user to one ranking because Equation 6 retains user-conditioned gate values and personalized dimensions. In the cor-rected frozen diagnostic, RQ5 shows increased coverage, but the frequencies of exclusive hits vary by dataset. Diversity-aware ob-jectives may still be needed when catalog breadth is a first-class requirement. 
+
+Dataset and catalog scope. All three datasets are Amazon e-commerce categories, and the 19.2% macro-gap analysis is specific to Video Games. Streaming, news, and social platforms may have different gap and catalog dynamics. Natural-gap stratification also cannot remove catalog drift over multi-year intervals. Because 
+
+hglobal is fixed after training, a periodically refreshed prior is a natural extension for rapidly changing catalogs. 
+
+One shared prior. The gate is user-conditioned through hpers ,but its fallback endpoint is one global vector shared by all users. This design cannot represent different fallback profiles for user types with distinct preference stability. A conditional or mixture prior could add that capacity, at the cost of more parameters and a new conditioning signal. 
+
+Sparse pre-gap histories. Gate quality depends on the frozen backbone representation, so history sparsity and staleness can com-pound one another. Side information could improve hpers for sparse-history users, but that setting is outside the present ID-only evalu-ation. 
+
+## 7 Conclusion 
+
+We defined Zero-Observation Reactivation and found monotonic performance decay across gap buckets for three sequential back-bones on three Amazon categories. DeltaGate keeps the backbone frozen and conditions a dimension-wise output gate on the inac-tivity gap and personalized history. In the >365d Video Games bucket, DG-SASRec reaches 0.047 Hit@10 versus 0.031 for SASRec, while DG-BERT4Rec reaches 0.046 versus 0.025 for its BERT4Rec backbone, using 66K trainable parameters. End-to-end retraining reaches higher absolute accuracy; the plugin preserves zero back-bone drift and observable routing behavior. The component controls show that neither the history endpoint nor the shared prior alone explains the learned route’s performance, while the post-training diagnostic shows dimension-specific sensitivity to the supplied gap. 
+
+## Acknowledgments 
+
+We thank Prof. Shuigeng Zhou of Fudan University for helpful discussions during the early development of this work, and the anonymous reviewers for their constructive feedback. OpenAI GPT Image 2 was used to assist the visual revision of Figure 3. The authors specified and verified all scientific content. RecSys ’26, September 27–October 02, 2026, Minneapolis, MN, USA Jiandong Ding, Tianying Liu, Fuyuan Liu, Huijie Qin, and Tiandeng Wu 
+
+## References 
+
+[1] Keqin Bao, Jizhi Zhang, Yang Zhang, Wenjie Wang, Fuli Feng, and Xiangnan He. 2023. Tallrec: An effective and efficient tuning framework to align large language model with recommendation. In Proceedings of the 17th ACM Conference on Recommender Systems . 1007–1014. [2] Léa Briand, Guillaume Salha-Galvan, Walid Bendada, Mathieu Morlon, and Viet-Anh Tran. 2021. A Semi-Personalized System for User Cold Start Recommendation on Music Streaming Apps. In Proceedings of the 27th ACM SIGKDD Conference on Knowledge Discovery & Data Mining . 2601–2609. [3] Jianxin Chang, Chenbin Zhang, Zhiyi Fu, Xiaoxue Zang, Lin Guan, Jing Lu, Yiqun Hui, Dewei Leng, Yanan Niu, Yang Song, and Kun Gai. 2023. TWIN: TWo-stage Interest Network for Lifelong User Behavior Modeling in CTR Prediction at Kuaishou. In Proceedings of the 29th ACM SIGKDD Conference on Knowledge Discovery and Data Mining . 3815–3825. [4] Zerui Chen, Heng Chang, Tianying Liu, Chuantian Zhou, Yi Cao, Jiandong Ding, Ming Liu, and Bing Qin. 2026. Beyond the Flat Sequence: Hierarchical and Preference-Aware Generative Recommendations. In Proceedings of the ACM Web Conference 2026 . Association for Computing Machinery, 7999–8007. doi:10.1145/ 3774904.3792790 [5] Ke Cheng, Heng Chang, Pengyang Wang, Liang Gu, Jiandong Ding, Yi Cao, Junchen Ye, and Bowen Du. 2026. RPE4Rec: Enhancing Dynamic Node Re-trieval with Efficient Relative Position Encoding for Recommendation Systems. In Proceedings of the Nineteenth ACM International Conference on Web Search and Data Mining . Association for Computing Machinery, 89–98. doi:10.1145/3773966. 3778006 [6] Sung Min Cho, Eunhyeok Park, and Seungjoon Yoo. 2020. MEANTIME: Mixture of Attention Mechanisms with Multi-temporal Embeddings for Sequential Recom-mendation. In Proceedings of the 14th ACM Conference on Recommender Systems 
+
+(Virtual Event, Brazil) (RecSys ’20) . Association for Computing Machinery, New York, NY, USA, 68–77. doi:10.1145/3383313.3412216 [7] Ziwei Fan, Zhiwei Liu, Jiawei Zhang, Yun Xiong, Lei Zheng, and Philip S. Yu. 2021. Continuous-Time Sequential Recommendation with Temporal Graph Col-laborative Transformer. In Proceedings of the 30th ACM International Conference on Information and Knowledge Management . 433–442. [8] Balázs Hidasi, Alexandros Karatzoglou, Linas Baltrunas, and Domonkos Tikk. 2016. Session-based recommendations with recurrent neural networks. In Inter-national Conference on Learning Representations (ICLR) .[9] Neil Houlsby, Andrei Giurgiu, Stanislaw Jastrzebski, Bruna Morrone, Quentin De Laroussilhe, Andrea Gesmundo, Mona Attariyan, and Sylvain Gelly. 2019. Parameter-Efficient Transfer Learning for NLP. In International Conference on Machine Learning . PMLR, 2790–2799. [10] Edward J Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Lu Wang, and Weizhu Chen. 2022. LoRA: Low-Rank Adaptation of Large Language Models. In International Conference on Learning Representations .[11] Wang-Cheng Kang and Julian McAuley. 2018. Self-Attentive Sequential Rec-ommendation. In Proceedings of the 2018 IEEE International Conference on Data Mining (ICDM) . 197–206. [12] Walid Krichene and Steffen Rendle. 2020. On sampled metrics for item recom-mendation. In Proceedings of the 26th ACM SIGKDD international conference on knowledge discovery & data mining . 1748–1757. [13] Srijan Kumar, Xikun Zhang, and Jure Leskovec. 2019. Predicting dynamic em-bedding trajectory in temporal interaction networks. In Proceedings of the 25th ACM SIGKDD International Conference on Knowledge Discovery & Data Mining .1269–1278. [14] Jiacheng Li, Yujie Wang, and Julian McAuley. 2020. Time Interval Aware Self-Attention for Sequential Recommendation. In Proceedings of the 13th ACM Inter-national Conference on Web Search and Data Mining (WSDM) . 322–330. [15] Chengkai Liu, Jianghao Lin, Jianling Wang, Hanzhou Liu, and James Caverlee. 2024. Mamba4Rec: Towards Efficient Sequential Recommendation with Selective State Space Models. arXiv preprint arXiv:2403.03900 (2024). [16] Jie Luo, Wenyu Zhang, Xinming Zhang, and Yuan Fang. 2026. Time-Aware Adaptive Side Information Fusion for Sequential Recommendation. In Proceedings of the 19th ACM International Conference on Web Search and Data Mining (WSDM) .[17] Jiaqi Ma, Zhe Zhao, Yi Xinyang, Jilin Chen, Lichan Hong, and Ed H Chi. 2018. Modeling Task Relationships in Multi-task Learning with Multi-gate Mixture-of-Experts. In Proceedings of the 24th ACM SIGKDD International Conference on Knowledge Discovery & Data Mining . 1930–1939. [18] Jianmo Ni, Jiacheng Li, and Julian McAuley. 2019. Justifying Recommendations using Distantly-Labeled Reviews and Fine-Grained Aspects. In Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing (EMNLP) .188–197. [19] Judea Pearl. 2009. Causality: Models, Reasoning, and Inference (2nd ed.). Cambridge University Press. [20] Qi Pi, Xiaoqiang Zhu, Guorui Zhou, Yujing Zhang, Zhe Wang, Lejian Ren, Ying Fan, and Kun Gai. 2020. Search-based User Interest Modeling with Lifelong Sequential Behavior Data for Click-Through Rate Prediction. In Proceedings of the 29th ACM International Conference on Information & Knowledge Management .2685–2692. [21] Steffen Rendle, Christoph Freudenthaler, and Lars Schmidt-Thieme. 2010. Factor-izing personalized markov chains for next-basket recommendation. In Proceedings of the 19th international conference on World wide web . 811–820. [22] D. Sculley, Gary Holt, Daniel Golovin, Eugene Davydov, Todd Phillips, Dietmar Ebner, Vinay Chaudhary, Michael Young, Jean-François Crespo, and Dan Denni-son. 2015. Hidden Technical Debt in Machine Learning Systems. In Advances in Neural Information Processing Systems , Vol. 28. 2503–2511. [23] Fei Sun, Jun Liu, Jian Wu, Changhua Pei, Xiao Lin, Wenwu Ou, and Peng Jiang. 2019. BERT4Rec: Sequential Recommendation with Bidirectional Encoder Rep-resentations from Transformer. In Proceedings of the 28th ACM International Conference on Information and Knowledge Management (CIKM) . 1441–1450. [24] Yi-Lin Sung, Jaemin Cho, and Mohit Bansal. 2022. LST: Ladder Side-Tuning for Parameter and Memory Efficient Transfer Learning. In Advances in Neural Information Processing Systems , Vol. 35. 12991–13005. [25] Jiaxi Tang and Ke Wang. 2018. Personalized top-n sequential recommenda-tion via convolutional sequence embedding. In Proceedings of the eleventh ACM international conference on web search and data mining . 565–573. [26] Shoujin Wang, Liang Hu, Yan Wang, Longbing Cao, Quan Z. Sheng, and Mehmet Orgun. 2021. A Survey on Session-based Recommender Systems. Comput. Surveys 
+
+54, 7 (2021), 1–38. [27] Tianxin Wei, Fuli Feng, Jiawei Chen, Ziwei Wu, Jinfeng Yi, and Xiangnan He. 2021. Model-agnostic counterfactual reasoning for eliminating popularity bias in recommender system. In Proceedings of the 27th ACM SIGKDD Conference on Knowledge Discovery & Data Mining . 1791–1800. [28] Likang Wu, Zhi Zheng, Zhaopeng Qiu, Hao Wang, Hongchao Gu, Tingjia Shen, Chuan Qin, Chen Zhu, Hengshu Zhu, Qi Liu, Hui Xiong, and Enhong Chen. 2024. A Survey on Large Language Models for Recommendation. World Wide Web 27, 5 (2024), 60. [29] Shu Wu, Yuyuan Tang, Yanqiao Zhu, Liang Wang, Xing Xie, and Tieniu Tan. 2019. Session-based recommendation with graph neural networks. In Proceedings of the AAAI conference on artificial intelligence , Vol. 33. 346–353. [30] Xiangyu Zhang, Zongqiang Kuang, Zehao Zhang, Fan Huang, and Xianfeng Tan. 2023. Cold & Warm Net: Addressing Cold-Start Users in Recommender Systems. In Database Systems for Advanced Applications: 28th International Conference, DASFAA 2023 . 532–543. [31] Yang Zhang, Fuli Feng, Xiangnan He, Tianxin Wei, Chonggang Song, Guohui Ling, and Yongdong Zhang. 2021. Causal intervention for leveraging popularity bias in recommendation. In Proceedings of the 44th International ACM SIGIR Conference . 11–20. [32] Yu Zheng, Chen Gao, Xiang Li, Xiangnan He, Yong Li, and Depeng Jin. 2021. Disentangling user interest and conformity for recommendation with causal embedding. In Proceedings of the Web Conference 2021 . 2980–2991. [33] Kun Zhou, Hui Wang, Wayne Xin Zhao, Yutao Zhu, Sirui Wang, Fuzheng Zhang, Zhongyuan Wang, and Ji-Rong Wen. 2020. S 3-Rec: Self-Supervised Learning for Sequential Recommendation with Mutual Information Maximization. In Pro-ceedings of the 29th ACM International Conference on Information and Knowledge Management . 1893–1902. [34] Yu Zhu, Hao Li, Yikang Liao, Beidou Wang, Ziyu Guan, Haifeng Liu, and Deng Cai. 2017. What to do next: Modeling user behaviors by time-LSTM. In Proceedings of the 26th International Joint Conference on Artificial Intelligence . 3602–3608.

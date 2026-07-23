@@ -1,0 +1,2355 @@
+Title: Breaking Feedback-Blindness: Utility-Augmented Transformer for Sequential Decision Making
+
+URL Source: https://arxiv.org/pdf/2607.18910v1
+
+Published Time: Wed, 22 Jul 2026 00:47:20 GMT
+
+Number of Pages: 25
+
+Markdown Content:
+# Breaking Feedback-Blindness: Utility-Augmented Transformer for Sequential Decision Making 
+
+Yuyang Shen 1 Shan Dai 2,1,∗ Daimin Chen 31The Chinese University of Hong Kong, Shenzhen 
+
+> 2
+
+Shenzhen Research Institute of Big Data 
+
+> 3
+
+University of International Business and Economics 
+
+yuyangshen@link.cuhk.edu.cn daishan@cuhk.edu.cn 202520210806@uibe.edu.cn 
+
+Abstract 
+
+Sequential decision making in non-stationary and partially observable environments requires rapid adaptation to latent regime changes. However, existing Transformer decision models face a structural bottleneck in the retrieval mechanism: even when reward is used for training or exposed as an input token, attention retrieval remains primarily driven by observation-derived similarity. We formalize this limitation as 
+
+feedback-blind retrieval , and formally show that, on feedback-informative tasks, observation-equivalent histories with different action–reward outcomes cannot be distinguished by any observation-only attention, resulting in suboptimal choice. To address this mismatch, we propose the Utility-Augmented Transformer (UAT), a new feedback-conditioned retrieval attention architecture in which a compact utility state modulates the query, key, and value projections, allowing action–reward history to directly alter context retrieval during the forward pass. UAT also enjoys an exact zero-gate degradation property that recovers the Vanilla Transformer when feedback is uninformative. Under finite-horizon compactness and Lipschitz assumptions, we prove that UAT strictly enlarges the observation-only Transformer class and can uniformly approximate feedback-dependent decision maps. Across four non-stationary benchmarks—synthetic navigation with hidden goal shifts, non-stationary sepsis treatment, cross-market portfolio allocation, and delayed-feedback recommendation, UAT consistently improves performance over observation-only, test-time adaptation, and input-level feedback baselines, with particularly large gains in noisier regimes that require stronger adaptation. 
+
+1 Introduction 
+
+Sequential decision making is central to reinforcement learning and to a broad range of applications, including clinical treatment planning [ 26 ], financial portfolio management [ 59 ], recommender sys-tems [ 1 ], robotics [ 32 ], and autonomous control [ 61 ]. In recent years, Transformer architectures [ 52 ]have emerged as a compelling backbone for decision models because of their strong sequence mod-eling capacity and their ability to aggregate long-range contextual evidence. Decision Transformer (DT) [ 7] and its extensions [ 62 , 57 , 47 ] have shown that many problems can be profitably reframed as sequence modeling, stimulating a large literature on Transformer-based reinforcement learning. Despite these advances, non-stationary and partially observable environments remain difficult [ 8]. The challenge is not only that the distribution shifts, but also that the latent regime governing action effectiveness may not be identifiable from the observation sequence alone [ 56 , 42 ]. In many realistic settings, two episodes can exhibit nearly identical observations while requiring different decisions because prior actions produced different reward feedback [12, 11, 34]. 
+
+> *Corresponding author. Preprint. arXiv:2607.18910v1 [cs.LG] 21 Jul 2026
+
+This difficulty exposes a structural mismatch [ 21 ] in many decision architectures. Existing models often use reward either as a training signal [ 48 , 27 ] or as an input token [ 7, 47 ], but the retrieval rule that governs how the model accesses historical context is still predominantly shaped by observation-derived attention [ 39 , 22 ]. When the frozen forward computation induces identical context retrieval for observation-matched histories, downstream supervision cannot distinguish them within the same forward pass [ 46 , 5 ]. This is the core phenomenon we call feedback-blind retrieval . To make this precise, we define feedback-informative decision processes : tasks where there exist two histories with identical observation sequences but different past action–reward outcomes, and these histories induce different optimal decisions. The definition isolates the regime-identification setting [ 63 ] in which feedback is not merely useful but structurally necessary. We then define feedback-blind retrieval as invariance of the retrieval state to past action–reward feedback when observations are held fixed. This structural mismatch has motivated a growing body of work aimed at incorporating reward and action information into decisions [ 3 ]. Early efforts, such as the Decision Transformer (DT) [ 7] and its variants [ 62 , 57 , 47 ], introduce return-to-go actions and rewards as additional input tokens. These tokens can influence attention scores, but the projection operators defining the retrieval kernel remain fixed and are not themselves conditioned on feedback, so observation and feedback interactions must share the same bilinear retrieval pathway. Similarly, gradient-based RL training [ 51 ] and test-time adaptation methods [ 53 ] can update network parameters to reflect new feedback, but because these updates occur outside the forward pass, the model’s retrieval state during inference remains blind to the within-episode action–reward history [ 54 ]. In other words, no matter how sophisticated the training signal or the parameter update rule is, a frozen forward pass that retrieves context based solely on observation features cannot distinguish histories with identical observations but divergent feedback outcomes [9]. We therefore identify retrieval—not merely representation or training—as the fundamental bottleneck. To break this bottleneck, what is needed is not another auxiliary loss [ 11 , 34 ] or a richer input tokenization [ 7], but a structural mechanism that allows the attention kernel itself to be directly conditioned on within-episode action–reward history. Motivated by this distinction, we propose the Utility-Augmented Transformer (UAT). UAT introduces a lightweight utility encoder that maps shifted action–reward pairs to a compact utility state. This state conditions the query, key, and value projections through additive and multiplicative modulation pathways [ 13 , 41 ], thereby allowing feedback to directly reshape the attention kernel during the forward pass. 
+
+Contributions. The major contributions of this work are as follows. • Feedback-blind retrieval formulation. We identify a class of feedback-informative decision pro-cesses in which optimal actions cannot be identified from observations alone. On the model side, we define feedback-blind retrieval and prove that observation-only attention cannot distinguish histories with identical observations but different action–reward outcomes. • Utility-Augmented Transformer. We propose UAT, a new feedback-conditioned retrieval architecture that promotes the attention query, key, value projections to utility-affine functions of an action–reward state, while preserving compatibility with Vanilla Transformers when the utility gates are zero. • Expressiveness and approximation theory. Theoretically, we prove that UAT strictly generalizes the observation-only Transformer function class and, under explicit assumptions, can uniformly approximate any continuous feedback-dependent Lipschitz decision map. • Empirical evaluation. We perform a comprehensive empirical study on four heterogeneous benchmarks: UAT consistently outperforms baselines without incurring substantial computational overhead. Boundary analysis shows degradation as feedback weakens. Ablations isolate the role of each component; and mechanism analysis reveals interpretable modulation functional patterns. 
+
+2 Related Work 
+
+Observation-Only Transformers. Observation-only Transformer refers to Transformers that pre-serve the core attention-retrieval structure, retrieving context through observation-derived queries and keys. A Vanilla Transformer [ 52 ] with a downstream action head is the simplest backbone of this family [ 60 , 10 , 33 ]. In sequential decision making, we use its causal form [ 35 ]: the architecture is unchanged, but attention is masked so that decisions depend only on existing information, preventing 2leakage from future information. The shared architecture is as follows. At step t, each observation feature vector oj ∈ O for j ≤ t is embedded as: 
+
+xj = LN  W E oj + pj
+
+, (1) where W E ∈ Rd×do is a learnable matrix, pj ∈ Rd is the positional encoding, LN denotes pre-normalization. For the current embedded vector xt and each historical xj (j ≤ t), attention computes: 
+
+qt = WQxt, kj = WK xj , vj = WV xj , (2) 
+
+h(l) 
+
+> t
+
+=
+
+> t
+
+X
+
+> j=1
+
+softmax j
+
+ ⟨qt,k j ⟩√dm
+
+
+
+vj , (3) where WQ, W K , W V ∈ Rdm×d are called projection matrices and ⟨· , ·⟩ is the Euclidean inner product. Multi-head attention [ 52 ] runs this in parallel across heads with independent projections, and each block follows it with a residual connection [ 15 ] and a position-wise FFN [ 46 ] . h(l) 
+
+> t
+
+∈ Rd is the output vector at layer l, which is passed to the next layer as input. After L layers, the final state 
+
+h(L) 
+
+> t
+
+∈ Rd is passed to the decision head and the model is trained with cross-entropy [49]. GTrXL [ 39 ] makes it more stable: it adds gated residual connections and a memory mechanism so that the model can preserve information over long horizons and train more reliably. However, GTrXL still receives the same observation-token sequence as Vanilla-TF. Its attention scores are computed from observation features only. Although rewards affect the parameters through the training loss, they do not form a within-episode signal that changes how the frozen model retrieves past context [5]. 
+
+Input-Level Feedback Injection Models. Decision Transformer (DT) [ 7] incorporates feedback at the input level by casting control as conditional sequence modeling. At each step, it forms an interleaved sequence of return-to-go, observation, and action tokens, ( ˆRt, o t, a t)Tt=1 , and processes the resulting trajectory with a standard causal Transformer [ 35 ]. Later variants improve this paradigm along different aspects: ODT [ 62 ] introduces online finetuning with stochastic policies; EDT [ 57 ]adapts the effective history length at inference to support trajectory stitching; and RA-DT [ 47 ]augments the context with retrieved sub-trajectories from an external memory. These methods enrich the context procedure, but largely retain the standard attention kernel, so the role of feedback in their retrieval remains structurally limited. 
+
+Adaptation or Conditioning Outside the Retrieval Kernel. Another related line changes model behavior without modifying the attention retrieval rule. Test-time adaptation methods such as TENT [ 53 ] and CoTTA [ 54 ] update parameters or normalization statistics during deployment to handle distribution shift, but their adaptation signal is usually an unsupervised prediction objective, and the attention kernel remains fixed. Feature-conditioning methods such as FiLM [ 41 ], AdaIN [ 19 ], and SPADE [ 40 ] inject external signals by modulating intermediate activations. They demonstrate the value of conditional computation, but operate on hidden features after retrieval. 
+
+3 Problem Setup and Structural Mismatch 
+
+Definition 1 (Non-stationary POMDP) . A non-stationary POMDP is a tuple M =(S, A, O, {Pt}t≥1, {Rt}t≥1, Ωt, γ ), where Pt and Rt are transitions and reward functions. At each step t, with latent state st ∈ S (unobserved), the agent observes ot ∼ Ωt(· | st), takes action 
+
+at ∈ A , and receives reward rt = Rt(st, a t). Decisions are made from the observable history Ht:
+
+Ht = (o1, a 1, r 1), . . . , (ot−1, a t−1, r t−1), o t . (4) 
+
+A history-dependent policy π : Ht → ∆( A) maps histories to action distributions. Under non-stationarity, the optimal policy is itself time-varying: 
+
+π∗ 
+
+> t
+
+(· | H t) ∈ arg max  
+
+> π
+
+EπM
+
+" TX
+
+> k=t
+
+γk−trk Ht
+
+#
+
+(5) Definition 1 highlights that under non-stationarity, the relevant uncertainty is often regime uncertainty :the same observation may have different control implications depending on how the environment has responded to previous actions [ 8]. This is the setting in which action–reward feedback becomes decision-critical. We next formalize the task-side property that motivates this work. 33.1 Feedback-Informative Tasks and Feedback-Blind Retrieval Definition 2 (Feedback-Informative Decision Process) . A non-stationary POMDP M is feedback-informative at time t if there exist two histories Ht and H′ 
+
+> t
+
+as defined in (4) that share the same observation sequence {oj }j≤t but differ in past action–reward outcomes, such that 
+
+π∗ 
+
+> t
+
+(· | H t)̸ = π∗ 
+
+> t
+
+(· | H ′
+
+> t
+
+). (6) Definition 2 does not merely restate partial observability. It isolates a stronger phenomenon: feedback-relevant aliasing : even after conditioning on entire observation sequence, optimal actions may remain unidentified unless the model knows how environment responded to previous actions. This is the key property of regime-shifting tasks, where observation-equivalent histories must be treated differently. 
+
+Definition 3 (Feedback-blind retrieval) . For a sequential decision model with retrieval representation 
+
+Rt(Ht) at time t, we say that the model admits feedback-blind retrieval if for any two histories Ht
+
+and H′ 
+
+> t
+
+in (4) that share the same observation sequence {oj }j≤t,
+
+Rt(Ht) = Rt(H′
+
+> t
+
+). (7) Definition 3 is a structural property of the forward-pass retrieval mechanism , not a statement about how the parameters were trained. A model may be trained with reward-based objectives and yet remain feedback-blind at inference if its frozen retrieval state is still solely a function of observations. 
+
+3.2 Why Observation-Driven Retrieval Fails Proposition 1 (Observation-only Transformers are feedback-blind) . Consider any causal Transformer policy whose input embeddings, attention blocks, and task head depend only on the observation sequence {oj }j≤t at a fixed parameter value θ. Then for any two histories Ht, H′ 
+
+> t
+
+with identical observation sequence {oj }j≤t, the final retrieval representation satisfies Rt(Ht) = Rt(H′
+
+> t
+
+). Hence the model admits feedback-blind retrieval. 
+
+Proposition 1 does not deny that feedback can be used through recurrent hidden states, belief-state updates, or test-time parameter adaptation. It says that a frozen observation-only attention kernel cannot distinguish observation-equivalent but feedback-distinct histories in the same forward pass. A second limitation concerns input-level feedback injection. 
+
+Proposition 2 (Input-level injection retains a rank-limited, entangled retrieval kernel) . Consider a concatenative feedback model with token embedding xj = We[oj ; fj ], where fj := [ aj−1; rj−1] and 
+
+We = [ W (o) 
+
+> e
+
+, W (f ) 
+
+> e
+
+] is partitioned column-wise. Then the attention logit between query position t
+
+and key position j decomposes as 
+
+ℓtj = o⊤ 
+
+> t
+
+M (oo )oj
+
+| {z }
+
+> obs–obs
+
++ o⊤ 
+
+> t
+
+M (of )fj
+
+| {z }
+
+> obs–fb
+
++ f ⊤ 
+
+> t
+
+M (f o )oj
+
+| {z }
+
+> fb–obs
+
++ f ⊤ 
+
+> t
+
+M (f f )fj
+
+| {z }
+
+> fb–fb
+
+, (8) 
+
+with M (oo ) := (W (o) 
+
+> e
+
+)⊤W ⊤ 
+
+> Q
+
+WK W (o) 
+
+> e
+
+, M (of ) := (W (o) 
+
+> e
+
+)⊤W ⊤ 
+
+> Q
+
+WK W (f ) 
+
+> e
+
+, M (f o ) := (W (f ) 
+
+> e
+
+)⊤W ⊤ 
+
+> Q
+
+WK W (o) 
+
+> e
+
+, and M (f f ) := ( W (f ) 
+
+> e
+
+)⊤W ⊤ 
+
+> Q
+
+WK W (f ) 
+
+> e
+
+. Every interaction matrix factors through the shared product W ⊤ 
+
+> Q
+
+WK ∈ Rd×d of rank at most dm; in particular rank( M (·· )) ≤ dm,
+
+col( M (o·)) ⊆ col  (W (o) 
+
+> e
+
+)⊤W ⊤
+
+> Q
+
+, and row( M (·o)) ⊆ row  WK W (o)
+
+> e
+
+. Hence all four interaction modes are routed through the same pair of projection maps. 
+
+Proposition 2 is a per-layer statement about the bilinear structure of the attention kernel: input-level injection changes what is stored in the token features, but each layer’s retrieval score remains a single rank-dm bilinear form in which the observation–observation, observation–feedback, and feedback– feedback modes cannot be assigned independent pathways. Depth can mix the channels indirectly through value updates, which explains why input-level models perform well on simpler tasks in our experiments; the bottleneck is that no layer can directly re-route retrieval based on feedback without entangling it with observation similarity. Conditioning the projections on feedback, as UAT does, provides this disentangled, direct pathway. The proof details of Proposition 1 and Proposition 2 are in Appendix A.1 44 Utility-Augmented Transformer 
+
+4.1 Utility Encoder 
+
+We first embed the most recent action–reward pair (aj−1, r j−1) at observation token j into uj . The resulting uj serves as a compact feedback state that directly conditions downstream decisions: 
+
+uj = E fa(aj−1), r j−1
+
+ ∈ Rdu , (9) where fa(aj−1) = Wa aj−1 is a bias-free linear function with learnable parameter Wa ∈ Rda×|A| .
+
+E is a lightweight neural network named utility encoder , and du denotes its output dimension. In practice, we adopt the instantiation: we set E as a bias-free two-layer MLP [ 18 ] with ReLU [ 36 ]activation: 
+
+uj = MLP   fa(aj−1); rj−1
+
+ . (10) The token-level gating vector g(l,h ) 
+
+> j
+
+and regime-level gating vector ρ(h) 
+
+> t
+
+are then derived from uj :
+
+g(l,h ) 
+
+> j
+
+= g(l,h ) 
+
+> u
+
+(uj ) ∈ [−1, 1] dm , ρ(h) 
+
+> t
+
+= f (h) 
+
+> u
+
+(¯ ut) ∈ [−1, 1] dm , (11) 
+
+¯ut = λ¯ut−1 + (1 − λ)ut, (12) with initialization ¯u0 = 0 and (a0, r 0) = ( 0, 0) . Here l and h index layer and head. The readouts 
+
+g(l,h ) 
+
+> u
+
+and f (h) 
+
+> u
+
+are bounded Lipschitz maps [ 45 ] from Rdu to [−1, 1] dm , and λ ∈ (0 , 1) sets the exponential memory. The local gate g(l,h ) 
+
+> j
+
+is layer- and head-specific and modulates keys/values, while the regime gate ρ(h) 
+
+> t
+
+is head-specific, shared across layers, and modulates queries through the smoothed utility states. In practice, the readouts are linear projections with tanh activation [29]: 
+
+g(l,h ) 
+
+> u
+
+(uj ) = tanh( W (l,h ) 
+
+> s
+
+uj ), f (h) 
+
+> u
+
+(¯ ut) = tanh( W (h) 
+
+> ρ
+
+¯ut), (13) where W (l,h ) 
+
+> s
+
+, W (h) 
+
+> ρ
+
+∈ Rdm×du are learnable embedding matrices initialized to zero. 
+
+4.2 Feedback Conditioned Attention 
+
+For the current embedded observation xt and each historical embedded observation xj (j ≤ t), we replace the standard attention projections in equation (2) with feedback-conditioned attention: 
+
+˜q(l,h ) 
+
+> t
+
+=
+
+
+
+W (l) 
+
+> Q,h
+
++ diag  ρ(h)
+
+> t
+
+ W (u,l )
+
+> Q,h
+
+
+
+xt + U (l) 
+
+> Q,h
+
+ρ(h) 
+
+> t
+
+, (14) 
+
+˜k(l,h ) 
+
+> j
+
+=
+
+
+
+W (l) 
+
+> K,h
+
++ diag  g(l,h )
+
+> j
+
+ W (u,l )
+
+> K,h
+
+
+
+xj + U (l) 
+
+> K,h
+
+g(l,h ) 
+
+> j
+
+, (15) 
+
+˜v(l,h ) 
+
+> j
+
+=
+
+
+
+W (l) 
+
+> V,h
+
++ diag  g(l,h )
+
+> j
+
+ W (u,l )
+
+> V,h
+
+
+
+xj + U (l) 
+
+> V,h
+
+g(l,h ) 
+
+> j
+
+. (16) The utility-affine matrices W (u) 
+
+> Q
+
+, W (u) 
+
+> K
+
+, W (u) 
+
+> V
+
+share the shape of the projections WQ, W K , W V ∈
+
+Rdm×d, preserving the structure while introducing a feedback-conditioned modulation pathway. 
+
+diag( ·) turns utility-gating vectors ρt, g j into a diagonal matrix suited to the dimensions of utility-affine matrices. The bias matrices UQ, U K , U V ∈ Rdm×dm inject a utility-dependent offset that remains active even when observations have small magnitude. All learnable matrices are head- and layer-specific. Then, the resulting single-head outputs are aggregated by multi-head attention and then processed by the usual residual and FFNs [ 52 ], yielding the layer representation h(l) 
+
+> t
+
+∈ Rd passed to the next layer. The empirical contribution of each component in ˜q⊤ 
+
+> t
+
+˜kj is examined in Appendix B. After L layers, the final-layer representation h(L) 
+
+> t
+
+∈ Rd is mapped to an action distribution: 
+
+πθ (· | H t) = softmax  Whead h(L) 
+
+> t
+
++ bhead 
+
+. (17) For discrete action spaces, πθ defines a categorical policy over A and the action is selected greedily as at = arg max a∈A πθ (a | H t). For continuous allocation tasks (e.g., portfolio management), the softmax output is directly interpreted as a target weight vector over assets. 
+
+Zero Degradation. This design admits a zero-degradation property. When the utility gates vanish: 
+
+g(l,h ) 
+
+> j
+
+= ρ(h) 
+
+> t
+
+= 0, all utility-conditioned terms in Eqs. (14) –(16) disappear, so UAT recovers Vanilla Transformer. Thus, uninformative feedback can be ignored without altering the observation-only backbone. This recovery point also anchors the theoretical comparison in section 5. 5Algorithm 1 UAT training: rollout-then-optimize. 
+
+Require: batch size B (episodes), window length T , model πθ , expert targets a∗ 
+
+> 1:
+
+Sample B episodes; set initial history Hb, 1 = {ob, 1} for b = 1 , . . . , B . 
+
+> 2:
+
+Rollout (sequential, no parameter update). For t = 1 , . . . , T :sample ˆab,t ∼ πθ (· | H b,t ), advance the process, and store (ob,t +1 , r b,t , a ∗
+
+> b,t
+
+). 
+
+> 3:
+
+Optimize (single batched forward pass over (B, T )). 
+
+compute utility states and gates {ub,t , g b,t , ρ b,t }Tt=1 using Eqs. (10) – (12) , with ˆab, 0 = rb, 0 = 0 ;logits ℓb,t = UAT θ (ob, 1: T , g b, 1: T , ρ b, 1: T ) under a causal mask; update θ by Adam L = − 1
+
+> BT
+
+P 
+
+> b,t
+
+log pθ (a∗ 
+
+> b,t
+
+| ℓb,t ). 
+
+> 4:
+
+Special case. If actions and rewards are dataset-supplied, the rollout step is skipped. 
+
+4.3 Training Strategy Initialization. We initialize the bias-free gating readouts to zero, W (l,h ) 
+
+> s
+
+, W (h) 
+
+> ρ
+
+= 0, which yields 
+
+g(l,h ) 
+
+> j
+
+= ρ(h) 
+
+> t
+
+= 0 at initialization. The utility-affine matrices are initialized from N (0 , 0.12) to preserve gradient flow, while the utility-bias matrices are initialized to zero; all utility-conditioned terms are initially gated out. Hence UAT starts from the Vanilla Transformer and gradually activates the feedback modulation pathway during training. 
+
+Expert Label Loss. All models are trained against domain expert action labels, falling within a behavioral cloning paradigm [ 4, 43 ]. By fixing the training objective to supervised imitation, perfor-mance can be attributed solely to architecture capacity rather than variance in the optimization [ 44 ]. For discrete actions, all models minimize the cross-entropy loss [49] against the expert action a∗ 
+
+> t
+
+:
+
+LCE = − 1
+
+BT 
+
+> B
+
+X
+
+> b=1
+> T
+
+X
+
+> t=1
+
+log πθ
+
+ a∗ 
+
+> b,t
+
+| H b,t 
+
+, (18) where B is the batch size and T is the episode length. For continuous allocation (Domain C), the objective is replaced by a KL divergence [ 9] against hindsight-optimal soft labels [ 17 ]. Domain-specific expert construction details are provided in Appendix C.2. 
+
+Rollout-then-optimize. UAT trains with rollout-then-optimize strategy [ 51 ]: it first rolls out causally with no gradients to collect {(at, r t)}Tt=1 , akin to on-policy RL [ 48 ]; the shifted pairs {(at−1, r t−1)}
+
+are then fed to the utility encoder, and a causally-masked parallel forward pass over (B, T ) tensor yields all logits, on which (18) is backpropagated each step. When actions and rewards are dataset-supplied (Domain D), UAT skips the rollout process. At test, UAT performs causal step-by-step inference without any expert guidance. Algorithm 1 summarizes the procedure. 
+
+4.4 Parameter and Computational Overhead 
+
+UAT introduces only a small forward-pass overhead over its Transformer counterparts during both training and inference. Detailed analysis is provided in Appendix D.3. 
+
+5 Theoretical Analysis 
+
+This section formalizes the theoretical properties of UAT. We first state assumptions explicitly, see details in Appendix A.2, and then establish the strict representational separation property, and uniform approximation result for feedback-dependent decision maps. Let Fobs TF denote the class of functions representable by observation-only Transformers. Let FUAT 
+
+denote the class of functions representable by UAT with action–reward feedback. 
+
+Theorem 1 (Strict representational hierarchy) . For finite horizon T ≥ 2, if the feedback space contains at least two distinguishable feedback outcomes, then 
+
+Fobs TF ⊊ FUAT . (19) Theorem 1 states a structural separation : there exist feedback-dependent mappings that observation-only retrieval can never represent, regardless of optimization. 6Table 1: Main results, 3 seeds, mean ±std. A: acc (Gradual/Abrupt/Cyclical). B: overall / post-shift acc. C: annualized Sharpe (DJIA/HSI/CSI). D: HR@10, NDCG@10. Bold : best; underline : second.                                                                                                                                                                                                                                                     
+
+> Family Model A(Acc) BC(SR) D
+> Grad. ↑Abr. ↑Cyc. ↑Acc ↑Post ↑DJIA ↑HSI ↑CSI ↑HR ↑NDCG ↑
+> Obs-only Vanilla-TF 0.362 ±0.01 0.356 ±0.02 0.340 ±0.01 0.700 ±0.00 0.408 ±0.02 1.036 ±0.011 0.243 ±0.026 0.383 ±0.018 0.296 ±0.005 0.135 ±0.002
+> GTrXL 0.328 ±0.00 0.336 ±0.01 0.366 ±0.01 0.636 ±0.01 0.413 ±0.02 1.030 ±0.050 0.290 ±0.142 0.463 ±0.060 0.311 ±0.004 0.142 ±0.001 TTA TENT 0.346 ±0.03 0.354 ±0.01 0.346 ±0.01 0.675 ±0.05 0.493 ±0.05 1.024 ±0.096 0.524 ±0.120 0.350 ±0.021 0.244 ±0.002 0.113 ±0.000
+> CoTTA 0.346 ±0.03 0.354 ±0.01 0.346 ±0.01 0.675 ±0.05 0.493 ±0.05 1.029 ±0.031 0.528 ±0.052 0.392 ±0.047 0.244 ±0.002 0.113 ±0.000 Input-fb DT-style 0.658 ±0.21 0.738 ±0.00 0.791 ±0.01 0.706 ±0.04 0.442 ±0.02 1.052 ±0.063 0.494 ±0.128 0.382 ±0.035 0.339 ±0.005 0.155 ±0.003
+> A-DT 0.866 ±0.00 0.826 ±0.00 0.838 ±0.00 0.667 ±0.01 0.414 ±0.03 1.049 ±0.040 0.283 ±0.054 0.372 ±0.055 0.337 ±0.003 0.154 ±0.002 Domain-spec.
+> IQL B–––0.712 ±0.02 0.425 ±0.02 –––––CaDM B–––0.375 ±0.06 0.253 ±0.03 –––––DeepTrader C–––––0.983 ±0.012 -0.019 ±0.005 0.461 ±0.010 ––SARL C–––––1.017 ±0.007 0.043 ±0.006 0.460 ±0.005 ––SASRec D––––––––0.281 ±0.010 0.129 ±0.003
+> BERT4Rec D––––––––0.160 ±0.004 0.073 ±0.002 Ours UAT 0.873 ±0.00 0.827 ±0.00 0.842 ±0.00 0.808 ±0.02 0.599 ±0.01 1.071 ±0.038 0.554 ±0.123 0.473 ±0.013 0.341 ±0.002 0.155 ±0.001
+
+Theorem 2 (Universal approximation for feedback-dependent decision maps) . Under Assumptions 1– 4 in Appendix A.2, for every ε > 0 and every Lipschitz decision map F ∗ : Ht → ∆( A), there exists a finite-depth, finite-width UAT such that 
+
+sup 
+
+Ht∈H t
+
+∥FUAT (Ht) − F ∗(Ht)∥ < ε. (20) Theorem 2 is phrased as universality inheritance result. This is more rigorous than claiming uncon-ditional universality directly from the UAT equations. It isolates the contribution of the feedback pathway while transparently stating all assumptions borrowed from the underlying Transformer approximation theory. The full proof of Theorem 1 and Theorem 2 is given in Appendix A.3. 
+
+6 Experiments 
+
+Our experimental evaluation is organized into five strands: (i) overall performance; (ii) boundary analyses testing robustness to feedback degradation; (iii) ablations isolating each architectural component; (iv) mechanism analyses visualizing how attention is reallocated; and (v) efficiency and sensitivity studies. This structure allows us to connect empirical findings to theoretical predictions. All experiments use an RTX A6000 GPU (48GB). 
+
+6.1 Experimental Setup Datasets. Consider four benchmarks covering representative settings: (A) Synthetic POMDP (Dark Room) with episode-wise hidden goals under three across-episode schedules [ 63 , 28 ], (B) non-stationary clinical treatment [ 20 ] with regime-switching treatment efficacy, (C) financial trading with market regime transitions [ 58 ], and (D) movie recommendation [14 ] with delayed genre-preference signals. Detailed settings including dataset statistics, features, hyperparameters and evaluation metrics are provided in Appendix C. 
+
+Baselines. We compare UAT against the following baselines. (1) Cross-domain baselines: 
+
+observation-only: VT [ 52 ] and GTrXL [ 39 ]; test-time adaptation: TENT [ 53 ] and CoTTA [ 54 ]; 
+
+input-level feedback: DT-style [ 7] and A-DT, which concatenates shifted (at−1, r t−1) into each observation (defined in Proposition 2). 
+
+(2) Domain-specific baselines: IQL [ 27 ], CaDM [ 31 ] for Domain B; DeepTrader [ 55 ], SARL [ 59 ]for Domain C; SASRec [ 22 ], BERT4Rec [ 50 ] for Domain D. We also design six ablation variants to test the component-specific contribution detailed in Appendix D.1. 
+
+6.2 Overall Performance Strong overall performance of UAT. Table 1 shows that UAT achieves the best or statistically comparable results across all benchmarks. Auxiliary metrics are reported in Appendix C.5, where UAT remains consistently strong. UAT’s gains over observation-only baselines indicate that feedback 7Inverted reward UAT VT   
+
+> Dom. A (Acc)
+> 0.870 0.349
+> Dom. D (HR@10)
+> 0.341 0.296
+
+Figure 1: Boundary analysis. Left: Domain A Gradual under reward noise/corruption; Domain D under delay/corruption. Bands = std, ± marks the UAT −VT gap. Right: inverted reward ( r7 →− r). is informative, while its gains over input-level baselines show the gain of conditioning retrieval over just concatenating. The comparison with IQL in Domain B suggests that UAT outperforms reward usage through gradient alone. The weaker results of domain-specific baselines mainly reflect stronger non-stationary settings, which emphasize cross-regime stability rather than overall model quality. 
+
+The advantage of feedback-conditioned retrieval grows as regime becomes more complex. In simpler settings like darkroom and recommendation, UAT–A-DT gap is smaller (average accuracy 0.847 (UAT) vs. 0.843 (A-DT) in Domain A). In noisier and faster regimes like clinical decision and financial trading, the gap becomes larger (Domain B: 0.599 (UAT) vs. 0.442 (DT) / 0.414 (A-DT); Domain C CSI Sharpe: 0.473 (UAT) vs. 0.382 (DT) / 0.372 (A-DT)). This suggests that input-level methods have limitations in harder scenarios, where feedback-conditioned retrieval is more effective. 
+
+6.3 Feedback-Quality Degradation Boundary Analysis 
+
+We use the Domain A and Domain D benchmarks to examine how UAT behaves as the feedback signal becomes progressively less informative. Detailed settings are summarized in Appendix D.2. 
+
+UAT degrades toward the Vanilla Transformer when feedback weakens. Figure 1 sweeps feedback signal from clean to corrupted. With informative feedback, UAT leads VT by a large margin (Domain A: +0 .52 clean; Domain D: +0 .054 at d=0 ). The gap shrinks as feedback degrades: on Domain A, +0 .18 at σ=2 , then +0 .05 (null) and +0 .02 (shuffled); on Domain D, +0 .054 to +0 .014 
+
+by d=5 , and near VT under null/shuffled. Thus, UAT tracks feedback quality and collapses to VT as signal weakens; the slight Domain D undershoot is consistent with extra capacity and noise. 
+
+UAT relies on feedback structure rather than reward polarity. The table on the right of figure 1 reports inverted-reward setting. Inverting every reward leaves UAT almost unchanged. This indicates that UAT extracts regime from changes and patterns in feedback rather than from absolute value. 
+
+6.4 Ablation Study 
+
+Full ablation setting and results are reported in Appendix D.1. Removing any component weakens UAT, suggesting that the gains come from the integrated feedback-conditioned retrieval design. 
+
+6.5 Mechanism Analysis 
+
+We further analyze how the utility modulation term works. The detailed settings are in Appendix D.2. 
+
+UAT relocates attention through modulation. Figure 2 visualizes attention under controlled shifts on Domain A (150 steps of synthesis). Panel (a) shows VT’s attention concentrates in pre-shift areas, whereas UAT redirects attention to post-shift in panel (b). Panel (d) isolates this difference clearly. Panel (c) further shows that the modulation pathway concentrates after each shift. 
+
+Gating vectors read regime changes and accelerate adaptation. Figure 3 probes UAT’s modulation pathway on an HSI-45-only diagnostic during shock periods. Market regimes are assigned post hoc using 21-day forward returns and z-scores. The window-end gate ∥ρT ∥ rises sharply around 2020 COVID drawdown, while within-window ∥ρt∥ separates regimes in expected stress order: shock >
+
+bear > bull > chop. It also increases with realized-volatility quartiles and is largest under shocks 80 30 60 90 120                        
+
+> 149
+> 119
+> 89
+> 59
+> 29
+> Key position  j
+> (a) Vanilla TF Layer 3
+> 030 60 90 120
+> 149
+> 119
+> 89
+> 59
+> 29
+> (b) UAT Full Q′K′Layer 3
+> 030 60 90 120
+> Query position t
+> 149
+> 119
+> 89
+> 59
+> 29
+> Key position  j
+> obs-only QK
+> utility
+> modulation
+> (c) UAT Base QK + Modulation Layer 3
+> 030 60 90 120
+> Query position t
+> 149
+> 119
+> 89
+> 59
+> 29
+> (d) Difference (UAT VT) Layer 3
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> row-norm attn
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> Attn
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> Mod.
+> 0.75
+> 0.50
+> 0.25
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> row-norm attn
+
+Figure 2: Cyclic-shift attention on DarkRoom ( T =150 , two shifts; 32-seed mean). (a) VT recalls pre-shift prototypes. (b) UAT refocuses on the active regime. (c) Base attention (lower) with feedback modulation (upper), strongest post-shift. (d) UAT–VT logit change. relative to calm baseline, indicating that the feedback pathway learns interpretable signals. Figure 4 further links this mechanism to policy recovery on Sepsis: after a regime shift, UAT recovers to pre-shift accuracy within τ ≤5, whereas DT-style and A-DT remain 10 –15 pp below their baselines and continue to fluctuate. In total, UAT retains the highest pre-shift accuracy ( 90% ). 
+
+6.6 Efficiency and Sensitivity Study Efficiency. Overall, UAT achieves these gains with moderate computational overhead; details are provided in Appendix D.3. 
+
+Sensitivity. UAT-specific and cross-baseline training hyperparameters are summarized in table 3 in Appendix C.4. Figure 5 sweeps the decay λ and utility width du (one-at-a-time, all else fixed, three seeds). Both are theoretically sensible— λ governs utility memory and du limits feedback capacity—yet experimental results show that neither drives large swings. For λ, overall accuracy has cross-seed std mostly 0.01 –0.02 (max 0.023 ); post-shift std is usually 0.01 –0.04 . For du, std on overall accuracy is tight: ±0.007 at the default du=16 ; the only outlier is du=8 (low mean, ±0.068 ). Defaults (λ=0 .8, d u=16) therefore retain strong post-shift performance without brittle tuning. 
+
+7 Conclusion 
+
+We studied sequential decision making under non-stationarity by identifying feedback-blind retrieval as a structural bottleneck of observation-driven Transformer policies. After formalizing feedback-informative decision processes, we proposed the Utility-Augmented Transformer (UAT), which conditions query, key, and value projections on a compact action–reward utility state so that feedback can reshape attention retrieval during the forward pass. UAT preserves a zero-degradation path to vanilla attention when feedback is uninformative. Theoretically, we showed that UAT strictly enlarges the observation-only Transformer class and can approximate feedback-dependent decision maps under standard assumptions. Empirically, UAT improves across four non-stationary benchmarks, degrades gracefully under weakened feedback, passes component ablations, exhibits interpretable modulation patterns, and maintains moderate computational overhead. 92019-08 
+
+> 2019-09
+> 2019-11
+> 2020-01
+> 2020-03
+> 2020-05
+
+0
+
+1
+
+2
+
+3
+
+4
+
+5
+
+6
+
+> UAT  T 2
+
+(a) tracks regime over the test set    
+
+> bull bear shock chop
+> 10.47
+> 10.48
+> 10.49
+> 10.50
+> 10.51
+> 10.52
+> 10.53
+> 10.54
+> VT  hT 2
+
+0 10 20 30 40 50 60 
+
+step within window 
+
+0
+
+1
+
+2
+
+3
+
+4
+
+5
+
+6
+
+7
+
+> t 2
+
+(b) per-regime profile 
+
+bull 
+
+bear 
+
+shock 
+
+chop 
+
+Q1 
+
+(low) 
+
+Q2 Q3 Q4 
+
+(high) 
+
+realised-vol quartile 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+> normalised magnitude
+
+(c) gate scales with vol    
+
+> UAT TVT hT
+
+bull bear shock chop 
+
+0
+
+2
+
+4
+
+6
+
+8
+
+10 
+
+> magnitude / chop baseline
+
+(d) UAT is selective, VT is not         
+
+> UAT T/Tchop
+> VT hT/hTchop
+
+Figure 3: Regime gate on HSI-45. (a) ∥ρT ∥ tracks regime changes, while VT ∥hT ∥ remains flat. (b) Within-window ∥ρt∥ separates regimes. (c) Gate magnitude rises with volatility quartile. (d) Shock regimes show the largest increase over the calm baseline. 10 5 0 5 10 15 
+
+= t tshift 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+> expert-action acc.
+
+(a) accuracy around shift 
+
+> Vanilla TF
+> DT-style
+> A-DT
+> UAT (ours)
+
+VT DT A-DT UAT 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+> expert-action acc.
+
+88% 
+
+85% 83% 
+
+90% 
+
+(b) pre- vs post-shift 
+
+> pre
+> post
+
+Figure 4: Adaptation kinetics on Domain B Sepsis ( T =90 , 64 episodes, 265 shifts). (a) Per-step accuracy around regime shifts ( τ =0 ). (b) Mean accuracy before ( [−10 , −1] ) and after ( [+1 , +15] )each shift. Shaded bands denote SEM. 0.50 0.60 0.80 0.90 0.95 
+
+> EMA decay
+> 0.55
+> 0.60
+> 0.65
+> 0.70
+> 0.75
+> 0.80
+> Accuracy
+> 0.617
+
+(a) Sensitivity to      
+
+> UAT post shift
+> UAT overall
+> 4816 32 64
+> Utility dim du
+> 0.50
+> 0.55
+> 0.60
+> 0.65
+> 0.70
+> 0.75
+> 0.80
+> Accuracy
+> 0.602
+
+(b) Sensitivity to du
+
+> UAT post shift
+> UAT overall
+
+Figure 5: Sensitivity analysis on Domain B using one-at-a-time sweeps over three seeds. Shaded bands denote ± one standard deviation. Solid curves report post-shift expert-action accuracy, while dashed curves report overall test accuracy. Vertical lines indicate the default settings ( λ=0 .8, du=16 ). 10 References 
+
+[1] M. Mehdi Afsar, Trafford Crump, and Behrouz Far. Reinforcement learning based recommender systems: A survey. ACM Comput. Surv. , 55(7), December 2022. ISSN 0360-0300. doi: 10.1145/3543846. URL https://doi.org/10.1145/3543846 .[2] Charu C. Aggarwal, Alexander Hinneburg, and Daniel A. Keim. On the surprising behavior of distance metrics in high dimensional space. In Jan Van den Bussche and Victor Vianu, editors, 
+
+Database Theory — ICDT 2001 , pages 420–434, Berlin, Heidelberg, 2001. Springer Berlin Heidelberg. ISBN 978-3-540-44503-6. [3] Kai Arulkumaran, Marc Peter Deisenroth, Miles Brundage, and Anil Anthony Bharath. Deep reinforcement learning: A brief survey. IEEE Signal Processing Magazine , 34(6):26–38, 2017. doi: 10.1109/MSP.2017.2743240. [4] Michael Bain and Claude Sammut. A framework for behavioural cloning. In K Furukawa, D Michie, and S Muggleton, editors, Machine Intelligence 15: Intelligent Agents . Oxford University Press, 01 2000. ISBN 9780198538677. doi: 10.1093/oso/9780198538677.003.0006. URL https://doi.org/10.1093/oso/9780198538677.003.0006 .[5] Yoshua Bengio, Aaron Courville, and Pascal Vincent. Representation learning: A review and new perspectives. IEEE Transactions on Pattern Analysis and Machine Intelligence , 35(8): 1798–1828, 2013. doi: 10.1109/TPAMI.2013.50. [6] Olivier Chapelle. Modeling delayed feedback in display advertising. In Proceedings of the 20th ACM SIGKDD International Conference on Knowledge Discovery and Data Mining ,KDD ’14, page 1097–1105, New York, NY, USA, 2014. Association for Computing Machinery. ISBN 9781450329569. doi: 10.1145/2623330.2623634. URL https://doi.org/10.1145/ 2623330.2623634 .[7] Lili Chen, Kevin Lu, Aravind Rajeswaran, Kimin Lee, Aditya Grover, Michael Laskin, Pieter Abbeel, Aravind Srinivas, and Igor Mordatch. Decision transformer: reinforcement learning via sequence modeling. In Proceedings of the 35th International Conference on Neural Information Processing Systems , NIPS ’21, Red Hook, NY, USA, 2021. Curran Associates Inc. ISBN 9781713845393. [8] Wang Chi Cheung, David Simchi-Levi, and Ruihao Zhu. Reinforcement learning for non-stationary markov decision processes: the blessing of (more) optimism. In Proceedings of the 37th International Conference on Machine Learning , ICML’20. JMLR.org, 2020. [9] Thomas M. Cover and Joy A. Thomas. Entropy, Relative Entropy, and Mutual Information . John Wiley & Sons, Ltd, 2005. ISBN 9780471748823. doi: https://doi.org/10.1002/047174882X.ch2. URL https://onlinelibrary.wiley.com/doi/abs/10.1002/047174882X.ch2 .[10] Zihang Dai, Zhilin Yang, Yiming Yang, Jaime Carbonell, Quoc Le, and Ruslan Salakhutdi-nov. Transformer-XL: Attentive language models beyond a fixed-length context. In Anna Korhonen, David Traum, and Lluís Màrquez, editors, Proceedings of the 57th Annual Meet-ing of the Association for Computational Linguistics , pages 2978–2988, Florence, Italy, July 2019. Association for Computational Linguistics. doi: 10.18653/v1/P19-1285. URL 
+
+https://aclanthology.org/P19-1285/ .[11] Priya L. Donti, Brandon Amos, and J. Zico Kolter. Task-based end-to-end model learning in stochastic optimization. In Proceedings of the 31st International Conference on Neural Information Processing Systems , NIPS’17, page 5490–5500, Red Hook, NY, USA, 2017. Curran Associates Inc. ISBN 9781510860964. [12] Adam N. Elmachtoub and Paul Grigas. Smart “predict, then optimize”. Management Science ,68(1):9–26, 2022. doi: 10.1287/mnsc.2020.3922. URL https://doi.org/10.1287/mnsc. 2020.3922 .[13] David Ha, Andrew M. Dai, and Quoc V. Le. Hypernetworks. In International Conference on Learning Representations , 2017. URL https://openreview.net/forum?id=rkpACe1lx .11 [14] F. Maxwell Harper and Joseph A. Konstan. The movielens datasets: History and context. ACM Trans. Interact. Intell. Syst. , 5(4), December 2015. ISSN 2160-6455. doi: 10.1145/2827872. URL https://doi.org/10.1145/2827872 .[15] Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun. Deep residual learning for image recognition. In 2016 IEEE Conference on Computer Vision and Pattern Recognition (CVPR) ,pages 770–778, 2016. doi: 10.1109/CVPR.2016.90. [16] Xiangnan He, Lizi Liao, Hanwang Zhang, Liqiang Nie, Xia Hu, and Tat-Seng Chua. Neural collaborative filtering. In Proceedings of the 26th International Conference on World Wide Web ,WWW ’17, page 173–182, Republic and Canton of Geneva, CHE, 2017. International World Wide Web Conferences Steering Committee. ISBN 9781450349130. doi: 10.1145/3038912. 3052569. URL https://doi.org/10.1145/3038912.3052569 .[17] Geoffrey Hinton, Oriol Vinyals, and Jeff Dean. Distilling the knowledge in a neural network, 2015. URL https://arxiv.org/abs/1503.02531 .[18] Kurt Hornik, Maxwell Stinchcombe, and Halbert White. Multilayer feedforward networks are universal approximators. Neural Networks , 2(5):359–366, 1989. ISSN 0893-6080. doi: https://doi.org/10.1016/0893-6080(89)90020-8. URL https://www.sciencedirect.com/ science/article/pii/0893608089900208 .[19] Xun Huang and Serge Belongie. Arbitrary style transfer in real-time with adaptive instance normalization. In 2017 IEEE International Conference on Computer Vision (ICCV) , pages 1510–1519, 2017. doi: 10.1109/ICCV.2017.167. [20] Alistair E. W. Johnson, Tom J. Pollard, Lu Shen, Li-wei H. Lehman, Mengling Feng, Moham-mad Ghassemi, Benjamin Moody, Peter Szolovits, Leo Anthony Celi, and Roger G. Mark. MIMIC-III, a freely accessible critical care database. Scientific Data , 3:160035, 2016. doi: 10.1038/sdata.2016.35. [21] Leslie Pack Kaelbling, Michael L. Littman, and Anthony R. Cassandra. Planning and acting in partially observable stochastic domains. Artificial Intelligence , 101(1):99–134, 1998. ISSN 0004-3702. doi: https://doi.org/10.1016/S0004-3702(98)00023-X. URL 
+
+https://www.sciencedirect.com/science/article/pii/S000437029800023X .[22] Wang-Cheng Kang and Julian McAuley. Self-attentive sequential recommendation. In 2018 IEEE International Conference on Data Mining (ICDM) , pages 197–206, 2018. doi: 10.1109/ ICDM.2018.00035. [23] Yakup Kara, Melek Acar Boyacioglu, and Ömer Kaan Baykan. Predicting direction of stock price index movement using artificial neural networks and support vector machines: The sample of the istanbul stock exchange. Expert Systems with Applications , 38(5):5311–5319, 2011. ISSN 0957-4174. doi: https://doi.org/10.1016/j.eswa.2010.10.027. URL https://www. sciencedirect.com/science/article/pii/S0957417410011711 .[24] Albert King and Yaojie Zhang. Akshare. https://github.com/akfamily/akshare , 2022. [25] Petter N. Kolm, Reha Tütüncü, and Frank J. Fabozzi. 60 years of portfolio optimiza-tion: Practical challenges and current trends. European Journal of Operational Research ,234(2):356–371, 2014. ISSN 0377-2217. doi: https://doi.org/10.1016/j.ejor.2013.10.060. URL https://www.sciencedirect.com/science/article/pii/S0377221713008898 .60 years following Harry Markowitz’s contribution to portfolio theory and operations research. [26] Matthieu Komorowski, Leo A. Celi, Omar Badawi, Anthony C. Gordon, and A. Aldo Faisal. The Artificial Intelligence Clinician learns optimal treatment strategies for sepsis in intensive care. Nature Medicine , 24(11):1716–1720, 2018. doi: 10.1038/s41591-018-0213-5. URL 
+
+https://doi.org/10.1038/s41591-018-0213-5 .[27] Ilya Kostrikov, Ashvin Nair, and Sergey Levine. Offline reinforcement learning with implicit q-learning. In International Conference on Learning Representations , 2022. URL https: //openreview.net/forum?id=68n2s9ZJWF8 .12 [28] Michael Laskin, Luyu Wang, Junhyuk Oh, Emilio Parisotto, Stephen Spencer, Richie Steiger-wald, DJ Strouse, Steven Stenberg Hansen, Angelos Filos, Ethan Brooks, maxime gazeau, Himanshu Sahni, Satinder Singh, and Volodymyr Mnih. In-context reinforcement learning with algorithm distillation. In The Eleventh International Conference on Learning Representations ,2023. URL https://openreview.net/forum?id=hy0a5MMPUv .[29] Yann A. LeCun, Léon Bottou, Genevieve B. Orr, and Klaus-Robert Müller. Efficient Back-Prop , pages 9–48. Springer Berlin Heidelberg, Berlin, Heidelberg, 2012. ISBN 978-3-642-35289-8. doi: 10.1007/978-3-642-35289-8_3. URL https://doi.org/10.1007/ 978-3-642-35289-8_3 .[30] Oliver Ledoit and Michael Wolf. Robust performance hypothesis testing with the sharpe ratio. 
+
+Journal of Empirical Finance , 15(5):850–859, 2008. ISSN 0927-5398. doi: https://doi.org/10. 1016/j.jempfin.2008.03.002. URL https://www.sciencedirect.com/science/article/ pii/S0927539808000182 .[31] Kimin Lee, Younggyo Seo, Seunghyun Lee, Honglak Lee, and Jinwoo Shin. Context-aware dynamics model for generalization in model-based reinforcement learning. In Proceedings of the 37th International Conference on Machine Learning , ICML’20. JMLR.org, 2020. [32] Sergey Levine, Chelsea Finn, Trevor Darrell, and Pieter Abbeel. End-to-end training of deep visuomotor policies. J. Mach. Learn. Res. , 17(1):1334–1373, January 2016. ISSN 1532-4435. [33] Wenzhe Li, Hao Luo, Zichuan Lin, Chongjie Zhang, Zongqing Lu, and Deheng Ye. A survey on transformers in reinforcement learning. Transactions on Machine Learning Research ,2023. ISSN 2835-8856. URL https://openreview.net/forum?id=r30yuDPvf2 . Survey Certification. [34] Jayanta Mandi, James Kotary, Senne Berden, Maxime Mulamba, Victor Bucarey, Tias Guns, and Ferdinando Fioretto. Decision-focused learning: Foundations, state of the art, benchmark and future opportunities. J. Artif. Int. Res. , 80, September 2024. ISSN 1076-9757. doi: 10.1613/jair.1.15320. URL https://doi.org/10.1613/jair.1.15320 .[35] Valentyn Melnychuk, Dennis Frauen, and Stefan Feuerriegel. Causal transformer for estimating counterfactual outcomes. In Kamalika Chaudhuri, Stefanie Jegelka, Le Song, Csaba Szepesvari, Gang Niu, and Sivan Sabato, editors, Proceedings of the 39th International Conference on Ma-chine Learning , volume 162 of Proceedings of Machine Learning Research , pages 15293–15329. PMLR, 17–23 Jul 2022. URL https://proceedings.mlr.press/v162/melnychuk22a. html .[36] Vinod Nair and Geoffrey E. Hinton. Rectified linear units improve restricted boltzmann machines. In Proceedings of the 27th International Conference on International Conference on Machine Learning , ICML’10, page 807–814, Madison, WI, USA, 2010. Omnipress. ISBN 9781605589077. [37] Andrew Y. Ng, Daishi Harada, and Stuart J. Russell. Policy invariance under reward transforma-tions: Theory and application to reward shaping. In Proceedings of the Sixteenth International Conference on Machine Learning , ICML ’99, page 278–287, San Francisco, CA, USA, 1999. Morgan Kaufmann Publishers Inc. ISBN 1558606122. [38] Adrian Pagan. The econometrics of financial markets. Journal of Empirical Finance , 3(1): 15–102, 1996. ISSN 0927-5398. doi: https://doi.org/10.1016/0927-5398(95)00020-8. URL 
+
+https://www.sciencedirect.com/science/article/pii/0927539895000208 .[39] Emilio Parisotto, H. Francis Song, Jack W. Rae, Razvan Pascanu, Caglar Gulcehre, Siddhant M. Jayakumar, Max Jaderberg, Raphaël Lopez Kaufman, Aidan Clark, Seb Noury, Matthew M. Botvinick, Nicolas Heess, and Raia Hadsell. Stabilizing transformers for reinforcement learning. In Proceedings of the 37th International Conference on Machine Learning , ICML’20. JMLR.org, 2020. [40] Taesung Park, Ming-Yu Liu, Ting-Chun Wang, and Jun-Yan Zhu. Semantic image synthesis with spatially-adaptive normalization. In 2019 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pages 2332–2341, 2019. doi: 10.1109/CVPR.2019.00244. 13 [41] Ethan Perez, Florian Strub, Harm de Vries, Vincent Dumoulin, and Aaron Courville. Film: visual reasoning with a general conditioning layer. In Proceedings of the Thirty-Second AAAI Conference on Artificial Intelligence and Thirtieth Innovative Applications of Artificial Intelligence Conference and Eighth AAAI Symposium on Educational Advances in Artificial Intelligence , AAAI’18/IAAI’18/EAAI’18. AAAI Press, 2018. ISBN 978-1-57735-800-8. [42] Marin Vlastelica Poganˇ ci´ c, Anselm Paulus, Vit Musil, Georg Martius, and Michal Rolinek. Differentiation of blackbox combinatorial solvers. In International Conference on Learning Representations , 2020. URL https://openreview.net/forum?id=BkevoJSYPB .[43] Dean A. Pomerleau. Alvinn: An autonomous land vehicle in a neural network. In D. Touretzky, editor, Advances in Neural Information Processing Systems , volume 1. Morgan-Kaufmann, 1988. URL https://proceedings.neurips.cc/paper_files/paper/1988/ file/812b4ba287f5ee0bc9d43bbf5bbe87fb-Paper.pdf .[44] Stephane Ross, Geoffrey Gordon, and Drew Bagnell. A reduction of imitation learning and structured prediction to no-regret online learning. In Geoffrey Gordon, David Dunson, and Miroslav Dudík, editors, Proceedings of the Fourteenth International Conference on Artificial Intelligence and Statistics , volume 15 of Proceedings of Machine Learning Research , pages 627–635, Fort Lauderdale, FL, USA, 11–13 Apr 2011. PMLR. URL https://proceedings. mlr.press/v15/ross11a.html .[45] Walter Rudin. Principles of Mathematical Analysis . McGraw-Hill, New York, 3 edition, 1976. [46] David E. Rumelhart, Geoffrey E. Hinton, and Ronald J. Williams. Learning representations by back-propagating errors. Nature , 323:533–536, 1986. doi: 10.1038/323533a0. URL 
+
+https://doi.org/10.1038/323533a0 .[47] Thomas Schmied, Fabian Paischer, Vihang Patil, Markus Hofmarcher, Razvan Pascanu, and Sepp Hochreiter. Retrieval-augmented decision transformer: External memory for in-context rl. 
+
+ArXiv , 2024. URL https://arxiv.org/abs/2410.07071 .[48] John Schulman, Filip Wolski, Prafulla Dhariwal, Alec Radford, and Oleg Klimov. Proximal policy optimization algorithms, 2017. URL https://arxiv.org/abs/1707.06347 .[49] C. E. Shannon. A mathematical theory of communication. The Bell System Technical Journal ,27(3):379–423, 1948. doi: 10.1002/j.1538-7305.1948.tb01338.x. [50] Fei Sun, Jun Liu, Jian Wu, Changhua Pei, Xiao Lin, Wenwu Ou, and Peng Jiang. Bert4rec: Se-quential recommendation with bidirectional encoder representations from transformer. In 
+
+Proceedings of the 28th ACM International Conference on Information and Knowledge Management , CIKM ’19, page 1441–1450, New York, NY, USA, 2019. Association for Computing Machinery. ISBN 9781450369763. doi: 10.1145/3357384.3357895. URL 
+
+https://doi.org/10.1145/3357384.3357895 .[51] Richard S. Sutton and Andrew G. Barto. Reinforcement Learning: An Introduction . A Bradford Book, Cambridge, MA, USA, 2018. ISBN 0262039249. [52] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Łukasz Kaiser, and Illia Polosukhin. Attention is all you need. In Proceedings of the 31st International Conference on Neural Information Processing Systems , NIPS’17, page 6000–6010, Red Hook, NY, USA, 2017. Curran Associates Inc. ISBN 9781510860964. [53] Dequan Wang, Evan Shelhamer, Shaoteng Liu, Bruno Olshausen, and Trevor Darrell. Tent: Fully test-time adaptation by entropy minimization. In International Conference on Learning Representations , 2021. URL https://openreview.net/forum?id=uXl3bZLkr3c .[54] Qin Wang, Olga Fink, Luc Van Gool, and Dengxin Dai. Continual test-time domain adaptation. In 2022 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pages 7191–7201, 2022. doi: 10.1109/CVPR52688.2022.00706. 14 [55] Zhicheng Wang, Biwei Huang, Shikui Tu, Kun Zhang, and Lei Xu. Deeptrader: A deep reinforcement learning approach for risk-return balanced portfolio management with market conditions embedding. Proceedings of the AAAI Conference on Artificial Intelligence , 35(1): 643–650, May 2021. [56] Bryan Wilder, Bistra Dilkina, and Milind Tambe. Melding the data-decisions pipeline: decision-focused learning for combinatorial optimization. In Proceedings of the Thirty-Third AAAI Conference on Artificial Intelligence and Thirty-First Innovative Applications of Artificial Intelligence Conference and Ninth AAAI Symposium on Educational Advances in Artificial In-telligence , AAAI’19/IAAI’19/EAAI’19. AAAI Press, 2019. ISBN 978-1-57735-809-1. doi: 10. 1609/aaai.v33i01.33011658. URL https://doi.org/10.1609/aaai.v33i01.33011658 .[57] Yueh-Hua Wu, Xiaolong Wang, and Masashi Hamaya. Elastic decision transformer. In A. Oh, T. Naumann, A. Globerson, K. Saenko, M. Hardt, and S. Levine, editors, Advances in Neural Information Processing Systems , volume 36, pages 18532–18550. Curran Associates, Inc., 2023. URL https://proceedings.neurips.cc/paper_files/paper/2023/file/ 3b3889d313ba9476c12c2d77ea66b24f-Paper-Conference.pdf .[58] Yahoo Finance. Download historical data in Yahoo Finance. https://help.yahoo.com/kb/ SLN2311.html , 2026. Accessed April 2026. [59] Yunan Ye, Hengzhi Pei, Boxin Wang, Pin-Yu Chen, Yada Zhu, Ju Xiao, and Bo Li. Reinforcement-learning based portfolio management with augmented asset movement pre-diction states. Proceedings of the AAAI Conference on Artificial Intelligence , 34(01):1112– 1119, Apr. 2020. doi: 10.1609/aaai.v34i01.5462. URL https://ojs.aaai.org/index. php/AAAI/article/view/5462 .[60] Chulhee Yun, Srinadh Bhojanapalli, Ankit Singh Rawat, Sashank Reddi, and Sanjiv Kumar. Are transformers universal approximators of sequence-to-sequence functions? In International Conference on Learning Representations , 2020. URL https://openreview.net/forum? id=ByxRM0Ntvr .[61] Jingyuan Zhao, Yuyan Wu, Rui Deng, Susu Xu, Jinpeng Gao, and Andrew Burke. A survey of autonomous driving from a deep learning perspective. ACM Comput. Surv. , 57(10), May 2025. ISSN 0360-0300. doi: 10.1145/3729420. URL https://doi.org/10.1145/3729420 .[62] Qinqing Zheng, Amy Zhang, and Aditya Grover. Online decision transformer. In Kamalika Chaudhuri, Stefanie Jegelka, Le Song, Csaba Szepesvari, Gang Niu, and Sivan Sabato, editors, 
+
+Proceedings of the 39th International Conference on Machine Learning , volume 162 of Pro-ceedings of Machine Learning Research , pages 27042–27059. PMLR, 17–23 Jul 2022. URL 
+
+https://proceedings.mlr.press/v162/zheng22c.html .[63] Luisa Zintgraf, Sebastian Schulze, Cong Lu, Leo Feng, Maximilian Igl, Kyriacos Shiarlis, Yarin Gal, Katja Hofmann, and Shimon Whiteson. Varibad: variational bayes-adaptive deep rl via meta-learning. J. Mach. Learn. Res. , 22(1), January 2021. ISSN 1532-4435. 15 Appendix A Proof Notes 
+
+A.1 Proof of Feedback-Blind Propositions 
+
+Proof of Proposition 1. We proceed by induction over the layers. Let h(ℓ) 
+
+> j
+
+denote the representation at position j after layer ℓ (with h(0)  
+
+> j
+
+= xj the input embedding). 
+
+Base case ( ℓ = 0 ). The input embedding is xj = LN( W E oj + pj ), which depends only on oj and the positional encoding pj . Since Ht and H′ 
+
+> t
+
+share the same observation sequence, xj (Ht) = xj (H′
+
+> t
+
+)
+
+for all j ≤ t.
+
+Inductive step. Assume h(ℓ) 
+
+> j
+
+(Ht) = h(ℓ) 
+
+> j
+
+(H′
+
+> t
+
+) for all j ≤ t. The attention output at layer ℓ + 1 is 
+
+¯h(ℓ+1)  
+
+> t
+
+=
+
+> t
+
+X
+
+> j=1
+
+softmax j
+
+⟨W (ℓ) 
+
+> Q
+
+h(ℓ) 
+
+> t
+
+, W (ℓ) 
+
+> K
+
+h(ℓ) 
+
+> j
+
+⟩√dm
+
+!
+
+W (ℓ) 
+
+> V
+
+h(ℓ) 
+
+> j
+
+.
+
+By the inductive hypothesis, all query, key, and value terms are identical for both histories. The softmax and summation are deterministic functions of these terms, so ¯h(ℓ+1)  
+
+> t
+
+(Ht) = ¯h(ℓ+1)  
+
+> t
+
+(H′
+
+> t
+
+).The feed-forward network F F N (ℓ) and layer normalization LN are deterministic, so h(ℓ+1)  
+
+> t
+
+(Ht) = 
+
+h(ℓ+1)  
+
+> t
+
+(H′
+
+> t
+
+).By induction, after L layers, h(L) 
+
+> t
+
+(Ht) = h(L) 
+
+> t
+
+(H′
+
+> t
+
+). The task head πθ (· | Ht) =softmax( Whead h(L) 
+
+> t
+
++ bhead ) is deterministic, so the final retrieval representation Rt(Ht) =
+
+h(L) 
+
+> t
+
+(Ht) = h(L) 
+
+> t
+
+(H′
+
+> t
+
+) = Rt(H′
+
+> t
+
+).
+
+Proof of Proposition 2. Write xj = W (o) 
+
+> e
+
+oj + W (f ) 
+
+> e
+
+fj from xj = We[oj ; fj ] with the column partition We = [ W (o) 
+
+> e
+
+, W (f ) 
+
+> e
+
+]. The attention logit (dropping the irrelevant 1/√dm scaling) is 
+
+ℓt,j = ( WQxt)⊤(WK xj ) = x⊤ 
+
+> t
+
+W ⊤ 
+
+> Q
+
+WK xj
+
+=  o⊤ 
+
+> t
+
+(W (o) 
+
+> e
+
+)⊤ + f ⊤ 
+
+> t
+
+(W (f ) 
+
+> e
+
+)⊤ W ⊤ 
+
+> Q
+
+WK
+
+ W (o) 
+
+> e
+
+oj + W (f ) 
+
+> e
+
+fj
+
+,
+
+which expands into the four terms of (8) with the stated matrices. Each of the four interaction matrices is of the form A⊤W ⊤ 
+
+> Q
+
+WK B with A, B ∈ { W (o) 
+
+> e
+
+, W (f ) 
+
+> e
+
+}. Since W ⊤ 
+
+> Q
+
+WK ∈ Rd×d has rank at most 
+
+dm (it is the product of W ⊤ 
+
+> Q
+
+∈ Rd×dm and WK ∈ Rdm×d), each interaction matrix has rank at most 
+
+dm, and 
+
+col  A⊤W ⊤ 
+
+> Q
+
+WK B ⊆ col  A⊤W ⊤
+
+> Q
+
+, row  A⊤W ⊤ 
+
+> Q
+
+WK B ⊆ row  WK B,
+
+which gives the stated inclusions with A, B instantiated per term. Hence all four interaction modes factor through the single pair of maps x 7 → WQx and x 7 → WK x.
+
+A.2 Assumptions for Theoretical Properties Assumption 1 (Finite horizon and compact domains) . The horizon T is finite. The observation, action, and reward spaces satisfy O ⊂ Rdo , A ⊂ Rda , R ⊂ R, and each set is compact. 
+
+Assumption 2 (Rich utility encoding) . The utility encoder E : Rda × R → Rdu and local gate readouts {g(l,h ) 
+
+> u
+
+} satisfy: for any finite set of distinct action–reward pairs {(ai, r i)}Ni=1 , there exist encoder parameters such that the induced gating vectors {gi = g(l,h ) 
+
+> u
+
+(E(fa(ai), r i)) } are pairwise distinct for each head h and layer l.
+
+Assumption 3 (Universality of Transformers on augmented tokens) . Let ˜xj = [ xj ; gj ] ∈ Rd+dm . The chosen family of standard Transformers is universal on compact finite-length sequences of augmented tokens ˜x1: t: for every continuous target map defined on that sequence domain and every ε > 0, there exists a finite-width, finite-depth causal Transformer that approximates it uniformly to within ε.
+
+16 Assumption 4 (Target regularity) . The target decision map F ∗ : Ht → ∆( A) is Lipschitz on the compact history domain induced by Assumption 1. That is, there exists LF ∗ > 0 such that for all 
+
+Ht, H ′ 
+
+> t
+
+∈ H t,
+
+∥F ∗(Ht) − F ∗(H′
+
+> t
+
+)∥ ≤ LF ∗ · dH(Ht, H ′
+
+> t
+
+), (21) 
+
+where dH is a suitable metric on the history space (e.g., concatenated Euclidean distance on observations, actions, and rewards). 
+
+A.3 Proof of Hierarchy and Expressiveness Theorems 
+
+Proof of Theorem 1. Part 1: Fobs  
+
+> TF
+
+⊆ F UAT .
+
+For any Vanilla Transformer TF θ ∈ F obs  
+
+> TF
+
+with parameters θ = ( W (l)
+
+> Q,h
+
+, W (l)
+
+> K,h
+
+, W (l)
+
+> V,h
+
+)l,h , we construct a corresponding UAT θ′ with the same base projection matrices and zero utility-affine terms. Specifi-cally, we set W (u,l ) 
+
+> Q
+
+= W (u,l ) 
+
+> K
+
+= W (u,l ) 
+
+> V
+
+= 0 for all l; set U (l) 
+
+> Q,h
+
+= U (l) 
+
+> K,h
+
+= U (l) 
+
+> V,h
+
+= 0 for all l, h ; set 
+
+W (l,h ) 
+
+> s
+
+= 0 and W (h) 
+
+> ρ
+
+= 0 for all l, h , so that g(l,h ) 
+
+> j
+
+= 0 and ρ(h) 
+
+> t
+
+= 0 for all j, t, l, h .Substituting into Eqs. (14)–(16): 
+
+˜q(l,h ) 
+
+> t
+
+= W (l)
+
+> Q,h
+
+xt + diag(0) · 0 · xt + 0 · 0 = W (l)
+
+> Q,h
+
+xt,
+
+˜k(l,h ) 
+
+> j
+
+= W (l)
+
+> K,h
+
+xj + diag(0) · 0 · xj + 0 · 0 = W (l)
+
+> K,h
+
+xj ,
+
+˜v(l,h ) 
+
+> j
+
+= W (l)
+
+> V,h
+
+xj + diag(0) · 0 · xj + 0 · 0 = W (l)
+
+> V,h
+
+xj .
+
+These are exactly the standard attention projections. Therefore TF θ = UAT θ′ , and every function in 
+
+Fobs  
+
+> TF
+
+is also in FUAT .
+
+Part 2: Fobs 
+
+> TF
+
+̸ = FUAT .
+
+Let T ≥ 2 and consider a feedback-informative task (Definition 2). There exist histories Ht, H ′
+
+> t
+
+sharing the same observation sequence {oj }j≤t but differing at some position j∗ < t in their action– reward outcomes: (aj∗ , r j∗ )̸ = ( a′ 
+
+> j∗
+
+, r ′ 
+
+> j∗
+
+), and the optimal policies differ: π∗ 
+
+> t
+
+(· | Ht)̸ = π∗ 
+
+> t
+
+(· | H′
+
+> t
+
+).We construct a UAT that distinguishes Ht and H′
+
+> t
+
+:By Assumption 2, there exist utility encoder parameters such that uj∗+1 = E(fa(aj∗ ), r j∗ )̸ =
+
+E(fa(a′ 
+
+> j∗
+
+), r ′ 
+
+> j∗
+
+) = u′
+
+> j∗+1
+
+. Consequently, the local gates at position j∗ + 1 for layer l = 1 and head 
+
+h = 1 satisfy g(1 ,1) 
+
+> j∗+1
+
+̸ = g′(1 ,1)  
+
+> j∗+1
+
+. Let d = g(1 ,1)  
+
+> j∗+1
+
+− g′(1 ,1)  
+
+> j∗+1
+
+∈ Rdm . Since d̸ = 0 , there exists an index 
+
+k ∈ { 1, . . . , d m} such that dk̸ = 0 .We now choose the utility-affine matrices to exploit this difference. Select W (u, 1)  
+
+> K
+
+such that its k-th row w(u, 1) ⊤ 
+
+> K,k
+
+satisfies w(u, 1) ⊤ 
+
+> K,k
+
+xj∗+1 ̸ = 0 . This is feasible because xj∗+1 is a fixed non-zero vector (it depends on oj∗+1 via the input embedding), and we can freely set W (u, 1)  
+
+> K
+
+.Similarly, select W (1)  
+
+> Q
+
+such that its k-th row w(1) ⊤ 
+
+> Q,k
+
+satisfies w(1) ⊤ 
+
+> Q,k
+
+xt̸ = 0 . This is also feasible because xt is fixed and non-zero. For all other rows m̸ = k of W (u, 1)  
+
+> K
+
+, choose them such that w(u, 1) ⊤ 
+
+> K,m
+
+xj∗+1 = 0 (e.g., set those rows to zero). Then the attention logit difference at position (t, j ∗ + 1) for head h = 1 is: 
+
+∆ℓ(1)  
+
+> t,j ∗+1
+
+= x⊤ 
+
+> t
+
+W (1) ⊤ 
+
+> Q
+
+diag( g(1 ,1) 
+
+> j∗+1
+
+)W (u, 1)  
+
+> K
+
+xj∗+1 − x⊤ 
+
+> t
+
+W (1) ⊤ 
+
+> Q
+
+diag( g′(1 ,1)  
+
+> j∗+1
+
+)W (u, 1)  
+
+> K
+
+xj∗+1 
+
+= x⊤ 
+
+> t
+
+W (1) ⊤ 
+
+> Q
+
+diag( d)W (u, 1)  
+
+> K
+
+xj∗+1 
+
+=
+
+> dm
+
+X
+
+> m=1
+
+dm · (w(1) ⊤ 
+
+> Q,m
+
+xt) · (w(u, 1) ⊤ 
+
+> K,m
+
+xj∗+1 )= dk · (w(1) ⊤ 
+
+> Q,k
+
+xt) · (w(u, 1) ⊤ 
+
+> K,k
+
+xj∗+1 )̸ = 0 .
+
+The last equality holds because dm · (w(u, 1) ⊤ 
+
+> K,m
+
+xj∗+1 ) = 0 for all m̸ = k (by construction), and the 
+
+k-th term is non-zero (by Steps 2–3). 17 Since the softmax function is strictly monotone in each logit (holding others fixed), a non-zero logit difference implies a non-zero difference in the attention weight αt,j ∗+1 . Consequently, the attention output ¯h(1 ,1)  
+
+> t
+
+differs between Ht and H′
+
+> t
+
+. This difference propagates through the residual connection, FFN, and subsequent layers. By induction over layers, the final representation h(L) 
+
+> t
+
+(Ht)̸ = h(L) 
+
+> t
+
+(H′
+
+> t
+
+).Finally, since the action space |A| ≥ 2 and the optimal policies differ at Ht versus H′
+
+> t
+
+, we can choose the task head (Whead , b head ) such that πθ (· | Ht)̸ = πθ (· | H′
+
+> t
+
+). For instance, if h(L) 
+
+> t
+
+(Ht)̸ = h(L) 
+
+> t
+
+(H′
+
+> t
+
+),then for any action a where π∗ 
+
+> t
+
+(a | Ht) > π ∗ 
+
+> t
+
+(a | H′
+
+> t
+
+), set Whead to amplify the component corresponding to a sufficiently to maintain the ordering. Thus, this UAT realizes a mapping that distinguishes Ht and H′
+
+> t
+
+, which no observation-only Trans-former can do (Proposition 1). Hence UAT /∈ F obs  
+
+> TF
+
+, proving Fobs 
+
+> TF
+
+̸ = FUAT .
+
+Proof of Theorem 2. We construct the approximating UAT through five steps. 
+
+Step 1: Decomposition of F ∗. Write F ∗(Ht) = F ∗({oj }j≤t, {aj , r j }j<t ). Since F ∗ is Lipschitz on a compact domain (Assumption 4), it is uniformly continuous (Heine-Cantor theorem). Therefore, for any ε > 0, there exists δ > 0 such that if two histories are δ-close in the metric dH, their images under F ∗ are (ε/ 3) -close. 
+
+Step 2: Utility encoder approximation. The utility encoder E is a two-layer MLP. By the universal approximation theorem for MLPs [ 18 ], for any continuous target map ϕ∗ : A × R → Rdu and any 
+
+δ′ > 0, there exists E such that 
+
+∥E(fa(aj ), r j ) − ϕ∗(aj , r j )∥ < δ ′, ∀(aj , r j ) ∈ A × R . (22) The gate readouts g(l,h ) 
+
+> u
+
+(u) = tanh( W (l,h ) 
+
+> s
+
+u) and f (h) 
+
+> u
+
+(¯ u) = tanh( W (h) 
+
+> ρ
+
+¯u) are continuous and map onto (−1, 1) dm . For any target gating values (g∗ 
+
+> j
+
+, ρ ∗ 
+
+> t
+
+) ∈ [−1, 1] dm × [−1, 1] dm , there exist encoder and readout parameters achieving ∥gj − g∗ 
+
+> j
+
+∥ < δ ′ and ∥ρt − ρ∗ 
+
+> t
+
+∥ < δ ′ for all j ≤ t.
+
+Step 3: Fixed-gating equivalence to standard Transformer. For any fixed gating configuration 
+
+g = ( {gj }j≤t, ρ t) ∈ [−1, 1] dm×t × [−1, 1] dm , the UAT attention projections in Eqs. (14) – (16) become: 
+
+˜qt =  WQ + diag( ρt)W (u)
+
+> Q
+
+| {z }
+
+> ˜WQ(ρt)
+
+xt + UQρt
+
+| {z } 
+
+> bQ(ρt)
+
+,
+
+˜kj =  WK + diag( gj )W (u)
+
+> K
+
+| {z }  
+
+> ˜WK(gj)
+
+xj + UK gj
+
+| {z }   
+
+> bK(gj)
+
+,
+
+˜vj =  WV + diag( gj )W (u)
+
+> V
+
+| {z }  
+
+> ˜WV(gj)
+
+xj + UV gj
+
+| {z }   
+
+> bV(gj)
+
+.
+
+For fixed g, the matrices ˜WQ(ρt), ˜WK (gj ), ˜WV (gj ) and biases bQ(ρt), b K (gj ), b V (gj ) are constants. Therefore, the UAT with fixed gating is exactly equivalent to a standard Transformer operating on augmented token representations. By Assumption 3, for any ε′ > 0, there exists a finite-depth, finite-width standard Transformer that approximates F ∗ uniformly to within ε′ on the domain of augmented tokens. 
+
+Step 4: Gating-space covering argument. Let G = [ −1, 1] dm×t × [−1, 1] dm be the space of all possible gating configurations. Since G is a compact subset of a finite-dimensional Euclidean space, it is totally bounded: for any δ′′ > 0, there exists a finite δ′′ -net {g(i)}Ni=1 ⊂ G such that every g ∈ G 
+
+is within δ′′ of some net center g(i).By the Lipschitz continuity of UAT’s composite mapping (Assumption 4 and the smoothness of attention and FFN operations), the output difference between using g and its nearest net center g(i∗)
+
+is bounded by LUAT · δ′′ for some Lipschitz constant LUAT depending on the network architecture but not on the specific input. Choosing δ′′ = ε/ (3 LUAT ) ensures this discretization error is at most ε/ 3.18 Step 5: Composition and error accounting. We combine the errors from Steps 2–4 using the triangle inequality. For any history Ht:
+
+∥FUAT (Ht) − F ∗(Ht)∥ ≤ ∥ FUAT (Ht) − FUAT (Ht; ideal gates )∥
+
+| {z }
+
+> (a) encoder error
+
++ ∥FUAT (Ht; ideal gates ) − FUAT (Ht; nearest net center )∥
+
+| {z }
+
+> (b) discretization error
+
++ ∥FUAT (Ht; nearest net center ) − F ∗(Ht)∥
+
+| {z }
+
+> (c) Transformer approximation error
+
+.
+
+Term (a): By Step 2, choose encoder parameters such that ∥gj − g∗ 
+
+> j
+
+∥ < δ ′ and ∥ρt − ρ∗ 
+
+> t
+
+∥ < δ ′ with 
+
+δ′ = ε/ (3 LUAT ). The Lipschitz continuity of UAT ensures term (a) < ε/ 3.Term (b): By Step 4, the finite net guarantees term (b) < ε/ 3.Term (c): By Step 3 (Assumption 3), choose depth and width such that the standard Transformer approximates F ∗ to within ε/ 3 at each net center. Hence term (c) < ε/ 3.Summing the three bounds: 
+
+∥FUAT (Ht) − F ∗(Ht)∥ < ε
+
+3 + ε
+
+3 + ε
+
+3 = ε. 
+
+Since this holds for all Ht ∈ H t, we obtain the uniform bound in Eq. (20). 
+
+Corollary 1 (Existence of optimal UAT for feedback-informative tasks) . Under Assumptions 1–4, for any feedback-informative task (Definition 2), there exists a UAT that achieves strictly lower imitation loss than any observation-only Transformer. Proof. Let F ∗ be the expert policy. By Theorem 2, there exists a UAT, called UAT 1 such that 
+
+∥FUAT 1 − F ∗∥∞ < ε/ 2 for any ε > 0. By Definition 2, there exist histories Ht, H ′ 
+
+> t
+
+where F ∗(Ht)̸ =
+
+F ∗(H′
+
+> t
+
+) but any observation-only Transformer produces FTF (Ht) = FTF (H′
+
+> t
+
+). Choosing ε smaller than half the minimum separation min Ht ∥F ∗(Ht)−FTF (Ht)∥ over all feedback-informative histories ensures that UAT 1 outperforms every TF ∈ F obs  
+
+> TF
+
+.
+
+B Empirical Logit Decomposition 
+
+Recall the utility-affine projections in Eqs. (14) – (15) . Dropping the additive bias channels 
+
+UQρt, U K gj for clarity, the obs-grounded part of the projections reads 
+
+˜qt =  WQ + diag( ρt) W (u)
+
+> Q
+
+ xt, ˜kj =  WK + diag( gj ) W (u)
+
+> K
+
+ xj .
+
+Expanding the inner product ˜q⊤ 
+
+> t
+
+˜kj gives four logit terms: 
+
+˜q⊤ 
+
+> t
+
+˜kj = x⊤ 
+
+> t
+
+W ⊤ 
+
+> Q
+
+WK xj
+
+| {z } 
+
+> ℓ(0) :obs-only
+
++ x⊤ 
+
+> t
+
+W ⊤ 
+
+> Q
+
+diag( gj ) W (u) 
+
+> K
+
+xj
+
+| {z } 
+
+> ℓ(1) :obs ×fb
+
++ x⊤
+
+> t
+
+ diag( ρt) W (u)
+
+> Q
+
+⊤WK xj
+
+| {z } 
+
+> ℓ(2) :fb ×obs
+
++ x⊤
+
+> t
+
+ diag( ρt) W (u)
+
+> Q
+
+⊤diag( gj ) W (u) 
+
+> K
+
+xj
+
+| {z } 
+
+> ℓ(3) :fb ×fb
+
+. (23) Term ℓ(0) is identical to vanilla attention. ℓ(1) re-ranks each key by its per-token utility gj , while 
+
+ℓ(2) reshapes the query according to the current regime gate ρt. The cross term ℓ(3) activates only when both gates are simultaneously non-trivial. UAT exactly recovers a Vanilla Transformer when 
+
+ρt, g j → 0, in which case ℓ(1) = ℓ(2) = ℓ(3) = 0 .The signed range [−1, 1] could be read as a directional coefficient on the learned utility-affine bases. Positive entries reinforce the corresponding rows of W (u), negative entries subtract or reverse them, and entries near zero suppress that modulation channel. Hence the direction of the logit change is jointly determined by the gate signs (gj , ρ t) and the learned matrices W (u) 
+
+> Q
+
+, W (u) 
+
+> K
+
+, which lets UAT either increase or decrease retrieval weights according to feedback. 19 C Supplementary Details of Main Experiment 
+
+C.1 Benchmark Datasets and Environment Details Domain A (Synthetic DarkRoom). A 10 ×10 DarkRoom grid [ 63 , 28 ] with an invisible goal. Each episode starts from a random non-goal cell. Observation (10-dim): the 3×3 local wall mask (9 binary entries) plus a noisy binary cue that fires with probability 0.5 when the agent is within Manhattan distance [ 2 ] 2 of the goal. Actions (5): stay/ up / down / left / right (where at = 0 stands for stay). 
+
+Reward : +2 at the goal, +0 .5 for reducing Manhattan distance, −0.5 for increasing it, and −0.01 per step. The hidden goal remains fixed within each episode and follows one of three schedules across episodes: gradual drift, abrupt jumps every six episodes, or a four-waypoint cyclic schedule. Model histories and utility states are reset at episode boundaries, and the current goal is never observed directly. 
+
+Domain B (Non-Stationary Sepsis Treatment). Starting states are 39,232 ICU admission snapshots from MIMIC-III [ 20 ] via the gym-sepsis simulator [ 26 ]. We use 20k for training and 5k for testing (IID split over patients). 
+
+State preprocessing. Raw states are 46-dimensional clinical vectors (vitals, labs, demographics). We standardize them on the training pool and reduce them to 20 PCA components (about 74% explained variance). 
+
+Action space. The original 24 discretized treatment combinations ( 4 vasopressor levels × 6 fluid levels) are mapped to 5 ordered intensity clusters by k-means on the treatment-level grid. Clusters are ordered by centroid treatment intensity: cluster 0 corresponds to minimal/no treatment, and cluster 4 to the highest-intensity treatment cluster. 
+
+Reward. The step reward is composed of a dense intermediate signal and a sparse terminal outcome. At each non-terminal step, the agent receives rt = 0 .1 ∆SOFA t + 0 .05 ∆Lactate t [ 20 ], where ∆( ·)
+
+denotes improvement (decrease) relative to the previous step. At episode termination, a bonus of 
+
++1 is awarded for recovery ( SOFA <0.3 and Lactate <0.3) and −1 for death; early termination is stochastic with death probability pdie and recovery probability prec that depend on the current SOFA and lactate levels. Treatment resistance is modelled by decaying efficacy after ≥ 3 consecutive identical actions. 
+
+Designed Hidden regime shift. Each episode contains 4–6 hidden regime segments with randomized lengths (sampled and normalized to the T =90 horizon), switching among three efficacy regimes: 
+
+(0) Fluid-responsive : fluids strongly improve MAP and lactate; vasopressors give mild benefit. Expert action: moderate-to-high fluid (cluster 3). (1) Vasopressor-dependent : vasopressors strongly improve MAP; fluids are harmful through overload. Expert action: highest-intensity treatment (cluster 4). (2) Conservative : any aggressive treatment is harmful; only minimal intervention (vaso ≤ 1,fluid ≤ 1) helps. Expert action: minimal treatment (cluster 0). Regime identity is never revealed to the agent; it can only be inferred from how the physiological state responds to treatment. The expert observes the current regime label directly and selects the intensity level that the regime favours. 
+
+Domain C (Financial Markets). Daily individual equities data in three stock index markets; see Table 2. 
+
+Data source. DJIA and HSI constituents are fixed as of April 2026, and their daily OHLCV series are obtained from Yahoo Finance [ 58 ] historical data; CSI 300 constituents and OHLCV series are collected through AkShare [ 24 ] using Chinese forward-adjusted ( qfq ) prices. We build features and returns from these stock-level series and allocate weights across them (plus cash), rather than trading the index itself as a single asset. We use the common trading-date intersection within each market, then restrict every constituent series to that shared calendar before computing indicators and building stride-1 length-T windows. 
+
+Observation. For each asset, the per-step 11-dim feature vector consists of technical indicators computed from OHLCV: RSI, MACD, MACD signal, MACD histogram, ATR, ADX, CCI, MFI, OBV, stochastic %K, and stochastic %D [ 23 ]. Features are z-scored per asset using training-period statistics only and clipped to [−5, 5] . A market with N assets has native observation size N ×11 ; the joint model pads all markets to Nmax =45 , giving a fixed 45 ×11=495 input. 
+
+Action. A continuous portfolio weight vector over risky assets plus one cash position, output by a softmax. For the shared joint model, the action head has Nmax +1=46 dimensions (cash plus 20 45 padded asset slots). During market-specific rollout and evaluation, the output is sliced to the actual N +1 active dimensions and re-normalised before computing portfolio returns. In the reported joint-market experiments we set transaction costs to zero for all three markets, matching the market configuration used by the released scripts [25]. 
+
+Training and evaluation protocol (joint cross-market). Domain C uses one shared checkpoint per seed. Each market is first split chronologically into an 80% training segment and a 20% test segment on its own trading calendar. We then construct stride-1 windows of T =60 days independently within each split, pad the asset dimension to Nmax , and concatenate the three markets’ training windows into a pooled multi-market training set. Each window is treated as an independent trajectory sample. The shared checkpoint is evaluated separately on each market’s held-out windows. Targets use next-day close-to-close price relatives, avoiding same-day leakage from technical indicators. Outputs are padded to Nmax +1 dimensions including cash, then sliced and re-normalised to the active N +1 
+
+assets during evaluation. During evaluation, each rolling window contributes only its final portfolio prediction, yielding one return per trading date for the computation of Sharpe ratio and CAGR. Table 2: Domain C markets. Calendar coverage is through 2026 at data-collection time (see Ap-pendix C.1 for how experiments form constituent-aligned panels).         
+
+> Market Assets Period (calendar)
+> DJIA 30 2013–2026 HSI 45 2015–2026 CSI 300 30 2018–2026
+
+Domain D (Delayed-Feedback Recommendation). MovieLens-25M [ 14 ] contains 25M ratings from 162,541 users on 62,423 movies. We filter to users with ≥ 100 interactions and items with ≥ 50 
+
+ratings, then sample up to 20k eligible user sequences in chronological order. 
+
+Genre-regime construction. The MovieLens genres are mapped to K=4 broad preference groups by hand-merging the official pipe-separated genre tags from the dataset. Each user sequence keeps its real chronological item order and is augmented with a hidden regime schedule that switches every 12–20 steps. The regime is exposed only through delayed feedback: 
+
+rt = ( rating t/5) · 1[genre (it) = ct] − 0.2 · 1[genre (it)̸ = ct],
+
+where ct is the active cluster; the main experiment uses delay d=1 . This follows relative typical settings [6, 37]. 
+
+State, action, and delayed feedback. At prediction position t, the model observes the logged item prefix through the completed interaction it and predicts a regime-aware expert recommendation target 
+
+a∗ 
+
+> t
+
+over the filtered vocabulary; this target is selected from the active genre cluster and need not equal the logged successor. The synthetic reward rt is computed from the completed logged interaction 
+
+(it, rating t) and is therefore dataset-supplied historical feedback rather than feedback for a∗ 
+
+> t
+
+. In the main setting ( d=1 ), feedback-aware models receive ˜rt = rt−d, zero-padded when t − d < 1. The sequence length is T =50 .
+
+C.2 Expert Construction and Domain-Specific Objectives 
+
+All domains use the behavioral cloning protocol in section 4.3: models observe Ht and imitate a privileged expert. 
+
+Domain A (Synthetic DarkRoom). The expert observes the true goal and selects the Manhattan-optimal movement. The loss is cross-entropy [49] over 5 actions. 
+
+Domain B (Non-Stationary Sepsis Treatment). The expert observes the active treatment-efficacy regime and selects the intensity level that the regime favors described in Appendix C.1. The training objective is cross-entropy [49] over the 5 clustered intensity levels. 
+
+Domain C (Financial Markets). The expert is constructed from hindsight [ 17 ]: given realized next-period price relatives yt ∈ RN +1 including the cash asset ( y(0)  
+
+> t
+
+=1 ), the target portfolio is a soft label with cash logit 0 and risky-asset logits (y(i) 
+
+> t
+
+− 1) /τ for i = 1 , . . . , N ; padded asset slots are masked before the softmax. The training objective is the KL divergence [ 9 ] between the model output 21 and this hindsight label: 
+
+LKL = 1
+
+BT 
+
+> B
+
+X
+
+> b=1
+> T
+
+X
+
+> t=1
+
+DKL 
+
+ π∗ 
+
+> b,t
+
+∥ πθ (· | H b,t ). (24) 
+
+Domain D (Delayed-Feedback Recommendation). The expert observes the active hidden genre regime and selects a target item from that regime’s genre cluster. The training objective is cross-entropy [ 49 ] over the item vocabulary at each sequence position; the delayed reward is an input signal for feedback-aware models, not the supervised target. 
+
+Feedback access by model family. Feedback-blind baselines (Vanilla Transformer, GTrXL, TENT, CoTTA) receive only {o1, . . . , o t}. DT-style baselines expose shifted reward/return information as input; A-DT also concatenates the shifted action. UAT sends the shifted logged action and the currently available delayed reward to the utility encoder; in Domain D, the delay is applied to the reward channel, while the supervised target a∗ 
+
+> t
+
+is never supplied as feedback. 
+
+C.3 Evaluation Metrics Domain A (Synthetic DarkRoom). Accuracy against the oracle optimal action measures overall de-cision quality. Navigation efficiency η = d∗/ max( tgoal , d ∗), where d∗ is the start-to-goal Manhattan distance [ 2] and tgoal is the step at which the agent first reaches the goal ( tgoal =T if never reached), captures how directly the agent exploits feedback to locate the hidden goal; η=1 corresponds to shortest-path navigation. Each shift pattern (gradual, abrupt, cyclic) is evaluated separately. 
+
+Domain B (Non-Stationary Sepsis Treatment). Accuracy against the regime-aware oracle on the 5-action clustered space serves as the primary metric, with per-regime accuracy across the three treatment efficacy regimes (fluid-responsive, vasopressor-dependent, conservative). Post-shift accuracy , computed over the first 5 steps after each regime switch, quantifies adaptation speed. 
+
+Domain C (Financial markets). Annualized Sharpe ratio [30 ] and annualized return [ 38 ] measure risk-adjusted and absolute profitability. Both are computed from the simple daily portfolio returns on each held-out market. Annualized return is reported as CAGR, wealth 252 /T T − 1 for the daily equity-index markets. Transaction costs are zero in the reported joint-market runs [25]. 
+
+Domain D (Delayed-Feedback Recommendation). Hit Rate@ K (HR@ K) and NDCG@ K [16 ](K=10 , 20 ) on held-out user sequences, evaluated under the leave-one-out protocol with 99 sampled negatives. The positive item is the regime-aware expert target; HR@ K measures whether it appears in the top-K, and NDCG@ K additionally rewards higher ranks. 
+
+C.4 Hyperparameters 
+
+Hyperparameter details are in Table 3. Shared architecture and optimizer settings are matched across Transformer-based methods within each domain. UAT-specific parameters were chosen by coarse validation search and reused in ablations unless stated otherwise. 
+
+C.5 Additional Diagnostics for Main Experiment 
+
+Figure 6 reports additional diagnostic metrics not included in the main table. These metrics provide a more fine-grained view across navigation efficiency, regime-wise clinical accuracy, market-level returns, and recommendation ranking performance. Across these auxiliary measures, UAT remains consistently among the strongest methods, supporting the robustness of the main results beyond the primary evaluation metrics. 
+
+D Supplementary Details of Additional Experiments 
+
+D.1 Ablation Experiment Ablation Variant Design. Table 4 lists the one-factor ablation variants, which could be divided into two groups. Group I: Utility encoder tests the necessity of each input signal and the nonlinear structure: no-action uses reward only; no-reward uses action only; linear replaces the MLP with 22 Table 3: Hyperparameters (shared across main / ablation). “UE & regime lr” applies to encoder E
+
+and readout Wρ.
+
+Parameter Domain A Domain B Domain C Domain D 
+
+> Shared
+
+dmodel / H / dff / L 64/4/128/3 64/4/128/3 128/4/256/4 64/4/128/3 Batch size B 256 256 128 × 3 = 384 256 Episode / seq length T 60 90 60 50 Optimizer Adam, grad clip 1.0
+
+Weight decay 10 −5 10 −5 10 −5 10 −5
+
+Base lr 2e-3 2e-3 2e-3 1e-3 Dropout 0.05 0.2 0.05 0.1 
+
+> UAT
+
+Utility dim du 16 16 32 16 Action emb dim dact 8 8 64 8EMA decay λ 0.7 0.8 0.9 0.95 Gating init Ws, Wρ 0 (bias-free) 
+
+W (u) init / U init N (0 , 0.12) / 0
+
+UE hidden dim 32 32 64 32 UE & regime lr 2e-2 2e-2 2e-2 2e-2 
+
+> Train
+
+Max epochs / patience 500 / 100 500 / 100 500 / 100 500 / 100 Feedback delay d — — — 1CoTTA 
+
+> TENT
+> VT
+> GTrXL
+> DT-style
+> A-DT
+> UAT
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> η
+> Gradual
+> VT
+> TENT
+> CoTTA
+> GTrXL
+> DT-style
+> A-DT
+> UAT
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> Abrupt
+> VT
+> TENT
+> CoTTA
+> GTrXL
+> DT-style
+> A-DT
+> UAT
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> Cyclic
+> CaDM
+> A-DT
+> CoTTA
+> TENT
+> DT-style
+> IQL
+> VT
+> GTrXL
+> UAT
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Accuracy
+> R0
+> CaDM
+> GTrXL
+> CoTTA
+> TENT
+> VT
+> A-DT
+> IQL
+> DT-style
+> UAT
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> R1
+> CaDM
+> GTrXL
+> DT-style
+> VT
+> A-DT
+> IQL
+> CoTTA
+> TENT
+> UAT
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> R2
+> SARL
+> DT-style
+> DeepTrader
+> VT
+> A-DT
+> CoTTA
+> GTrXL
+> TENT
+> UAT
+> 0.00
+> 0.02
+> 0.04
+> 0.06
+> 0.08
+> 0.10
+> 0.12
+> 0.14
+> 0.16
+> Ann. Return
+> DJIA
+> DeepTrader
+> SARL
+> DT-style
+> VT
+> CoTTA
+> A-DT
+> TENT
+> GTrXL
+> UAT
+> −0.02
+> 0.00
+> 0.02
+> 0.04
+> 0.06
+> 0.08
+> 0.10
+> 0.12
+> HSI
+> CoTTA
+> VT
+> A-DT
+> TENT
+> GTrXL
+> DT-style
+> SARL
+> DeepTrader
+> UAT
+> 0.00
+> 0.01
+> 0.02
+> 0.03
+> 0.04
+> 0.05
+> 0.06
+> CSI300
+> BERT4Rec
+> CoTTA
+> TENT
+> SASRec
+> VT
+> GTrXL
+> GRU4Rec
+> A-DT
+> DT-style
+> UAT
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> HR@20
+> HR@20 (overall)
+> BERT4Rec
+> CoTTA
+> TENT
+> SASRec
+> VT
+> GTrXL
+> GRU4Rec
+> A-DT
+> DT-style
+> UAT
+> 0.00
+> 0.05
+> 0.10
+> 0.15
+> 0.20
+> 0.25
+> 0.30
+> 0.35
+> macro-HR@10
+> macro-HR@10 (avg.\ over 4 regimes)
+
+(a) Domain A — Navigation Efficiency η (b) Domain B — Per-regime Accuracy 
+
+(c) Domain C — Annualized Return by Market (d) Domain D — Overall Ranking Metrics 
+
+Figure 6: Additional diagnostic metrics. Bars sorted ascending; (a) Domain A navigation efficiency 
+
+η. (b) Domain B per-regime acc. (c) Domain C annualized return. (d) Domain D HR@20 / HR@10 (over regimes). Error bars = ±std (3 seeds). a linear map. Group II: Attention modulation selectively disables components of the utility-affine attention: no-Q removes W (u)
+
+Q ; no-KV removes W (u)
+
+K and W (u)
+
+V ; no-bias removes the utility-bias matrices UQ, U K , U V .
+
+Design rationale. Group I isolates the feedback inputs and nonlinear utility encoder. Group II maps to the logit decomposition: noQ removes regime-level query modulation, noKV removes token-level key/value modulation, and noBias removes observation-independent utility offsets. Each variant disables only the targeted component and otherwise preserves the same backbone and all other settings as UAT, ensuring that performance differences isolate the corresponding component. 23 Table 4: Ablation variants. Same architecture / training as full UAT. 
+
+Variant Modification Meaning 
+
+Group I: Utility Encoder 
+
+UAT-noAction aj =0 ; reward only Isolate reward signal UAT-noReward rj =0 ; action only Isolate action signal UAT-linear uj = W [aj ; rj ]; linear Remove nonlinear encoding 
+
+Group II: Utility-Affine Attention 
+
+UAT-noQ W (u) 
+
+> Q
+
+=0 ; ρt disabled Remove query modulation UAT-noKV W (u) 
+
+> K
+
+=W (u) 
+
+> V
+
+=0 ; gj disabled Remove key/value modulation UAT-noBias UQ=UK =UV =0 Remove observation-independent bias 
+
+Table 5: Ablation, 3 seeds. Columns match Table 1. Bold : best; underline: second.                                                                                                                                                                       
+
+> Group Variant A(Acc) BC(SR) D
+> Grad. ↑Abr. ↑Cyc. ↑Acc ↑Post ↑DJIA ↑HSI ↑CSI ↑HR ↑NDCG ↑
+> Encoder
+> no-action 0.707 ±0.02 0.605 ±0.01 0.702 ±0.02 0.793 ±0.02 0.589 ±0.02 1.062 ±0.04 0.339 ±0.10 0.407 ±0.03 0.341 ±0.001 0.154 ±0.001
+> no-reward 0.395 ±0.01 0.415 ±0.01 0.459 ±0.02 0.706 ±0.03 0.439 ±0.04 1.045 ±0.06 0.272 ±0.07 0.396 ±0.03 0.293 ±0.002 0.134 ±0.001
+> linear 0.870 ±0.00 0.826 ±0.00 0.834 ±0.00 0.740 ±0.04 0.485 ±0.03 1.038 ±0.03 0.327 ±0.15 0.417 ±0.06 0.340 ±0.002 0.155 ±0.001 Attention
+> no-Q 0.872 ±0.00 0.827 ±0.00 0.837 ±0.01 0.807 ±0.01 0.591 ±0.01 1.024 ±0.03 0.251 ±0.14 0.400 ±0.05 0.339 ±0.002 0.155 ±0.001
+> no-KV 0.506 ±0.02 0.438 ±0.00 0.505 ±0.02 0.671 ±0.03 0.402 ±0.03 0.972 ±0.02 0.487 ±0.08 0.367 ±0.03 0.294 ±0.003 0.134 ±0.001
+> no-bias 0.871 ±0.00 0.826 ±0.00 0.840 ±0.00 0.793 ±0.03 0.583 ±0.03 1.070 ±0.02 0.462 ±0.15 0.417 ±0.05 0.336 ±0.001 0.154 ±0.001 Ours UAT 0.873 ±0.00 0.827 ±0.00 0.842 ±0.00 0.808 ±0.02 0.599 ±0.01 1.071 ±0.04 0.554 ±0.12 0.473 ±0.01 0.341 ±0.002 0.155 ±0.001
+
+Results. (1) All components contribute, while full UAT remains the strongest. As shown in Table 5, the full UAT achieves the best overall performance across all domains, indicating that its gains do not come from any single component in isolation. The proposed architecture functions as an integrated system, and removing any one of them weakens the final design. (2) Component contributions differ. 
+
+Among attention-side ablations, removing KV pathway causes the largest degradation on almost all domains: in Domain A, average accuracy drops from 0.847 to 0.483 in no-KV, much more severely than in no-Q (0.845) or no-bias (0.846). This may suggest that the main gains of attention retrieval come from KV-side, while Q-side and bias mainly provide additional refinement. The encoder-side ablations show that removing reward is more harmful than removing action, matching the intuition that regime shifts are primarily revealed by changed realized reward. 
+
+D.2 Boundary and Mechanism Analyses 
+
+This subsection records protocol differences for boundary and mechanism analyses. The relative results are fully discussed in the main text. 
+
+Boundary Analysis: Domain A (Reward Quality Degradation). UAT and Vanilla-TF are trained/evaluated on gradual DarkRoom under clean rewards, Gaussian reward noise ( σ ∈{0.5, 1.0, 2.0, 5.0}), null rewards, within-episode reward shuffling, and sign-flipped rewards. Cor-ruption is applied to the feedback channel used by the model; the metric is per-step optimal-action accuracy over three seeds. 
+
+Boundary Analysis: Domain D (Delay Sensitivity). UAT and Vanilla-TF are retrained for d ∈{0, 1, 3, 5, 10 } using the same MovieLens genre-regime construction. For this boundary sweep, d=0 
+
+denotes immediate access to rt from the latest completed logged interaction; it does not expose feedback for the supervised recommendation target a∗ 
+
+> t
+
+. Other hyperparameters match Table 3; evaluation uses leave-one-out ranking with 99 negatives. The corruption study keeps the main delay 
+
+d=1 and applies null/shuffle/adversarial delayed-reward corruption. 
+
+Mechanism Analysis: Domain A: In-Episode Goal Shift (Left Panel). Domain A checkpoints are rolled out without retraining on an extended cyclic DarkRoom diagnostic (one episode, Th=150 )with two hidden goal shifts. We average attention maps over 32-seed rollouts and visualize Vanilla-TF attention, UAT attention, the UAT base/modulation decomposition, and the UAT–VT logit difference. 
+
+Mechanism Analysis: Domain C: Regime Gate on HSI (Right Panel). We train and evaluate UAT exclusively on the HSI dataset. Each held-out rolling window is labeled post hoc on its last day 24 Table 6: Efficiency measured on Domain A ( B=256 , T =60 , dm=16 , H=4 , single GPU).                                          
+
+> Training Inference Model Params ms/ep Peak MB ms/step Peak MB
+> Vanilla-TF 109,828 17.1 181.4 2.1 74.9 GTrXL 146,884 30.2 316.2 5.3 180.4 TENT 109,828 14.1 197.6 11.3 218.7 CoTTA 109,828 14.1 199.8 11.3 221.1 DT-style 102,660 17.4 515.4 6.2 178.7 A-DT 102,532 14.6 202.8 2.1 94.0
+> UAT 155,972 32.4 253.9 3.1 112.0
+
+into bull, bear, shock, or chop, using information strictly after that day only for the forward-looking statistics (never fed to the model). We form an equal-weight market proxy from constituent simple returns and convert to daily log returns; let σ63 be the trailing 63 -day standard deviation through the label day. Shock takes priority if the label day’s absolute log return satisfies |rt|/σ 63 > 1.5 and 
+
+the maximum peak-to-trough drawdown over the subsequent five trading days exceeds 1.5% . If not shock, bull applies when the cumulative log return over the next 21 trading days exceeds +1% , bear 
+
+when it falls below −1% , and chop otherwise. We then extract ∥ρt∥2 at inference time; regime labels are not used for training or adaptation. 
+
+D.3 Efficiency Analysis Experiment Complexity Analysis. For hidden size d, H heads ( dm = d/H ), and L layers, UAT adds the following parameters, all independent of the horizon T :• Utility-affine projections: 3LH · dm · d = 3 Ld 2 (since dm = d/H and H heads); • Utility bias matrices: 3LH · d2 
+
+> m
+
+= 3 Ld md;• Gating readouts: LH · dm · du + H · dm · du = ( L + 1) Hd mdu;• Utility encoder: |ϕu| (negligible: two-layer MLP with small hidden width). The total parameter overhead is O(Ld 2 + Ld md + LHd mdu) = O(Ld 2), since dm = d/H and 
+
+du ≪ d in practice. The per-forward computational cost matches standard attention, O(BT 2d)
+
+for batch size B and horizon T , with all UAT -specific terms being lower-order additions. Training reduces to a single parallel forward pass when actions and rewards are dataset-supplied, and adds an extra length-T rollout phase when rewards depend on the model. 
+
+Experimental Results. Table 6 shows that UAT achieves its performance gains without incurring pro-hibitive computational cost. UAT’s parameter count is comparable to GTrXL (155,972 vs. 146,884), and its training cost is nearly identical (32.4 vs. 30.2 ms/epoch). Its memory usage is substantially lower than DT-style (253.9 vs. 515.4 MB). At inference, UAT is considerably faster than TENT, GTrXL and DT-style. 25
