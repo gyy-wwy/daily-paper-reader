@@ -6,44 +6,44 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-23
-- 运行时间：2026-07-23 21:36:41 UTC
+- 最新运行日期：2026-07-24
+- 运行时间：2026-07-24 20:16:55 UTC
 - 运行状态：成功
 - 本次总论文数：8
-- 精读区：4
-- 速读区：4
+- 精读区：5
+- 速读区：3
 
 ### 今日简报（AI）
-今日共处理8篇推荐相关论文，精读4篇、速读4篇，重点关注自主语言代理驱动的个性化推荐工具学习以及Wukong-HSTU架构的通用模型。最值得精读的是打分9.0的《Personalized Recommendation Tool Learning via Autonomous Language Agents》和8.0的《WHALE》，分别揭示了语言代理自主调用工具以提升推荐效果，以及通过统一架构实现大规模序列建模的优势。建议优先阅读这两篇，进一步了解如何借助语言模型实现推荐工具的自动组合与预训练序列模型的规模化部署。
-- 详情：[/202607/23/README](/202607/23/README)
+今日共精读5篇、速读3篇推荐相关论文，重点推荐《Diffusion Language Model for Recommendation》（10分）和《Cardinality-Decomposed Loss》（9分）。前者展示了扩散模型在推荐中的创新应用，后者提出匹配异构推荐图结构的新损失函数。建议优先精读这两篇高分论文，再快速浏览淘宝搜索生成式检索（7分）和可控内容推荐（6分）等实践方向。
+- 详情：[/202607/24/README](/202607/24/README)
 
 ### 精读区论文标签
-1. [Personalized Recommendation Tool Learning via Autonomous Language Agents](/202607/23/2607.19739v1-personalized-recommendation-tool-learning-via-autonomous-language-agents)  
+1. [Diffusion Language Model for Recommendation](/202607/24/2607.21519v1-diffusion-language-model-for-recommendation)  
+   标签：评分：10.0/10、query:rec-sys
+   evidence：面向推荐的扩散语言模型一种新颖的LLM增强方法
+2. [Cardinality-Decomposed Loss: Matching Training Objectives to Relation Structure in Heterogeneous Recommendation Graphs](/202607/24/2607.20737v1-cardinality-decomposed-loss-matching-training-objectives-to-relation-structure-in-heterogeneous-recommendation-graphs)  
    标签：评分：9.0/10、query:rec-sys
-   evidence：基于大语言模型代理的个性化推荐工具学习
-2. [WHALE: A Scalable Unified Model for Recommendation with Wukong-HSTU Architecture](/202607/23/2607.17017v1-whale-a-scalable-unified-model-for-recommendation-with-wukong-hstu-architecture)  
+   evidence：基于GNN的异构推荐图方法，提出基数分解损失
+3. [Bridging the Structural Gap: Adapting Autoregressive Generation for Recommendation](/202607/24/2607.21028v1-bridging-the-structural-gap-adapting-autoregressive-generation-for-recommendation)  
+   标签：评分：9.0/10、query:rec-sys
+   evidence：提出BARGE框架，利用自回归解码和上下文感知注意力实现LLM增强的生成式推荐
+4. [Can Generative Recommendation Reach Cold Items? A Temporal Perspective on Semantic-ID Generation](/202607/24/2607.21101v1-can-generative-recommendation-reach-cold-items-a-temporal-perspective-on-semantic-id-generation)  
+   标签：评分：9.0/10、query:rec-sys
+   evidence：使用时间协议研究生成式推荐中的冷启动可达性
+5. [Evaluating covariate balance for long time horizon Markov decision processes](/202607/24/2607.15080v1-evaluating-covariate-balance-for-long-time-horizon-markov-decision-processes)  
    标签：评分：8.0/10、query:rec-sys
-   evidence：统一推荐模型结合非序列和序列特征，适用于会话推荐
-3. [Zero-Observation User Reactivation with Gap-Driven Dimensional Gating](/202607/23/2607.19802v1-zero-observation-user-reactivation-with-gap-driven-dimensional-gating)  
-   标签：评分：8.0/10、query:rec-sys
-   evidence：解决零观测用户重新激活问题，属于冷启动的一种形式
-4. [UniRank: Benchmarking Ranking Models for Unified Sequential Modeling and Feature Interaction](/202607/23/2607.19987v1-unirank-benchmarking-ranking-models-for-unified-sequential-modeling-and-feature-interaction)  
-   标签：评分：8.0/10、query:rec-sys
-   evidence：面向会话推荐的序列建模排名模型基准
+   evidence：离线强化学习用于推导最优治疗建议，直接适用于基于RL的推荐
 
 ### 速读区论文标签
-1. [Breaking Feedback-Blindness: Utility-Augmented Transformer for Sequential Decision Making](/202607/23/2607.18910v1-breaking-feedback-blindness-utility-augmented-transformer-for-sequential-decision-making)  
+1. [TSGR: Taobao Search Generative Retrieval](/202607/24/2607.18796v1-tsgr-taobao-search-generative-retrieval)  
    标签：评分：7.0/10、query:rec-sys
-   evidence：解决序列决策中的反馈盲点，通过效用增强方法，适用于交互推荐
-2. [Conservative Query and Adaptive Regularization for Offline RL Under Uncertainty Estimation](/202607/23/2607.19199v1-conservative-query-and-adaptive-regularization-for-offline-rl-under-uncertainty-estimation)  
-   标签：评分：7.0/10、query:rec-sys
-   evidence：使用偏好查询的离线强化学习用于策略改进
-3. [RAMP: Robust Ad Recommendation Under Limited Personalized-Feature Availability via Masking and Alignment Pathways](/202607/23/2607.17473v1-ramp-robust-ad-recommendation-under-limited-personalized-feature-availability-via-masking-and-alignment-pathways)  
+   evidence：生成式检索方法可迁移至推荐系统中的物品检索
+2. [Controllable and Content-Based Recommendations](/202607/24/2607.20938v1-controllable-and-content-based-recommendations)  
    标签：评分：6.0/10、query:rec-sys
-   evidence：隐私限制导致个性化特征缺失，类似冷启动问题
-4. [TSGR: Taobao Search Generative Retrieval](/202607/23/2607.18796v2-tsgr-taobao-search-generative-retrieval)  
+   evidence：基于内容的可控推荐框架，与推荐系统主题相关
+3. [One More Turn, Less Regret: A Regret-Based Multi-Turn Benchmark for LLMs' Clarification Policies](/202607/24/2607.21143v1-one-more-turn-less-regret-a-regret-based-multi-turn-benchmark-for-llms-clarification-policies)  
    标签：评分：6.0/10、query:rec-sys
-   evidence：面向电商搜索的生成式检索，与推荐系统方法相关
+   evidence：基于遗憾的多轮LLM澄清策略基准，应用于产品推荐场景
 
 
 <div class="dpr-home-promo-card">

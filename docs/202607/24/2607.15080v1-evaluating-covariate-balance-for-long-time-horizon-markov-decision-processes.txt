@@ -1,0 +1,1627 @@
+Title: Evaluating covariate balance for long time horizon Markov decision processes
+
+URL Source: https://arxiv.org/pdf/2607.15080v1
+
+Published Time: Fri, 17 Jul 2026 01:39:20 GMT
+
+Number of Pages: 38
+
+Markdown Content:
+# Evaluating covariate balance for long time horizon Markov decision processes 
+
+## Joshua Spear joshua.spear.21@ucl.ac.uk UCL GOS Institute of Child Health Rebecca Pope r.pope@ucl.ac.uk UCL GOS Institute of Child Health Neil J Sebire Neil.Sebire@gosh.nhs.uk NIHR GOSH UCL BRC July 2026 
+
+Abstract 
+
+This article explores the application of covariate balance diagnostics for detecting the presence of hidden confounding/model miss-specification in studies applying offline reinforcement learning (RL) to deriving opti-mal treatment recommendations. The results demonstrate that, either there is a high risk of bias within existing offline RL studies for treatment recommendations or, existing covariate balance metrics are not sufficient to assess such studies. Regardless, existing offline RL studies cannot be concluded as being statistically robust. The conclusions propose future research directions for obtaining more methodologically robust applica-tions of offline RL to treatment recommendation problems. 
+
+Keywords: Off-policy evaluation, offline reinforcement learning, observa-tional healthcare data, sepsis management 
+
+# 1 Introduction 
+
+Offline reinforcement learning (RL) has become increasingly popular within the artificial intelligence (AI) community for various domains, including robotics, healthcare and power plant control. Some of these domains, a notable example being healthcare, assume the analysis is performed entirely offline i.e., there is no ability to obtain on-policy trajectories (outside of behaviour cloning). These 1arXiv:2607.15080v1 [cs.LG] 16 Jul 2026 domains rely on off-policy evaluation (OPE) to obtain quantitative measures of performance. OPE is a causal inference problem in the sense that the assumptions are equivalent (Chakraborty & Moodie (2013)). Under OPE (or offline RL), a Markov decision process (MPD), or variant thereof, is assumed whilst, for causal inference analyses, the assumptions of consistency and exchangeability are re-quired. Asserting the correctness of an MDP, or of consistency and exchange-ability, is equally unverifiable. Within the context of causal inference, to account for this lack of verifiability, various diagnostic checks of robustness of causal in-ferences have been proposed (Rubin (2001), Austin (2009)). However, such checks are seldom seen in applications of OPE and offline RL in the AI commu-nity. The primary aim of this analysis was to understand the extent to which ex-isting applications of offline RL within healthcare satisfy the diagnostic checks of assumptions that are common place within the causal inference community. Of particular focus is in applying the covariate balance diagnostic to applica-tions of offline RL to learning treatment regimens for sepsis. 
+
+## 1.1 Contributions 
+
+The contributions of this analysis are two-fold: 
+
+• Section 3 consolidates and formalises the definitions of covariate balance and extends the ”weighted” version to the time-dependent setting; 
+
+• Section 4 demonstrates that existing studies applying offline RL to treat-ment recommendations in healthcare fail to satisfy covariate balance tests. It cannot be determined whether this is a result of confounding/model miss-specification being present or the inappropriateness of the tests for long time horizons. Regardless, the conclusions motivate new research directions within the field. 
+
+# 2 Background 
+
+Research has already been conducted into the application of offline RL to a wide array of domains. In a survey, Yu et al. (2019) highlighted the following areas of physical health where research has been conducted: cancer treatment, anemia management of patients requiring dialysis, insulin dosing for diabetic patients, management of HIV, and more recently ICU applications including the treatment of sepsis (via vasosuppressor and IV dosage), optimal ventilation and optimal glycemic control (again for sepsis management). 2Applications of offline RL to sepsis management have, almost exclusively, used the same MDP definition and preprocessing pipeline. Beginning with the seminal paper from Komorowski et al. (2018), subsequent papers shared the es-tablished preprocessing pipelines developed by Komorowski et al (Prasad et al. (2017), Raghu, Gottesman, Liu, Komorowski, Faisal, Doshi-Velez & Brunskill (2018)). The causal question analysed has been, the causal effect of different dosages of intravenous (IV) fluids and vasopressors on 90 day mortality of adult sepsis patients, with exclusions being applied to palliative patients. Patient trajectories have been defined by 24 hours of observations prior to sepsis onset and 48 hours proceeding. These trajectories have been discretised into 4 hour buckets, resulting in a maximum 18 step algorithmic horizon. The action space has been defined by discretising IV fluid and vasopressor dosages into 5 buckets each, resulting in a discrete action space of dimension 25. For a more detailed breakdown of the cohort, refer to Komorowski et al. (2018). Within causal inference diagnostic checks for confounding/model miss-specification have predominantly revolved around covariate balance assessments using propensity scores (Rubin (2001), Austin (2009)). Rubin (2001) in par-ticular advocated for the use of propensity based methods since there do not require exposure to outcome data, emulating to some extent the process of a clinical trial. The use of propensity based methods within causal inference is in stark contrast to the offline RL community where, potentially due to recommendations from large simulation studies (Fu et al. (2021), Voloshin et al. (2019)), there has been a general focus on outcome based methods. Whilst there is a wider acceptance for the necessity of covariate balance checks within the causal inference community, definitions of estimators and extensions to the time-dependent setting are not obvious from the literature. 
+
+# 3 Covariate balance 
+
+It will be demonstrated that there exists two distinct notions of covariate bal-ance and these will be referred to as conditional covariate balance and weighted covariate balance . Before proceeding to these definitions however, it is instruc-tive to consider the different types of propensity score based estimators used for performing causal inferences. For the first part of this section, a contextual ban-dit density (equation 1) will be used where A defines the treatment, S defines the confounding variables and R defines the outcome of interest. 
+
+pπ (τ ) = pS (s)pπ (a|s)pR(r|a, s ) (1) 
+
+## 3.1 Propensity score estimators for causal inference 
+
+Within causal inference, there exist a number of different types of estimators which utilise the propensity score, and these can be grouped as either condi-tional or weighting based estimators. This is in contrast to off-policy evaluation 3in the offline reinforcement learning literature, where importance sampling (weighting) based estimators are solely used. Conditioning estimators (i.e., propensity score matching and stratification) utilise theorem 3 of Rosenbaum & Rubin (1983), reproduced in Theorem 1. 
+
+Theorem 1 (Theorem 3 of Rosenbaum & Rubin (1983)) . If treatment assign-ment is strongly ignorable, then it is strongly ignorable given any balancing score 
+
+b(x); that is ∀x,
+
+(R1, R 0) ⊥⊥ A|S and 0 < P (A = 1 |S) < 1
+
+implies, ∀b(x):
+
+(R1, R 0) ⊥⊥ A|b(S) and 0 < P (A = 1 |b(S)) < 1In short, the theorem states that if positivity and exchangeability (and consistency) hold 1 given the covariates, then the potential outcomes and treatments are exchangeable given any balancing score, where a balancing score is defined as inducing conditional independence between the treatment and covariates (a balancing score is any b(s) such that: A ⊥⊥ S|b(S)). From theorem 1, and as an example of a conditioning estimator, the propen-sity score matching estimator can be derived, with e(S) = P (A = 1 |S), as: 
+
+EE[Rdo( A=1) −Rdo( A=0) |S] = EE[Rdo( A=1) |S] − EE[Rdo( A=0) |S] (2) =EE[Rdo( A=1) |S, e (S)]  − EE[Rdo( A=0) |S, e (S)]  (3) =EE[Rdo( A=1) |e(S)]  − EE[Rdo( A=0) |e(S)]  (4) =EE[Rdo( A=1) |A = 1 , e (S)]  − EE[Rdo( A=0) |A = 0 , e (S)]  (5) =EE[R|A = 1 , e (S)]  − EE[R|A = 0 , e (S)]  (6) =EE[R|A = 1 , e (S)] − E[R|A = 0 , e (S)]  (7) Where: equation 3 follows as e(S) is courser than S (Rosenbaum & Rubin (1983)); equation 4 follows from theorem 1 and; equations 5 and 6 follow from the assumptions of exchangability and consistency, respectively. Assuming a dataset d = {(si, a i, r i)}ni=1 , generated according to equation 1. Furthermore, let d1 = {(si, a i, r i) : ai = 1 , (si, a i, r i) ∈ d} and d0 = {(si, a i, r i) : 
+
+ai = 0 , (si, a i, r i) ∈ d}. (One-to-one) matching requires pairing each observation in d1 with an observation in d0 under the condition that e(si) ≈ e(sj ) for the 
+
+ith observation in d1 and the jth observation in d0. Let m = {(τi, 1, τ i, 0) : 
+
+τi, 1 ∈ d1, τ i, 0 ∈ d0, e (si, 1) = e(si, 0), s i, 1 ∈ τi, 1, s i, 0 ∈ τi, 0}, then, beginning with 
+
+> 1Rubin’s original framework for causal inference did not include consistency and thus it is not present in Theorem 1 however, consistency is referenced for completeness.
+
+4equation 7: 
+
+EE[R|A = 1 , e (S)] − E[R|A = 0 , e (S)]  ≈ 1
+
+|E| 
+
+X
+
+> E
+
+1
+
+|E i|
+
+X
+
+> Ei
+
+ri, 1 − 1
+
+|E i|
+
+X
+
+> Ei
+
+ri, 0
+
+!
+
+where E is the unique values of e(S) in d, such that E = T Ei. Where, for every 
+
+Ei there is only one pair of matches, the estimator is equivalent to: 1
+
+|m|
+
+> |m|
+
+X
+
+> i=1
+
+ri, 1 − ri, 0
+
+In contrast to conditioning estimators, weighting estimators do not ex-plicitely use the conditional independence statement of theorem 1 and critically, the derivation does not hold for any balancing score, b(s): 
+
+E[Rdo( A=a)|S] = E[Rdo( A=a)|A = a, S ] (8) = E[R|A = a, S ] (9) =
+
+Z
+
+> R
+
+RP (R|A = a, S ) (10) =
+
+Z
+
+> R
+
+R P (R, A = a, S )
+
+P (A = a, S ) (11) =
+
+Z
+
+> R
+
+RP (A = a|S)
+
+P (R, A = a, S )
+
+P (S) (12) =
+
+Z
+
+> R
+
+RP (A = a|S) P (R, A = a|S) (13) =
+
+Z
+
+> R
+
+R
+
+1(a = 1) e(S) + 1(a = 0)(1 − e(S)) P (R, A = a|S) (14) And as such, the empirical estimator is: 1
+
+nanX
+
+> i=1
+
+ri1(ai = a)
+
+P (A = ai|si) =
+
+Z
+
+> R
+
+RP (A = a|S) P (R, A = a|S) (15) where na = Pni=1 1(ai = a). 
+
+## 3.2 Covariate balance as a diagnostic measure 
+
+To consolidate the literature, two covariate balancing measures are formally derived, the conditional covariate balance (utilising the covariate balancing requirement from theorem 1) and the weighted covariate balance (using the change of measure argument from equations 9 to 14). Whilst a number of authors have called for balance diagnostics of higher moments (Austin (2009)), the focus of this analysis will be on first moments. First mo-ment covariate balance diagnostic measures have predominantly taken the form of absolute standardised difference in means (herein referred to as MASD). 53.2.1 Conditional covariate balance 
+
+The conditional covariate balance is implied by theorem 1 and is made precise in corollary 1. 
+
+Corollary 1. 
+
+(R1, R 0) ⊥⊥ A|b(S) and 0 < P (A = 1 |b(S)) < 1 = ⇒ A ⊥⊥ S|b(S)
+
+and thus conditional covariate balance, defined as A ⊥⊥ S|b(S), is a necessary but not sufficient condition for valid causal inference. Proof. Begin with Theorem 1, then for Rdo( A) ⊥⊥ A|b(S), b(S) must be a bal-ancing score (by assumption of the theorem). The condition is not sufficient due to the one directional implication of theorem 1. The MASD metric utilising the conditional independence behaviour from corollary 1 is defined as: MASD Cond (k) = |ˆμ1(k) − ˆμ0(k)|
+
+p(|E| )−1 ˆσ21 (k) − (|E| )−1 ˆσ20 (k) (16) where: ˆμj (k) = 1
+
+|E| 
+
+X
+
+> E
+
+ˆμj, E′ (k)ˆμj, E′ (k) = 1
+
+|E ′|
+
+X
+
+> E′
+
+si,k 1(ai = j)ˆσ2 
+
+> j
+
+(k) = 1
+
+|E| − 1
+
+X
+
+> E
+
+(ˆ μj, E′ (k) − ˆμj (k)) 2
+
+The metric is derived by observing that, under corollary 1 if A ⊥⊥ S|b(S), then 
+
+E[S|A = a, b (S)] − E[S|A = a′, b (S)] = 0 and thus E[E[S|A = a, b (S)] − E[S|A =
+
+a′, b (S)]] = E[E[S|A = a, b (S)]] − E[E[S|A = a′, b (S)]] = 0. 
+
+3.2.2 Weighted covariate balance 
+
+The weighted covariate balance is similarly implied by theorem 1 (albeit slightly differently) and made precise in corollary 2. 
+
+Corollary 2. Let e(S) be the true propensity score then, if: 
+
+E
+
+"
+
+1(A = 1) S
+
+ˆe(S) − 1(A = 0) S
+
+1 − ˆe(S)
+
+#
+
+= 0 (17) 
+
+And the conditions of theorem 1 hold, then ∀ˆe(s):
+
+(R1, R 0) ⊥⊥ A|ˆe(S) and 0 < P (A = 1 |ˆe(S)) < 16Proof. Firstly, by theorem 1, ∀s, e (s): (R1, R 0) ⊥⊥ A|S and 0 < P (A = 1 |S) < 1=⇒ (R1, R 0) ⊥⊥ A|e(S) and 0 < P (A = 1 |e(S)) < 1Secondly, observe that, for the true propensity score, e(S): 
+
+E
+
+"
+
+1(A = 1) Se(S) − 1(A = 0) S
+
+1 − e(S)
+
+#
+
+= E
+
+"
+
+1(A = 1) Sp(A|S) − 1(A = 0) Sp(A|S)
+
+#
+
+(18) =
+
+Z 1(A = 1) Sp(A|S) p(S, A )dsa −
+
+Z 1(A = 0) Sp(A|S) p(S, A )dsa 
+
+=
+
+Z Sp(A = 1 |S) p(A = 1 |S)p(S)dsa −
+
+Z Sp(A = 0 |S) p(A = 0 |S)p(S)dsa 
+
+=E[S] − E[S] = 0 As such: ˆe(S) = e(S) ⇐⇒ E
+
+"
+
+1(A = 1) S
+
+ˆe(S) − 1(A = 0) S
+
+1 − ˆe(S)
+
+#
+
+= 0 Combining the two statements, if theorem 1 and equation 17 hold, =⇒ ∀ ˆe(s): (R1, R 0) ⊥⊥ A|ˆe(S) and 0 < P (A = 1 |ˆe(S)) < 1The MASD metric for weighted covariate balance , using the condition (equa-tion 17) in corollary 2 is thus defined as: MASD Weight (k) = |ˆμ1(k) − ˆμ0(k)|
+
+pn−1 ˆσ21 (k) + n−1 ˆσ20 (k) (19) where: ˆμa(k) = 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+1(ai = a)si,k 
+
+p(ai = a|si)ˆσ2 
+
+> a′
+> 0: t
+
+(k) = 1
+
+n − 1
+
+> n
+
+X
+
+> i=1
+
+1(ai = a)si,k 
+
+p(ai = a|si) − ˆμa(k)
+
+!2
+
+Corollaries 1 and 2 might seem over engineered however, they were in-troduced to solidify the notions of covariate balance that, up to this point, have not been consolidated within the literature. Whilst it is already widely understood, the corollaries also formally assert that the covariate balance conditions are necessary and not sufficient conditions and thus do not replace expert design of an observational studie. Critically, both of the conditions assume the underlying causal assumptions are present. 73.2.3 MASD Cond (k) and MASD Weight (k)Practically speaking, whether MASD Cond (k) or MASD Weight (k) is used to assess covariate balance is generally a function of the estimator being used for inference (Cannas & Arpino (2019)). Arguably, weighted covariate balance is stronger since it requires ˆ e(X) = e(X) where ˆ e(X) is the estimated propensity score which is almost always used. In contrast, conditional covariate balance only requires ˆ e(X) to be a member of some equivalence class of balancing scores. However, it is unknown whether this observation is of any practical use. As a diagnostic measure, authors have suggested that MASD Cond (k) or MASD Weight (k) should be below a certain threshold. Authors (Cannas & Arpino (2019) and references therein) have suggested that covariate balance should be less than 0.25 (or conservatively, 0.1). This heuristic however, has been defined experimentally and assumes a denominator of 
+
+q 12 ˆσ2
+
+> a′
+> 0: t
+
+(k) + 12 ˆσ2
+
+> a′′
+> 0: t
+
+(k) instead of 
+
+q
+
+n−1 ˆσ2
+
+> a′
+> 0: t
+
+(k) + n−1 ˆσ2
+
+> a′′
+> 0: t
+
+(k). With respect to the derivations of MASD Cond (k)and MASD Weight (k), only the numerators were formalised. The denominator was informally motivated by the MASD metrics resembling a Welsh t-test and were used to standardise the variance of the statistic to be 1 (Cohen (2013)). For equations 16 and 19, the denominator of 
+
+q 12 ˆσ2
+
+> a′
+> 0: t
+
+(k) + 12 ˆσ2
+
+> a′′
+> 0: t
+
+(k) was used, contrasting existing work (Cannas & Arpino (2019)), since it resembles a t-test assuming unequal variance. It shall be seen experimentally, in section 4, that this is a far more reasonable assumption and the denominator assuming equal variance i.e., 
+
+q 12 ˆσ2
+
+> a′
+> 0: t
+
+(k) + 12 ˆσ2
+
+> a′′
+> 0: t
+
+(k) is perhaps overly optimistic. 
+
+## 3.3 Time dependent propensity balancing 
+
+Of interest for this analysis is the time dependent setting with non-binary action spaces. Given the derivations from section 3.2, MASD Weight-t(k, a ′
+
+> 0: t
+
+, a ′′ 
+
+> 0: t
+
+) is derived, enabling covariate balance to be principally assessed. Assuming now, an MDP density (equation 20): 
+
+pπ (τ ) = pS0 (s0)
+
+> H−1
+
+Y
+
+> t=0
+
+pπ (at|st)pT (st+1 |at, s t)pR(rt+1 |at, s t) (20) Then: 
+
+E
+
+"
+
+1(A0: t = a′
+
+> 0: t
+
+)g(S0: t)
+
+Qtt′=0 p(At′ |St′ ) − 1(A0: t = a′′ 
+
+> 0: t
+
+)g(S0: t)
+
+Qtt′=0 p(At′ |St′ )
+
+#
+
+= E[g(S0: t)] − E[g(S0: t)] 8where X0: t = {X0, ..., X t}. Define g = Ptt′=1 1(t′ = t)St to obtain the time t
+
+balance. This is a result of: 
+
+E
+
+"
+
+1(A0: t = a′
+
+> 0: t
+
+)g(S0: t)
+
+Qtt′=0 p(At′ |St′ ) − 1(A0: t = a′′ 
+
+> 0: t
+
+)g(S0: t)
+
+Qtt′=0 p(At′ |St′ )
+
+#
+
+=
+
+Z 1(A0: t = a′
+
+> 0: t
+
+)g(S0: t)
+
+Qtt′=0 p(At′ |St′ ) p(S0: t, A 0: t)ds 0: ta0: t
+
+−
+
+Z 1(A0: t = a′′ 
+
+> 0: t
+
+)g(S0: t)
+
+Qtt′=0 p(At′ |St′ ) p(S0: t, A 0: t)ds 0: ta0: t
+
+=
+
+Z g(S0: t)
+
+p(A0: t = a′
+
+> 0: t
+
+|S0: t) p(A0: t = a′
+
+> 0: t
+
+|S0: t)p(S0: t)ds 0: t
+
+−
+
+Z g(S0: t)
+
+p(A0: t = a′′ 
+
+> 0: t
+
+|S0: t) p(A0: t = a′′ 
+
+> 0: t
+
+|S0: t)p(S0: t)ds 0: t
+
+=E[g(S0: t)] − E[g(S0: t)] = 0 The empirical balancing metric can thus be defined as: MASD Weight-t(k, a ′
+
+> 0: t
+
+, a ′′ 
+
+> 0: t
+
+) = |ˆμa′ 
+
+> 0: t
+
+(k) − ˆμa′′  
+
+> 0: t
+
+(k)|
+
+q
+
+n−1 ˆσ2
+
+> a′
+> 0: t
+
+(k) + n−1 ˆσ2
+
+> a′′
+> 0: t
+
+(k) (21) where: ˆμa′ 
+
+> 0: t
+
+(k) = 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+1(ai, 0: t = a′
+
+> 0: t
+
+)g(si, 0: t,k )
+
+Qtt′=0 p(ai,t ′ |si,t ′ )ˆσ2 
+
+> a′
+> 0: t
+
+(k) = 1
+
+n − 1
+
+> n
+
+X
+
+> i=1
+
+1(ai, 0: t = a′
+
+> 0: t
+
+)g(si, 0: t,k )
+
+Qtt′=0 p(ai,t ′ |si,t ′ ) − ˆμa′
+
+> 0: t
+
+!2
+
+3.3.1 Variance reduction 
+
+Importance sampling (IS) estimators are understood to suffer from large variance. The most popular variance reduction methods for IS estima-tors include: clipping and Hajek. The clipped estimator is identical to MASD Weight-t(k, a ′
+
+> 0: t
+
+, a ′′ 
+
+> 0: t
+
+) (equation 21) except the propensity weights, 
+
+Qtt′=0 p(At′ |St′ ) are replaced by: max 
+
+> t
+
+Y
+
+> t′=0
+
+p(At′ |St′ ), τ −1
+
+!
+
+The Hajek estimator is defined as: MASD Hajek-t(k, a ′
+
+> 0: t
+
+, a ′′ 
+
+> 0: t
+
+) = |ˆμa′ 
+
+> 0: t
+
+(k) − ˆμa′′  
+
+> 0: t
+
+(k)|
+
+q
+
+n−1 ˆσ2
+
+> a′
+> 0: t
+
+(k) + n−1 ˆσ2
+
+> a′′
+> 0: t
+
+(k) (22) 9where: ˆμa′ 
+
+> 0: t
+
+(k) = 
+
+> 1
+> n
+
+Pni=1     
+
+> 1(ai, 0: t=a′
+> 0: t)g(si, 0: t,k )
+> Qtt′=0 p(ai,t ′|si,t ′)1
+> n
+
+Pni=1    
+
+> 1(ai, 0: t=a′
+> 0: t)
+> Qtt′=0 p(ai,t ′|si,t ′)
+
+ˆσ2 
+
+> a′
+> 0: t
+
+(k) = 1
+
+n − 1
+
+> n
+
+X    
+
+> i=1
+> 1(ai, 0: t=a′
+> 0: t)g(si, 0: t,k )
+> Qtt′=0 p(ai,t ′|si,t ′)1
+> n
+
+Pni=1    
+
+> 1(ai, 0: t=a′
+> 0: t)
+> Qtt′=0 p(ai,t ′|si,t ′)
+
+− ˆμa′
+
+> 0: t
+
+!2
+
+The derivation for the Hajek estimator is almost identical to MASD Weight-t(k, a ′
+
+> 0: t
+
+, a ′′ 
+
+> 0: t
+
+). 
+
+E
+
+" 1(A0: t=a′   
+
+> 0: t)g(S0: t)
+> Qtt′=0 p(At′|St′)
+
+E 1(A0: t=a′   
+
+> 0: t)
+> Qtt′=0 p(At′|St′)
+
+ −   
+
+> 1(A0: t=a′′
+> 0: t)g(S0: t)
+> Qtt′=0 p(At′|St′)
+
+E 1(A0: t=a′′    
+
+> 0: t)
+> Qtt′=0 p(At′|St′)
+
+#
+
+= E[g(S0: t)] 
+
+E 1(A0: t=a′   
+
+> 0: t)
+> Qtt′=0 p(At′|St′)
+
+ − E[g(S0: t)] 
+
+E 1(A0: t=a′′    
+
+> 0: t)
+> Qtt′=0 p(At′|St′)
+
+
+
+= E[g(S0: t)] 1 − E[g(S0: t)] 1=E[g(S0: t)] − E[g(S0: t)] 
+
+# 4 Applications of propensity score balancing diagnostics in healthcare 
+
+The original application of offline RL to the sepsis domain by Komorowski et al. (2018) used a discrete state space. In recent years, continuous state spaces have generally been considered (Raghu, Komorowski & Singh (2018), Huang et al. (2022), Kaushik et al. (2022)). Given this, a continuous state spaces was be used for the analysis presented. The preprocessing code for the analysis was copied from Subramanian & Killian (2023) with modifications only to explicitely export a reduced action space for the analysis in section 4.2.4. 
+
+## 4.1 Experimental protocol 
+
+For the analysis, preprocessing steps and MDP assumptions were identical to previous works. However, of the previous analyses which used continuous state representations, non performed evaluations with propensity models and thus custom propensity models were developed. Throughout, analysis statements such as ”aggregation across X” will be made e.g., ”median (across features) and mean (across action trajectories) ra-tio of variances” or ”mean MASD Weight-t(k, a ′
+
+> 0: t
+
+, a ′′ 
+
+> 0: t
+
+) across features”. As an 10 example, if the ratio of variances is defined as: 
+
+q
+
+n−1 ˆσ2
+
+> a′
+> 0: t
+
+(k) + n−1 ˆσ2
+
+> a′′
+> 0: t
+
+(k)
+
+q
+
+n−1 ˆσ′2
+
+> a′
+> 0: t
+
+(k) + n−1 ˆσ′2
+
+> a′′
+> 0: t
+
+(k)then the ”median (across features) and mean (across action trajectories)” refers the following aggregation: med k
+
+1
+
+|B| 
+
+X
+
+> a′
+> 0: t,a ′′
+> 0: t
+
+q
+
+n−1 ˆσ2
+
+> a′
+> 0: t
+
+(k) + n−1 ˆσ2
+
+> a′′
+> 0: t
+
+(k)
+
+q
+
+n−1 ˆσ2′
+
+> a′
+> 0: t
+
+(k) + n−1 ˆσ2′
+
+> a′′
+> 0: t
+
+(k)
+
+!
+
+where B defines the set of intervention sequences of length t (i.e., values of 
+
+a′
+
+> 0: t
+
+, a ′′ 
+
+> 0: t
+
+) and med defines the median operator with an ordering over k.
+
+4.1.1 MASD denominator justification 
+
+Figures 1 and 2 display the median (across features) and mean (across action trajectories) ratio of variances for the full action space analysed in section 4.2.3 and the fluid action space analysed in section 4.2.4, respectively. Observe that the ratio of variances is divergent by the fourth timestep for the full action space and by the fifth timestep for the fluid action space. Whilst heuristic, it is clear that the Welsh type denominator (derived for samples with un-equal variances) should be used, motivating the selection in equations 16 and 16. 
+
+(a) Training dataset (b) Testing dataset 
+
+Figure 1: The figure describes aggregations of the ratio of variance values used in the denominator of the vanilla MASD metric on the full action space dataset. The values on the plot have been clipped to a maximum of 25% of the original aggregated values. The solid line describes the median (across features) and mean (across action trajectories). The shaded region defines the min and max across features. 11 (a) Training dataset (b) Testing dataset 
+
+Figure 2: The figure describes aggregations of the ratio of variance values used in the denominator of the vanilla MASD metric on the fluid action space dataset. The values on the plot have been clipped to a maximum of 25% of the original aggregated values. The solid line describes the median (across features) and mean (across action trajectories). The shaded region defines the min and max across features. 
+
+4.1.2 Covariate balance assessment criteria 
+
+Since 
+
+q 12 ˆσ2
+
+> a′
+> 0: t
+
+(k) + 12 ˆσ2
+
+> a′′
+> 0: t
+
+(k) >
+
+q
+
+n−1 ˆσ2
+
+> a′
+> 0: t
+
+(k) + n−1 ˆσ2
+
+> a′′
+> 0: t
+
+(k) for n > 2, the im-plication of using the Welsh style denominator is that the resulting covariate balance will, by definition, be larger than under the Wald style denominator. Arguably the 0.25 (or 0.10) thresholds used in the literature should still be valid since the use of the Welsh style denominator should be viewed merely as an ad-justment for the unequal variances. However, since these thresholds have been established experimentally rather than theoretically, this implication is not nec-essarily rigorous. As such, covariate balance was assessed under the following conditions: 
+
+• The value of MASD Weight-t(k, t ) was less than 25% for all timesteps (i.e., the existing condition posed by Cannas & Arpino (2019)) and/or; 
+
+• The value of MASD-Diff Weight-t(k, t ) was positive for all timesteps; where: MASD-Diff Weight-t(k, a ′
+
+> 0: t
+
+, a ′′ 
+
+> 0: t
+
+) =MASD UnWeight-t(k, a 0: t, a ′′ 
+
+> 0: t
+
+)
+
+− MASD Weight-t(k, a ′
+
+> 0: t
+
+, a ′′ 
+
+> 0: t
+
+)MASD-Diff Weight-t(k, t ) = 1
+
+|W| 
+
+X
+
+> a′
+> 0: t,a ′′
+> 0: t
+
+MASD-Diff Weight-t(k, a ′
+
+> 0: t
+
+, a ′′ 
+
+> 0: t
+
+)MASD Weight-t(k, t ) = 1
+
+|W| 
+
+X
+
+> a′
+> 0: t,a ′′
+> 0: t
+
+MASD Weight-t(k, a ′
+
+> 0: t
+
+, a ′′ 
+
+> 0: t
+
+)and W = {(a′
+
+> 0: t
+
+, a ′′ 
+
+> 0: t
+
+) : a′
+
+> 0: t
+
+, a ′′  
+
+> 0: t
+
+∈ A0: t × A 0: t, a ′
+
+> 0: t
+
+̸ = a′′ 
+
+> 0: t
+
+} and MASD UnWeight-t(k, a ′
+
+> 0: t
+
+, a ′′ 
+
+> 0: t
+
+) is defined as MASD Weight-t(k, a ′
+
+> 0: t
+
+, a ′′ 
+
+> 0: t
+
+)with p(a|s) = 1, ∀s, a ∈ S × A . Observe that a positive value for 12 MASD-Diff Weight-t(k, t ) defines an improvement in covariate balance, on average across intervention combinations, under the propensity score and feature k, hence the desire for the metric to be positive. Existing statistical learning theory necessitates the use of separate valida-tion sets to obtain unbiased predictions of model performance (Efron (1986), Hastie et al. (2009)). For example, Efron (1986) demonstrated that the bias of the training mean squared error, 1
+
+> n
+
+Pni=1 (yi, ˆf (xi)) 2 with respect to the expected error (with a fixed function ˆf ) is equivalent to, 2
+
+> n
+
+Pni=1 Cov( yi, ˆf (xi)) i.e., the training error under estimates the expected mean squared error in proportion to the covariance of the training labels and the predicted training la-bels. Clearly, this under estimation is correlated with the learning process for ˆf .It is intuitive to see that, when used as a training objective (Imai & Ratkovic (2014)), the validation covariate balance should be used to per-form evaluations. It is similarly reasonable to assume that the validation covariate balance statistics should be used even when covariate balance is not used as a training objective. No formal derivation was provided for either of these conjectures and as such, where relevant, all of the results pre-sented in this analysis are shown for both the training and a separate testing set. 
+
+## 4.2 Results 
+
+The results are presented in three sections where section 4.2.3 performs the anal-ysis as described in section 4.1, and section 4.2.4 and 4.2.5 are supplementary analyses using an identical setup except: 
+
+• Section 4.2.4 uses an action space that is restricted to only fluid dosages, and thus is of dimension 5. 
+
+• Section 4.2.5 considers both the full action space from section 4.2.3 and re-duced space from section 4.2.4 but considers truncated trajectory lengths. The dataset corresponding to the full action space is herein referred to as the ”sepsis” dataset, whilst the dataset corresponding to the fluid only action space is herein referred to as the ”sepsis-fluid” dataset. To conduct all analyses, two seeds were used which randomised the dataset splitting and propensity model training. To produce the covariate balance figures and data presented, unless otherwise specified, the average balance statistics of both seeds were taken. 
+
+4.2.1 Propensity score models 
+
+Since the existing studies considering treatment regiemens for sepsis (Raghu, Komorowski & Singh (2018), Huang et al. (2022), Kaushik et al. (2022)) 13 had not developed propensity models, these had to be developed as part of the analysis. For the full action space and fluid action space three xgboost (Chen & Guestrin (2016)) models were developed. The first two were identical in hyperparameters, using defaults with minimal regularisation (the full list is detailed in appendix section ?? ) however, xgboost 1 w used a weighted objective, where weights were defined per label as the reciprocal of the number of occurrences in the training set. The final model, xgboost 1 w optuna was an xgboost model with hyperparameters tuned with optuna (Akiba et al. (2019)) and with a weighted objective. Whilst the unweighted (xgboost 1) and wighted (xgboost 1 w) models performed identically for both datasets (table 1), the weighted regression was deemed to make more sense from a model development standpoint and thus it was retained. For the experiments presented in section 4.2.5, assessing the reduced time horizon, only the xgboost 1 w and xgboost 1 w optuna were trained for the reason previously stated. The aim of the propensity score model development was to obtain a suffi-ciently strong model, resembling that which a practitioner might reasonably develop. As such, for each dataset, the strongest performing model according to a held-out validation was selected as the model to use for the scenario. For example, as demonstrated by table 1, under the sepsis dataset without trajectory truncation, the xgboost 1 w optuna model performed the best and thus it was selected. In contrast, under the sepsis-fluid with maximum trajectory length 8, the xgboost 1 w model was selected. 14 Dataset (Max trajectory length) Model Macro F1 Score Training Validation Test Sepsis xgboost 1 0.94 0.455 0.467 Sepsis xgboost 1 w 0.94 0.455 0.467 Sepsis xgboost 1 w optuna 0.622 0.457 0.481 Sepsis-fluid xgboost 1 0.756 0.657 0.656 Sepsis-fluid xgboost 1 w 0.756 0.657 0.656 Sepsis-fluid xgboost 1 w optuna 0.711 0.662 0.657 Sepsis (2) xgboost 1 w 0.999 0.356 0.394 Sepsis (2) xgboost 1 w optuna 0.616 0.348 0.377 Sepsis (5) xgboost 1 w 0.977 0.352 0.382 Sepsis (5) xgboost 1 w optuna 0.431 0.379 0.397 Sepsis (8) xgboost 1 w 0.961 0.393 0.415 Sepsis (8) xgboost 1 w optuna 0.480 0.399 0.424 Sepsis (13) xgboost 1 w 0.948 0.429 0.449 Sepsis (13) xgboost 1 w optuna 0.458 0.442 0.462 Sepsis-fluid (2) xgboost 1 w 0.994 0.660 0.651 Sepsis-fluid (2) xgboost 1 w optuna 0.690 0.659 0.656 Sepsis-fluid (5) xgboost 1 w 0.869 0.632 0.632 Sepsis-fluid (5) xgboost 1 w optuna 0.716 0.633 0.630 Sepsis-fluid (8) xgboost 1 w 0.802 0.637 0.636 Sepsis-fluid (8) xgboost 1 w optuna 0.661 0.636 0.635 Sepsis-fluid (13) xgboost 1 w 0.765 0.647 0.648 Sepsis-fluid (13) xgboost 1 w optuna 0.660 0.647 0.648 Table 1: The table displays the performance of propensity models evaluated on each of the sepsis, sepsis-fluid and truncated versions of the datasets. The bracketed numbers in the Dataset (Max trajectory length) column define the maximum trajectory length for the truncated scenarios. 
+
+4.2.2 Importance sampling variance and floating point approxima-tions 
+
+The large variance of the importance sampling estimator is exacerbated over longer time horizons. This issue is further exacerbated by computations required for variance calculations (i.e., squaring already large numbers) and the floating point (FP) approximation of computers. For the vanilla importance sampling metric, values often overflowed the floating point approximation and became infinite, particularly when calculating the sample variance required for 15 the denominators of the various MASD metrics. This was initially handled by imputing the overflowed variance values however, this lead to miss-leading results. For example, imputing the variance values obscured the observation that: the denominator of the MASD metric prevents a fair comparison across time horizons (figure 5 and discussed in section 4.2.3). Whether a more sophisticated approach to handling FP approximations existed was not explored. However, the analysis suggests that, at the point that FP approximations become problematic, the variance of the estimator is so large that: covariate balance is highly unlikely to be achieved (figure 4 and discussed in section 4.2.3) and; any conclusions drawn should be treated with a high level of skepticism. As such, whilst flawed, the approach used for handling FP approximations is unlikely to have altered the conclusions drawn. 
+
+4.2.3 Full action space (Sepsis dataset) 
+
+Figure 3 displays the median MASD Weight-t(k, t ) value, across features. In expectation, any deviation from 0 suggests conditional exchangeability does not hold however, to account for sampling variability, the figure should be interpreted as: the larger the deviation from 0, the greater the likelihood that conditional exchangeability does not hold. As described in section 4.1, an MASD value of less than 0.25 is colloquially accepted as a reasonable level balance. Under this metric, covariate balance is not present in the study and there is a reasonable chance of obtaining biased causal effect estimations. Despite this, the covariate balance seemingly improves with horizon. On average the median MASD reduces with horizon length. This however, is demonstrated to be an artefact of the metric. Figure 4 displays the mean (across action trajectories) and median (across features) numerator and denominator values of the MASD Weight-t(k, a ′
+
+> 0: t
+
+, a ′′ 
+
+> 0: t
+
+) metric for the model. The aggregations for the plot are defined over those action trajectory pairs with finite denominator values, the proportion of which is displayed in figure 5. In calculating the MASD Weight-t(k, t ) value, displayed in figure 3, those action trajectory combinations with overfload variance values were excluded from the calculation. This resulted in a selection bias, giving the impression that covariate balance was around 1 or marginally below, accounting for the rounding error (as demonstrated by 4). Had denominator values not overflown, the MASD Weight-t(k, t ) metric values (displayed in 3) would have decreased even further with trajectory horizon however, this is clearly an artefact of the estimator. Examining the unormalised numerator in figure 4, clearly demonstrates a divergence in covariate balance as a result of uncontrolled, weights. As such, the variance of the importance sampling estimator remains problematic. 16 (a) Training dataset (b) Testing dataset 
+
+Figure 3: The figure describes the median MASD Weight-t(k, t ) value, across fea-tures on the sepsis dataset. The x-axis displays the time horizon and the y-axis displays the median MASD Weight-t(k, t ) value as the solid line with the min and max values described by the shaded region. The dotted line is a reference for the value 1.  
+
+> (a) Training dataset (b) Testing dataset
+
+Figure 4: The figure describes the median numerator and denominator of the MASD Weight-t(k, a ′
+
+> 0: t
+
+, a ′′ 
+
+> 0: t
+
+) metric, across features on the sepsis dataset, under the vanilla estimator. The x-axis displays the time horizon. Aggregations are taken over action trajectory pairs with finite denominators. The text on the figure defines the ratio of the numerator and denominator values, rounded to 2 decimal places.  
+
+> (a) Training dataset (b) Testing dataset
+
+Figure 5: The figure displays the proportion of action trajectory pairs where the associated denominator value for MASD Weight-t(k, a ′
+
+> 0: t
+
+, a ′′ 
+
+> 0: t
+
+) is finite. The MASD Weight-t(k, a ′
+
+> 0: t
+
+, a ′′ 
+
+> 0: t
+
+) values are defined with respect to the sepsis dataset, under the vanilla estimator, with the x-axis displaying the time horizon and y-axis displaying the proportion of finite denominators. 17 Figure 6 displays the median MASD Weight-t(k, t ) but for the clipped importance sampling estimator (Ionides (2008)) and figure 7 displays the median MASD Weight-t(k, t ) for the Hajek estimator. Both the clipped and Hajek estimators present a similar story to the vanilla estimator. Under the clipped estimator covariate balance cannot be concluded to be achieved, since the metric values are greater than 0.25. Without a formal analysis, it is unclear whether the 0.25 cut-off proposed by Cannas & Arpino (2019) can be applied to the Hajek estimator. Under both the clipped and Hajek estimators, similarly to the vanilla estimator, balance appears to improve with horizon. Figures 8 and 9 display the decomposition of MASD Weight-t(k, a ′
+
+> 0: t
+
+, a ′′ 
+
+> 0: t
+
+) by numerator and denominator (similarly to figure 4). In comparison to the vanilla estimator, the unormalised numerator of the MASD Weight-t(k, t ) metric does not diverge, suggesting that the apparent improvement in covariate balance under the estimator at longer time horizons can be trusted. However, subsequent analysis (section 4.2.3) will demonstrate that this apparent improvement is an artefact of the estimators.  
+
+> (a) Training dataset (b) Testing dataset
+
+Figure 6: The figure describes the median MASD Weight-t(k, t ) value using clipped importance sampling, across features on the sepsis dataset. The x-axis displays the time horizon and the y-axis displays the median MASD Weight-t(k, t )value as the solid line with the min and max values described by the shaded region. The dotted line is a reference for the value 1. 18 (a) Training dataset (b) Testing dataset 
+
+Figure 7: The figure describes the median MASD Weight-t(k, t ) value using Hajek importance sampling, across features on the sepsis dataset. The x-axis displays the time horizon and the y-axis displays the median MASD Weight-t(k, t ) value as the solid line with the min and max values described by the shaded region. The dotted line is a reference for the value 1.  
+
+> (a) Training dataset (b) Testing dataset
+
+Figure 8: The figure describes the median numerator and denominator of the MASD Weight-t(k, a ′
+
+> 0: t
+
+, a ′′ 
+
+> 0: t
+
+) metric, across features on the sepsis dataset, under the clipped estimator. The x-axis displays the time horizon. Aggregations are taken over action trajectory pairs with finite denominators.  
+
+> (a) Training dataset (b) Testing dataset
+
+Figure 9: The figure describes the median numerator and denominator of the MASD Weight-t(k, a ′
+
+> 0: t
+
+, a ′′ 
+
+> 0: t
+
+) metric, across features on the sepsis dataset, under the Hajek estimator. The x-axis displays the time horizon. Aggregations are taken over action trajectory pairs with finite denominators. 19 Figures 10, 11 and 12 describe the median (across features) MASD-Diff Weight-t(k, t ) values on the sepsis dataset. The blue describes the range of values where covariate balance is improved under the propensity model and orange describes the opposite. For the vanilla estimator, the result supports the deduction that covariate balance degrades with horizon. In particular, after timepoint 3 on the training set and timepoint 2 on the testing set, the median MASD-Diff Weight-t(k, t ) across features is not greater than 0. Figure 11, displaying balance under the clipped estimator, suggests the propensity model improves covariate balance for the entire trajectory. This is similarly the case for the Hajek estimator, presented in figure 12. A conclusion regarding the validity of this claim is reserved until the bias of the estimator is explored, as already alluded to.  
+
+> (a) Training dataset (b) Testing dataset
+
+Figure 10: The figure describes the median (across features) MASD-Diff Weight-t(k, t ) values on the sepsis dataset, under the vanilla es-timator. The shaded region describes the min and max MASD-Diff Weight-t(k, t )values by timepoint.  
+
+> (a) Training dataset (b) Testing dataset
+
+Figure 11: The figure describes the median (across features) MASD-Diff Weight-t(k, t ) values on the sepsis dataset, under the clipped esti-mator. The shaded region describes the min and max MASD-Diff Weight-t(k, t )values by timepoint. 20 (a) Training dataset (b) Testing dataset 
+
+Figure 12: The figure describes the median (across features) MASD-Diff Weight-t(k, t ) values on the sepsis dataset, under the Hajek es-timator. The shaded region describes the min and max MASD-Diff Weight-t(k, t )values by timepoint. 
+
+Bias investigation for clipped and Hajek importance sampling Fig-ure 13 displays scatter plots of the average (across intervention level) original covariate on the x-axis (i.e., g(si, 0: t,k )) against the weighted covariate on the y-axis (i.e., g(si, 0: t,k )( Qtt′=0 p(ai,t ′ |si,t ′ )) −1 from equation 21). The fewer points observed at timestep 1 is a function of the fact that the number of potential interventions increases as 25 t+1 . Across the timesteps, a non-zero amount of variance is retained by the map from the unweighted to the weighted covariate (i.e., between the x and y axes). Figures 14 and 15 display the same information as figure 13 but for the clipped and Hajek estimators, respectively. Visually, in comparison to the vanilla estimator, the variance in the importance weighted projection of the covariates vanishes at longer time horizons. Let h(si,t,k ) define the projected covariate under an importance weighting regimen i.e.: 
+
+hVanilla (si,t,k , a 0: t) = g(si, 0: t,k )
+
+Qtt′=0 p(ai,t ′ |si,t ′ )
+
+hClipped (si,t,k , a 0: t) = g(si, 0: t,k )
+
+ζ ∨ Qtt′=0 p(ai,t ′ |si,t ′ )
+
+hHajek (si,t,k , a 0: t) = g(si, 0: t,k )
+
+Qtt′=0 p(ai,t ′ |si,t ′ )( P Q tt′=0 p(ai,t ′ |si,t ′ )) −1
+
+The lack of variance for a given value of g(si, 0: t,k ) under the hClipped and hHajek 
+
+projections (demonstrated by figures 14 and 15) implies hClipped (si,t,k , a 0: t) = 
+
+hClipped (si,t,k , a ′
+
+> 0: t
+
+) and hHajek (si,t,k , a 0: t) = hHajek (si,t,k , a ′
+
+> 0: t
+
+) i.e., the bias introduced by the clipped and Hajek estimators results in the covariate projections collapsing to a single value for a given covariate value, g(si, 0: t,k )and for all intervention levels, a0: t. The implication is that, under high variance regimens (e.g., long time horizons), the covariate weight under the clipped and Hajek estimators will be equal for all actions trajectories, giving the 21 impression of balance that is equivalent to the unweighted state i.e., does not degrade but does not improve. Recall, figures 11 and 12 demonstrated that the MASD-Diff Weight-t(k, t ) values converged to 0 with time and thus maybe a function of the afore described phenomena. 
+
+Bias analysis of clipped importance sampling Let: 
+
+d = {τi}ni=1 = {si, 0, a i, 0, ..., s i,H −2, a i,H −2, s i,H −1}ni=1 
+
+with density defined by equation 20. For a sufficiently large time horizon, 
+
+t, since p(ai,t ′ |si,t ′ ) is a normalised probability density, observe that ∀τ ∈
+
+d, QH−2 
+
+> t′=0
+
+p(ai,t ′ |si,t ′ ) ∨ ζ = ζ. Then: ˆμa′ 
+
+> 0: t
+
+(k) = 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+1(ai, 0: t = a′
+
+> 0: t
+
+)g(si, 0: t,k )
+
+ζ
+
+=ζ−1 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+1(ai, 0: t = a′
+
+> 0: t
+
+)g(si, 0: t,k )
+
+!
+
+Additionally, for simplicity, considering the biased estimate of σ2
+
+> a′
+> 0: t
+
+(k): ¯σ2 
+
+> a′
+> 0: t
+
+(k) = 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+1(ai, 0: t = a′
+
+> 0: t
+
+)g(si, 0: t,k )
+
+Qtt′=0 p(ai,t ′ |si,t ′ ) − ˆμa′
+
+> 0: t
+
+!2
+
+= 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+1(ai, 0: t = a′
+
+> 0: t
+
+)g(si, 0: t,k )
+
+Qtt′=0 p(ai,t ′ |si,t ′ )
+
+!2
+
+− 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+1(ai, 0: t = a′
+
+> 0: t
+
+)g(si, 0: t,k )
+
+Qtt′=0 p(ai,t ′ |si,t ′ )
+
+!2
+
+= 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+1(ai, 0: t = a′
+
+> 0: t
+
+)g(si, 0: t,k )
+
+ζ
+
+!2
+
+− 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+1(ai, 0: t = a′
+
+> 0: t
+
+)g(si, 0: t,k )
+
+ζ
+
+!2
+
+=ζ−2 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+
+
+1(ai, 0: t = a′
+
+> 0: t
+
+)g(si, 0: t,k )
+
+2
+
+− 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+1(ai, 0: t = a′
+
+> 0: t
+
+)g(si, 0: t,k )
+
+!2!
+
+22 (a) Timestep 1 
+
+> (b) Timestep 4
+> (c) Timestep 16
+
+Figure 13: The figure displays scatter plots of the average (across interven-tion level) covariate value on the x-axis against the weighted covariate (i.e., 
+
+g(si, 0: t,k )( Qtt′=0 p(ai,t ′ |si,t ′ )) −1 from equation 21) on the y-axis. The weighted covariate values are clipped between the 10th and 90th percentile of the original distribution. The figure displays timestep 1 at the top, timestep 4 in the middle and timestep 16 at the bottom, with propensity score predictions made over seed 0 of the training dataset. 23 (a) Timestep 1 
+
+> (b) Timestep 4
+> (c) Timestep 16
+
+Figure 14: The figure displays scatter plots of the average (across intervention level) covariate value on the x-axis against the clipped importance weighted covariate (i.e., g(si, 0: t,k )( Qtt′=0 p(ai,t ′ |si,t ′ )) −1 from equation 21) on the y-axis. The weighted covariate values are further clipped between the 10th and 90th percentile of the original distribution. The figure displays timestep 1 at the top, timestep 4 in the middle and timestep 16 at the bottom, with propensity score predictions made over seed 0 of the training dataset. 24 (a) Timestep 1 
+
+> (b) Timestep 4
+> (c) Timestep 16
+
+Figure 15: The figure displays scatter plots of the average (across intervention level) covariate value on the x-axis against the Hajek importance weighted co-variate (i.e., g(si, 0: t,k )( Qtt′=0 p(ai,t ′ |si,t ′ )) −1 from equation 21) on the y-axis. The weighted covariate values are clipped between the 10th and 90th percentile of the original distribution. The figure displays timestep 1 at the top, timestep 4 in the middle and timestep 16 at the bottom, with propensity score predictions made over seed 0 of the training dataset. 25 Combining the numerator and denominator, observe that: 
+
+|ˆμa′ 
+
+> 0: t
+
+(k) − ˆμa′′  
+
+> 0: t
+
+(k)|
+
+q
+
+n−1 ¯σ2
+
+> a′
+> 0: t
+
+(k) + n−1 ¯σ2
+
+> a′′
+> 0: t
+
+(k) = ζ−1| ˆμ′a′ 
+
+> 0: t
+
+(k) − ˆμ′a′′  
+
+> 0: t
+
+(k)|
+
+q
+
+ζ−2(n−1 ¯σ′2 
+
+> a′
+> 0: t
+
+(k) + n−1 ¯σ′2 
+
+> a′′
+> 0: t
+
+(k)) where ˆ μ′a′ 
+
+> 0: t
+
+(k) and ¯ σ′2 
+
+> a′
+> 0: t
+
+(k) are the unweighted mean and standard deviation. Which implies, for a sufficiently large t:MASD Weight-t(k, a ′
+
+> 0: t
+
+, a ′′ 
+
+> 0: t
+
+) ≈ MASD UnWeight-t(k, a 0: t, a ′′ 
+
+> 0: t
+
+) (23) Equation 23 explains the apparent positive covariate balance observed when considering the clipped importance sampling estimator, demonstrated in figures 6 and 11. 
+
+Bias analysis of Hajek importance sampling A similar deduction regard-ing the bias of the Hajek estimator can be made. However, unlike the clipping estimator, the resulting bias is driven by the exponential reduction in effective sample size. This is demonstrated in figure 16, displaying the number of obser-vations per intervention level, split by time for the training and testing datasets. 
+
+(a) Training set (b) Testing set 
+
+Figure 16: The figure displays the aggregate number of observations per in-tervention level, across time. The thick blue line defines the mean number of observations whilst the shaded area defines and min and max. Returning to the Hajek estimator, MASD Hajek-t(k, a ′
+
+> 0: t
+
+, a ′′ 
+
+> 0: t
+
+), for a suffi-26 ciently large t:    
+
+> 1(ai, 0: t=a′
+> 0: t)g(si, 0: t,k )
+> Qtt′=0 p(ai,t ′|si,t ′)1
+> n
+
+Pni=1    
+
+> 1(ai, 0: t=a′
+> 0: t)
+> Qtt′=0 p(ai,t ′|si,t ′)
+
+= 1(ai, 0: t = a′
+
+> 0: t
+
+)g(si, 0: t,k )As such: 
+
+> 1
+> n
+
+Pni=1     
+
+> 1(ai, 0: t=a′
+> 0: t)g(si, 0: t,k )
+> Qtt′=0 p(ai,t ′|si,t ′)1
+> n
+
+Pni=1    
+
+> 1(ai, 0: t=a′
+> 0: t)
+> Qtt′=0 p(ai,t ′|si,t ′)
+
+= 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+1(ai, 0: t = a′
+
+> 0: t
+
+)g(si, 0: t,k )and: 1
+
+n − 1
+
+> n
+
+X    
+
+> i=1
+> 1(ai, 0: t=a′
+> 0: t)g(si, 0: t,k )
+> Qtt′=0 p(ai,t ′|si,t ′)1
+> n
+
+Pni=1    
+
+> 1(ai, 0: t=a′
+> 0: t)
+> Qtt′=0 p(ai,t ′|si,t ′)
+
+− ˆμa′
+
+> 0: t
+
+!2
+
+= 1
+
+n − 1
+
+> n
+
+X
+
+> i=1
+
+1(ai, 0: t = a′
+
+> 0: t
+
+)g(si, 0: t,k ) − 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+1(ai, 0: t = a′
+
+> 0: t
+
+)g(si, 0: t,k )
+
+!2
+
+Thus, similarly to the clipped estimator, for a sufficiently large t:MASD Hajek-t(k, a ′
+
+> 0: t
+
+, a ′′ 
+
+> 0: t
+
+) ≈ MASD UnWeight-t(k, a 0: t, a ′′ 
+
+> 0: t
+
+) (24) 
+
+Summary To conclude, the high variance of the importance sampling estima-tor precludes drawing a conclusion regarding the presence of covariate balance at later timesteps. Furthermore, controlling this variance using the conventional clipping and weighting arguably worsens the issue since both methods bias towards perfect covariate balance in high variance settings. More encouragingly, both the clipped and Hajek estimators did suggest covariate balance was present beyond the first three timesteps where, from figures 14 and 15, there is still variation in the weighted states. This argument however, is entirely heuristic and a formal framework describing the trade-off between accuracy and variance reduction would be extremely useful. Pessimistic PAC based estimators for clipped importance sampling have been widely established (Sakhi et al. (2024)) and thus would provide a solid starting point for developing such a framework. An immediate and potentially significant challenge in adapting these estima-tors however, is the desirability of pessimism in the context of covariate balance. 
+
+4.2.4 Fluid action space (Sepsis-fluid dataset) 
+
+Under the full action space used in the previous section, a number of actions were drastically underrepresented even before accounting for the cumulative effect over time. Figures 22 and 23 describe the proportion of observations 27 split by action over time. At a high level, for the sepsis dataset, the minimum representation for a given action was only 3% of the total observations (calculated using the seed 0 training set). It was hypothesised that this lead to higher variance in the covariate balance metrics due to the reduced effective sample size, as demonstrated by figure 17a. This is in contrast to figure 17b where the effective sample size of a given intervention reduces to 0 at a later time horizon (judging by the minimum value).  
+
+> (a) Sepsis dataset (b) Sepsis-fluid dataset
+
+Figure 17: The figures describe the mean (blue solid line) and min/max (shaded area) number of observations per intervention level, across time. The seed 0 training set was used to produce the figures. Figures 18 and 19 display the median MASD Weight-t(k, t ) and MASD-Diff Weight-t(k, t ) values for the sepsis-fluid dataset, respectively. In comparison to the sepsis datasets, the propensity model induces better covariate balance for the first four timesteps (on the testing dataset) instead of the first two (figure 19). However, using the restricted action space far from resolves the lack of covariate balance: balance worsens from timestep 4 onwards in comparison to the unweighted covariates. The predictive performance of the propensity score also improved under the sepsis-fluid dataset (table 1) which was almost certainly a result of the more uniform action density. Since the propensity model needs to be correctly specified to achieve covariate balance (corollary 2), this improvement in performance is a confounder for understanding the impact of the reduced action space. Subsequent analysis in section 5.1 demonstrates that sample size does indeed impact covariate balance. As such, all that is unknown is the extent to which the relative balance between the sepsis and the sepsis-fluid datasets is 28 mediated by the improvement in the propensity model performance.  
+
+> (a) Training dataset (b) Testing dataset
+
+Figure 18: The figure describes the median MASD Weight-t(k, t ) value, across features, for the sepsis-fluid dataset, under the vanilla estimator. The x-axis displays the time horizon and the y-axis displays the median MASD Weight-t(k, t )value as the solid line with the min and max values described by the shaded region.  
+
+> (a) Training dataset (b) Testing dataset
+
+Figure 19: The figure describes the median (across features) MASD-Diff Weight-t(k, t ) values for the sepsis-fluid dataset, under the vanilla es-timator. The shaded region describes the min and max MASD-Diff Weight-t(k, t )values by timepoint. 29 (a) Training dataset (b) Testing dataset 
+
+Figure 20: The figure describes the median (across features) MASD-Diff Weight-t(k, t ) values for the sepsis-fluid dataset, under the clipped es-timator. The shaded region describes the min and max MASD-Diff Weight-t(k, t )values by timepoint. 
+
+(a) Training dataset (b) Testing dataset 
+
+Figure 21: The figure describes the median (across features) MASD-Diff Weight-t(k, t ) values for the sepsis-fluid dataset, under the Hajek es-timator. The shaded region describes the min and max MASD-Diff Weight-t(k, t )values by timepoint. 30 (a) Training dataset (seed 0)  (b) Testing dataset (seed 0) 
+
+> (c) Training dataset (seed 1)  (d) Testing dataset (seed 1)
+> Figure 22: The figure describes the proportion of actions per timestep, across the training and testing sets, and split by seeds for the sepsis dataset.
+
+31 (a) Training dataset (seed 0)  (b) Testing dataset (seed 0) 
+
+> (c) Training dataset (seed 1)  (d) Testing dataset (seed 1)
+> Figure 23: The figure describes the proportion of actions per timestep, across the training and testing sets, and split by seeds for the sepsis-fluid dataset.
+
+32 4.2.5 Reduced time horizon 
+
+The results presented in sections 4.2.3 and 4.2.4 have suggested that covariate balance might be present over a shorter time horizon. Similar to constraining the action space, as discussed in section 4.2.4, constraining the planning horizon might provide a reasonable approach to ensuring covariate balance is satisfied. This hypothesis was assessed by evaluating covariate balance for propensity models trained on horizons of length 2, 5, 8 and 13 timesteps. Horizons 5 and 13 were chosen since these defined the 5th and 50th percentile of trajectory lengths, calculated on the training set under seed 0. Horizon 2 was chosen as this defines the minimum multistep horizon. Horizon 8 was subsequently included based on the results of 5 and 13. Table 2 displays the number of timesteps where the median MASD-Diff Weight-t(k, t ) > 0 and appendix section 
+
+?? contains the complete median (across features) MASD Weight-t(k, t ) and MASD-Diff Weight-t(k, t ) plots. Dataset Horizon # median MASD-Diff Weight-t(k, t ) > 0Training Testing Sepsis 2 2 2Sepsis 5 3 2Sepsis 8 3 3
+
+Sepsis 13 3 2Sepsis-fluid 2 2 2Sepsis-fluid 5 5 5
+
+Sepsis-fluid 8 5 4Sepsis-fluid 13 5 4Table 2: The table displays the number of timesteps where the median MASD-Diff Weight-t(k, t ) (across features) was greater than 0 for the truncated trajectories across, the sepsis and sepsis-fluid datasets. The results in table 2 demonstrate that, across the sepsis and sepsis-fluid datasets, reducing the time horizon can improve the resulting covariate balance, albeit this is not uniformly the case. Of the restricted trajectory lengths assessed, covariate balance never worsened and improved on the sepsis dataset at horizon 8 and on the sepsis fluid dataset at horizon 5. For all restricted time horizons and across both action spaces, the action dimension was effectively the same as under the original time horizon. There was a risk that certain actions were only present in later timesteps of the trajectories and thus by considering truncated trajectories, the action space would also effectively be reduced. Since it had already been demonstrated that a reduced action space dimension improved covariate balance (section 4.2.4), reducing the action space along with the horizon risked confounding 33 the analysis. However, as stated the action space dimension was identical except for the first timestep under the sepsis dataset where the effective action dimension was 24 rather than 25. Since the action dimension was effectively retained, any improvement in covariate balance could reasonably be attributed to truncating the trajectories. Since covariate balance did not uniformly improve across all truncated horizons (or uniformly across all horizons below a given length), further assessment is required, to ensure these results were not statistical anomalies. It is perhaps counterintuitive that restricting the maximum time horizon would increase the horizon over which covariate balance is present. It is hypothesised however, that truncating the horizon improves the stability of training the propensity model. This is discussed further in section 5.2. 
+
+# 5 Conclusion 
+
+The core implication of the analysis is that existing applications of offline reinforcement learning for learning treatment recommendations are too high dimensional (both in time and action space) to conclude, using existing ap-proaches for assessing diagnostic balance that, at least heuristically, conditional exchangeability holds. With respect to the sepsis domain assessed, figures 10 and 19 combined suggest that covariate balance can be achieved for the first 2 timesteps and this can be improved by restricting the action space and potentially by truncating trajectories. A second implication of the analysis is that, traditional approaches to reducing variance in importance sampling estimators are not valid for assessing covariate balance. As the variance of the vanilla estimator (and thus uncer-tainty) increases, both the Hajek and clipped estimator will predictably suggest that covariate balance has been achieved. Arguably, it is unsurprising that the clipped and Hajek estimators are insufficient for assessing covariate balance. Where sequential exchangeability does not hold, the resulting causal estimates are biased. As a result, the MASD metrics are a diagnostic check for bias. On the surface, checking for bias using biased estimators (without proper control) feels counterintuitive. An impactful line of future work would consider the point at which the bias under the clipped or Hajek estimators overwhelms the estimates. If this could be characterised, then far greater confidence could be placed in the presence of covariate balance at timesteps larger than 2, for the sepsis dataset assessed in this analysis (based on figures 11 and 12). 34 5.1 Training/validation set 
+
+As discussed in section 4.1, it is intuitive to consider the covariate balance over the training set to be a biased estimate of the expected covariate balance. On the surface, the general degradation in balance between the testing and training set supports this. Figure 24 describes the median (across features) MASD-Diff Weight-t(k, t ) values, calculated on seed 0 of the training data but subsampled to be the size of the testing set, for the sepsis and sepsis-fluid datasets, respectively. Notably, in comparison to figure 10 for the sepsis dataset and 19 for the sepsis-fluid datasets, the number of timesteps with a positive median covariate balance is equivalent to that observed on the testing sets. It is thus quite possible that the degradation in balance on the testing set is a function of the reduced sample size, rather than the training set metric being inherently biased/the bias being substantial.  
+
+> (a) Sepsis dataset (b) Sepsis-fluid dataset
+
+Figure 24: The figure describes the median (across features) MASD-Diff Weight-t(k, t ) values for seed 0 of the training data, subsam-pled to the size of the testing set. The metric values are derived under the vanilla importance sampling estimator. The shaded region describes the min and max MASD-Diff Weight-t(k, t ) values by timepoint. Without considering the use of covariate balance for model training (in the case of Imai & Ratkovic (2014)), it is quite possible that the bias (if any) from assessing covariate balance on the training set (or even better the joint training and testing set) is sufficiently small such that the increased sample size provides a more accurate view of the covariate balance achieved. Given this observation, an important line of future work would be to establish the behaviour of covariate balance to determine whether the training set can be used to assess balance. 
+
+## 5.2 Propensity score architecture 
+
+The derivation of the weighted MASD metrics described in section 3.3 utilised the independence structure of the MDP to simplify the time t propensity estimate by equating p(A0: t|S0: t) = Qtt′=0 p(At′ |St′ ). This autoregressive 35 approach is common for sequence modelling. An alternate modelling approach would be to jointly learn the density of the trajectory. The results presented in 4.2.5 potentially support the hypothesis that this joint modelling approach would benefit the development of propensity models. The results showed that by truncating the trajectory length, the number of timesteps where covariate balance was present (relative to the unweighted distribution) improved, in some scenarios. It was hypothesised that this was a result of the global structure of the trajectory being easier to capture. The causal structure of the MDP would still need to be respected and thus the marginal decomposition would still exist however, a joint modelling approach might improve the overall stability of the inferred densities at later time horizons. It is hypothesised that such an approach might trade-off a degraded covariate stability earlier in trajectories for an improved covariate stability at later timesteps. More concretely, the current training process learnt p(At|St, A t−1). The joint density was subsequently defined by p(A0: t|S0: t, A 0: t−1) =
+
+p(A0|S0) Qtt′=1 p(At|St, A t−1). A joint modelling approach would learn p(A0: H−1|S0: H−1, A 0: H−2) directly and thus p(A0: t|S0: t, A 0: t−1) =R p(A0: H−1|S0: H−1, A 0: H−2)dA t+1: H−1, S t+1: H−1.
+
+# References 
+
+Akiba, T., Sano, S., Yanase, T., Ohta, T. & Koyama, M. (2019), Optuna: A next-generation hyperparameter optimization framework, in ‘Proceedings of the 25th ACM SIGKDD International Conference on Knowledge Discovery and Data Mining’. Austin, P. C. (2009), ‘Balance diagnostics for comparing the distribution of baseline covariates between treatment groups in propensity-score matched samples’, Statistics in Medicine 28 (25), 3083–3107. 
+
+URL: https://onlinelibrary.wiley.com/doi/10.1002/sim.3697 
+
+Cannas, M. & Arpino, B. (2019), ‘A comparison of machine learning algorithms and covariate balance measures for propensity score matching and weighting’, 
+
+Biometrical Journal 61 (4), 1049–1072. 
+
+URL: https://onlinelibrary.wiley.com/doi/10.1002/bimj.201800132 
+
+Chakraborty, B. & Moodie, E. E. (2013), Statistical Methods for Dynamic Treat-ment Regimes , Springer New York. Chen, T. & Guestrin, C. (2016), XGBoost: A scalable tree boosting system, in 
+
+‘Proceedings of the 22nd ACM SIGKDD International Conference on Knowl-edge Discovery and Data Mining’, KDD ’16, ACM, New York, NY, USA, 36 pp. 785–794. 
+
+URL: http://doi.acm.org/10.1145/2939672.2939785 
+
+Cohen, J. (2013), Statistical Power Analysis for the Behavioral Sciences , 0 edn, Routledge. 
+
+URL: https://www.taylorfrancis.com/books/9781134742707 
+
+Efron, B. (1986), ‘How Biased is the Apparent Error Rate of a Prediction Rule?’, Journal of the American Statistical Association 81 (394), 461–470. 
+
+URL: https://www.tandfonline.com/doi/full/10.1080/01621459.1986.10478291 
+
+Fu, J., Norouzi, M., Nachum, O., Tucker, G., Wang, Z., Novikov, A., Yang, M., Zhang, M. R., Chen, Y., Kumar, A., Paduraru, C., Levine, S. & Paine, T. L. (2021), Benchmarks for deep off-policy evaluation, in ‘ICLR 2021 - 9th International Conference on Learning Representations’. Hastie, T., Tibshirani, R. & Friedman, J. (2009), The Elements of Statistical Learning , Springer Series in Statistics, Springer New York, New York, NY. 
+
+URL: http://link.springer.com/10.1007/978-0-387-84858-7 
+
+Huang, Y., Cao, R. & Rahmani, A. (2022), Reinforcement learning for sepsis treatment: A continuous action space solution, in N. Lawrence, ed., ‘Proceed-ings of Machine Learning Research’. Imai, K. & Ratkovic, M. (2014), ‘Covariate balancing propensity score’, Journal of the Royal Statistical Society. Series B: Statistical Methodology 76 .Ionides, E. L. (2008), ‘Truncated Importance Sampling’, Journal of Computa-tional and Graphical Statistics 17 (2), 295–311. 
+
+URL: http://www.tandfonline.com/doi/abs/10.1198/106186008X320456 
+
+Kaushik, P., Kummetha, S., Moodley, P. & Bapi, R. S. (2022), ‘A conserva-tive q-learning approach for handling distribution shift in sepsis treatment strategies’. Komorowski, M., Celi, L. A., Badawi, O., Gordon, A. C. & Faisal, A. A. (2018), ‘The artificial intelligence clinician learns optimal treatment strategies for sepsis in intensive care’, Nature Medicine 24 .Prasad, N., Cheng, L. F., Chivers, C., Draugelis, M. & Engelhardt, B. E. (2017), A reinforcement learning approach to weaning of mechanical ventilation in intensive care units. Raghu, A., Gottesman, O., Liu, Y., Komorowski, M., Faisal, A., Doshi-Velez, F. & Brunskill, E. (2018), ‘Behaviour policy estimation in off-policy policy evaluation: Calibration matters’. Raghu, A., Komorowski, M. & Singh, S. (2018), ‘Model-based reinforcement learning for sepsis treatment’. 37 Rosenbaum, P. R. & Rubin, D. B. (1983), ‘The central role of the propensity score in observational studies for causal effects’, Biometrika 70 (1), 41–55. 
+
+URL: https://academic.oup.com/biomet/article-lookup/doi/10.1093/biomet/70.1.41 
+
+Rubin, D. B. (2001), ‘Using propensity scores to help design observational stud-ies: Application to the tobacco litigation’, Health Services and Outcomes Research Methodology 2.Sakhi, O., Aouali, I., Alquier, P. & Chopin, N. (2024), Logarithmic smoothing for pessimistic off-policy evaluation, selection and learning, in ‘The Thirty-eighth Annual Conference on Neural Information Processing Systems’. 
+
+URL: https://openreview.net/forum?id=zLClygeRK8 
+
+Subramanian, J. & Killian, T. (2023), ‘mimc sepsis’. 
+
+URL: https://github.com/microsoft/mimic sepsis?tab=readme-ov-file 
+
+Voloshin, C., Le, H. M., Jiang, N. & Yue, Y. (2019), ‘Empirical study of off-policy policy evaluation for reinforcement learning’. Yu, C., Liu, J., Nemati, S. & Yin, G. (2019), ‘Reinforcement learning in health-care: A survey’, ACM Computing Surveys 55 .38
