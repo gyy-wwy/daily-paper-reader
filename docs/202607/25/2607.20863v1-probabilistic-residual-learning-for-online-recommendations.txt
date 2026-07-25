@@ -1,0 +1,1155 @@
+Title: Probabilistic Residual Learning for Online Recommendations
+
+URL Source: https://arxiv.org/pdf/2607.20863v1
+
+Published Time: Fri, 24 Jul 2026 00:24:47 GMT
+
+Number of Pages: 21
+
+Markdown Content:
+# Probabilistic Residual Learning for Online Recommendations 
+
+## Wenyuan Wang ∗
+
+Rutgers University Piscataway , New Jersey , United States ww462@scarletmail.rutgers.edu 
+
+## Yusong Zhao ∗† 
+
+Rutgers University Piscataway , New Jersey , United States yz1635@scarletmail.rutgers.edu 
+
+## Zihao Xu ∗
+
+Rutgers University Piscataway , New Jersey , United States zihao.xu@rutgers.edu 
+
+## Hengyi Wang ∗
+
+Rutgers University Piscataway , New Jersey , United States hw514@scarletmail.rutgers.edu 
+
+## Qi Xu ∗
+
+Meta Sunnyvale, California, United States xuqi0511@gmail.com 
+
+## Zhigang Hua ∗† 
+
+Meta Sunnyvale, California, United States zhua@meta.com 
+
+## Yan Xie 
+
+Meta Sunnyvale, California, United States yanxie@meta.com 
+
+## Yi Wang 
+
+Rutgers University Piscataway , New Jersey , United States yw1013@scarletmail.rutgers.edu 
+
+## Zihao Zhao 
+
+Rutgers University Piscataway , New Jersey , United States zz1009@rutgers.edu 
+
+## Bo Long 
+
+Meta Sunnyvale, California, United States bolong@meta.com 
+
+## Chengzhi Mao 
+
+Rutgers University Piscataway , New Jersey , United States chengzhi.mao@rutgers.edu 
+
+## Shuang Yang 
+
+Meta Sunnyvale, California, United States shuangyang@meta.com 
+
+## Hengguan Huang †
+
+University of Copenhagen Copenhagen, Denmark hengguan.huang@sund.ku.dk 
+
+## Hao Wang †
+
+Rutgers University & UIUC Piscataway , New Jersey , United States hwangml@illinois.edu 
+
+Abstract 
+
+Modern recommender systems are typically based on deep learning (DL) models, where a dense encoder learns representations of users and items. As a result, these systems often suffer from the black-box nature and computational complexity of the underlying models, making it difficult to systematically enhance their recommenda-tion capabilities. To address this problem, we propose Probabilistic Residual Learning (PRL) , a causal Bayesian recommendation model that models the residual between ground-truth and base predic-tions, enabling targeted refinement of existing systems. Specifically, PRL (1) probabilistically groups users for localized residual model-ing, (2) models domain-level confounders that influence user and item representations, and (3) aggregates cluster-specific residual predictions over the confounders using do-calculus. Experiments demonstrate that our plug-and-play PRL is compatible with various base DL recommender systems, improving their performance while automatically discovering meaningful user clusters.  
+
+> ∗Co-first authors.
+> †Corresponding authors.
+> This work is licensed under a Creative Commons Attribution 4.0 International License.
+> RecSys ’26, Minneapolis, MN, USA
+> ©2026 Copyright held by the owner/author(s). ACM ISBN 979-8-4007-2284-4/2026/09 https://doi.org/10.1145/3773078.3831754
+
+CCS Concepts 
+
+• Information systems → Recommender systems .
+
+Keywords 
+
+Bayesian Deep Learning, Probabilistic Graphical Model 
+
+ACM Reference Format: 
+
+Wenyuan Wang, Yusong Zhao, Zihao Xu, Hengyi Wang, Qi Xu, Zhigang Hua, Yan Xie, Yi Wang, Zihao Zhao, Bo Long, Chengzhi Mao, Shuang Yang, Hengguan Huang, and Hao Wang. 2026. Probabilistic Residual Learning for Online Recommendations. In 20th ACM Conference on Recommender Systems (RecSys ’26), September 27–October 02, 2026, Minneapolis, MN, USA. ACM, New York, NY, USA, 21 pages. https://doi.org/10.1145/3773078.3831754 
+
+1 Introduction 
+
+Over the past decade, personalized recommendations have signifi-cantly improved user experiences in domains such as e-commerce and social media. The recommender systems driving these ad-vancements often rely on sophisticated deep learning (DL) mod-els [ 4 , 29 , 39 ] capable of handling vast amounts of data, enabling highly accurate predictions and personalized interactions. Despite their effectiveness, these models are often costly or difficult to sys-tematically adapt to new domains, particularly under cold-start domain shifts such as changes in user markets. Cold-start scenarios, a critical problem in recommendation systems, exacerbate these issues due to the presence of heterogeneous features and the influ-ence of diverse and spurious patterns. As a result, existing models exhibit notably low performance in such settings. arXiv:2607.20863v1 [cs.IR] 23 Jul 2026 RecSys ’26, September 27–October 02, 2026, Minneapolis, MN, USA Wang et al. Items 
+
+Users 
+
+Base Recommenders 
+
+DLRM  CDL  NCF 
+
+...  Sub -model 3 
+
+Sub -model 1 
+
+Sub -model 2 
+
+Train Sub -models for Clusters 
+
+Predicted Residual Ratings 
+
+Input 
+
+Confounders 
+
+Input 
+
+Probabilistic Clustering 
+
+K = 3 
+
+Or  Or                
+
+> Item1 Item2
+> User1 0.11 0.46
+> User2 0.08 0.30
+> Item1 Item2
+> User1 0.37 0.79
+> User2 0.10 0.95
+> Item1 Item2
+> User1 0.26 0.33
+> User2 0.02 0.65
+
+Base Predicted Ratings Final Predicted Ratings 
+
+... 
+
+…
+
+Causal Debiasing 
+
+Figure 1: Overview of PRL. During training, PRL models the residuals of a fixed base recommender, probabilistically clusters users, and learns cluster-specific correction models. During inference, it predicts a confounder-adjusted residual using the inferred cluster and adds it to the base prediction. 
+
+Existing work [ 1 , 8 , 16 , 17 , 21 , 22 , 38 , 43 , 49 ] often addresses domain shift through shared users or items. However, such overlap is often unavailable in practice; for example, users and items may be disjoint across countries. This setting also requires modeling shared confounders, as exposure and popularity effects may induce domain-specific correlations that transfer poorly. Additionally, existing methods often overlook latent user clusters, missing opportunities for user-cluster-targeted enhancement. To address these problems, we draw inspiration from the hier-archical Bayesian DL framework [ 33 , 34 ] to propose causal hierar-chical Bayesian DL model, dubbed Probabilistic Residual Learning (PRL) , as a plug-and-play framework to improve and potentially interpret any base recommender systems in cross-domain settings. Fig. 1 shows the simplified overview of our framework. During the training stage , given any base recommender (e.g., DLRM [ 25 ], CDL [ 31 ], or NCF [ 11 ]), PRL is learned by jointly (1) computing its predicted ratings and the residual ratings (i.e., the difference between the ground-truth ratings and the base model’s predicted ratings), (2) dividing users into latent clusters based on the residual ratings using our probabilistic clustering method, (3) training a sub-model for each latent user cluster. During the inference stage ,once PRL is learned, given a new user-item pair, PRL can then (1) estimate the user’s cluster ID to select the proper sub-model, (2) use this sub-model to perform causal inference to debias poten-tial confounders and predict the residual rating, and (3) add this predicted residual rating to the base predicted rating to obtain the final predicted rating, thereby producing the final recommendation. Notably, PRL is plug-and-play , i.e., it is compatible with any base DL recommendation model and can enhance the original model’s performance. Our contributions are as follows: 
+
+• We formulate cross-domain adaptation as a plug-and-play probabilistic residual correction problem for fixed base rec-ommenders. 
+
+• We develop a hierarchical Bayesian model that combines probabilistic user clustering with causal adjustment of do-main confounders. 
+
+• Experiments across datasets and base recommenders demon-strate improved cold-start cross-domain recommendation. 
+
+2 Probabilistic Residual Learning 2.1 Problem Setting and Notations 
+
+Consider a recommendation dataset containing 𝐼 users and 𝐽 items. A DL encoder 𝑓 𝑣 (·) : R𝑑 → Rℎ encodes each item 𝑗 ’s raw features 
+
+x𝑣 𝑗 ∈ R𝑑 into 𝑓 𝑣 (x𝑣 𝑗 ). For a given user 𝑖 and an item 𝑗 , there is a ground-truth rating 𝑅 𝑖 𝑗 ∈ R, a base predicted rating b𝑅 𝑖 𝑗 ∈ R
+
+provided by a base recommender, and a residual rating e𝑅 𝑖 𝑗 = 𝑅 𝑖 𝑗 −
+
+b𝑅 𝑖 𝑗 . There is a latent cluster ID 𝑘 (𝑘 ∈ { 1, ..., 𝐾 }) that indicates which user group user 𝑖 belongs to. We assume that there exists a user latent vector u𝑖 ∈ Rℎ for each user 𝑖 and an item latent vector v𝑗 ∈ Rℎ for each item 𝑗 ; they are both impacted by a causal confounder s ∈ R𝑔 , where 𝑔 ≪ ℎ.Our goal is to predict the final rating 𝑅 using the residual e𝑅 , i.e., 
+
+𝑅 = b𝑅 + e𝑅 , where b𝑅 represents the rating from the original (base) DL recommender. When the original recommender is provided, b𝑅 
+
+is fixed; therefore we only need to learn e𝑅 in order to predict the final rating 𝑅 . For generality, we assume 𝑀 domains, where 𝑚 𝑖 and 
+
+𝑚 𝑗 denote the domain ID of user 𝑖 and item 𝑗 , respectively. 
+
+2.2 Method Overview 
+
+PRL jointly models cluster-specific users, content-informed items, and confounder-adjusted residuals. Fig. 2 shows their dependencies and variational formulation. 
+
+Generative Process. Below we describe the generative process of PRL shown in Fig. 2. Probabilistic Residual Learning for Online Recommendations RecSys ’26, September 27–October 02, 2026, Minneapolis, MN, USA ෩𝑹  𝒗 
+
+𝒖  𝒔 
+
+𝒙 𝒗 
+
+J
+
+I
+
+𝝅 
+
+𝝁  𝚺  K            
+
+> ෩𝑹 :residual rating
+> 𝒖 𝒊 :user i’s latent vector
+> 𝒙 𝒋
+> 𝒗 :item j’s raw feature s
+> 𝝁 𝒌 :mean of cluster k
+> 𝒗 𝒋 : item j’s latent vector
+> 𝝅 𝒊 :cluster ID for user
+> 𝒔 :causal confounder
+> 𝚺 𝐤 :covariance of cluster k
+> Deep Learning
+> Model
+
+Figure 2: Probabilistic graphical model of PRL. The cluster variable 𝜋 𝑖 selects the user prior, while the domain factor s𝑚 
+
+influences u𝑖 , v𝑗 , and the residual rating e𝑅 𝑖 𝑗 .
+
+For each domain 𝑚 , PRL draws a confounder s𝑚 ∼ N ( 0, I). For each item 𝑗 , it draws 
+
+v𝑗 ∼ 𝑝 (v𝑗 | x𝑣 𝑗 , s𝑚 ) = 𝑃𝑜𝐺 
+
+
+
+𝑓 𝑣 (x𝑣 𝑗 ), W𝑣 s𝑚 , Λ−1 
+
+> 𝑣
+
+I, 𝜆 −1 
+
+> 𝑣
+
+I
+
+
+
+. (1) For each user 𝑖 , PRL draws a cluster assignment 𝜋 𝑖 ∼ 𝑝 (𝜋 𝑖 | 𝜃 ) and 
+
+u𝑖 ∼ N ( 𝝁 𝜋 𝑖 + W𝑢 s𝑚 , 𝚺 𝜋 𝑖 ).
+
+Finally, it draws the residual rating 
+
+e𝑅 𝑖 𝑗 ∼ N 
+
+
+
+u⊤ 
+
+> 𝑖
+
+v𝑗 + w𝑅 ⊤s𝑚 , 𝜆 −1
+
+> e𝑅 𝑖 𝑗
+
+
+
+.
+
+Here, W𝑢 , W𝑣 , and w𝑅 are globally shared parameters. The product-of-Gaussians prior in Eqn. 1 combines the content-based estimate 𝑓 𝑣 (x𝑣 𝑗 ) and the domain-conditioned estimate W𝑣 s𝑚 .The resulting distribution is also Gaussian [5], with 
+
+𝝁 𝑝𝑜𝑔 = Λ𝑣 𝑓 𝑣 (x𝑣 𝑗 ) + 𝜆 𝑣 W𝑣 s𝑚 
+
+Λ𝑣 + 𝜆 𝑣 
+
+, 𝜆 𝑝𝑜𝑔 = Λ𝑣 + 𝜆 𝑣 . (2) 
+
+Model Factorization . As shown in Fig. 2, we factorize the gen-erative model into four conditional distributions: 
+
+𝑝 (u𝑖 , v𝑗 , 𝜋, e𝑅 𝑖 𝑗 |{ 𝝁 𝑘 , 𝚺 𝑘 }𝐾 𝑘 =1, x𝑣 𝑗 , s𝑚 )
+
+= 𝑝 (e𝑅 𝑖 𝑗 |u𝑖 , v𝑗 , s𝑚 )𝑝 (u𝑖 |{ 𝝁 𝑘 , 𝚺 𝑘 }𝐾 𝑘 =1, s𝑚 , 𝜋 )𝑝 (v𝑗 |x𝑣 𝑗 , s𝑚 )𝑝 (𝜋 ). (3) 
+
+𝑝 (𝜋 |𝜃 ) is the prior distribution for 𝜋 . Each of the remaining dis-tributions is assumed as a Gaussian distribution and is shown as follows: 
+
+𝑝 (e𝑅 𝑖 𝑗 |u𝑖 , v𝑗 , s𝑚 ) = N ( u⊤ 
+
+> 𝑖
+
+v𝑗 + w𝑅 ⊤s𝑚 , 𝜆 −1
+
+> e𝑅 𝑖 𝑗
+
+), (4) 
+
+𝑝 (u𝑖 |{ 𝝁 𝑘 , 𝚺 𝑘 }𝐾 𝑘 =1, s𝑚 , 𝜋 ) = N ( 𝝁 𝜋 𝑖 + W𝑢 s𝑚 , 𝚺 𝜋 𝑖 ), (5) 
+
+𝑝 (v𝑗 |x𝑣 𝑗 , s) = 𝑃𝑜𝐺 (𝑓 𝑣 (x𝑣 𝑗 ), W𝑣 s𝑚 , Λ−1 
+
+> 𝑣
+
+I, 𝜆 −1 
+
+> 𝑣
+
+I), (6) where 𝑖 and 𝑗 refer to the user index and the item index, respectively. We employ variational distributions 𝑞 (u𝑖 , v𝑗 |x𝑣 𝑗 ) to approximate the posterior distributions of u𝑖 and v𝑗 .
+
+𝑞 ({ u𝑖 }𝐼 𝑖 =1, {v𝑗 }𝐽 𝑗 =1) =
+
+Ö𝐼 𝑖 =1 𝑞 (u𝑖 )
+
+Ö𝐽 𝑗 =1 𝑞 (v𝑗 ). (7) More specifically, we assume 𝑞 (v𝑗 ) follows a gaussian distribution: 
+
+𝑞 (v𝑗 ) = N ( 𝝁 v𝑗 , Λ−1 
+
+> 𝑣
+
+I). (8) Here, 𝑗 is the item index, Λ𝑣 ∈ R refers to the precision. Similarly: 
+
+𝑞 (u𝑖 ) = N ( 𝝁 u𝑖 , Λ−1 
+
+> 𝑢
+
+I), (9) where 𝑖 is the user index, and Λ𝑢 ∈ R is the precision. Different users and items have different approximate posteriors. We also use a categorical variational distribution 𝑞 (𝜋 ) to approximate the posterior distribution of 𝜋 (more details below). 
+
+Learning Objective. We maximize an evidence lower bound (ELBO) as our learning objective for both the generative and infer-ence models. 
+
+L𝐸𝐿𝐵𝑂 (x𝑣 𝑗 , e𝑅 𝑖 𝑗 )
+
+= E𝑞 (u𝑖 )𝑞 (v𝑗 )
+
+ log 𝑝 (u𝑖 , v𝑗 , e𝑅 𝑖 𝑗 |{ 𝝁 𝑘 , 𝚺 𝑘 }𝐾 𝑘 =1, x𝑣 𝑗 , s𝑚 , 𝜋 )
+
++ E𝑞 (𝜋 ) [𝑝 (𝜋 |𝜃 )] − E𝑞 (𝜋 ) [𝑞 (𝜋 )] − E𝑞 (u𝑖 )𝑞 (v𝑗 )
+
+ log 𝑞 (v𝑗 )] − E𝑞 (u𝑖 )𝑞 (v𝑗 )
+
+ log 𝑞 (u𝑖 )] . (10) Combining Eqn. 3 and Eqn. 7, we obtain the following decompo-sition: 
+
+L𝐸𝐿𝐵𝑂 (x𝑣 𝑗 , e𝑅 𝑖 𝑗 )
+
+= −𝐷 𝐾𝐿 
+
+ 𝑞 (u𝑖 )∥ 𝑝 (u𝑖 |{ 𝝁 𝑘 , 𝚺 𝑘 }𝐾 𝑘 =1, s𝑚 , 𝜋 ) (11) 
+
++ E𝑞 (u𝑖 )𝑞 (v𝑗 )𝑞 (𝜋 )
+
+ log 𝑝 (e𝑅 𝑖 𝑗 |u𝑖 , v𝑗 , s𝑚 , 𝜋 ) (12) 
+
+− 𝐷 𝐾𝐿 
+
+ 𝑞 (v𝑗 )∥ 𝑝 (v𝑗 |x𝑣 𝑗 , s𝑚 ), (13) 
+
+− 𝐷 𝐾𝐿 
+
+ 𝑞 (𝜋 )∥ 𝑝 (𝜋 |𝜃 ), (14) where 𝐷 𝐾𝐿 (·∥·) is the Kullback-Leibler (KL) divergence. For Eqn. 11, we compute the log likelihood for each cluster 𝑘 as 
+
+log 𝑝 ({ u𝑖 }𝑖 ∈𝐼 𝑘 | { 𝝁 𝑘 , 𝚺 𝑘 }, s𝑚 , 𝜋 )
+
+= − 12∑︁ 𝑖 ∈𝐼 𝑘 
+
+[log |𝚺 𝑘 | + ( u𝑖 − 𝝁 𝑘 − W𝑢 s𝑚 )⊤𝚺 −1 
+
+> 𝑘
+
+(u𝑖 − 𝝁 𝑘 − W𝑢 s𝑚 )] + 𝐶, (15) where 𝑖 is the user index, 𝐼 𝑘 is the set of user index that belongs to cluster 𝑘 , and 𝐶 is a constant. Similarly, all the other terms can be expanded as: 
+
+log 𝑝 (e𝑅 𝑖 𝑗 |u𝑖 , v𝑗 , s) = −
+
+𝜆 e𝑅 𝑖 𝑗 
+
+2
+
+e𝑅 𝑖 𝑗 − u⊤ 
+
+> 𝑖
+
+v𝑗 − w𝑅 ⊤s𝑚 
+
+2
+
++ 𝐶, (16) 
+
+𝐷 𝐾𝐿 
+
+ 𝑞 (v𝑗 )∥ 𝑝 (v𝑗 |x𝑣 𝑗 , s𝑚 ) = − 𝜆 𝑣 
+
+2 ∥𝝁 v𝑗 − W𝑣 s𝑚 ∥2
+
+− Λ𝑣 
+
+2 ∥𝝁 v𝑗 − 𝑓 𝑣 (x𝑣 𝑗 )∥ 2 + 𝐶. (17) Here 𝐶 can be omitted because we treat scalars like 𝜆 𝑣 ∈ R, 𝜆 𝑢 ∈ R,
+
+Λ𝑣 ∈ R, and Λ𝑢 ∈ R as constants. 
+
+Intuition for Each Term in Eqn. 10. Below, we describe the intuition of each term in Eqn. 10: (1) Regularize Latent Variable u𝑖 (Eqn. 11). The KL term 
+
+𝐷 𝐾𝐿 
+
+ 𝑞 (u𝑖 )∥ 𝑝 (u𝑖 |{ 𝝁 𝑘 , 𝚺 𝑘 }𝐾 𝑘 =1, s𝑚 , 𝜋 ) aims to regularize user 
+
+𝑖 ’s latent variable u𝑖 , ensuring u𝑖 is close to the center of its corresponding user cluster 𝜋 𝑖 , and therefore close to other users’ latent embeddings in the same cluster. (2) Predict Residual Rating e𝑅 𝑖 𝑗 from u𝑖 and v𝑗 (Eqn. 12). 
+
+𝑝 (e𝑅 𝑖 𝑗 |u𝑖 , v𝑗 , s𝑚 ) uses the inferred u𝑖 , v𝑗 , and the causal con-founder s𝑚 to predict the residual rating, thereby encour-aging u𝑖 and v𝑗 to retain more information to maximize prediction performance. (3) Regularize Latent Variable v𝑗 (Eqn. 13). Similar to Eqn. 11, 
+
+𝐷 𝐾𝐿 (𝑞 (v𝑗 )∥ 𝑝 (v𝑗 |x𝑣 𝑗 , s𝑚 )) is the KL divergence term between the inference model 𝑞 (·| x𝑣 𝑗 ) and the generative model 𝑝 (·| s𝑚 );RecSys ’26, September 27–October 02, 2026, Minneapolis, MN, USA Wang et al. 
+
+this encourages the inferred posterior 𝑞 (v𝑗 |x𝑣 𝑗 ) to be close to the prior distribution 𝑝 (v𝑗 |s𝑚 ).(4) Regularize Latent Variable 𝜋 (Eqn. 14). 𝐷 𝐾𝐿 
+
+ 𝑞 (𝜋 )∥ 𝑝 (𝜋 |𝜃 )
+
+is the KL divergence term between the categorical variational distribution 𝑞 (𝜋 ) and the prior 𝑝 (𝜋 |𝜃 ); this encourages the inferred posterior 𝑞 (𝜋 ) to be close to the prior 𝑝 (𝜋 |𝜃 ).
+
+2.3 Inference and Learning 
+
+In our framework, we need to learn several parameters, including the Gaussian parameters {𝝁 𝑘 , 𝚺 𝑘 }𝐾 𝑘 =1, user latent u, item latent v,and the parameters of the functions 𝑓 𝑥 (·) and 𝑓 𝑣 (·) , as well as W𝑢 ,
+
+W𝑣 , and w𝑅 . The following sections detail the learning process for all these parameters. The complete algorithm is outlined in Algorithm 1. 
+
+1) {𝝁 𝑘 , 𝚺 𝑘 }𝐾 𝑘 =1. To optimize {𝝁 𝑘 , 𝚺 𝑘 }𝐾 𝑘 =1, we take derivatives of Eqn. 15 w.r.t. 𝝁 𝑘 and 𝚺 𝑘 as follows: 
+
+𝜕 L
+
+𝜕 𝝁 𝑘 
+
+= 𝚺 −1
+
+> 𝑘
+
+ u𝑖 − 𝝁 𝑘 − W𝑢 s𝑚 
+
+ , (18) 
+
+𝜕 L
+
+𝜕 𝚺 𝑘 
+
+= 12 𝚺 −1
+
+> 𝑘
+
+  u𝑖 − 𝝁 𝑘 − W𝑢 s𝑚 
+
+   u𝑖 − 𝝁 𝑘 − W𝑢 s𝑚 
+
+⊤ − 𝚺 𝑘 
+
+ 𝚺 −1 
+
+> 𝑘
+
+.
+
+(19) Setting Eqn. 18 and Eqn. 19 to zero leads to the following update rules, respectively: 
+
+𝝁 𝑘 = 1
+
+|𝐼 𝑘 |∑︁ 𝑖 ∈𝐼 𝑘 
+
+(u𝑖 − W𝑢 s𝑚 ) , (20) 
+
+𝚺 𝑘 = 1
+
+|𝐼 𝑘 |∑︁ 𝑖 ∈𝐼 𝑘 
+
+ u𝑖 − 𝝁 𝑘 − W𝑢 s𝑚 
+
+   u𝑖 − 𝝁 𝑘 − W𝑢 s𝑚 
+
+⊤ , (21) where I𝑘 is the set of user index 𝑖 that belongs to cluster 𝑘 .
+
+2) u𝑖 , v𝑗 , and 𝜋 𝑖 . After computing the gradients of Eqn. 10 w.r.t. the means of u𝑖 ∼ N ( 𝝁 u𝑖 , Λ−1 
+
+> 𝑢
+
+I) (i.e., 𝝁 u𝑖 ) and v𝑗 ∼ N ( 𝝁 v𝑗 , Λ−1 
+
+> 𝑣
+
+I)
+
+(i.e., 𝝁 v𝑗 ), we obtain the following update rules: 
+
+𝝁 u𝑖 = (𝚺 𝜋 𝑖 V𝜆 e𝑅 (𝑖, :) V⊤ + I)−1 h
+
+𝝁 𝜋 𝑖 + W𝑢 s𝑚 
+
++ 𝚺 𝜋 𝑖 V𝜆 e𝑅 (𝑖, :) (eR(𝑖, :) − w𝑅 ⊤s𝑚 I)
+
+i
+
+, (22) 
+
+𝝁 v𝑗 =
+
+h
+
+U𝜆 e𝑅 (:,𝑗 ) U⊤ + ( 𝜆 𝑣 − Λ𝑣 )I
+
+i −1
+
+·
+
+h
+
+𝜆 𝑣 W𝑣 s𝑚 − Λ𝑣 𝑓 𝑣 (x𝑣 𝑗 )+ U𝜆 e𝑅 (:,𝑗 ) (eR(:,𝑗 ) − w𝑅 ⊤s𝑚 I)
+
+i
+
+. (23) PRL is efficient; Eqn. 22 uses only the user’s rated items, so its cost scales with rated items rather than the full catalog. Note that here U and V refer to user latent matrix (u𝑖 )𝐼 𝑖 =1 and item latent matrix (v𝑗 )𝐽 𝑗 =1. eR(𝑖, :) := (e𝑅 𝑖 1, · · · , e𝑅 𝑖 𝐽 )⊤, eR(:,𝑗 ) := (e𝑅 1𝑗 , · · · , e𝑅 𝐼 𝑗 )⊤
+
+. 𝜆 e𝑅 (𝑖, :) := diag (𝜆 e𝑅 𝑖 1 , · · · , 𝜆 e𝑅 𝑖 𝐽 ), 𝜆 e𝑅 (:,𝑗 ) := diag (𝜆 e𝑅 1𝑗 , · · · , 𝜆 e𝑅 𝐼 𝑗 ).With a uniform prior distribution on 𝜋 𝑖 , i.e., 𝑝 (𝜋 𝑖 = 𝑘 |𝜃 ) = 1 
+
+> 𝐾
+
+,the estimation of 𝜋 𝑖 is similar to that of a Gaussian mixture model (GMM). Specifically, we can approximate 𝑝 (𝜋 𝑖 = 𝑘 |𝑢 𝑖 , 𝑣 𝑗 , 𝑥 𝑣 𝑗 , {𝜇 𝑘 , Σ𝑘 }𝐾 𝑘 =1)
+
+using 
+
+𝑞 (𝜋 𝑖 = 𝑘 ) = N ( u𝑖 ; 𝜇 𝑘 + 𝑊 𝑢 𝑠 𝑚 𝑖 , Σ𝑘 )
+
+Í𝐾 𝑙 =1 N ( u𝑖 ; 𝜇 𝑙 + 𝑊 𝑢 𝑠 𝑚 𝑖 , Σ𝑙 ) , (24) 
+
+Algorithm 1 Learning Algorithm of PRL 
+
+Input: Raw item features x𝑣 , initialized 𝑓 𝑥 (·) and 𝑓 𝑣 (·) parameters, 
+
+W𝑢 , W𝑣 , w𝑅 , initialized Gaussian parameters {𝝁 𝑘 , 𝚺 𝑘 }𝐾 𝑘 =1, and the number of epochs T. 
+
+for 𝑡 = 1 : 𝑇 do for 𝑚 = 1 : 𝑀 do 
+
+Update u𝑖 and v𝑗 using Eqn. 22 and Eqn. 23 update the variational distribution of 𝜋 𝑖 using Eqn. 24. Update W𝑢 , W𝑣 , w𝑅 using Eqn. 25, Eqn. 26 and Eqn. 27. Update the parameters of 𝑓 𝑣 (·) using gradient ascent of L
+
+in Eqn. 10. Update {𝝁 𝑘 , 𝚺 𝑘 }𝐾 𝑘 =1 using Eqn. 20 and Eqn. 21, respectively. 
+
+Output: 𝑓 𝑣 (·) parameters, W𝑢 , W𝑣 , w𝑅 , and Gaussian parameters 
+
+{𝝁 𝑘 , 𝚺 𝑘 }𝐾 𝑘 =1.which is obtained by maximizing the ELBO Eqn. 11 ∼14. We then choose the optimal (most probable) cluster for each user 𝑖 , i.e., the cluster assignment for user 𝑖 is set to 𝜋 𝑖 = argmax 𝑘 𝑞 (𝜋 𝑖 = 𝑘 ),which is used to compute Eqn. 22 ∼23. 
+
+3) W𝑢 , W𝑣 , w𝑅 . The update rules for W𝑢 , W𝑣 , and w𝑅 are as follows: 
+
+W𝑢 = 1
+
+𝐼 (
+
+> 𝐼
+
+∑︁ 
+
+> 𝑖 =1
+
+u𝑖 −
+
+> 𝐾
+
+∑︁ 
+
+> 𝑘 =1
+
+|𝐼 𝑘 |𝝁 𝑘 )s⊤ 
+
+> 𝑚
+
+(s𝑚 s⊤ 
+
+> 𝑚
+
+)−1, (25) 
+
+W𝑣 = 1
+
+𝐽 
+
+> 𝐽
+
+∑︁ 
+
+> 𝑗 =1
+
+v𝑗 s⊤ 
+
+> 𝑚
+
+(s𝑚 s⊤ 
+
+> 𝑚
+
+)−1, (26) 
+
+w𝑅 =
+
+Í𝑖,𝑗 𝜆 e𝑅 𝑖 𝑗 (e𝑅 𝑖 𝑗 − u⊤ 
+
+> 𝑖
+
+v𝑗 )
+
+Í𝑖,𝑗 𝜆 e𝑅 𝑖 𝑗 
+
+(s𝑚 s⊤ 
+
+> 𝑚
+
+)−1s𝑚 . (27) 
+
+4) Parameters of 𝑓 𝑥 (·) and 𝑓 𝑣 (·) . We use gradient ascent of L
+
+in Eqn. 10 to update these parameters. 
+
+Inference. Inference includes the E-Step in Algorithm 1, where PRL infers latent variables u𝑖 and v𝑗 , and updates the parameters of encoder model 𝑓 𝑣 (·) using gradient ascent of L in Eqn. 10. 
+
+Learning. Learning includes the iteration between the E-Step 
+
+and M-Step in Algorithm 1 until convergence. In each M-Step , we update the Gaussian parameters {𝝁 𝑘 , 𝚺 𝑘 }𝐾 𝑘 =1 following the update rules from Eqn. 20 and Eqn. 21, respectively; we update learnable pa-rameters W𝑢 , W𝑣 , w𝑅 following the update rules from Eqn. 25, Eqn. 26, and Eqn. 27, respectively. 
+
+2.4 Plug-and-Play PRL 
+
+Below we discuss key components of our plug-and-play PRL after learning all parameters with Algorithm 1. 
+
+Inferring User Clusters. Given the learned mixture parameters 
+
+{𝝁 𝑘 , 𝚺 𝑘 }𝐾 𝑘 =1, PRL assigns each user to the cluster 𝜋 𝑖 with the largest posterior probability in Eqn. 24, similar to a hard EM algorithm. 
+
+Isolating Causal Confounders s𝑚 . With the structured causal model (SCM), we estimate a domain-level confounder represen-tation s𝑚 for each domain 𝑚 by approximating its posterior dis-tribution 𝑝 (s𝑚 |e𝑅, x𝑣 𝑗 , {𝝁 𝑘 , 𝚺 𝑘 }𝐾 𝑘 =1) via variational domain indexing (VDI) [ 40 ]. In this way, we can minimize the bias introduced by the causal confounder s𝑚 when inferring u𝑖 and v𝑗 using Eqn. 22 and Eqn. 23, respectively. In practice, s𝑚 may be instantiated by an Probabilistic Residual Learning for Online Recommendations RecSys ’26, September 27–October 02, 2026, Minneapolis, MN, USA ෩𝑹  𝒗 
+
+## 𝒖  𝒔 
+
+## 𝒙 𝒗 
+
+J
+
+I
+
+## 𝝅 
+
+## 𝝁  𝚺  K
+
+> ×
+> ×
+
+Figure 3: Causal inference in PRL is equivalent to removing the influence of confounder s on u𝑖 and v𝑗 .
+
+observed proxy or by a learned domain index, depending on the dataset. When VDI is used, the domain index 𝑠 𝑚 can be thought of as the embedding for each domain 𝑚 . For example, in the dataset XMRec where each of the 18 domains contains items and users from one market/country (e.g., France or US), 𝑠 𝑚 can be thought of as a “country” embedding. Interestingly, our preliminary results show that similar countries tend to have similar domain embedding 
+
+𝑠 𝑚 (i.e., domain index) [ 40 ] . In other words, 𝑠 𝑚 captures the simi-larities among different domains and therefore provides valuable information for our recommender systems. 
+
+Debiasing the Causal Confounders. Under our PRL frame-work, for each inferred user cluster 𝑘 , we perform causal inference for each user 𝑖 in this cluster to predict the residual e𝑅 𝑖 𝑗 (for each item 𝑗 ) while debiasing the causal confounders s. Specifically, with the inferred u𝑖 and v𝑗 (using Eqn. 22 and Eqn. 23) and s𝑚 , we can predict e𝑅 𝑖 𝑗 by do-calculus as 
+
+𝑝 (𝑘 ) (e𝑅 𝑖 𝑗 |𝑑𝑜 (u𝑖 ), 𝑑𝑜 (v𝑗 )) =∑︁ 𝑀 𝑚 =1 𝑝 (𝑘 ) (e𝑅 𝑖 𝑗 |u𝑖 , v𝑗 , s𝑚 )𝑝 (s𝑚 ), (28) where 𝑝 (𝑘 ) (e𝑅 𝑖 𝑗 |u𝑖 , v𝑗 , s) represents the 𝑘 ’th sub-model trained from the 𝑘 ’th cluster’s user data. In practice, we use 𝑘 = 𝜋 𝑖 (𝜋 𝑖 is user 𝑖 ’s cluster) when predicting user 𝑖 ’s rating e𝑅 𝑖 𝑗 .Note that performing causal inference by intervening (u𝑖 , v𝑗 )
+
+effectively cuts the relations between the causal confounders s and 
+
+(u𝑖 , v𝑗 ). Fig. 3 demonstrates the do-calculus that PRL performs for debiasing the causal confounder s.
+
+Intuition behind Do-Calculus: Why Marginalize over the Domain Factor s𝑚 in Eqn. 28. Estimating interventional distri-butions typically requires actively intervening in a recommender system to collect data, which is often costly and impractical. In-stead, PRL leverages do-calculus to estimate the interventional ef-fect 𝑝 (𝑘 ) (e𝑅 𝑖 𝑗 | 𝑑𝑜 (u𝑖 ), 𝑑𝑜 (v𝑗 )) from observational data by marginal-izing over the confounder s. This operation reduces reliance on spurious domain-specific correlations. In datasets such as XMRec, where each domain corresponds to a country, s𝑚 can act as a confounder, inducing biases such as exposure or popularity effects. A predictor conditioned on a specific domain may overfit these shortcuts, attributing preferences to country-specific patterns rather than true user-item relationships. For example, a model may associate Bollywood films with cricket gear due to their co-occurrence in a market, not due to intrinsic preference. By marginalizing over s𝑚 as in Eqn. 28, PRL removes such confounding effects and retains residual signals that are more stable and transferable across domains. 
+
+Summary. To summarize, for each user 𝑖 , PRL causally infers the residual rating e𝑅 𝑖 as follows: (1) Infer the user cluster 𝜋 𝑖 by approximating its posterior 
+
+𝑝 (𝜋 𝑖 |u𝑖 , v𝑗 , x𝑣 𝑗 , {𝝁 𝑘 , 𝚺 𝑘 }𝐾 𝑘 =1).(2) Infer the residual rating e𝑅 𝑖 𝑗 by causal Bayesian model aver-aging defined in Eqn. 28. (3) Predict the final rating as 𝑅 = e𝑅 + b𝑅 , where b𝑅 is the base recommender’s prediction. 
+
+3 Experiments 
+
+We evaluate whether PRL improves heterogeneous base recom-menders and whether its causal component benefits cross-domain recommendation. Additional settings and results can be found in the supplementary material. 
+
+3.1 Datasets 
+
+XMRec. XMRec [2] contains 18 local markets (countries), 16 product categories, and 52.5M user-item interactions. For each item 𝑗 , we use its description as the item feature x𝑣 𝑗 . We exclude users with fewer than three purchases. The three train-test splits are: France, Italy, India → Japan, Mexico; Mexico, Spain, India → Japan, Germany; and Germany, Italy, Japan → United States, India. We use product production countries as the causal confounders s𝑚 .
+
+MovieLens. MovieLens [9 ] contains movie ratings from users of different ages. We use movie titles and plots as item features x𝑣 𝑗 ,and derive user features from the first three films each user rated. We exclude users with fewer than five ratings or with no rating above 3, leaving 6,034 users and 3,705 items. We use two age-based train-test splits: 1–18, 18–25, 35–45, 45–50, 50–56, 56 + → 25–35; and 25–35 → all other groups. For brevity, we denote each age group by its starting age, e.g., “1” for “1–18”. We use normalized movie release years as causal confounders s𝑚 .In all experiments, we use a cold-start setting where each testing domain user has only one rating in the training set, making the recommendations extremely challenging. 
+
+3.2 Base Recommenders, Baselines, and Metrics 
+
+PRL is a plug-and-play framework compatible with any base rec-ommender. In this paper, we compare PRL with five representative recommendation models, including Collaborative Deep Learning (CDL ) [ 31 ], Deep Learning Recommendation Model ( DLRM ) [ 25 ], Top Personalized-K Recommendation. ( PerK ) [ 16 ], Neural Collabo-rative Filtering ( NCF ) [ 11 ], and Light Graph Convolutional Network (LightGCN ) [ 10 ]. These methods serve as both our baselines and our base recommenders to be enhanced by PRL. We evaluate all methods using Recall@20, Precision@20, F1@20, MAP@20, and NDCG@20, averaged over all users; formal metric definitions and training details are in the Appendix. 
+
+3.3 Results 
+
+Results for Different Base Models. Table 1 and Table 2 show that PRL improves the base models overall. Gains are smaller on MovieLens, where release year provides a weaker confounding signal than XMRec’s market factors. 
+
+Recall@ 𝑁 with Larger 𝑁 . Fig. 4 shows that full PRL consis-tently outperforms its non-causal counterpart across base models, splits, and cutoff values. RecSys ’26, September 27–October 02, 2026, Minneapolis, MN, USA Wang et al. 
+
+Table 1: Performance of PRL with different base models on XMRec. The best results are marked with bold face. Data Method Recall@20 F1@20 MAP@20 NDCG@20 Precision@20 
+
+France, Italy, India →
+
+Japan, Mexico CDL (Base Model) 0.0143 0.0016 0.0028 0.0009 0.0009 PRL (Full) 0.1091 0.0128 0.0463 0.0108 0.0068 
+
+DLRM (Base Model) 0.0044 0.0004 0.0004 0.0002 0.0002 PRL (Full) 0.0295 0.0035 0.0048 0.0018 0.0018 
+
+PerK (Base Model) 0.1098 0.0128 0.0512 0.0112 0.0068 PRL (Full) 0.1635 0.0192 0.0637 0.0151 0.0102 
+
+NCF (Base Model) 0.0131 0.0148 0.0026 0.0008 0.0008 PRL (Full) 0.1137 0.0137 0.0309 0.0090 0.0073 
+
+LightGCN (Base Model) 0.0182 0.0021 0.0050 0.0014 0.0011 PRL (Full) 0.1003 0.0121 0.0316 0.0084 0.0064 
+
+Mexico, Spain, India →
+
+Japan, Germany CDL (Base Model) 0.1127 0.0135 0.0301 0.0086 0.0072 PRL (Full) 0.1761 0.0230 0.0593 0.0163 0.0123 
+
+DLRM (Base Model) 0.0756 0.0093 0.0085 0.0041 0.0049 PRL (Full) 0.2017 0.0246 0.0545 0.0156 0.0131 
+
+PerK (Base Model) 0.1443 0.0177 0.0601 0.0143 0.0094 PRL (Full) 0.2750 0.0335 0.1086 0.0263 0.0179 
+
+NCF (Base Model) 0.0096 0.0012 0.0022 0.0007 0.0007 PRL (Full) 0.1558 0.0202 0.0280 0.0107 0.0108 
+
+LightGCN (Base Model) 0.0165 0.0022 0.0061 0.0016 0.0012 PRL (Full) 0.1064 0.0138 0.0278 0.0087 0.0077 Table 2: Performance of PRL with different base models on MovieLens. The best results are marked with bold face. Data Method Recall@20 F1@20 MAP@20 NDCG@20 Precision@20 
+
+1, 18, 35, 45, 50, 56 →
+
+25 CDL (Base Model) 0.0179 0.0274 0.0045 0.0581 0.0587 PRL (Full) 0.0252 0.0409 0.0072 0.1071 0.1076 
+
+DLRM (Base Model) 0.0714 0.1096 0.0285 0.2433 0.2366 PRL (Full) 0.0716 0.1101 0.0284 0.2431 0.2372 
+
+PerK (Base Model) 0.0682 0.1029 0.0290 0.2224 0.2107 PRL (Full) 0.0690 0.1037 0.0287 0.2190 0.2110 
+
+NCF (Base Model) 0.0050 0.0250 0.0011 0.0251 0.0251 PRL (Full) 0.0240 0.0387 0.0057 0.0947 0.1005 
+
+LightGCN (Base Model) 0.0081 0.0132 0.0019 0.0381 0.0358 PRL (Full) 0.0249 0.0402 0.0069 0.1076 0.1055 
+
+25 →
+
+1, 18, 35, 45, 50, 56 CDL (Base Model) 0.0576 0.0848 0.0174 0.1602 0.1716 PRL (Full) 0.0645 0.0952 0.0202 0.1772 0.1897 
+
+DLRM (Base Model) 0.0848 0.1342 0.0382 0.3347 0.3225 PRL (Full) 0.0903 0.1405 0.0414 0.3455 0.3319 
+
+PerK (Base Model) 0.0746 0.1164 0.0324 0.2701 0.2661 PRL (Full) 0.0792 0.1225 0.0355 0.2821 0.2757 
+
+NCF (Base Model) 0.0140 0.0229 0.0030 0.0633 0.0652 PRL (Full) 0.0450 0.0694 0.0144 0.1639 0.1711 
+
+LightGCN (Base Model) 0.0093 0.0157 0.0022 0.0497 0.0482 PRL (Full) 0.0290 0.0480 0.0097 0.1493 0.1395 Visualizations of the Clusters. Fig. 5 visualizes the user latent 
+
+u for all five base models on the XMRec dataset. Each visualization shows a distinct separation into 3 clusters, indicating successful user grouping of our model. Furthermore, Figure 6 illustrates the relationship between user clusters and items using the CDL-based PRL model on the same dataset. For each user, we selected the item with the highest rating they have given, recorded the item ID and its rating, and visualized the results. Different clusters are represented using distinct colors, effectively showcasing the distribution and preferences of users within each cluster. For instance, Cluster 1 (Red) shows pronounced preferences for 4-5 specific items, underscoring the impact of user clustering on improving PRL’s performance. 
+
+Performance of Each Cluster Discovered by PRL. For a deeper understanding of the model performance, we include more Probabilistic Residual Learning for Online Recommendations RecSys ’26, September 27–October 02, 2026, Minneapolis, MN, USA 
+
+Table 3: Comparison between PRL w/o Causality and PRL (Full) on a specific domain with different base models on XMRec. The best results are marked with bold face. Data Method Recall@20 F1@20 MAP@20 NDCG@20 Precision@20 
+
+France, Italy, India →
+
+Japan, Mexico CDL (Base Model) 0.0143 0.0016 0.0028 0.0009 0.0009 CDL PRL w/o Causality 0.1058 0.0126 0.0333 0.0088 0.0067 PRL (Full) 0.1091 0.0128 0.0463 0.0108 0.0068 
+
+DLRM (Base Model) 0.0044 0.0004 0.0004 0.0002 0.0002 DLRM PRL w/o Causality 0.0232 0.0026 0.0039 0.0014 0.0014 PRL (Full) 0.0295 0.0035 0.0048 0.0018 0.0018 
+
+PerK (Base Model) 0.1098 0.0128 0.0512 0.0112 0.0068 PerK PRL w/o Causality 0.1376 0.0160 0.0558 0.0129 0.0085 PRL (Full) 0.1635 0.0192 0.0637 0.0151 0.0102 
+
+NCF (Base Model) 0.0131 0.0148 0.0026 0.0008 0.0008 NCF PRL w/o Causality 0.1056 0.0126 0.0235 0.0074 0.0067 PRL (Full) 0.1137 0.0137 0.0309 0.0090 0.0073 
+
+LightGCN (Base Model) 0.0182 0.0021 0.0050 0.0014 0.0011 LightGCN PRL w/o Causality 0.0940 0.0112 0.0289 0.0076 0.0059 PRL (Full) 0.1003 0.0121 0.0316 0.0084 0.0064 
+
+Figure 4: Recall@ N on all three XMRec splits, comparing each base model with PRL without causality and full PRL. 
+
+fine-grained results for different clusters discovered by PRL in Ap-pendix. Results show that our PRL can usually improve performance in most clusters. 
+
+Case Study on Debiasing. To explore PRL’s debiasing capability and cross-domain generalization, we conducted a detailed analysis using the first domain pair of the XMRec dataset, which corresponds to the countries France, Italy, India, Japan, and Mexico .We first examined the top-20 recommendations for each user using the CDL baseline model. The resulting distributions showed notable country-specific biases: 
+
+• Italian users: 34 Camera & Photo recommendations (3.70%) out of 920 total recommendations. 
+
+• Indian users: 878 Camera & Photo recommendations (6.46%) out of 13,600 total recommendations. The bias ratio across countries was 1.75 × (maximum: 6.46%, minimum: 3.70%), indicating that Indian users were recommended camera products 1.75 times more frequently than Italian users. After applying our PRL model, we examined the top-20 recom-mendations for each user. The resulting distributions were notably more balanced: 
+
+• Italian users: 33 Camera & Photo recommendations (3.59%) out of 920 total recommendations. RecSys ’26, September 27–October 02, 2026, Minneapolis, MN, USA Wang et al. 50 0 50         
+
+> t-SNE Component 1
+> 60
+> 40
+> 20
+> 0
+> 20
+> 40
+> 60
+> t-SNE Component 2
+> CDL
+> Tensor 1
+> Tensor 2
+> Tensor 3 50 050
+> t-SNE Component 1
+> 60
+> 40
+> 20
+> 0
+> 20
+> 40
+> 60
+> t-SNE Component 2
+> DLRM
+> Tensor 1
+> Tensor 2
+> Tensor 3 50 050
+> t-SNE Component 1
+> 60
+> 40
+> 20
+> 0
+> 20
+> 40
+> 60
+> t-SNE Component 2
+> Perk
+> Tensor 1
+> Tensor 2
+> Tensor 3 50 050
+> t-SNE Component 1
+> 80
+> 60
+> 40
+> 20
+> 0
+> 20
+> 40
+> 60
+> t-SNE Component 2
+> NCF
+> Tensor 1
+> Tensor 2
+> Tensor 3 50 050
+> t-SNE Component 1
+> 60
+> 40
+> 20
+> 0
+> 20
+> 40
+> 60
+> t-SNE Component 2
+> LightGCN
+> Tensor 1
+> Tensor 2
+> Tensor 3
+
+Figure 5: t-SNE projections of PRL user latents u𝑖 on XMRec. Colors denote cluster assignments 𝜋 𝑖 inferred by Eqn. 24, rather than ground-truth labels. 0 2000 4000 6000 8000 10000 
+
+> Item Index
+> 0.2
+> 0.4
+> 0.6
+> Score
+
+Item Scores by Cluster 
+
+> Clusters
+> Cluster 1
+> Cluster 2
+> Cluster 3
+
+Figure 6: User clusters based on users’ highest rated items, us-ing the CDL-based PRL model applied to the XMRec dataset. X-axis indicates the item ID, while Y-axis indicates the score of the item. Clusters are distinguished by different colors. 
+
+• Indian users: 427 Camera & Photo recommendations (3.14%) out of 13,600 total recommendations. The bias ratio across countries was reduced to 1.14 × (maximum: 3.59%, minimum: 3.14%), representing a 38.5% reduction in country-specific bias. This demonstrates that PRL successfully mitigated the preference biases through probabilistic user clustering and causal debiasing, thereby enabling the model to learn more generalizable user-item interaction patterns. 
+
+Ablation Study. The comparison in Table 3 and Fig. 4 highlights the performance difference between ‘PRL w/o Causality’ and ‘PRL (Full)’. The results consistently show that ‘PRL (Full)’ outperforms its counterpart, ‘PRL w/o Causality’, emphasizing the crucial role of causal inference in enhancing the effectiveness of the PRL model. Furthermore, a comparison between the base model and ‘PRL w/o Causality’ also reveals notable performance improvements, validat-ing the efficacy of PRL’s user cluster discovery. Additional details and results can be found in Table S1 ∼S15 of Appendix. 
+
+4 Related Work 
+
+Domain-Dependent Recommendation. Previous work has ex-plored in-domain recommendation scenarios. Early methods, in-cluding PMF [ 24 ] and BPR [ 27 ], applied collaborative filtering techniques to address challenges in recommendation. Sequential models such as GRU4Rec [ 12 ], SASRec [ 15 ], UniSRec [ 13 ], and CauseRec [ 45 ] use interaction histories; the latter two transfer item representations and augment counterfactual sequences, respec-tively. CDL [ 20 , 31 , 32 , 44 ] instead uses item content for cold-start recommendation. Despite advances in in-domain recommendation, cross-domain recommendation remains understudied. Existing work uses domain adaptation techniques [ 6 , 23 , 28 , 30 , 40 , 41 ], often relying on shared users or items across source and target domains [ 1 , 8, 17 , 21 , 22 , 38 ,43 , 49 ]. On the other hand, some methods enhance recommendation performance in both source and target domains simultaneously [ 14 ,18 , 47 ]. In contrast, PRL first infers user clusters and confounders before cluster-specific recommendation, improving generalization and robustness to domain shifts. 
+
+Causal Inference for Recommendation. Causal inference [ 26 ,42 ] and discovery [ 7 , 36 ] have been widely applied to model cause-and-effect relationships between variables in the machine learn-ing community. Recently, it has been employed to improve the performance of recommender systems [ 35 ]. PDA [ 46 ] uses causal intervention to address popularity bias in recommendations, while DICE [ 48 ] learns representations from user interactions based on the structured causal model (SCM). Additionally, some research focuses on debiasing recommendations without adopting a causal inference perspective [ 3, 19 , 37 ]. However, these approaches do not consider user groups within the SCM framework. In contrast, our method divides users into clusters based on a confounder vari-able and generates recommendations by aggregating user ratings through do-calculus, providing a more interpretable and sophisti-cated approach. 
+
+5 Conclusion 
+
+In this paper, we address the problem of cross-domain recommen-dation by introducing a novel causal Bayesian framework, named Probabilistic Residual Learning (PRL). PRL generates recommenda-tions by: (1) inferring the user cluster ID, (2) inferring the residual rating based on our causal debiasing framework, and (3) predict-ing the final rating as a correction to the base model’s prediction. PRL can enhance the performance of any base recommenders in a plug-and-play manner, and automatically discover meaningful user clusters. As a general probabilistic framework compatible with var-ious recommendation systems, PRL can be extended to additional modalities beyond textual data in future research. Furthermore, PRL provides interpretability by uncovering latent user preferences and biases that influence rating predictions. Its modular design also allows seamless integration with deep learning-based recom-menders, making it a scalable and adaptable solution for diverse recommendation scenarios. Probabilistic Residual Learning for Online Recommendations RecSys ’26, September 27–October 02, 2026, Minneapolis, MN, USA 
+
+References 
+
+[1] Ye Bi, Liqiang Song, Mengqiu Yao, Zhenyu Wu, Jianming Wang, and Jing Xiao. 2020. A Heterogeneous Information Network based Cross Domain Insurance Recommendation System for Cold Start Users. In SIGIR . 2211–2220. [2] Hamed Bonab, Mohammad Aliannejadi, Ali Vardasbi, Evangelos Kanoulas, and James Allan. 2021. Cross-market product recommendation. In Proceedings of the 30th ACM International Conference on Information & Knowledge Management .110–119. [3] Jiawei Chen, Hande Dong, Xiang Wang, Fuli Feng, Meng Wang, and Xiangnan He. 2023. Bias and debias in recommender system: A survey and future directions. 
+
+ACM Transactions on Information Systems 41, 3 (2023), 1–39. [4] Junyoung Chung, cCaglar Gül ccehre, KyungHyun Cho, and Yoshua Bengio. 2014. Empirical Evaluation of Gated Recurrent Neural Networks on Sequence Modeling. 
+
+CoRR abs/1412.3555 (2014). arXiv:1412.3555 http://arxiv.org/abs/1412.3555 [5] Mark JF Gales and SS Airey. 2006. Product of Gaussians for speech recognition. 
+
+Computer Speech & Language 20, 1 (2006), 22–40. [6] Yaroslav Ganin, Evgeniya Ustinova, Hana Ajakan, Pascal Germain, Hugo Larochelle, Fran ccois Laviolette, Mario Marchand, and Victor Lempitsky. 2016. Domain-adversarial training of neural networks. JMLR 17, 1 (2016), 2096–2030. [7] Clark Glymour, Kun Zhang, and Peter Spirtes. 2019. Review of causal discovery methods based on graphical models. Frontiers in genetics 10 (2019), 524. [8] Casper Hansen, Christian Hansen, Jakob Grue Simonsen, Stephen Alstrup, and Christina Lioma. 2020. Content-aware Neural Hashing for Cold-start Recom-mendation. In SIGIR . 971–980. [9] F Maxwell Harper and Joseph A Konstan. 2015. The movielens datasets: History and context. Acm transactions on interactive intelligent systems (tiis) 5, 4 (2015), 1–19. [10] Xiangnan He, Kuan Deng, Xiang Wang, Yan Li, Yongdong Zhang, and Meng Wang. 2020. Lightgcn: Simplifying and powering graph convolution network for recommendation. In Proceedings of the 43rd International ACM SIGIR conference on research and development in Information Retrieval . 639–648. [11] Xiangnan He, Lizi Liao, Hanwang Zhang, Liqiang Nie, Xia Hu, and Tat-Seng Chua. 2017. Neural collaborative filtering. In Proceedings of the 26th international conference on world wide web . 173–182. [12] Balázs Hidasi, Alexandros Karatzoglou, Linas Baltrunas, and Domonkos Tikk. 2016. Session-based Recommendations with Recurrent Neural Networks. In ICLR ,Yoshua Bengio and Yann LeCun (Eds.). [13] Yupeng Hou, Shanlei Mu, Wayne Xin Zhao, Yaliang Li, Bolin Ding, and Ji-Rong Wen. 2022. Towards universal sequence representation learning for recommender systems. In Proceedings of the 28th ACM SIGKDD conference on knowledge discovery and data mining . 585–593. [14] Guangneng Hu, Yu Zhang, and Qiang Yang. 2018. CoNet: Collaborative Cross Networks for Cross-Domain Recommendation. In Proceedings of the 27th ACM International Conference on Information and Knowledge Management, CIKM . 667– 676. [15] Wang-Cheng Kang and Julian McAuley. 2018. Self-attentive sequential recom-mendation. In 2018 IEEE international conference on data mining (ICDM) . IEEE, 197–206. [16] Wonbin Kweon, SeongKu Kang, Sanghwan Jang, and Hwanjo Yu. 2024. Top-Personalized-K Recommendation. In Proceedings of the ACM on Web Conference 2024 . 3388–3399. [17] Jingjing Li, Mengmeng Jing, Ke Lu, Lei Zhu, Yang Yang, and Zi Huang. 2019. From zero-shot learning to cold-start recommendation. In Proceedings of the AAAI Conference on Artificial Intelligence , Vol. 33. 4189–4196. [18] Pan Li and Alexander Tuzhilin. 2020. DDTCDR: Deep Dual Transfer Cross Domain Recommendation. In WSDM ’20: The Thirteenth ACM International Con-ference on Web Search and Data Mining, Houston, TX, USA, February 3-7, 2020 ,James Caverlee, Xia (Ben) Hu, Mounia Lalmas, and Wei Wang (Eds.). ACM, 331–339. doi:10.1145/3336191.3371793 [19] Siqing Li, Liuyi Yao, Shanlei Mu, Wayne Xin Zhao, Yaliang Li, Tonglei Guo, Bolin Ding, and Ji-Rong Wen. 2021. Debiasing learning based cross-domain recom-mendation. In Proceedings of the 27th ACM SIGKDD Conference on Knowledge Discovery & Data Mining . 3190–3199. [20] Xiaopeng Li and James She. 2017. Collaborative variational autoencoder for recommender systems. In KDD . 305–314. [21] Tingting Liang, Congying Xia, Yuyu Yin, and Philip S. Yu. 2020. Joint Training Capsule Network for Cold Start Recommendation. In SIGIR . 1769–1772. [22] Siwei Liu, Iadh Ounis, Craig Macdonald, and Zaiqiao Meng. 2020. A Heteroge-neous Graph Neural Model for Cold-Start Recommendation. In Proceedings of the 43rd International ACM SIGIR Conference on Research and Development in Information Retrieval . 2029–2032. [23] Tianyi Liu, Zihao Xu, Hao He, Guangyuan Hao, Guang-He Lee, and Hao Wang. 2023. Taxonomy-Structured Domain Adaptation. In ICML .[24] Andriy Mnih and Russ R Salakhutdinov. 2007. Probabilistic matrix factorization. 
+
+Advances in neural information processing systems 20 (2007). [25] Maxim Naumov, Dheevatsa Mudigere, Hao-Jun Michael Shi, Jianyu Huang, Narayanan Sundaraman, Jongsoo Park, Xiaodong Wang, Udit Gupta, Carole-Jean Wu, Alisson G Azzolini, et al . 2019. Deep learning recommendation model for personalization and recommendation systems. arXiv preprint arXiv:1906.00091 
+
+(2019). [26] Judea Pearl. 2009. Causality . Cambridge university press. [27] Steffen Rendle, Christoph Freudenthaler, Zeno Gantner, and Lars Schmidt-Thieme. 2012. BPR: Bayesian personalized ranking from implicit feedback. arXiv preprint arXiv:1205.2618 (2012). [28] Haizhou Shi and Hao Wang. 2023. A Unified Approach to Domain Incremental Learning with Memory: Theory and Algorithm.. In NeurIPS .[29] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N Gomez, Lukasz Kaiser, and Illia Polosukhin. 2017. Attention is all you need. Advances in neural information processing systems 30 (2017). [30] Hao Wang, Hao He, and Dina Katabi. 2020. Continuously Indexed Domain Adaptation. In ICML .[31] Hao Wang, Naiyan Wang, and Dit-Yan Yeung. 2015. Collaborative deep learning for recommender systems. In Proceedings of the 21th ACM SIGKDD international conference on knowledge discovery and data mining . 1235–1244. [32] Hao Wang, SHI Xingjian, and Dit-Yan Yeung. 2016. Collaborative recurrent autoencoder: Recommend while learning to fill in the blanks. In NIPS . 415–423. [33] Hao Wang and Dit-Yan Yeung. 2016. Towards Bayesian deep learning: A frame-work and some existing methods. TDKE 28, 12 (2016), 3395–3408. [34] Hao Wang and Dit-Yan Yeung. 2020. A Survey on Bayesian Deep Learning. CSUR 
+
+53, 5 (2020), 1–37. [35] Yixin Wang, Dawen Liang, Laurent Charlin, and David M Blei. 2020. Causal inference for recommender systems. In Proceedings of the 14th ACM Conference on Recommender Systems . 426–431. [36] Yuhao Wang, Vlado Menkovski, Hao Wang, Xin Du, and Mykola Pechenizkiy. 2020. Causal discovery from incomplete data: A deep learning approach. In AAAI StarAI Workshop .[37] Zimu Wang, Yue He, Jiashuo Liu, Wenchao Zou, Philip S. Yu, and Peng Cui. 2022. Invariant Preference Learning for General Debiasing in Recommendation. In 
+
+KDD ’22: The 28th ACM SIGKDD Conference on Knowledge Discovery and Data Mining . 1969–1978. [38] Le Wu, Yonghui Yang, Lei Chen, Defu Lian, Richang Hong, and Meng Wang. 2020. Learning to Transfer Graph Embeddings for Inductive Graph based Rec-ommendation. In SIGIR . 1211–1220. [39] Shu Wu, Yuyuan Tang, Yanqiao Zhu, Liang Wang, Xing Xie, and Tieniu Tan. 2019. Session-based recommendation with graph neural networks. In Proceedings of the AAAI conference on artificial intelligence , Vol. 33. 346–353. [40] Zihao Xu, Guangyuan Hao, Hao He, and Hao Wang. 2023. Domain Indexing Variational Bayes: Interpretable Domain Index for Domain Adaptation. In ICLR .[41] Zihao Xu, Guang-He Lee, Yuyang Wang, Hao Wang, et al . 2022. Graph-Relational Domain Adaptation. In ICLR .[42] Jingquan Yan and Hao Wang. 2023. Self-Interpretable Time Series Prediction with Counterfactual Explanations. In ICML .[43] Fajie Yuan, Xiangnan He, Alexandros Karatzoglou, and Liguang Zhang. 2020. Parameter-Efficient Transfer from Sequential Behaviors for User Modeling and Recommendation. In SIGIR . 1469–1478. [44] Fuzheng Zhang, Nicholas Jing Yuan, Defu Lian, Xing Xie, and Wei-Ying Ma. 2016. Collaborative knowledge base embedding for recommender systems. In KDD .ACM, 353–362. [45] Shengyu Zhang, Dong Yao, Zhou Zhao, Tat-Seng Chua, and Fei Wu. 2021. Causerec: Counterfactual user sequence synthesis for sequential recommen-dation. In Proceedings of the 44th international ACM SIGIR conference on research and development in information retrieval . 367–377. [46] Yang Zhang, Fuli Feng, Xiangnan He, Tianxin Wei, Chonggang Song, Guohui Ling, and Yongdong Zhang. 2021. Causal intervention for leveraging popularity bias in recommendation. In Proceedings of the 44th International ACM SIGIR Conference on Research and Development in Information Retrieval . 11–20. [47] Cheng Zhao, Chenliang Li, and Cong Fu. 2019. Cross-Domain Recommendation via Preference Propagation GraphNet. In Proceedings of the 28th ACM International Conference on Information and Knowledge Management, CIKM . 2165–2168. [48] Yu Zheng, Chen Gao, Xiang Li, Xiangnan He, Yong Li, and Depeng Jin. 2021. Disentangling user interest and conformity for recommendation with causal embedding. In Proceedings of the Web Conference 2021 . 2980–2991. [49] Ziwei Zhu, Shahin Sefati, Parsa Saadatpanah, and James Caverlee. 2020. Rec-ommendation for New Users and New Items via Randomized Training and Mixture-of-Experts Transformation. In SIGIR . 1121–1130. RecSys ’26, September 27–October 02, 2026, Minneapolis, MN, USA Wang et al. 
+
+## Probabilistic Residual Learning for Online Recommendations (Appendix) 
+
+A More Details on Experiments and Implementation A.1 Metrics 
+
+mAP. mAP is defined as: AP 𝑖 = 1
+
+|𝐽 𝑖 |
+
+> 𝑁
+
+∑︁ 
+
+> 𝑛 =1
+
+rel 𝑖,𝑛 × Precision 𝑖 @𝑛, (S1) where 𝑁 is the total number of recommended items, Precision 𝑖 @𝑛 is the precision at rank 𝑛 , and |𝐽 𝑖 | is the total number of relevant items for user 𝑖 . The mean Average Precision (mAP) is then calculated by averaging AP 𝑖 over all users: mAP = 1
+
+|𝐼 | 
+
+> |𝐼 |
+
+∑︁ 
+
+> 𝑖 =1
+
+AP 𝑖 , (S2) where |𝐼 | is the total number of users. 
+
+NDCG. NDCG@ N is computed as follows. First, the Discounted Cumulative Gain (DCG@ N ) is calculated: DCG 𝑖 @𝑁 =
+
+> 𝑁
+
+∑︁ 
+
+> 𝑛 =1
+
+2rel 𝑖,𝑛 − 1log 2 (𝑛 + 1) , (S3) where rel 𝑖,𝑛 denotes the relevance of the item at position 𝑛 for user 𝑖 . Next, the Ideal Discounted Cumulative Gain (IDCG@ N ), representing the maximum possible DCG (i.e., all relevant items ranked at the top), is calculated as: IDCG 𝑖 @𝑁 =  
+
+> min (𝑁 , |𝐽 𝑖 | )
+
+∑︁ 
+
+> 𝑛 =1
+
+21 − 1log 2 (𝑛 + 1) =  
+
+> min (𝑁 , |𝐽 𝑖 | )
+
+∑︁ 
+
+> 𝑛 =1
+
+1log 2 (𝑛 + 1) , (S4) where |𝐽 𝑖 | denotes the total number of relevant items for user 𝑖 .Finally, the Normalized Discounted Cumulative Gain is obtained by normalizing DCG@ N by IDCG@ N :NDCG 𝑖 @𝑁 = DCG 𝑖 @𝑁 
+
+IDCG 𝑖 @𝑁 . (S5) Here the logarithmic term log 2 (𝑛 + 1) discounts the relevance based on the item’s position in the ranked list, serving as the nor-malization factor. 
+
+A.2 Training Configurations 
+
+Following CDL [ 2 ], we set the hidden dimension ℎ = 50 for all latent vectors, as well as for the encoder network. Similar to CDL, we also add an additional decoder to reconstruct x𝑣 , serving as a regulariza-tion term during training. During training, we use AdamW [ 1 ] as our optimizer, with a learning rate of 10 −3 and a batch size of 256 .The base models were trained for 100 epochs, while PRL was trained for 150 epochs. All experiments were conducted on an NVIDIA RTX A5000 GPU. 
+
+A.3 Performance of Each Clusters Discovered by PRL 
+
+Table S7, S8, S9, S10, S11 show PRL’s performance across different clusters on XMRec using CDL, DLRM, PerK, NCF, and LightGCN as base models. These results support the conclusion that PRL improves upon the base models even without incorporating the causality component. Furthermore, the full PRL consistently out-performs its non-causal counterpart across all configurations. For example, CDL, as the base model, achieves a recall@ 20 of 0.0241 for User Cluster 1 in the split of “France, Italy, India → Japan, Mexico”. When PRL without the causal inference component is applied, re-call improves to 0.0278 . The full PRL further enhances performance for this metric, achieving a recall@ 20 of 0.0708 .Table S1, S3, S4, S5, S6 show PRL’s performance across different clusters on MovieLens with the same five base models. Even with some fluctuations, the similar improvements are consistent with the results for XMRec. 
+
+A.4 Ablation Study 
+
+The performance comparison across Table S1-S11 shows that “PRL (Full)” generally outperforms “PRL w/o Causality”, highlighting the effectiveness of causal inference in PRL. Additionally, compar-ing the base model with “PRL w/o Causality” reveals performance enhancements, suggesting that PRL’s user cluster discovery signifi-cantly boosts performance. 
+
+Simple Baseline. Moreover, we conducted experiments by clus-tering the user features and then performing per-cluster modeling to predict the residuals. Table S12 presents the results comparing this simple baseline with our full PRL, verifying that our latent variable modeling is highly effective, while per-cluster modeling alone yields limited improvements. 
+
+Larger Base Models. We also conducted additional ablation ex-periments by scaling up the CDL baseline to approximately match the parameter size of the PRL-enriched network. Concretely, we expanded both the depth and width of the CDL architecture as suggested. The original CDL structure was 512 → 200 → 50 , while the larger (deeper and wider) version used an architecture of 512 
+
+→ 550 → 400 → 50 , resulting in roughly 1.05M parameters, which is comparable to PRL’s 0.90M parameters. This ensures that the comparison isolates the effect of PRL from mere model capacity differences. The results are presented in Table S13. Although the deeper CDL exhibits a slight performance improvement over the base model, PRL still achieves substantially higher performance across most metrics. This demonstrates that PRL’s gains stem from its ability to capture cross-domain relational patterns, user-cluster-specific representations, rather than simply from an increased pa-rameter count. 
+
+More User Records in the Training Set. We conducted ex-periments using CDL as the base model to analyze the effect of incorporating a higher number of testing-domain user records into the training process. Specifically, we used the second domain pair of the XMRec dataset, involving users from Mexico, Spain, India, Japan, and Germany. we selected users with more than four in-teractions and varied the number of testing-domain user records included in the training set to construct 1-shot, 2-shot, and 3-shot scenarios, where 𝑛 -shot means there are 𝑛 records for each testing user in the training set. The performance of both the base CDL model and our proposed PRL model in these settings is summarized in Table S14 and Table S15 below. Probabilistic Residual Learning for Online Recommendations RecSys ’26, September 27–October 02, 2026, Minneapolis, MN, USA 
+
+Table S1: Performance of PRL on different user clusters with CDL as the base model on MovieLens. “-” means a cluster contains only training-set users, i.e., no test-set users to evaluate. The best results are marked with bold face. Data Cluster Method Recall@20 F1@20 MAP@20 NDCG@20 Precision@20 
+
+1, 18, 35, 45, 50, 56 →
+
+25 CDL (Base Model) 0.0 0.0 0.0 0.0 0.0 1 PRL w/o Causality 0.0 0.0 0.0 0.0 0.0 PRL (Full) 0.0 0.0 0.0 0.0 0.0 CDL (Base Model) - - - - -2 PRL w/o Causality - - - - -PRL (Full) - - - - -CDL (Base Model) 0.0179 0.0274 0.0045 0.0581 0.0587 3 PRL w/o Causality 0.0186 0.0302 0.0056 0.0864 0.0802 PRL (Full) 0.0252 0.0409 0.0072 0.1071 0.1077 
+
+25 →
+
+1, 18, 35, 45, 50, 56 CDL (Base Model) 0.0558 0.0861 0.0174 0.1758 0.1879 
+
+1 PRL w/o Causality 0.0317 0.0528 0.0095 0.1511 0.1572 PRL (Full) 0.0558 0.0861 0.0174 0.1759 0.1879 
+
+CDL (Base Model) 0.0651 0.0795 0.0173 0.0938 0.1020 2 PRL w/o Causality 0.0676 0.0880 0.0183 0.1159 0.1259 PRL (Full) 0.1016 0.1341 0.0319 0.1832 0.1972 
+
+CDL (Base Model) - - - - -3 PRL w/o Causality - - - - -PRL (Full) - - - - -
+
+Table S2: Performance of PRL with different base models on MovieLens. The best results are marked with bold face. Data Method Recall@20 F1@20 MAP@20 NDCG@20 Precision@20 
+
+1, 18, 35, 45, 50, 56 →
+
+25 CDL (Base Model) 0.0179 0.0274 0.0045 0.0581 0.0587 PRL w/o Causality 0.0186 0.0302 0.0057 0.0863 0.0801 PRL (Full) 0.0252 0.0409 0.0072 0.1071 0.1076 
+
+DLRM (Base Model) 0.0714 0.1096 0.0285 0.2433 0.2366 PRL w/o Causality 0.0232 0.0026 0.0039 0.0014 0.0014 PRL (Full) 0.0716 0.1101 0.0284 0.2431 0.2372 
+
+PerK (Base Model) 0.0682 0.1029 0.0290 0.2224 0.2107 PRL w/o Causality 0.0582 0.0877 0.0212 0.1755 0.1787 PRL (Full) 0.0690 0.1037 0.0287 0.2190 0.2110 
+
+NCF (Base Model) 0.0050 0.0250 0.0011 0.0251 0.0251 PRL w/o Causality 0.0231 0.0374 0.0055 0.0927 0.0989 PRL (Full) 0.0240 0.0387 0.0057 0.0947 0.1005 
+
+LightGCN (Base Model) 0.0081 0.0132 0.0019 0.0381 0.0358 PRL w/o Causality 0.0248 0.0402 0.0070 0.1077 0.1053 PRL (Full) 0.0249 0.0402 0.0069 0.1076 0.1055 RecSys ’26, September 27–October 02, 2026, Minneapolis, MN, USA Wang et al. 
+
+Table S3: Performance of PRL on different user clusters with DLRM as the base model on MovieLens. “-” means a cluster contains only training-set users, i.e., no test-set users to evaluate. The best results are marked with bold face. Data Cluster Method Recall@20 F1@20 MAP@20 NDCG@20 Precision@20 
+
+1, 18, 35, 45, 50, 56 →
+
+25 DLRM (Base Model) - - - - -1 PRL w/o Causality - - - - -PRL (Full) - - - - -DLRM (Base Model) 0.0714 0.1097 0.0285 0.2433 0.2367 2 PRL w/o Causality 0.0269 0.0434 0.0073 0.1078 0.1112 PRL (Full) 0.0716 0.1101 0.0284 0.2431 0.2372 
+
+DLRM (Base Model) 0.0 0.0 0.0 0.0 0.0 3 PRL w/o Causality 0.0 0.0 0.0 0.0 0.0 PRL (Full) 0.0 0.0 0.0 0.0 0.0 25 →
+
+1, 18, 35, 45, 50, 56 DLRM (Base Model) 0.0790 0.1264 0.0343 0.3266 0.3146 1 PRL w/o Causality 0.0328 0.0548 0.0116 0.1716 0.1656 PRL (Full) 0.0848 0.1366 0.0396 0.3634 0.3505 
+
+DLRM (Base Model) 0.0882 0.1390 0.0405 0.3396 0.3271 
+
+2 PRL w/o Causality 0.0975 0.1382 0.0426 0.2572 0.2374 PRL (Full) 0.1119 0.1561 0.0486 0.2745 0.2583 DLRM (Base Model) - - - - -3 PRL w/o Causality - - - - -PRL (Full) - - - - -
+
+Table S4: Performance of PRL on different user clusters with Perk as the base model on MovieLens. “-” means a cluster contains only training-set users, i.e., no test-set users to evaluate. The best results are marked with bold face. Data Cluster Method Recall@20 F1@20 MAP@20 NDCG@20 Precision@20 
+
+1, 18, 35, 45, 50, 56 →
+
+25 Perk (Base Model) - - - - -1 PRL w/o Causality - - - - -PRL (Full) - - - - -Perk (Base Model) 0.0686 0.1040 0.0295 0.2271 0.2150 
+
+2 PRL w/o Causality 0.0583 0.0884 0.0215 0.1788 0.1820 PRL (Full) 0.0683 0.1036 0.0288 0.2215 0.2136 Perk (Base Model) 0.0585 0.0745 0.0173 0.1053 0.1023 3 PRL w/o Causality 0.0550 0.0701 0.0139 0.0942 0.0967 PRL (Full) 0.0847 0.1074 0.0277 0.1559 0.1467 
+
+25 →
+
+1, 18, 35, 45, 50, 56 Perk (Base Model) 0.0745 0.1179 0.0332 0.2868 0.2826 1 PRL w/o Causality 0.0319 0.0530 0.0140 0.1811 0.1563 PRL (Full) 0.0745 0.1179 0.0332 0.2870 0.2828 
+
+Perk (Base Model) 0.0750 0.1090 0.0292 0.2033 0.1995 2 PRL w/o Causality 0.0939 0.1338 0.0367 0.2399 0.2323 PRL (Full) 0.0984 0.1407 0.0446 0.2628 0.2469 
+
+Perk (Base Model) - - - - -3 PRL w/o Causality - - - - -PRL (Full) - - - - -Probabilistic Residual Learning for Online Recommendations RecSys ’26, September 27–October 02, 2026, Minneapolis, MN, USA 
+
+Table S5: Performance of PRL on different user clusters with NCF as the base model on MovieLens. “-” means a cluster contains only training-set users, i.e., no test-set users to evaluate. The best results are marked with bold face. Data Cluster Method Recall@20 F1@20 MAP@20 NDCG@20 Precision@20 
+
+1, 18, 35, 45, 50, 56 →
+
+25 NCF (Base Model) 0.0 0.0 0.0 0.0 0.0 1 PRL w/o Causality 0.0 0.0 0.0 0.0 0.0 PRL (Full) 0.1964 0.1325 0.0230 0.0754 0.1000 
+
+NCF (Base Model) 0.0051 0.0087 0.0011 0.0282 0.0279 2 PRL w/o Causality 0.0271 0.0443 0.0067 0.1134 0.1210 PRL (Full) 0.0285 0.0463 0.0070 0.1159 0.1231 
+
+NCF (Base Model) 0.0047 0.0074 0.0009 0.0172 0.0177 3 PRL w/o Causality 0.0125 0.0192 0.0023 0.0386 0.0409 PRL (Full) 0.0120 0.0185 0.0022 0.0389 0.0410 
+
+25 →
+
+1, 18, 35, 45, 50, 56 NCF (Base Model) 0.0149 0.0248 0.0032 0.0710 0.0729 1 PRL w/o Causality 0.0309 0.0515 0.0088 0.1494 0.1555 
+
+PRL (Full) 0.0306 0.0512 0.0087 0.1484 0.1551 NCF (Base Model) - - - - -2 PRL w/o Causality - - - - -PRL (Full) - - - - -NCF (Base Model) 0.0098 0.0150 0.0021 0.0302 0.0319 3 PRL w/o Causality 0.0941 0.1316 0.0312 0.2094 0.2185 PRL (Full) 0.1071 0.1481 0.0392 0.2309 0.2402 Table S6: Performance of PRL on different user clusters with LightGCN as the base model on MovieLens. “-” means a cluster contains only training-set users, i.e., no test-set users to evaluate. The best results are marked with bold face. Data Cluster Method Recall@20 F1@20 MAP@20 NDCG@20 Precision@20 
+
+1, 18, 35, 45, 50, 56 →
+
+25 LightGCN (Base Model) - - - - -1 PRL w/o Causality - - - - -PRL (Full) - - - - -LightGCN (Base Model) 0.0081 0.0132 0.0019 0.0381 0.0358 2 PRL w/o Causality 0.0248 0.0402 0.0070 0.1075 0.1052 PRL (Full) 0.0248 0.0401 0.0069 0.1073 0.1053 
+
+LightGCN (Base Model) 0.0226 0.0224 0.0075 0.0227 0.0222 3 PRL w/o Causality 0.0214 0.0378 0.0115 0.1911 0.1611 PRL (Full) 0.0563 0.0884 0.0226 0.2219 0.2056 
+
+25 →
+
+1, 18, 35, 45, 50, 56 LightGCN (Base Model) 0.0094 0.0157 0.0022 0.0498 0.0484 1 PRL w/o Causality 0.0300 0.0495 0.0101 0.1515 0.1416 
+
+PRL (Full) 0.0288 0.0477 0.0097 0.1492 0.1394 LightGCN (Base Model) 0.0068 0.0110 0.0011 0.0277 0.0294 2 PRL w/o Causality 0.0297 0.0428 0.0130 0.0953 0.0765 PRL (Full) 0.0531 0.0793 0.0204 0.1597 0.1559 
+
+LightGCN (Base Model) - - - - -3 PRL w/o Causality - - - - -PRL (Full) - - - - -RecSys ’26, September 27–October 02, 2026, Minneapolis, MN, USA Wang et al. 
+
+Table S7: Performance of PRL on different user clusters with CDL as the base model on XMRec. “-” means a cluster contains only training-set users, i.e., no test-set users to evaluate. The best results are marked with bold face. 
+
+Data Cluster Method Recall@20 F1@20 MAP@20 NDCG@20 Precision@20 
+
+France, Italy, India →
+
+Japan, Mexico CDL (Base Model) 0.0241 0.0028 0.0062 0.0018 0.0015 1 PRL w/o Causality 0.1972 0.0238 0.0905 0.0197 0.0127 
+
+PRL (Full) 0.0708 0.0074 0.0652 0.0105 0.0039 CDL (Base Model) 0.0126 0.0014 0.0022 0.0007 0.0008 2 PRL w/o Causality 0.0902 0.0107 0.0236 0.0069 0.0057 PRL (Full) 0.1156 0.0138 0.0431 0.0109 0.0073 
+
+CDL (Base Model) - - - - -3 PRL w/o Causality - - - - -PRL (Full) - - - - -Mexico, Spain, India →
+
+Japan, Germany CDL (Base Model) 0.1742 0.0225 0.0333 0.0123 0.0120 1 PRL w/o Causality 0.2114 0.0267 0.0707 0.0194 0.0142 
+
+PRL (Full) 0.1665 0.0222 0.0634 0.0170 0.0119 CDL (Base Model) 0.0903 0.0102 0.0289 0.0072 0.0054 2 PRL w/o Causality 0.1532 0.0187 0.0524 0.0136 0.0100 PRL (Full) 0.1796 0.0233 0.0579 0.0160 0.0124 
+
+CDL (Base Model) - - - - -3 PRL w/o Causality - - - - -PRL (Full) - - - - -Germany, Italy, Japan →
+
+United States, India CDL (Base Model) 0.0262 0.0059 0.0079 0.0041 0.0033 1 PRL w/o Causality 0.0261 0.0063 0.0072 0.0044 0.0036 PRL (Full) 0.0266 0.0064 0.0062 0.0042 0.0037 
+
+CDL (Base Model) 0.0244 0.0054 0.0088 0.0042 0.0031 
+
+2 PRL w/o Causality 0.0166 0.0037 0.0041 0.00234 0.0021 PRL (Full) 0.0250 0.0055 0.0088 0.0042 0.0031 
+
+CDL (Base Model) 0.0277 0.0049 0.0066 0.0028 0.0027 
+
+3 PRL w/o Causality 0.0194 0.0045 0.0049 0.0030 0.0026 PRL (Full) 0.0278 0.0049 0.0067 0.0028 0.0027 Probabilistic Residual Learning for Online Recommendations RecSys ’26, September 27–October 02, 2026, Minneapolis, MN, USA 
+
+Table S8: Performance of PRL on different user clusters with DLRM as the base model on XMRec. “-” means a cluster contains only training-set users, i.e., no test-set users to evaluate. The best results are marked with bold face. Data Cluster Method Recall@20 F1@20 MAP@20 NDCG@20 Precision@20 
+
+France, Italy, India →
+
+Japan, Mexico DLRM (Base Model) 0.0051 0.0005 0.0004 0.0002 0.0003 1 PRL w/o Causality 0.0246 0.0027 0.0039 0.0014 0.0014 PRL (Full) 0.0345 0.004 0.0056 0.0021 0.0021 
+
+DLRM (Base Model) 0.0000 0.0000 0.0000 0.0000 0.0000 2 PRL w/o Causality 0.0150 0.0017 0.0040 0.0010 0.0009 
+
+PRL (Full) 0.0000 0.0000 0.0000 0.0000 0.0000 DLRM (Base Model) - - - - -3 PRL w/o Causality - - - - -PRL (Full) - - - - -Mexico, Spain, India →
+
+Japan, Germany DLRM (Base Model) 0.0000 0.0000 0.0000 0.0000 0.0000 1 PRL w/o Causality 0.3296 0.0416 0.0203 0.0153 0.0222 
+
+PRL (Full) 0.3074 0.0395 0.0213 0.0152 0.0211 DLRM (Base Model) 0.0780 0.0096 0.0087 0.0042 0.0051 2 PRL w/o Causality 0.1398 0.0174 0.0277 0.0096 0.0093 PRL (Full) 0.1984 0.0241 0.0555 0.0157 0.0128 
+
+DLRM (Base Model) - - - - -3 PRL w/o Causality - - - - -PRL (Full) - - - - -Germany, Italy, Japan →
+
+United States, India DLRM (Base Model) 0.0023 0.0006 0.0003 0.0003 0.0003 1 PRL w/o Causality 0.0042 0.0011 0.0010 0.0007 0.0007 
+
+PRL (Full) 0.0046 0.0011 0.0009 0.0007 0.0006 DLRM (Base Model) 0.0018 0.0005 0.0003 0.0003 0.0003 2 PRL w/o Causality 0.0045 0.0012 0.0010 0.0007 0.0007 
+
+PRL (Full) 0.0045 0.0011 0.0012 0.0007 0.0007 
+
+DLRM (Base Model) 0.0036 0.0008 0.0005 0.0004 0.0004 3 PRL w/o Causality 0.0052 0.0015 0.0009 0.0009 0.0009 PRL (Full) 0.0141 0.0034 0.0075 0.0032 0.0019 RecSys ’26, September 27–October 02, 2026, Minneapolis, MN, USA Wang et al. 
+
+Table S9: Performance of PRL on different user clusters with PerK as the base model on XMRec. “-” means a cluster contains only training-set users, i.e., no test-set users to evaluate. The best results are marked with bold face. 
+
+Data Cluster Method Recall@20 F1@20 MAP@20 NDCG@20 Precision@20 
+
+France, Italy, India →
+
+Japan, Mexico PerK (Base Model) 0.1752 0.0204 0.1152 0.022 0.0108 1 PRL w/o Causality 0.2153 0.0260 0.1255 0.0252 0.0139 
+
+PRL (Full) 0.1782 0.0210 0.1162 0.0226 0.0114 PerK (Base Model) 0.0986 0.0115 0.0403 0.0094 0.0061 2 PRL w/o Causality 0.1243 0.0143 0.0440 0.0108 0.0076 PRL (Full) 0.1629 0.0189 0.0548 0.0138 0.0100 
+
+PerK (Base Model) - - - - -3 PRL w/o Causality - - - - -PRL (Full) - - - - -Mexico, Spain, India →
+
+Japan, Germany PerK (Base Model) 0.1434 0.0176 0.0582 0.014 0.0094 1 PRL w/o Causality 0.2175 0.0262 0.0913 0.0217 0.0140 PRL (Full) 0.2905 0.0353 0.1157 0.0278 0.0188 
+
+PerK (Base Model) 0.1495 0.0184 0.0723 0.0166 0.0098 2 PRL w/o Causality 0.2783 0.0307 0.0964 0.0232 0.0163 
+
+PRL (Full) 0.1790 0.0224 0.0646 0.0167 0.0120 PerK (Base Model) - - - - -3 PRL w/o Causality - - - - -PRL (Full) - - - - -Germany, Italy, Japan →
+
+United States, India PerK (Base Model) 0.0194 0.0043 0.0057 0.003 0.0024 1 PRL w/o Causality 0.0295 0.0066 0.0087 0.0046 0.0037 PRL (Full) 0.0308 0.0068 0.0086 0.0046 0.0038 
+
+PerK (Base Model) 0.0126 0.0028 0.0032 0.0018 0.0016 2 PRL w/o Causality 0.0155 0.0035 0.0040 0.0022 0.0020 PRL (Full) 0.0162 0.0037 0.0048 0.0025 0.0021 
+
+PerK (Base Model) 0.0261 0.0035 0.0091 0.0025 0.0019 3 PRL w/o Causality 0.0174 0.0027 0.0013 0.0012 0.0014 PRL (Full) 0.0266 0.0041 0.0102 0.0033 0.0022 Probabilistic Residual Learning for Online Recommendations RecSys ’26, September 27–October 02, 2026, Minneapolis, MN, USA 
+
+Table S10: Performance of PRL on different user clusters with NCF as the base model on XMRec. “-” means a cluster contains only training-set users, i.e., no test-set users to evaluate. The best results are marked with bold face. Data Cluster Method Recall@20 F1@20 MAP@20 NDCG@20 Precision@20 
+
+France, Italy, India →
+
+Japan, Mexico NCF (Base Model) 0.0090 0.0010 0.0019 0.0005 0.0005 1 PRL w/o Causality 0.2013 0.0238 0.0537 0.0151 0.0127 
+
+PRL (Full) 0.1581 0.0176 0.0476 0.0122 0.0093 NCF (Base Model) 0.0165 0.0019 0.0032 0.0010 0.0010 2 PRL w/o Causality 0.0893 0.0107 0.0184 0.0061 0.0057 PRL (Full) 0.1062 0.0130 0.0280 0.0084 0.0069 
+
+NCF (Base Model) - - - - -3 PRL w/o Causality - - - - -PRL (Full) - - - - -Mexico, Spain, India →
+
+Japan, Germany NCF (Base Model) 0.0097 0.0013 0.0022 0.0007 0.0007 1 PRL w/o Causality 0.1081 0.0142 0.0181 0.0073 0.0076 PRL (Full) 0.1560 0.0202 0.0280 0.0107 0.0108 
+
+NCF (Base Model) - - - - -2 PRL w/o Causality - - - - -PRL (Full) - - - - -NCF (Base Model) 0.0 0.0 0.0 0.0 0.0 3 PRL w/o Causality 0.0 0.0 0.0 0.0 0.0 PRL (Full) 0.0 0.0 0.0 0.0 0.0 Germany, Italy, Japan →
+
+United States, India NCF (Base Model) 0.0020 0.0005 0.0006 0.0004 0.0003 1 PRL w/o Causality 0.0204 0.0051 0.0041 0.0030 0.0029 PRL (Full) 0.0214 0.0055 0.0039 0.0032 0.0031 
+
+NCF (Base Model) 0.0018 0.0005 0.0003 0.0003 0.0003 2 PRL w/o Causality 0.0064 0.0015 0.0008 0.0008 0.0009 PRL (Full) 0.0079 0.0021 0.0011 0.0011 0.0012 
+
+NCF (Base Model) 0.0 0.0 0.0 0.0 0.0 3 PRL w/o Causality 0.0 0.0 0.0 0.0 0.0 PRL (Full) 0.0 0.0 0.0 0.0 0.0 RecSys ’26, September 27–October 02, 2026, Minneapolis, MN, USA Wang et al. 
+
+Table S11: Performance of PRL on different user clusters with LightGCN as the base model on XMRec. “-” means a cluster contains only training-set users, i.e., no test-set users to evaluate. The best results are marked with bold face. Data Cluster Method Recall@20 F1@20 MAP@20 NDCG@20 Precision@20 
+
+France, Italy, India →
+
+Japan, Mexico LightGCN (Base Model) 0.0261 0.0034 0.0028 0.0015 0.0018 1 PRL w/o Causality 0.1742 0.0209 0.0749 0.0167 0.0111 
+
+PRL (Full) 0.1400 0.0154 0.0482 0.0115 0.0081 LightGCN (Base Model) 0.0168 0.0019 0.0054 0.0013 0.0010 2 PRL w/o Causality 0.0804 0.0095 0.0211 0.0060 0.0051 PRL (Full) 0.0936 0.0115 0.0288 0.0079 0.0061 
+
+LightGCN (Base Model) - - - - -3 PRL w/o Causality - - - - -PRL (Full) - - - - -Mexico, Spain, India →
+
+Japan, Germany LightGCN (Base Model) 0.0093 0.0009 0.0046 0.0008 0.0005 1 PRL w/o Causality 0.0972 0.0097 0.0129 0.0045 0.0051 
+
+PRL (Full) 0.0 0.0 0.0 0.0 0.0 LightGCN (Base Model) 0.0170 0.0023 0.0062 0.0017 0.0012 2 PRL w/o Causality 0.1040 0.0135 0.0215 0.0077 0.0072 PRL (Full) 0.1790 0.0224 0.0646 0.0167 0.0120 
+
+LightGCN (Base Model) - - - - -3 PRL w/o Causality - - - - -PRL (Full) - - - - -Germany, Italy, Japan →
+
+United States, India LightGCN (Base Model) 0.0016 0.0005 0.0002 0.0002 0.0003 1 PRL w/o Causality 0.0062 0.0017 0.0012 0.0010 0.0010 
+
+PRL (Full) 0.0066 0.0017 0.0014 0.0011 0.0010 
+
+LightGCN (Base Model) 0.0 0.0 0.0 0.0 0.0 2 PRL w/o Causality 0.0 0.0 0.0 0.0 0.0 PRL (Full) 0.0 0.0 0.0 0.0 0.0 LightGCN (Base Model) 0.0016 0.0004 .0002 0.0002 0.0002 3 PRL w/o Causality 0.0037 0.0009 0.0010 0.0006 0.0005 
+
+PRL (Full) 0.0039 0.0008 0.0012 0.0006 0.0005 Probabilistic Residual Learning for Online Recommendations RecSys ’26, September 27–October 02, 2026, Minneapolis, MN, USA 
+
+> Table S12: Results on the simple baseline and PRL.
+
+# Method Recall@20 F1@20 MAP@20 NDCG@20 Precision@20 
+
+# CDL 0.0143 0.0016 0.0028 0.0009 0.0009 Clustering + Residuals 0.0156 0.0018 0.0023 0.0009 0.0010 PRL (Full) 0.1091 0.0128 0.0463 0.0108 0.0068 
+
+# DLRM 0.0044 0.0004 0.0004 0.0002 0.0002 Clustering + Residuals 0.0163 0.0018 0.0029 0.0009 0.0010 PRL (Full) 0.0295 0.0035 0.0048 0.0018 0.0018 
+
+# PerK 0.1098 0.0128 0.0512 0.0112 0.0068 Clustering + Residuals 0.1118 0.0129 0.0513 0.0113 0.0069 PRL (Full) 0.1635 0.0192 0.0637 0.0151 0.0102 
+
+# NCF 0.0131 0.00148 0.0026 0.0008 0.0008 Clustering + Residuals 0.0164 0.0019 0.0029 0.0010 0.0010 PRL (Full) 0.1137 0.0137 0.0309 0.0090 0.0073 
+
+# LightGCN 0.0182 0.0021 0.0050 0.0014 0.0011 Clustering + Residuals 0.0277 0.0031 0.0054 0.0017 0.0017 PRL (Full) 0.1003 0.0121 0.0316 0.0084 0.0064 Table S13: Performance comparison between larger CDL and PRL. Method Recall@20 F1@20 MAP@20 NDCG@20 Precision@20 
+
+# CDL 0.0143 0.0016 0.0028 0.0009 0.0009 CDL (Larger) 0.0223 0.0026 0.0022 0.0011 0.0014 PRL (Full) 0.1091 0.0128 0.0463 0.0108 0.0068 Table S14: Results in 𝑛 -shot settings for the CDL base model. Method Config Recall@20 Precision@20 F1@20 MAP@20 NDCG@20 
+
+## CDL (Base Model) 1-shot 0.0647 0.0105 0.0181 0.0111 0.0098 CDL (Base Model) 2-shot 0.0700 0.0085 0.0152 0.0108 0.0078 CDL (Base Model) 3-shot 0.0817 0.0060 0.0112 0.0159 0.0106 RecSys ’26, September 27–October 02, 2026, Minneapolis, MN, USA Wang et al. 
+
+Table S15: Results in 𝑛 -shot settings for our proposed model PRL (Full) using CDL as the base model. Method Config Recall@20 Precision@20 F1@20 MAP@20 NDCG@20 
+
+# PRL (Full) 1-shot 0.1080 0.0195 0.0359 0.0252 0.0208 PRL (Full) 2-shot 0.1507 0.0195 0.0356 0.0359 0.0216 PRL (Full) 3-shot 0.2178 0.0145 0.0272 0.0471 0.0251 Probabilistic Residual Learning for Online Recommendations RecSys ’26, September 27–October 02, 2026, Minneapolis, MN, USA 
+
+References 
+
+[1] Diederik P. Kingma and Jimmy Ba. 2015. Adam: A Method for Stochastic Opti-mization. In ICLR .[2] Hao Wang, Naiyan Wang, and Dit-Yan Yeung. 2015. Collaborative deep learning for recommender systems. In Proceedings of the 21th ACM SIGKDD international conference on knowledge discovery and data mining . 1235–1244.

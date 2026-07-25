@@ -1,0 +1,1290 @@
+Title: An Epistemic Position-Based Click Model: From Interactions to Epistemic Distributions of Relevance and Bias
+
+URL Source: https://arxiv.org/pdf/2607.18712v1
+
+Published Time: Wed, 22 Jul 2026 00:37:27 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+# An Epistemic Position-Based Click Model: From Interactions to Epistemic Distributions of Relevance and Bias 
+
+## Oscar Rolando Ramirez Milian ∗
+
+o.r.ramirezmilian@uva.nl University of Amsterdam Amsterdam, The Netherlands 
+
+## Harrie Oosterhuis ∗
+
+h.r.oosterhuis@uva.nl University of Amsterdam Amsterdam, The Netherlands 
+
+## Abstract 
+
+User interactions with rankings are affected by both items’ rele-vances and display positions. Accordingly, click probabilities are often modeled as a product of relevance and position factors; and for improving recommendation and search, one needs to disentangle relevance from position bias. However, existing click models only provide frequentist point-estimates that do not capture any mea-sure of epistemic uncertainty. Consequently, there is no indication of how much confidence one should have in their predictions. In this work, we introduce the first evidential deep-learning approach to form an epistemic alternative to the important position-based click model. Our learned model takes as input item and position features and outputs a beta-distribution for every relevance and position-bias variable of the position-based model. These distribu-tions capture epistemic uncertainty about click probabilities and the underlying effects of attraction and position bias. The main challenge of our approach is its optimization for which we pro-pose approximation and conditioning techniques to provide nu-merical stability and variance reduction. Our experiments indicate that our approach captures epistemic uncertainty in predictions on previously-unseen data, whereas standard policy gradients fail to learn meaningful distributions. We believe our contribution of the first contextual epistemic click model constitutes an important step in incorporating Bayesian uncertainty into click modeling. 
+
+## CCS Concepts 
+
+• Information systems → Probabilistic retrieval models .
+
+## Keywords 
+
+Click Modeling; Epistemic Uncertainty; Bayesian Probability 
+
+ACM Reference Format: 
+
+Oscar Rolando Ramirez Milian and Harrie Oosterhuis. 2026. An Epistemic Position-Based Click Model: From Interactions to Epistemic Distributions of Rel-evance and Bias. In Proceedings of the 49th International ACM SIGIR Confer-ence on Research and Development in Information Retrieval (SIGIR ’26), July 20–24, 2026, Melbourne, VIC, Australia. ACM, New York, NY, USA, 12 pages. https://doi.org/10.1145/3805712.3809529  
+
+> ∗Work performed while at the Radboud University Nijmegen.
+> This work is licensed under a Creative Commons Attribution 4.0 International License.
+> SIGIR ’26, Melbourne, VIC, Australia
+> ©2026 Copyright held by the owner/author(s). ACM ISBN 979-8-4007-2599-9/2026/07 https://doi.org/10.1145/3805712.3809529
+
+## 1 Introduction 
+
+Search and recommendation systems connect users to online con-tent by presenting rankings of items [ 34 , 36 ], thereby, they are vital for making large online collections accessible and navigable [ 4 ]. The ordering in these rankings heavily affect user satisfaction and what items they may consider interacting with [ 24 , 52 ]. Therefore, it is important to have accurate estimates of user preferences for items to provide the best rankings; and at same time, the effect of the presented ordering makes it difficult to infer such preferences from interactions with rankings [ 41 ]. The fields of click modeling and unbiased learning-to-rank concern themselves with methods to disentangle user preferences from other factors [ 14 , 19 , 25 , 43 ]. The position-based click model ( PBM ) [ 14 , 15 ] is a foundational click model that remains relevant due to its combination of simplicity and effectiveness [2, 3, 12, 15, 25, 44, 46, 59]: 
+
+Definition 1.1 ( Position-based click model (PBM )). In the PBM , the probability of a click (C = 1) on an item 𝑑 displayed at position 𝑘 of a ranking in the context 𝑞 is a product of the probability that position 𝑘 is examined (E = 1), conditioned on the position, and the probability that item is found attractive (R = 1), conditioned on the context and item: 
+
+P[ C = 1 | 𝑞, 𝑑, 𝑘 ] = P[ E = 1 | 𝑘 ]P[ R = 1 | 𝑞, 𝑑 ] = 𝜃 𝑘 𝜁 𝑞,𝑑 . (1) The 𝜃 and 𝜁 parameters are often referred to as position bias and 
+
+item relevance (a.k.a. attractiveness or preference) factors respec-tively [ 15 , 41 ]. We note that our notation originates from a web-search setting where 𝑞 is a search query and 𝑑 is a document [ 44 ]; in recommendation settings, 𝑞 can represent information about the user and/or the webpage at which the recommendation is made and 𝑑 an item to be recommended [ 41 ]. Since examination and relevance cannot be observed directly, the PBM parameters have to be inferred from logged click data [14, 15, 59]. Let 𝑁 𝑞,𝑑,𝑘 ∈ Z≥0 be the number of times item 𝑑 was displayed at position 𝑘 for query 𝑞 and 𝑀 𝑞,𝑑,𝑘 ∈ Z≥0 the number of times 𝑑 was clicked at 𝑘 for 𝑞 and let N and M be tuples of all 𝑁 𝑞,𝑑,𝑘 and 𝑀 𝑞,𝑑,𝑘 
+
+values respectively. Existing methods for estimating the parameters of the PBM take one of two approaches [ 43 ]; The click model family searches for the parameters that maximize the likelihood of the data [ 14 , 27 , 59 ]: (𝜽 ∗, 𝜻 ∗) = arg max (𝜽 ,𝜻 ) P[ M | N, 𝜽 , 𝜻 ]. Unbiased learning-to-rank methods first estimate the examination probabili-ties per rank, e.g., through position randomization [ 59 ], to use for inverse-propensity-scoring estimates of relevance [ 25 , 58 ], for exam-ple, with estimated propensities 𝜌 : ˆ𝜁 IPS  
+
+> 𝑞,𝑑
+
+= 1 
+
+> Í𝐾 𝑘 =1𝑁 𝑞,𝑑,𝑘
+
+Í𝐾 𝑘 =1   
+
+> 𝑀 𝑞,𝑑,𝑘
+> 𝜌 [E=1|𝑘 ]
+
+. 
+
+> 1arXiv:2607.18712v1 [cs.IR] 21 Jul 2026 SIGIR ’26, July 20–24, 2026, Melbourne, VIC, Australia Oscar Rolando Ramirez Milian and Harrie Oosterhuis
+
+A significant limitation of these approaches is that they only pro-vide pointwise estimates for the parameters [ 23 ]. Therefore, they do not give any indication of how reliable their estimates are, nor how much confidence one should have in their value [ 28 ]. Moreover, as a result, they also do not provide insight in the possible risks in using them for downstream tasks. This is especially concerning since the PBM explains observations by products of probabilities, and consequently, generally many different parameter values can explain observed click data equally well [ 21 , 43 ]. This is part of a larger limitation of the click modeling and unbiased learning-to-rank fields, as –to the best of our knowledge– all state-of-the-art methodologies only provide pointwise estimates [ 19 , 25 , 27 , 41 , 45 ]. This work proposes the first contextual epistemic parameter esti-mation method for the PBM ; our approach is based on evidential deep-learning [ 5, 38 , 39 , 53 , 54 ] and learns a distribution for each of its parameters that represent epistemic uncertainty. Our model consists of a Beta distribution for each parameter, i.e., 
+
+𝜃 𝑘 ∈ ( 0, 1) for every 𝑘 and 𝜁 𝑞,𝑑 ∈ ( 0, 1) for every (𝑞, 𝑑 ), which are treated as independent random variables. Accordingly, we optimize the model by searching for the best 𝛼 and 𝛽 parameters of the Beta distributions, i.e., (𝛼 𝑘 , 𝛽 𝑘 ) for every 𝜃 𝑘 , and (𝛼 𝑞,𝑑 , 𝛽 𝑞,𝑑 ) for every 𝜁 𝑞,𝑑 , by maximizing the likelihood of the data under the 
+
+𝛼 and 𝛽 parameters; with 𝜽 ∈ ( 0, 1)𝐾 , 𝜻 ∈ ( 0, 1)𝑄𝐷 , and their distribution parameters 𝜶 𝜽 , 𝜷 𝜽 , 𝜶 𝜻 , 𝜷 𝜻 as tuples of all 𝛼 𝑘 , 𝛽 𝑘 , 𝛼 𝑞,𝑑 
+
+and 𝛽 𝑞,𝑑 respectively: 
+
+argmax     
+
+> (𝜶 𝜽 ,𝜷 𝜽 ,𝜶 𝜻 ,𝜷 𝜻 )
+
+∫
+
+P  M | N, 𝜻 , 𝜽 p  𝜻 , 𝜽 𝜶 𝜻 , 𝜷 𝜻 , 𝜶 𝜽 , 𝜷 𝜽 
+
+𝑑 𝜻 𝑑 𝜽 . (2) Because the number of queries and items ( 𝑄𝐷 ) is large, we optimize a neural network to predict 𝛼 𝑞,𝑑 and 𝛽 𝑞,𝑑 based on features 𝑋 𝑞,𝑑 .Vice versa, because the number of positions ( 𝐾 ) is very limited, we learn 𝛼 𝑘 and 𝛽 𝑘 values directly. However, a direct application of Monte Carlo integration to solve (2) poses substantial challenges. In particular, the numerical precision of the sample values and the high variance inherent in the gradient estimation are main difficulties. As a solution, we introduce a novel approach that optimizes a numerically-stable approximation of the log-likelihood and reduces variance through conditioning on partial samples. Our novel method is the first contextual epistemic click model , and provides a foundation for future click models that use evidential deep learning for uncertainty quantification [5, 30, 38, 47, 53]. 
+
+## 2 Related Work 
+
+Click models. Early click models were probabilistic graphical models ( PGM s) handcrafted for the classic web search setting [ 14 ,15 , 17 , 33 , 51 ]; among them is the PBM [ 15 , 51 ]. Later, more com-plex click models consider sequences of actions, such as the cas-cading click model [ 15 ] or the user browsing model [ 17 ]. Neural network ( NN ) click models were introduced to avoid the assump-tions inherent in PGM design and their constraints [ 9 , 10 , 63 ]. Many click models have been designed with specific settings or appli-cations in mind, e.g., for specific interfaces such as grid layouts for image search and carousel interfaces for recommendation sys-tems [ 13 , 18 , 27 , 49 , 50 , 61 , 64 ]. In the unbiased learning-to-rank field, click models are often applied to separate the effect of user preference from examination behavior [ 18 , 20 , 58 , 59 ]. This has lead to NN click models that apply a two-tower structure, where the model is divided into two parts with either position or item features [ 21 , 62 , 64 ]. The many inverse-propensity-scoring methods in the field are commonly build on the assumption that user clicks come from a PBM click model and require accurate probability examinations [ 2, 25 , 46 , 58 , 59 ]. Although, a few works also assume trust-bias or cascading click models [1, 29, 44, 56, 57]. As a result, methods for the estimation of PBM parameters re-main important to the unbiased off-policy evaluation and optimiza-tion of rankings [2, 3, 12, 20, 25, 44, 46, 59]. Liu et al . [32] also proposed a Bayesian click model, in contrast with our approach, their model is non-contextual ; They do not use document features, but instead optimize model parameters in a lookup table, consequently, they cannot handle previously-unseen or long-tail documents for which there is little to no data. Several categorizations of click models have been made: Chuklin et al . [14] give an overview of PGM click models, and Liu et al . [33] give two separate categorizations for PGM and NN click models. Recently, Kang et al . [27] propose a theory-based categorization that enables the comparison of click models of different types and for different interfaces. Together, they provide a comprehensive overview of existing click models from which it appears that, besides Liu et al .[32] , no other previous work has considered Bayesian click models. 
+
+Uncertainty estimation and evidential learning. Uncertainty is a fundamental concept in machine learning, generally, a distinc-tion is made between aleatoric uncertainty stemming from ran-domness inherent in an outcome to be predicted; and epistemic 
+
+uncertainty stemming from a lack of knowledge [ 28 ]. There are numerous approaches to uncertainty estimation; Hüllermeier and Waegeman [23] provide a comprehensive overview. The most rel-evant to this work is the evidential deep learning methodology; originating from the work by Malinin and Gales [38] who pro-posed prior networks for evidential regression, and Sensoy et al .[53] who proposed evidential classification . The core idea is to let a network predict the parameters of a distribution over the outcome domain, thereby representing the epistemic uncertainty of a pre-diction [ 23 , 30 , 38 , 53 ]. Whilst the evidential approach has become popular [ 5, 38 , 39 , 54 ], likely due to its easy applicability, some have questioned whether it accurately learns to capture epistemic uncer-tainty [ 6, 26 ]. In response, Meinert et al . [40] argue that evidential deep learning is a useful heuristic that gives a reasonable proxy of epistemic uncertainty; we discuss this further in Section 4.2. 
+
+## 3 Preliminaries: Notation and Epistemic PBM 
+
+In our setting, the observed data are query-item pairs, their displays to the users and the clicks received from displays. We have the query-item pairs (𝑞, 𝑑 ) ∈ D with feature-vector representations 
+
+𝑋 𝑞,𝑑 . For every position 𝑘 ∈ { 1, 2, . . . , 𝐾 } and pair (𝑞, 𝑑 ), 𝑁 𝑞,𝑑,𝑘 ∈
+
+Z≥0 indicates the number of times the item 𝑑 was displayed at position 𝑘 for query 𝑞 , and 𝑀 𝑞,𝑑,𝑘 the number of times it was clicked. For convenience, we also define 𝑊 𝑞,𝑑,𝑘 = 𝑁 𝑞,𝑑,𝑘 − 𝑀 𝑞,𝑑,𝑘 as the number of displays without clicks. Lastly, we assume that there are many more pairs than display positions: |D| >> 𝐾 , which is generally true for recommendation and retrieval [4]. In the PBM , the probability of a click is a product of a position factor 𝜃 𝑘 and a relevance factor 𝜁 𝑞,𝑑 (Definition 1.1). We assume that all clicks are independent Bernoulli variables, an assumption that 
+
+> 2
+
+An Epistemic Position-Based Click Model: From Interactions to Epistemic Distributions of Relevance and Bias SIGIR ’26, July 20–24, 2026, Melbourne, VIC, Australia Lookup Table Neural Network query-item features position ID 
+
+> Predicted relevance (A single value) Predicted position bias (A single value) Predicted click probability Predicted click probability Predicted relevance (Beta Distribution) Predicted position bias (Beta Distribution) Lookup Table Predicted alpha (query-item pair) Predicted beta (query-item pair) Predicted alpha (position ID) Predicted beta (position ID) Predicted relevance mean Predicted position bias mean Predicted relevance con fi dence Predicted position bias con fi dence Neural Network query-item features position ID
+
+(a) Pointwise deep learning. (b) Evidential deep learning. 
+
+Figure 1: Schematic comparison of the two deep learning instantiations of a position-based click model. 
+
+often goes implicitly with the PBM [14 ]. Therefore, each sum of clicks 𝑀 𝑞,𝑑,𝑘 is binomially distributed when conditioned on 𝑁 𝑞,𝑑,𝑘 :
+
+P 𝑀 𝑞,𝑑,𝑘 𝑁 𝑞,𝑑,𝑘 , 𝜃 𝑘 , 𝜁 𝑞,𝑑 
+
+ =
+
+𝑁 𝑞,𝑑,𝑘 
+
+𝑀 𝑞,𝑑,𝑘 
+
+ 𝜃 𝑘 𝜁 𝑞,𝑑 
+
+𝑀 𝑞,𝑑,𝑘  1−𝜃 𝑘 𝜁 𝑞,𝑑 
+
+𝑊 𝑞,𝑑,𝑘 
+
+. (3) To keep our notation brief, we define 𝜽 = (𝜃 𝑘 : 𝑘 ∈ ( 1, 2, . . . , 𝐾 )) as the sequence of all 𝜃 𝑘 and define 𝜻 analogously. Thereby, 𝜽 and 𝜻 
+
+capture the aleatoric uncertainty of our model [ 23 ], as they aim to describe the stochasticity inherent in the clicking behavior of users. To capture epistemic uncertainty, we opt for an evidential ap-proach [ 5, 35 , 38 ] by fitting a parametric distribution over the possi-ble values of 𝜽 and 𝜻 . Specifically, we rely on Beta distributions as each individual 𝜃 or 𝜁 variable is in the interval (0, 1). Accordingly, we model each 𝜃 𝑘 as a sample from a Beta distribution specific to po-sition 𝑘 : 𝜃 𝑘 ∼ Beta  𝛼 𝑘 , 𝛽 𝑘 
+
+; and analogously: 𝜁 𝑞,𝑑 ∼ Beta  𝛼 𝑞,𝑑 , 𝛽 𝑞,𝑑 
+
+.We model the joint probability density function as the product of the individual marginal densities: 
+
+p  𝜽 , 𝜻 𝜶 𝜽 , 𝜷 𝜽 , 𝜶 𝜻 , 𝜷 𝜻 
+
+ = p  𝜽 | 𝜶 𝜽 , 𝜷 𝜽 
+
+p 𝜻 |𝜶 𝜻 , 𝜷 𝜻 
+
+. (4) This implies that the 𝜃 𝑘 and 𝜁 𝑞,𝑑 random variables are independent, i.e., conditioning on one does not change the others’ distributions: 
+
+p  𝜽 | 𝜶 𝜽 , 𝜷 𝜽 
+
+ =
+
+𝐾 Ö
+
+𝑘 =1
+
+p 𝜃 𝑘 |𝛼 𝑘 , 𝛽 𝑘 
+
+,
+
+p  𝜻 𝜶 𝜻 , 𝜷 𝜻 
+
+ =
+
+Ö
+
+𝑞,𝑑 ∈ D 
+
+p 𝜁 𝑞,𝑑 |𝛼 𝑞,𝑑 , 𝛽 𝑞,𝑑 
+
+.
+
+(5) Again for brevity, we define 𝜶 𝜽 = (𝛼 𝑘 : 𝑘 ∈ ( 1, 2, . . . , 𝐾 )) , 𝜶 𝜻 = 𝛼 𝑞,𝑑 : (𝑞, 𝑑 ) ∈ D  and analogously 𝜷 𝜽 and 𝜷 𝜻 . Thus, 𝜶 𝜽 , 𝜷 𝜽 ,
+
+𝜶 𝜻 and 𝜷 𝜻 describe the epistemic uncertainty of our model, i.e., how probable each possible value of 𝜽 and 𝜻 is predicted to be. To the best of our knowledge, this is the first epistemic PBM and potentially the first epistemic click model altogether [14, 27, 33]. Finally, the question now becomes how to find the values for 𝜶 𝜽 ,
+
+𝜷 𝜽 , 𝜶 𝜻 and 𝜷 𝜻 such that our epistemic model best predicts the true 
+
+𝜽 and 𝜻 values and an appropriate uncertainty about its predictions. Following evidential deep learning methodology [ 5 , 37 ], we search for a model that maximizes the likelihood of the observed data: 
+
+L =
+
+∫
+
+P  M | N, 𝜻 , 𝜽 p  𝜻 𝜶 𝜻 , 𝜷 𝜻 
+
+p  𝜽 | 𝜶 𝜽 , 𝜷 𝜽 
+
+𝑑 𝜻 𝑑 𝜽 
+
+= E
+
+h Ö 
+
+𝑞,𝑑,𝑘 
+
+P  𝑀 𝑞,𝑑,𝑘 𝑁 𝑞,𝑑,𝑘 , 𝜃 𝑘 , 𝜁 𝑞,𝑑 
+
+ 𝜶 𝜻 , 𝜷 𝜻 , 𝜶 𝜽 , 𝜷 𝜽 
+
+i
+
+. (6) Accordingly, our goal is to develop a method for optimizing 𝜶 𝜽 , 𝜷 𝜽 ,
+
+𝜶 𝜻 and 𝜷 𝜻 to maximize the likelihood of our observed data. Because the number of positions 𝐾 is limited, we learn 𝜶 𝜽 and 𝜷 𝜽 directly (in a lookup table). Conversely, since the number of query-item pairs is enormous, we learn a neural network to predict 𝛼 𝑞,𝑑 and 
+
+𝛽 𝑞,𝑑 for a given feature vector 𝑋 𝑞,𝑑 , thereby making our approach generalizable to previously-unseen queries and items. 
+
+## 4 Background 4.1 Naïve Monte Carlo gradient estimation 
+
+Since the likelihood is an expectation (6), it can be estimated unbi-asedly through a straightforward Monte Carlo estimation [ 22 ]. We can take 𝑆 samples for each of the 𝜃 and 𝜁 parameters according to 
+
+𝜶 𝜽 , 𝜷 𝜽 and 𝜶 𝜻 , 𝜷 𝜻 , which we group in vectors for convenience: 
+
+˜𝜃 (𝑖 )
+
+𝑘 ∼ Beta  𝛼 𝑘 , 𝛽 𝑘 
+
+, ˜𝜽 (𝑖 ) =   ˜𝜃 (𝑖 )
+
+1 , . . . , ˜𝜃 (𝑖 )
+
+𝐾 
+
+, (7) 
+
+˜𝜁 (𝑖 )
+
+𝑞,𝑑 ∼ Beta  𝛼 𝑞,𝑑 , 𝛽 𝑞,𝑑 
+
+, ˜𝜻 (𝑖 ) =   ˜𝜁 (𝑖 )
+
+𝑞,𝑑 : (𝑞, 𝑑 ) ∈ D . (8) We can evaluate the probability of our observations conditioned a single sample of position bias ˜𝜽 (𝑖 ) and relevance values ˜𝜻 (𝑖 ) :
+
+˜𝐿   ˜𝜻 (𝑖 )
+
+, ˜𝜽 (𝑖 ) ≜ ˜𝐿 (𝑖 )≜
+
+Ö
+
+𝑞,𝑑,𝑘 
+
+𝑁 𝑞,𝑑,𝑘 
+
+𝑀 𝑞,𝑑,𝑘 
+
+  ˜𝜃 (𝑖 )
+
+𝑘 ˜𝜁 (𝑖 )
+
+𝑞,𝑑 
+
+𝑀 𝑞,𝑑,𝑘 
+
+1 − ˜𝜃 (𝑖 )
+
+𝑘 ˜𝜁 (𝑖 )
+
+𝑞,𝑑 
+
+𝑊 𝑞,𝑑,𝑘 
+
+. (9) The mean value of ˜𝐿 (𝑖 ) provides an unbiased estimate of the likeli-hood of our model, additionally, the gradient of the likelihood can be unbiasedly estimated with the log-derivative trick [60]: 
+
+˜L ≈ 1
+
+𝑆 
+
+𝑆 ∑︁ 
+
+𝑖 =1
+
+˜𝐿 (𝑖 ) , ∇L ≈ 1
+
+𝑆 
+
+𝑆 ∑︁ 
+
+𝑖 =1
+
+˜𝐿 (𝑖 ) 
+
+∇ log p   ˜𝜻 (𝑖 ) |𝜶 𝜻 , 𝜷 𝜻 
+
+
+
++ ∇ log p   ˜𝜽 (𝑖 ) |𝜶 𝜽 , 𝜷 𝜽 
+
+
+
+.
+
+(10) A lower-variance variation of this estimate can be made with leave-one-out baseline-corrections [31]: 
+
+∇L ≈ 1
+
+𝑆 
+
+𝑆 ∑︁ 
+
+𝑖 =1
+
+˜𝐿 (𝑖 ) − 1
+
+𝑆 − 1
+
+𝑆 ∑︁ 
+
+𝑗 =1
+
+1[ 𝑗 ≠ 𝑖 ] ˜𝐿 ( 𝑗 )
+
+!
+
+×
+
+
+
+∇ log p   ˜𝜻 (𝑖 ) |𝜶 𝜻 , 𝜷 𝜻 
+
+ + ∇ log p   ˜𝜽 (𝑖 ) |𝜶 𝜽 , 𝜷 𝜽 
+
+ 
+
+.
+
+(11) Nevertheless, due to the high dimensionality of ˜𝜻 and ˜𝜽 , the vari-ance of this estimate is impractically high, and the values of ˜𝐿 (𝑖 ) are incredibly small, leading to numerical precisions problems when estimating their mean or the estimated policy gradient. 
+
+## 4.2 Evidential deep learning as a heuristic 
+
+Despite the popularity of evidential deep learning due to its relative practicality [ 5, 38 , 47 , 53 ], there has also been criticism. Namely, Juergens et al . [26] criticise second-order learners which predict probability distributions over outcomes and are optimized with standard loss functions. Bengs et al . [6] and Juergens et al . [26] provide proofs that the distributions that minimize evidential deep 
+
+3SIGIR ’26, July 20–24, 2026, Melbourne, VIC, Australia Oscar Rolando Ramirez Milian and Harrie Oosterhuis 
+
+learning losses are Dirac delta functions that concentrate all proba-bility density on a single point. Therefore, loss minimization is not expected to properly calibrate the shape of predicted distributions, and thus, does not appropriately represent epistemic uncertainty. While their conditions do not entirely apply to our setting, a similar behavior can be found for our approach. Let 𝜻 ∗ and 𝜽 ∗ be values that maximize the likelihood of our observations: 
+
+𝐿 (𝜻 ∗, 𝜽 ∗) = sup 
+
+> 𝜻 ,𝜽
+
+𝐿 (𝜻 , 𝜽 ) = max  
+
+> 𝜻 ,𝜽
+
+𝐿 (𝜻 , 𝜽 ) ≥ 𝐿 (𝜻 , 𝜽 ). (12) The value of 𝐿 evaluated at any 𝜻 ∗, 𝜽 ∗ of the maximizing set, is always an upper bound for L, for all 𝜶 𝜻 , 𝜷 𝜻 and 𝜶 𝜽 , 𝜷 𝜽 :
+
+𝐿 (𝜻 ∗, 𝜽 ∗) ≥ E𝐿 (𝜻 , 𝜽 ) 𝜶 𝜻 , 𝜷 𝜻 , 𝜶 𝜽 , 𝜷 𝜽 
+
+ = L. (13) A sequence of parameters  𝜶 (𝑛 ) 
+
+> 𝜻
+
+, 𝜷 (𝑛 )
+
+> 𝜻
+
+ 
+
+> 𝑛
+
+and  𝜶 (𝑛 ) 
+
+> 𝜽
+
+, 𝜷 (𝑛 )
+
+> 𝜽
+
+ 
+
+> 𝑛
+
+can always be constructed such that 𝛼 (𝑛 ) 
+
+> 𝑞,𝑑
+
++ 𝛽 (𝑛 ) 
+
+> 𝑞,𝑑
+
+→ ∞ , 𝛼 (𝑛 ) 
+
+> 𝑘
+
++ 𝛽 (𝑛 ) 
+
+> 𝑘
+
+→ ∞ as 𝑛 → ∞ 
+
+and the corresponding Beta distributions concentrate probability mass monotonically around 𝜻 ∗ and 𝜽 ∗. In other words, there is always a sequence of Beta distributions whose probability measures converge weakly to Dirac measures supported on 𝜻 ∗ and 𝜽 ∗:
+
+Beta  𝛼 (𝑛 ) 
+
+> 𝑞,𝑑
+
+, 𝛽 (𝑛 )
+
+> 𝑞,𝑑
+
+ 𝑤 
+
+−→ 𝛿 𝜁 ∗ 
+
+> 𝑞,𝑑
+
+, Beta  𝛼 (𝑛 ) 
+
+> 𝑘
+
+, 𝛽 (𝑛 )
+
+> 𝑘
+
+ 𝑤 
+
+−→ 𝛿 𝜃 ∗ 
+
+> 𝑘
+
+. (14) The Portmanteau theorem [ 7 ] implies that L, evaluated as an ex-pectation of 𝐿 under such distributions, tends to the value: 
+
+𝐿  𝜻 ∗, 𝜽 ∗  = E𝜻 ∼𝛿 𝜻 ∗ ,𝜽 ∼𝛿 𝜽 ∗ [𝐿 (𝜻 , 𝜽 )] . (15) In summary, any Dirac measure supported on a maximizer of 
+
+𝐿 attains the maximum of L. Consequently, in our setting the optimizer can asymptotically concentrate all the probability mass on singleton sets, by choosing Beta distributions with sufficiently large parameters. Thus, in theory, our optimization does not converge on an appropriate shape of our epistemic distribution, analogous to the criticism of Juergens et al. [26] and Bengs et al. [6]. Nevertheless, Meinert et al . [40] argue that practitioners should not treat evidential deep learning as a method for exact epistemic uncertainty quantification, but instead as a useful heuristic that provides a reasonable proxy of uncertainty. This could explain its continued popularity [ 5 , 38 , 47 , 53 ]. A common heuristic for evidential deep learning is the usage of entropy regularization. For our setting, let H be the entropy of the Beta distributions: 
+
+H(𝜶 𝜻 , 𝜷 𝜻 , 𝜶 𝜽 , 𝜷 𝜽 ) =∑︁ 
+
+> 𝑞,𝑑
+
+𝐻 (𝛼 𝑞,𝑑 , 𝛽 𝑞,𝑑 ) + ∑︁ 
+
+> 𝑘
+
+𝐻 (𝛼 𝑘 , 𝛽 𝑘 ), (16) where 𝐻 (𝛼, 𝛽 ) is the entropy of an individual beta distribution: 
+
+𝐻 (𝛼, 𝛽 ) = log (B(𝛼, 𝛽 )) − ( 𝛼 − 1)𝜓 (𝛼 ) − ( 𝛽 − 1)𝜓 (𝛽 )+ ( 𝛼 + 𝛽 − 2)𝜓 (𝛼 + 𝛽 ). (17) Entropy regularization is applied with the weight 𝜆 ∈ R≥0:
+
+L′ = L + 𝜆 H(𝜶 𝜻 , 𝜷 𝜻 , 𝜶 𝜽 , 𝜷 𝜽 ). (18) In practice, the entropy regularization incentives the epistemic model to spread its confidence over multiple hypotheses. In other words, if there are multiple PBM parameters that result in compara-ble likelihood, then the epistemic model is incentivized to spread its probability mass over all of them. Together with early stopping, this prevents the epistemic model to collapse into a pointwise model, and can result in a useful proxy of uncertainty in practice [40]. 
+
+## 5 Method: Optimizing the Epistemic PBM 
+
+This section introduces our novel methodology for estimating and optimizing the likelihood of our epistemic PBM . The main challenge of estimating (10) and (11) is that it involves averaging over incred-ibly small values, this results in numerical precisions issues and exuberates variance-related problems during optimization. We pro-pose numerically stable computation , conditioning on partial samples 
+
+and self-normalization to overcome this challenge. 
+
+## 5.1 Numerical stability for loss estimation 
+
+As they represent the probability of a large number of observa-tions, the values ˜𝐿 (𝑖 ) << 1 can become extremely small. Therefore, naïvely taking the mean of these values in (10) can result in under-flow errors during computation. A natural solution is to use their log values to estimate the log-likelihood instead: 
+
+𝓁 (𝜽 , 𝜻 ) ≜ log (𝐿 (𝜽 , 𝜻 )) . (19) Accordingly, the mean in (10) can done in the log space with the log-values ˜𝓁 (𝑖 ) of the likelihood samples ˜𝐿 (𝑖 ) :
+
+log   ˜L = log 
+
+ 1
+
+𝑆 
+
+> 𝑆
+
+∑︁ 
+
+> 𝑖 =1
+
+e ˜𝓁 (𝑖 ) 
+
+= log 
+
+ 𝑆 ∑︁ 
+
+> 𝑖 =1
+
+e ˜𝓁 (𝑖 ) 
+
+− log (𝑆 ). (20) The log-sum-exp operation [ 8], LSE : R𝑆 → R, is commonly used to avoid underflow when operating very small numbers. For nu-merically stability, it translates the log values at the start and end of the operations, while staying mathematically equivalent: 
+
+LSE (𝑧 1, . . . , 𝑧 𝑆 ) ≜ max (𝑧 1, . . . , 𝑧 𝑆 ) + log 
+
+ 𝑆 ∑︁ 
+
+> 𝑖 =1
+
+e𝑧 𝑖 −max (𝑧 1,...,𝑧 𝑆 )
+
+. (21) The LSE can thus give a more stable estimate of the log-likelihood: 
+
+log   ˜L = LSE   ˜𝓁 (1) , . . . , ˜𝓁 (𝑆 )  − log (𝑆 ). (22) We note that while LSE improves stability, it is not immune to numerical precision errors. In particular, if one of the samples ˜𝓁 (𝑖 )
+
+dominates the others by being much larger: ∀𝑗 ≠ 𝑖, ˜𝓁 (𝑖 ) >> ˜𝓁 ( 𝑗 ) ,then LSE ( ˜𝓁 (1) , . . . , ˜𝓁 (𝑆 ) ) ≈ max ( ˜𝓁 (1) , . . . , ˜𝓁 (𝑆 ) ) = ˜𝓁 (𝑖 ) . Since: 
+
+max   ˜𝓁 (1) , . . . , ˜𝓁 (𝑆 )  − log  𝑆  ≤ log   ˜L , (23) we can expect an underestimate of the log-likelihood. A key insight is that this issue is less likely if the values over which the LSE is computed are closer to each other. 
+
+## 5.2 Conditioning on position bias 
+
+In order to have ˜𝓁 values closer to each other, we search for a lower variance estimator. Our first insight is that (10) uses samples of a combination of position bias 𝜽 and relevance 𝜻 values, which are independent in our epistemic PBM . Therefore, the variance of the naïve estimator (10) comes from both variable sets, and thus, an estimator conditioned on one of the two could result in lower variance. Since we assumed that there are much fewer positions than query-item pairs ( 𝐾 << |D| ), we condition on position bias. For brevity, we use 𝐽 𝑞,𝑑,𝑘 to denote the probability of 𝑀 𝑞,𝑑,𝑘 clicks given 𝑁 𝑞,𝑑,𝑘 displays and specific values for 𝜃 𝑘 and 𝜁 𝑞,𝑑 (cf. (3)): 
+
+𝐽 𝑞,𝑑,𝑘 (𝜃 𝑘 , 𝜁 𝑞,𝑑 ) ≜ 𝐽 𝑞,𝑑,𝑘 ≜ P 𝑀 𝑞,𝑑,𝑘 |𝑁 𝑞,𝑑,𝑘 , 𝜃 𝑘 , 𝜁 𝑞,𝑑 
+
+. (24)  
+
+> 4An Epistemic Position-Based Click Model: From Interactions to Epistemic Distributions of Relevance and Bias SIGIR ’26, July 20–24, 2026, Melbourne, VIC, Australia
+
+Similarly, the probability of the observed clicks at every position for a single item-pair with comparable conditionals is: 
+
+𝐽 𝑞,𝑑 
+
+ 𝜽 , 𝜁 𝑞,𝑑 
+
+ ≜ 𝐽 𝑞,𝑑 ≜
+
+Ö
+
+> 𝑘
+
+𝐽 𝑞,𝑑,𝑘 
+
+ 𝜃 𝑘 , 𝜁 𝑞,𝑑 
+
+. (25) We proceed by replacing the conditional on the specific values of the relevance 𝜁 𝑞,𝑑 with our epistemic parameters 𝛼 𝑞,𝑑 , 𝛽 𝑞,𝑑 , however, we keep the condition on specific values for the position bias 𝜽 :
+
+J𝑞,𝑑 
+
+ 𝜽 , 𝛼 𝑞,𝑑 , 𝛽 𝑞,𝑑 
+
+ ≜ J𝑞,𝑑 ≜ E
+
+> 𝜁 𝑞,𝑑
+
+h
+
+𝐽 𝑞,𝑑 
+
+ 𝜽 , 𝜁 𝑞,𝑑 
+
+ 𝜽 
+
+i
+
+. (26) Importantly, through the conditioning on 𝜽 , every J𝑞,𝑑 is indepen-dent of each other. We rewrite the likelihood (6) as: 
+
+L = E
+
+> 𝜽 ,𝜻
+
+h Ö 
+
+> 𝑞,𝑑,𝑘
+
+𝐽 𝑞,𝑑,𝑘 
+
+i
+
+= E
+
+> 𝜽
+
+h
+
+E
+
+> 𝜻
+
+h Ö 
+
+> 𝑞,𝑑,𝑘
+
+𝐽 𝑞,𝑑,𝑘 𝜽 
+
+i i 
+
+, (27) using the independence of J𝑞,𝑑 when conditioned on 𝜽 :
+
+L = E
+
+> 𝜽
+
+h Ö 
+
+> 𝑞,𝑑
+
+E
+
+> 𝜻 𝑞,𝑑
+
+h
+
+𝐽 𝑞,𝑑 𝜽 
+
+i i 
+
+= E
+
+> 𝜽
+
+h Ö 
+
+> 𝑞,𝑑
+
+J𝑞,𝑑 
+
+i
+
+. (28) The variance of an expectation conditioned on a variable is guaran-teed to be smaller or equal than the total variance: 
+
+V
+
+> 𝜽
+
+h
+
+E
+
+> 𝜻
+
+h Ö 
+
+> 𝑞,𝑑
+
+𝐽 𝑞,𝑑 𝜽 
+
+i i 
+
+≤ V
+
+> 𝜽 ,𝜻
+
+h Ö 
+
+> 𝑞,𝑑
+
+𝐽 𝑞,𝑑 
+
+i
+
+. (29) Thus, a potential estimator could use intermediate conditional esti-mates to lower variance, and thus, improve computational stability. To construct such an estimator, we first divide our sampling procedure to separately take 𝑆 pos samples 𝜽 (𝑖 ) ∼ Beta  𝜶 𝜽 , 𝜷 𝜽 
+
+ and 
+
+𝑆 rel samples 𝜁 ( 𝑗 ) 
+
+> 𝑞,𝑑
+
+∼ Beta  𝛼 𝑞,𝑑 , 𝛽 𝑞,𝑑 
+
+ for every query-item pair. Sub-sequently, we can estimate J𝑞,𝑑 using a single 𝜽 (𝑖 ) sample while averaging over the 𝑆 rel 𝜁 ( 𝑗 ) 
+
+> 𝑞,𝑑
+
+samples: 
+
+˜J𝑞,𝑑 
+
+ 𝜽 (𝑖 ) , 𝛼 𝑞,𝑑 , 𝛽 𝑞,𝑑 
+
+ ≜ ˜J (𝑖 ) 
+
+> 𝑞,𝑑
+
+≜ 1
+
+𝑆 rel 
+
+> 𝑆 rel
+
+∑︁ 
+
+> 𝑗 =1
+
+˜𝐽 𝑞,𝑑 
+
+ 𝜽 (𝑖 ) , 𝜁 ( 𝑗 )
+
+> 𝑞,𝑑
+
+ ≈ J 𝑞,𝑑 . (30) Based on (28), we estimate the log-likelihood with LSE :
+
+log   ˜L ≈ LSE 
+
+∑︁ 
+
+> 𝑞,𝑑
+
+log 
+
+ ˜J (1)
+
+> 𝑞,𝑑
+
+
+
+, . . . , ∑︁ 
+
+> 𝑞,𝑑
+
+log 
+
+ ˜J (𝑆 pos )
+
+> 𝑞,𝑑
+
+ 
+
+−log  𝑆 pos 
+
+. (31) Importantly, the intermediate estimator (30) only concerns an ex-pectation over a single random variable 𝜁 𝑞,𝑑 , and (given the interme-diate estimates) the log-likelihood estimator (31) only concerns an expectation over the 𝐾 random variables in 𝜽 . Thereby, the variance of both these estimators is lower than when considering samples of all variables at once (cf. (29)), resulting in a better sample-efficiency. Additionally, this brings the values in the LSE operations closer to each other, thus resulting in more stable computations as well. 
+
+## 5.3 Gradient estimation with self-normalization 
+
+The previous subsections concerned the estimation of the likeli-hood, however, for optimization a stable estimate of its gradient is equally important. The gradient estimator in (10) multiplies likeli-hood values conditioned on single samples of parameter values ˜𝐿 (𝑖 )
+
+with a gradient w.r.t. the log-probabilities of the samples. However, generally, the likelihood values are extremely close to zero ˜𝐿 (𝑖 ) ≈ 0
+
+resulting in a near-zero gradient, leading to unstable optimization. In response, we note that for optimization a gradient’s direction is generally more important than its magnitude. Inspired by self-normalized importance sampling [ 11 , 55 ], we apply self-normalization by dividing the ˜𝐿 (𝑖 ) values by the estimated overall likelihood ˜L; we note that this is equivalent to optimizing the log-likelihood since: 
+
+∇ log (L) = ∇LL . (32) Importantly, this maintains the direction of the gradient whilst also normalizing the small values for ˜𝐿 (𝑖 ). Furthermore, self-normalization can be computed more stably with a softmax 𝝈 using LSE :
+
+𝝈 𝑖 (𝑧 1, · · · , 𝑧 𝑆 ) ≜ 𝝈 (𝑧 𝑖 ) ≜ e𝑧 𝑖 
+
+Í𝑆 𝑗 =1 e𝑧 𝑗 = e𝑧 𝑖 −LSE (𝑧 1,...,𝑧 𝑆 ) . (33) For the naive estimator (10), self-normalization results in: 
+
+∇ log 
+
+ ˜L
+
+
+
+(34) 
+
+≈ 1
+
+𝑆 
+
+> 𝑆
+
+∑︁ 
+
+> 𝑖 =1
+
+𝐿 (𝑖 )
+
+˜L
+
+
+
+∇ log p   ˜𝜻 (𝑖 ) |𝜶 𝜻 , 𝜷 𝜻 
+
+ + ∇ log p   ˜𝜽 (𝑖 ) |𝜶 𝜽 , 𝜷 𝜽 
+
+
+
+= 1
+
+𝑆 
+
+> 𝑆
+
+∑︁ 
+
+> 𝑖 =1
+
+𝝈   ˜𝓁 (𝑖 )  
+
+∇ log p   ˜𝜻 (𝑖 ) |𝜶 𝜻 , 𝜷 𝜻 
+
+ + ∇ log p   ˜𝜽 (𝑖 ) |𝜶 𝜽 , 𝜷 𝜽 
+
+
+
+.
+
+For the conditioned estimator (31), we separately estimate the gradient for the position bias parameters ( ∇pos ) as for the parame-ters of the relevance model ( ∇rel ). Since the outermost expectation in (31) is over position bias samples, the ∇pos gradient after self-normalization is quite straightforward: 
+
+∇pos log   ˜L  ≈ 1
+
+𝑆 pos 
+
+> 𝑆 pos
+
+∑︁ 
+
+> 𝑖 =1
+
+
+
+𝝈 
+
+∑︁ 
+
+> 𝑞,𝑑
+
+log ˜J (𝑖 )
+
+> 𝑞,𝑑
+
+
+
+∇pos log p   ˜𝜽 (𝑖 ) |𝜶 𝜽 , 𝜷 𝜽 
+
+
+
+.
+
+(35) We first rewrite the gradient ∇rel of (31) without self-normalization: 
+
+∇rel L = ∇rel E
+
+> 𝜽
+
+h Ö 
+
+> 𝑞,𝑑
+
+J𝑞,𝑑 
+
+i
+
+= ∇rel E
+
+> 𝜽
+
+h
+
+exp 
+
+∑︁ 
+
+> 𝑞,𝑑
+
+log  J𝑞,𝑑 
+
+i 
+
+= E
+
+> 𝜽
+
+h
+
+∇rel exp 
+
+∑︁ 
+
+> 𝑞,𝑑
+
+log  J𝑞,𝑑 
+
+i 
+
+= E
+
+> 𝜽
+
+h
+
+exp 
+
+∑︁ 
+
+> 𝑞,𝑑
+
+log  J𝑞,𝑑 
+
+∑︁ 
+
+> 𝑞,𝑑
+
+∇rel log  J𝑞,𝑑 
+
+i
+
+= E
+
+> 𝜽
+
+h
+
+exp 
+
+∑︁ 
+
+> 𝑞,𝑑
+
+log  J𝑞,𝑑 
+
+∑︁ 
+
+> 𝑞,𝑑
+
+∇rel J𝑞,𝑑 
+
+J𝑞,𝑑 
+
+i
+
+.
+
+(36) This leads us to the following self-normalized gradient estimator: 
+
+∇rel log   ˜L  ≈ 1
+
+𝑆 pos 
+
+> 𝑆 pos
+
+∑︁ 
+
+> 𝑖 =1
+
+©«
+
+𝝈 
+
+∑︁ 
+
+> 𝑞,𝑑
+
+log   ˜J (𝑖 )
+
+> 𝑞,𝑑
+
+∑︁ 
+
+> 𝑞,𝑑
+
+∇rel ˜J (𝑖 )
+
+> 𝑞,𝑑
+
+˜J (𝑖 )
+
+> 𝑞,𝑑
+
+ª®¬
+
+, (37) where ∇rel ˜J (𝑖 ) 
+
+> 𝑞,𝑑
+
+is an estimate for the sample 𝜽 (𝑖 ) :
+
+∇rel ˜J (𝑖 ) 
+
+> 𝑞,𝑑
+
+≈ 1
+
+𝑆 rel 
+
+> 𝑆 rel
+
+∑︁ 
+
+> 𝑗 =1
+
+˜𝐽 (𝑖,𝑗 ) 
+
+> 𝑞,𝑑
+
+∇rel log 
+
+
+
+p  ˜𝜁 ( 𝑗 ) 
+
+> 𝑞,𝑑
+
+|𝛼 𝑞,𝑑 , 𝛽 𝑞,𝑑 
+
+
+
+. (38) Thus, through numerically-stable self-normalization, we deal with near-zero likelihoods for samples; equivalently, self-normalization results in the gradients of the log-likelihood. Thereby, we increase the stability of both our standard and conditioned gradient esti-mates, which should result in more robust optimization.               
+
+> 5SIGIR ’26, July 20–24, 2026, Melbourne, VIC, Australia Oscar Rolando Ramirez Milian and Harrie Oosterhuis
+> Istella-S MSLR-Web10k Log-Likelihood 200 400 600 800 1000 1200 1400
+> −5.2
+> −5.0
+> −4.8
+> −4.6
+> −4.4
+> −4.2
+> −4.0
+> −3.8
+> ×10 4200 400 600 800 1000 1200 1400
+> −3.52
+> −3.44
+> −3.36
+> −3.28
+> −3.20
+> −3.12
+> −3.04
+> −2.96
+> −2.88
+> −2.80
+> ×10 4Pointwise PBM Naive + b.c. Self-norm. Self-norm. + b.c. Self-norm. + cond. Self-norm. + cond. + b.c.
+
+Figure 2: Log-likelihood of test-set clicks as predicted by pointwise and epistemic PBM s trained with different methods over 1500 epochs. X-axis: training epochs; Y-axis: mean log-likelihood of clicks on test-set. The shaded areas indicate 95% confidence intervals computed using a Student’s 𝑡 −distribution with 14 degrees of freedom. Results are based on 15 independent runs. 
+
+## 5.4 Entropy regularization 
+
+Section 4.2 discussed the common practice of entropy regulariza-tion for evidential deep learning. Due to the specifics of our setup, we slightly adapt this approach before applying it. First, we note that whilst there are many more query-item pairs than positions (|D| >> 𝐾 ), the individual position-bias parameters 𝜃 𝑘 are involved in many more click probabilities than the 𝜁 𝑞,𝑑 . Nevertheless, stan-dard entropy (16) gives equal weight to all parameters, we correct for this imbalance by introducing a modified entropy ¯H′ (cf. (17)): 
+
+¯H′(𝜶 𝜻 , 𝜷 𝜻 , 𝜶 𝜽 , 𝜷 𝜽 ) = 1
+
+|D| ∑︁ 𝑞,𝑑 
+
+𝐻 (𝛼 𝑞,𝑑 , 𝛽 𝑞,𝑑 ) + 1
+
+𝐾 ∑︁ 𝑘 
+
+𝐻 (𝛼 𝑘 , 𝛽 𝑘 ). (39) Furthermore, as our main computations are all in log-space, we add the regularization term to the log-likelihood, with 𝜆 ∈ R≥0:
+
+log   ˜L′  = log   ˜L( 𝜶 𝜻 , 𝜷 𝜻 , 𝜶 𝜽 , 𝜷 𝜽 ) + 𝜆 ¯H′(𝜶 𝜻 , 𝜷 𝜻 , 𝜶 𝜽 , 𝜷 𝜽 ). (40) Thereby, when 𝜆 > 0, our optimization aims to find parameters that balance maximizing the likelihood of the observed clicks and maxi-mizing the epistemic uncertainty in the model. Thus, if there are multiple values for the position bias ( 𝜽 ) and relevance ( 𝜻 ) variables that explain the data similarly well, then the entropy regularization pushes the optimization to spread epistemic probability over all of these values, avoiding a potential model collapse. 
+
+## 6 Experimental Setup 
+
+We perform several experiments to evaluate how accurately our epistemic PBM can predict clicks and whether its epistemic distri-butions capture uncertainty appropriately. Specifically: we compare our proposed techniques: self-normalization , conditioning on posi-tion bias and entropy regularization (Section 5) and a traditional pointwise PBM . We apply a semi-synthetic setup because our eval-uation requires a comparison between learned click models and ground-truth parameter values. For reproducibility, our implemen-tation will be made available upon publication. 
+
+Datasets. We perform our experiments on two learning-to-rank datasets: MSLR-Web-10K [48 ] and the Istella-S [16 ]. MSLR contains 30,000 queries with an average of 125 pre-selected documents per query and 136 features to represent query-document pairs, we only use fold-1 of the dataset. Istella has 33,018 queries, an average of 103 pre-selected documents per query and 220 features. Both dataset have an expert-judged relevance label for every query-document pair: 𝑦 𝑞,𝑑 ∈ { 0, 1, 2, 3, 4} where 0 is the least relevant and 4 the most. The datasets come with standard training/validation/test set splits. 
+
+Click generation. For each dataset, we simulate 10 5 query-inter-actions by uniformly sampling queries over the train, validation and test sets (with replacement). Simulated clicks are sampled from a PBM with 𝜃 𝑘 = 1 
+
+> 𝑘
+
+and 𝜁 𝑞,𝑑 = 0.9(𝑦 𝑞,𝑑 /4) + 0.1 on sampled top-5 rankings ( 𝐾 = 5). Our logging policy ranker is a neural-network (2 hidden layers of 64 units) Plackett-Luce ranking model [ 42 ] opti-mized on 30 random training-set queries in a supervised manner. 
+
+Model parameters. Our click models are based on neural net-works with 3 hidden layers of 64, 64 and 32 units to predict docu-ment relevances and a lookup table to predict position bias. The epis-temic neural networks output two parameters: the mean 𝜇 ∈ ( 0, 1)
+
+(using a sigmoid activation) and confidence 𝜈 ∈ [ 1, ∞) (using the 
+
+|𝑥 | + 1 transformation). The predicted beta distributions parameters were then obtained by: 𝛼 = 𝜇𝜈 and 𝛽 = (1−𝜇 )𝜈 . The pointwise PBM baseline uses the same network structure but outputs the 𝜁 ∈ ( 0, 1)
+
+parameter directly. All models are optimized over 1500 training epochs; we do not apply entropy regularization except when stated otherwise. For gradient estimation, we take 𝑆 = 60 samples when not applying conditioning, and 𝑆 pos = 60 and 𝑆 rel = 60 when con-ditioning (see Section 5.2). Pointwise PBM has an exact gradient. During training, we batch the data into chunks of 12k and 35k 𝑞 ,𝑑 
+
+pairs for epistemic and pointwise models respectively. 
+
+Evaluation. To evaluate the predictive accuracy of our optimized PBM , we evaluate the log-likelihood of the clicks generated on the test-set. We also want to evaluate whether the uncertainty captured by our epistemic models is appropriate, however, there is no standard method for evaluating epistemic uncertainty [ 23 , 26 ]. Thus, we plot the learned distributions for the 𝐾 = 5 position bias parameters ( 𝜃 𝑘 ) for visual inspection. Due to the large number of query-document pairs, we cannot do the same for 𝜁 𝑞,𝑑 ; instead we analyze the means and standard deviations of the relevance distributions. All results are based on 15 independent runs. 
+
+## 7 Experimental Results 7.1 Comparison of proposed techniques 
+
+The main purpose of click models is making accurate predictions; thus our first research question is: Which of our proposed techniques result in a higher log-likelihood of our epistemic click model? 
+
+Figure 2 displays learning curves in terms of log-likelihood over training epochs of models optimized with different gradient esti-mation techniques. We see that the general trends and differences between methods is very consistent between the Istella and MSLR datasets: The naïve estimator struggles to improve log-likelihood 
+
+> 6
+
+An Epistemic Position-Based Click Model: From Interactions to Epistemic Distributions of Relevance and Bias SIGIR ’26, July 20–24, 2026, Melbourne, VIC, Australia 
+
+𝜃 1 𝜃 2 𝜃 3 𝜃 4 𝜃 5
+
+> Istella-S
+> Naïve+bc. 1.00 0.36 0.50 0.64 0.33 0.22 0.25 0.46 0.20 0.47 Self-norm. 1.00 0.84 0.50 0.37 0.33 0.22 0.25 0.15 0.20 0.12 S.-norm.+cond. 1.00 1.00 0.50 0.49 0.33 0.32 0.25 0.24 0.20 0.19
+
+p.w. 0.0 0.2 0.4 0.6 0.8 1.0 0.0 0.2 0.4 0.6 0.8 1.0 0.0 0.2 0.4 0.6 0.8 1.0 0.0 0.2 0.4 0.6 0.8 1.0 0.0 0.2 0.4 0.6 0.8 1.0 
+
+> MSLR-Web10k Naïve+bc. 1.00 0.37 0.50 0.41 0.33 0.26 0.25 0.39 0.20 0.69 Self-norm. 1.00 0.49 0.50 0.23 0.33 0.15 0.25 0.11 0.20 0.08 S.-norm.+cond. 1.00 1.00 0.50 0.50 0.33 0.32 0.25 0.25 0.20 0.19
+
+p.w. 0.0 0.2 0.4 0.6 0.8 1.0 0.0 0.2 0.4 0.6 0.8 1.0 0.0 0.2 0.4 0.6 0.8 1.0 0.0 0.2 0.4 0.6 0.8 1.0 0.0 0.2 0.4 0.6 0.8 1.0 Pointwise predictions Barycenter's mean Ground Truth Predicted k
+
+Figure 3: Predicted distributions by epistemic PBMs optimized with different methods and pointwise PBM predictions. 
+
+much beyond its starting point, suggesting that its gradient esti-mation is too unstable to be useful for optimization (even with baseline-corrections applied). Self-normalization results in a higher log-likelihood, and surprisingly, baseline-corrections degrades its point of convergence. Finally, self-normalization and condition-ing on position bias leads to the highest log-likelihood, with or without baseline-corrections. The differences between methods are substantial and the 95% confidence intervals indicate that they are statistically significant. Overall, these results strongly suggest that the stability of the gradient is a serious issue for learning epistemic click models and that our techniques effectively increase stability. Therefore, we have a clear answer to our first research ques-tion: Self-normalization and conditioning on position bias lead to a considerably higher log-likelihood than naïve estimation; baseline cor-rections have no positive effect when applied with self-normalization. 
+
+## 7.2 Comparison with pointwise PBM 
+
+Next, we consider whether there is a trade-off between modeling uncertainty and predictive accuracy. Accordingly, our second re-search question is: Can our epistemic click model reach the same log-likelihood as a traditional pointwise click model? 
+
+We again turn to Figure 2 where we can see the log-likelihood curves of the pointwise PBM and the epistemic PBM with self-normalization and conditioning. Surprisingly, we see that the epis-temic click model converges at a higher log-likelihood and requires far fewer training epochs to reach convergence; The epistemic PBM needs 100 epochs, whereas the pointwise PBM does not even con-verge within 1200 epochs. Thus, instead of a trade-off, these results show that it actually improves accuracy. We speculate that this improvement comes from differences in initialization: Pointwise PBM s are initialized with specific position bias parameters or mod-els that gives pointwise relevance predictions; in our experiments, default logit-initialization results in initial values around 0.5 for all parameters. Conversely, the epistemic PBM can be initialized with an almost-uniform distribution over the possible parameter values; in our experiments, this happens because 𝜈 values start around 1. As a result, our epistemic PBM starts from a neutral initial position, and furthermore, by predicting distributions it can keep multiple possible parameter values in consideration. Possibly, this could also allow it to be less prone to get stuck in local optima than the point-wise PBM . This matches [ 14 , Chapter 4.2] which stresses the effect of intialization on the convergence of pointwise click models. Regardless of the underlying reason, we answer the second re-search question in the affirmative: Epistemic click models can provide higher log-likelihood than traditional pointwise click models. 
+
+## 7.3 The learned epistemic distributions. 
+
+We continue by asking the third research question: Does our epis-temic PBM appropriately capture epistemic uncertainty? 
+
+Figure 3 displays the predicted distributions for the position bias parameters 𝜃 𝑘 for epistemic PBM s optimized with several methods 
+
+7SIGIR ’26, July 20–24, 2026, Melbourne, VIC, Australia Oscar Rolando Ramirez Milian and Harrie Oosterhuis                                     
+
+> Average of the 𝜇 𝑞,𝑑 s.s.d of the 𝜇 𝑞,𝑑 Average of the 𝜈 𝑞,𝑑 s.s.d of the 𝜈 𝑞,𝑑
+> Istella-S 0.40
+> 0.48
+> 0.56
+> 0.64
+> 0.72
+> 0.80
+> 0.88
+> 0.96 0.00
+> 0.04
+> 0.08
+> 0.12
+> 0.16
+> 0.20
+> 0.24
+> 0.28 3
+> 6
+> 9
+> 12
+> 15
+> 18
+> 21
+> 24
+> 27 0.0
+> 0.4
+> 0.8
+> 1.2
+> 1.6
+> 2.0
+> 2.4
+> 2.8
+> 3.2
+> 3.6MSLR-Web10K 200 400 600 800 1000 1200 1400
+> 0.32
+> 0.40
+> 0.48
+> 0.56
+> 0.64
+> 0.72
+> 0.80
+> 0.88
+> 0.96 200 400 600 800 1000 1200 1400
+> 0.000
+> 0.025
+> 0.050
+> 0.075
+> 0.100
+> 0.125
+> 0.150
+> 0.175
+> 0.200
+> 0.225 200 400 600 800 1000 1200 1400
+> 2
+> 4
+> 6
+> 8
+> 10
+> 12
+> 14
+> 16 200 400 600 800 1000 1200 1400
+> 0.0
+> 0.4
+> 0.8
+> 1.2
+> 1.6
+> 2.0
+> 2.4
+> 2.8
+> 3.2
+> 3.6Pointwise PBM Naive + b.c. Self-norm. Self-norm. + b.c. Self-norm. + cond. Self-norm. + cond. + b.c.
+
+Figure 4: Statistics of the relevance distributions of the epistemic PBM during optimization. X-axis: training epoch; Y-axis: average or sampled standard deviation of the predicted means 𝜇 𝑞,𝑑 and confidences 𝜈 𝑞,𝑑 over all the query-document pairs 𝑞, 𝑑 .
+
+and the predictions of the pointwise PBM s. For interpretability, a Barycenter over the distributions of the 15 runs is also visualized. We see very clearly that naïve optimization does not lead to informative distributions, but extremely flat predicted distributions for all parameters. Self-normalization without conditioning results in more concentrated distributions but they systematically under-estimate all parameter values. In contrast, self-normalization with 
+
+conditioning on position bias leads to distributions concentrated around the ground truth values. Finally, the pointwise estimates systematically underestimate position bias on the first three posi-tions, but are more evenly spread around the correct values on the final two positions. The location of the means of the distributions corresponds to their predictive accuracy, i.e., the methods that re-sult in a higher likelihood (as discussed in Section 7.1) also provide distributions more centered around the true position bias. Additionally, Figure 3 shows that there is a noticeable spread in the values on which the methods converge; for the epistemic PBM sthis seems less of an issue as their distributions still mostly overlap, but this is not applicable to the predictions of the pointwise PBM s. Evaluating the width of the epistemic distributions is not straight-forward, however, it is clear that naïve optimization results in distri-butions that are far too wide, conversely, self-normalization without 
+
+conditioning results in distributions that are too concentrated as the true values get almost no epistemic probability. In contrast, the distributions self-normalization with conditioning are placed around the true values, so give much probability to them, yet, it is unclear how to evaluate their width. Because we know this model has the highest likelihood, it appears that its uncertainty around its position bias parameters provide better estimates than the other epistemic and pointwise PBM s. It also appears to match the spread from the different pointwise PBM estimates. Thus, at most, we can conclude that our epistemic PBM with self-normalization and conditioning appropriately captures uncertainty in its position bias predictions, as far as can be judged from visual inspection .The widths of the epistemic distributions over the relevance parameters are more difficult to analyze, as due to the enormous number of query-document pairs, we cannot visualize them all. Instead, Figure 4 shows the average and the s.s.d. of the distribu-tions’ mean and confidence parameters 𝜇 𝑞,𝑑 and 𝜈 𝑞,𝑑 (see Section 6). We see that the average of 𝜇 𝑞,𝑑 increases substantially during the first training epochs when not conditioning the estimators on po-sition bias, which seem incorrect as high relevance labels are rare in the datasets. Moreover, we see that the 𝜇 𝑞,𝑑 s.s.d. for the naïve estimator is near zero, indicating that the same 𝜇 𝑞,𝑑 is used for all documents; clearly it has failed to learn meaningful parameters. When we consider 𝜈 𝑞,𝑑 we see that the naïve model has extremely low confidence on average, and a near-zero s.s.d.; again indicating that all documents get the same confidence. The self-normalized estimator without baseline corrections continues to increase its average 𝜈 𝑞,𝑑 , resulting in extremely high confidence levels. Self-normalization with conditioning leads to high s.s.d. for both 𝜇 𝑞,𝑑 
+
+and 𝜈 𝑞,𝑑 , indicating it varies the means and confidence parameters over different query-document pairs; the average values appear to take reasonable values for the datasets. Thus, similar to our previous conclusions, we conclude that self-normalization with condition-ing results in plausible relevance distributions of our epistemic PBM ,whereas without these techniques this is not the case. 
+
+Lastly, we answer our third research questions as follows: With self-normalization and conditioning, the epistemic PBM appear to capture appropriate levels of epistemic uncertainty in its predictions over both the position bias and relevance parameters. 
+
+## 7.4 The effect of entropic regularization 
+
+So far we have not applied entropic regularization and only opti-mized log-likelihood. To address this gap, we ask our fourth research question: How does entropic regularization impact epistemic PBM s? 
+
+Figure 5 displays various statistics of epistemic PBM s trained with self-normalization and conditioning under different levels of entropic regularization. Furthermore, Figure 6 displays the position bias distributions under mild and extreme entropy regularization. From Figure 5, we see that 𝜆 ≤ 10 −3 does not lead to meaningful decreases in log-likelihood, but does result in lower average 𝜈 𝑞,𝑑 .Therefore, it appears that the models can have less confidence in their relevance predictions, while still maintaining predictive accuracy. Figure 6 shows us that 𝜆 = 10 −3 affects the means of the position bias distributions, and some distributions are wider (i.e., 
+
+𝜃 1 on MSLR) but most appear very similar to when 𝜆 = 0 (3rd and 7th rows in Figure 3). Thus, it seems the means of the position bias distributions are shifted to account for the lower confidence in the relevance distributions. If we consider more extreme regularization 
+
+> 8
+
+An Epistemic Position-Based Click Model: From Interactions to Epistemic Distributions of Relevance and Bias SIGIR ’26, July 20–24, 2026, Melbourne, VIC, Australia 
+
+Log-Likelihood Average of 𝜇 𝑞,𝑑 s.s.d. of 𝜇 𝑞,𝑑 Average of 𝜈 𝑞,𝑑 s.s.d. of 𝜈 𝑞,𝑑                                                   
+
+> Istella-S −4.50
+> −4.35
+> −4.20
+> −4.05
+> −3.90
+> −3.75
+> ×10 40.36
+> 0.42
+> 0.48
+> 0.54
+> 0.60
+> 0.66 0.04
+> 0.08
+> 0.12
+> 0.16
+> 0.20
+> 0.24 1.2
+> 1.8
+> 2.4
+> 3.0
+> 3.6
+> 4.20.5
+> 1.0
+> 1.5
+> 2.0
+> 2.5
+> 3.0MSLR-Web10k 250 500 750 1000 1250
+> −3.28
+> −3.20
+> −3.12
+> −3.04
+> −2.96
+> −2.88
+> −2.80 ×10 4250 500 750 1000 1250
+> 0.24
+> 0.32
+> 0.40
+> 0.48
+> 0.56 250 500 750 1000 1250
+> 0.025
+> 0.050
+> 0.075
+> 0.100
+> 0.125
+> 0.150 250 500 750 1000 1250
+> 1.5
+> 3.0
+> 4.5
+> 6.0
+> 7.5
+> 9.0250 500 750 1000 1250
+> 0.8
+> 1.6
+> 2.4
+> 3.2
+> 4.0λ= 0 .00 λ= 5 .00 ×10 −5λ= 1 .00 ×10 −4λ= 5 .00 ×10 −4λ= 1 .00 ×10 −3λ= 5 .00 ×10 −3λ= 1 .00 ×10 −2λ= 2 .50 ×10 −1
+
+Figure 5: The effect of regularization on various statistics. X-axis: training epoch; Y-Axis: values of the indicated metrics. 
+
+𝜃 1 𝜃 2 𝜃 3 𝜃 4 𝜃 5                                                  
+
+> Istella-S  𝜆  = 0.001 1.00 1.00 0.50 0.49 0.33 0.32 0.25 0.22 0.20 0.18 𝜆  = 0.25 0.00.20.40.60.81.0
+> 1.00 0.67 0.00.20.40.60.81.0
+> 0.50 0.50 0.00.20.40.60.81.0
+> 0.33 0.46 0.00.20.40.60.81.0
+> 0.25 0.44 0.00.20.40.60.81.0
+> 0.20 0.43
+> MSLR-Web10k
+> 𝜆  = 0.001 1.00 0.88 0.50 0.41 0.33 0.26 0.25 0.20 0.20 0.14 𝜆  = 0.25 0.00.20.40.60.81.0
+> 1.00 0.59 0.00.20.40.60.81.0
+> 0.50 0.47 0.00.20.40.60.81.0
+> 0.33 0.46 0.00.20.40.60.81.0
+> 0.25 0.43 0.00.20.40.60.81.0
+> 0.20 0.41
+
+Figure 6: Position bias distributions obtained with entropy regularization applied with weight 𝜆 = 0.001 and 𝜆 = 0.25 (cf. Figure 3). 
+
+with 𝜆 = 0.25 , we see in Figure 5 that this considerably reduces the likelihood and average 𝜈 𝑞,𝑑, ; correspondingly, Figure 6 shows us that 
+
+𝜆 = 0.25 leads to uninformatively wide position bias distributions. Based on these observations, we answer the fourth research question: Entropy regularization results in epistemic PBM s with less confidence in their predictions, if applied with moderation the resulting models are able to maintain near-optimal likelihood, but extreme regularization leads to unusably unconfident models. 
+
+## 7.5 Downstream task: Ranker evaluation 
+
+Finally, our fifth research question considers the usefulness of our epistemic approach for downstream tasks: Can our epistemic PBM provide appropriate uncertainty distributions for ranker evaluation? 
+
+Our task is to predict the expected number of clicks for different rankers than the one used for the observed click data, thus involving a distribution shift. As rankers, we select three individual features from each dataset: the ones with the highest, the lowest and median true value (i.e., the resulting expected number of clicks). To obtain an epistemic distributions for each of our epistemic PBM s, we sam-ple 2500 parameters from each of them, compute the expected number of clicks conditioned on each sample, and then compute a histogram to approximate the epistemic distributions. We compare with pointwise predictions which are straightforwardly computed from their learned parameter. The results are displayed in Figure 7. We see that most distribu-tions place substantial probability mass around the ground-truth values, but a few distributions seem to be notably misplaced. Simi-larly, the pointwise predictions are also placed around the ground-truth, but are spread out, and thus, many individual pointwise predictions make substantial errors. The spread and errors of the pointwise and epistemic predictions appear comparable, and are likely a result of the distribution shift. Yet, unlike the pointwise pre-dictions, the individual epistemic predictions do provide an insight into their possible error through the width of their distributions. Thus, we affirmatively answer the fifth research question: Epis-temic PBM s provide useful epistemic predictions for downstream ranker evaluation that appear comparable in accuracy with pointwise predictions while also giving useful indications of uncertainty. 
+
+9SIGIR ’26, July 20–24, 2026, Melbourne, VIC, Australia Oscar Rolando Ramirez Milian and Harrie Oosterhuis 
+
+Istella #Feat. 34 Istella #Feat. 172 Istella #Feat. 195 0 0.5 10 0.5 10 0.5 1
+
+MSLR #Feat. 14 MSLR #Feat. 128 MSLR #Feat. 133 0 0.5 10 0.5 10 0.5 1
+
+Figure 7: Pointwise and epistemic predictions of the expected number of clicks when using different single features as rankers. Vertical lines indicate the ground-truth value. 
+
+## 8 Conclusion 
+
+We introduced epistemic PBM – the first contextual epistemic click model. Instead of directly learning PBM parameters, our model learns distributions over their possible values. We optimize with an evidential deep learning approach that maximizes likelihood, for which we introduced several novel gradient estimation tech-niques: self-normalization and conditioning on position bias . Our experimental results show that without these techniques, optimiza-tion completely fails; whereas with them applied, optimization finds accurate distributions that capture uncertainty appropriately. Surprisingly, our epistemic PBM achieves considerably higher like-lihoods than the traditional pointwise PBM ; an improvement we attribute to the epistemic PBM ’s capacity for neutral initialization, enabled by the additional confidence parameter. In other words, the epistemic PBM allows training to start from uninformative dis-tributions; whereas the pointwise method has no such flexibility and must confidently commit to a random initial estimate, which is almost surely incorrect. This difference is coherently reflected in the initial likelihood: when a prediction is incorrect, low confi-dence is preferable to a high confidence. Our work has limitations: Evidential deep learning has known flaws regarding its theoretical points of convergence [ 6, 26 ]. Furthermore, there is no objective evaluation of epistemic distributions; thus, whilst we did identify some serious failures of baselines, we are limited in assessing the correctness of the shapes of our epistemic distributions. Never-theless, we consider this first contextual epistemic click model an important contribution to the field and the start of a new direction of epistemic click modeling research. 
+
+## Acknowledgments 
+
+We want to thank the Institute for Computing and Information Sci-ences (iCIS) at the Radboud University Nijmegen with which Oscar and Harrie were affiliated while doing the research and writing of this work, in particular, we thank Arjen P. de Vries for his feedback on the manuscript. This work is supported by the Dutch Research Council (NWO), grant number VI.Veni.222.269 and used the Dutch national e-infrastructure with the support of the SURF Cooperative using grant no. EINF-11296. 
+
+## References 
+
+[1] Aman Agarwal, Xuanhui Wang, Cheng Li, Michael Bendersky, and Marc Najork. 2019. Addressing trust bias for unbiased learning-to-rank. In The World Wide Web Conference . 4–14. [2] Qingyao Ai, Keping Bi, Cheng Luo, Jiafeng Guo, and W Bruce Croft. 2018. Unbi-ased learning to rank with unbiased propensity estimation. In The 41st interna-tional ACM SIGIR conference on research & development in information retrieval .385–394. [3] Qingyao Ai, Tao Yang, Huazheng Wang, and Jiaxin Mao. 2021. Unbiased learning to rank: online or offline? ACM Transactions on Information Systems (TOIS) 39, 2 (2021), 1–29. [4] Réka Albert, Hawoong Jeong, and Albert-László Barabási. 1999. Diameter of the world-wide web. nature 401, 6749 (1999), 130–131. [5] Alexander Amini, Wilko Schwarting, Ava Soleimany, and Daniela Rus. 2020. Deep evidential regression. Advances in neural information processing systems 33 (2020), 14927–14937. [6] Viktor Bengs, Eyke Hüllermeier, and Willem Waegeman. 2022. Pitfalls of epis-temic uncertainty quantification through loss minimisation. Advances in Neural Information Processing Systems 35 (2022), 29205–29216. [7] Patrick Billingsley. 2013. Convergence of probability measures . John Wiley & Sons. [8] Pierre Blanchard, Desmond J Higham, and Nicholas J Higham. 2021. Accurately computing the log-sum-exp and softmax functions. IMA J. Numer. Anal. 41, 4 (2021), 2311–2330. [9] Alexey Borisov, Ilya Markov, Maarten de Rijke, and Pavel Serdyukov. 2016. A Neu-ral Click Model for Web Search. In Proceedings of the 25th International Conference on World Wide Web (Montréal, Québec, Canada) (WWW ’16) . International World Wide Web Conferences Steering Committee, Republic and Canton of Geneva, CHE, 531–541. doi:10.1145/2872427.2883033 [10] Alexey Borisov, Martijn Wardenaar, Ilya Markov, and Maarten de Rijke. 2018. A Click Sequence Model for Web Search. In The 41st International ACM SIGIR Conference on Research & Development in Information Retrieval (Ann Arbor, MI, USA) (SIGIR ’18) . Association for Computing Machinery, New York, NY, USA, 45–54. doi:10.1145/3209978.3210004 [11] Gabriel Cardoso, Sergey Samsonov, Achille Thin, Eric Moulines, and Jimmy Olsson. 2022. BR-SNIS: Bias Reduced Self-Normalized Importance Sampling. In Advances in Neural Information Processing Systems , S. Koyejo, S. Mohamed, A. Agarwal, D. Belgrave, K. Cho, and A. Oh (Eds.), Vol. 35. Curran Asso-ciates, Inc., 716–729. https://proceedings.neurips.cc/paper_files/paper/2022/ file/04bd683d5428d91c5fbb5a7d2c27064d-Paper-Conference.pdf [12] Ye Chen and Tak W Yan. 2012. Position-normalized click prediction in search advertising. In Proceedings of the 18th ACM SIGKDD international conference on Knowledge discovery and data mining . 795–803. [13] Flavio Chierichetti, Ravi Kumar, and Prabhakar Raghavan. 2011. Optimizing two-dimensional search results presentation. In Proceedings of the Fourth ACM International Conference on Web Search and Data Mining (Hong Kong, China) 
+
+(WSDM ’11) . Association for Computing Machinery, New York, NY, USA, 257–266. doi:10.1145/1935826.1935873 [14] Aleksandr Chuklin, Ilya Markov, and Maarten De Rijke. 2022. Click models for web search . Springer Nature. [15] Nick Craswell, Onno Zoeter, Michael Taylor, and Bill Ramsey. 2008. An ex-perimental comparison of click position-bias models. In Proceedings of the 2008 international conference on web search and data mining . 87–94. [16] Domenico Dato, Claudio Lucchese, Franco Maria Nardini, Salvatore Orlando, Raffaele Perego, Nicola Tonellotto, and Rossano Venturini. 2016. Fast Ranking with Additive Ensembles of Oblivious and Non-Oblivious Regression Trees. ACM Transactions on Information Systems 35, 2, Article 15 (2016), 31 pages. doi:10. 1145/2987380 [17] Georges E. Dupret and Benjamin Piwowarski. 2008. A user browsing model to predict search engine click data from past observations.. In Proceedings of the 31st Annual International ACM SIGIR Conference on Research and Development in Infor-mation Retrieval (Singapore, Singapore) (SIGIR ’08) . Association for Computing Machinery, New York, NY, USA, 331–338. doi:10.1145/1390334.1390392 [18] Ruocheng Guo, Xiaoting Zhao, Adam Henderson, Liangjie Hong, and Huan Liu. 2020. Debiasing Grid-based Product Search in E-commerce. In Proceedings of the 26th ACM SIGKDD International Conference on Knowledge Discovery & Data Mining (Virtual Event, CA, USA) (KDD ’20) . Association for Computing Machinery, New York, NY, USA, 2852–2860. doi:10.1145/3394486.3403336 [19] Shashank Gupta, Philipp Hager, Jin Huang, Ali Vardasbi, and Harrie Oosterhuis. 2024. Unbiased Learning to Rank: On Recent Advances and Practical Applications. In Proceedings of the 17th ACM International Conference on Web Search and Data Mining (Merida, Mexico) (WSDM ’24) . Association for Computing Machinery, New York, NY, USA, 1118–1121. doi:10.1145/3616855.3636451 [20] Philipp Hager, Maarten de Rijke, and Onno Zoeter. 2023. Contrasting Neural Click Models and Pointwise IPS Rankers. In Advances in Information Retrieval ,Jaap Kamps, Lorraine Goeuriot, Fabio Crestani, Maria Maistro, Hideo Joho, Brian Davis, Cathal Gurrin, Udo Kruschwitz, and Annalina Caputo (Eds.). Springer Nature Switzerland, Cham, 409–425. 10 An Epistemic Position-Based Click Model: From Interactions to Epistemic Distributions of Relevance and Bias SIGIR ’26, July 20–24, 2026, Melbourne, VIC, Australia 
+
+[21] Philipp Hager, Onno Zoeter, and Maarten de Rijke. 2025. Unidentified and Confounded? Understanding Two-Tower Models for Unbiased Learning to Rank. In Proceedings of the 2025 International ACM SIGIR Conference on Innovative Concepts and Theories in Information Retrieval (ICTIR) (Padua, Italy) (ICTIR ’25) .Association for Computing Machinery, New York, NY, USA, 347–357. doi:10. 1145/3731120.3744604 [22] John Hammersley. 2013. Monte Carlo methods . Springer Science & Business Media. [23] Eyke Hüllermeier and Willem Waegeman. 2021. Aleatoric and epistemic uncer-tainty in machine learning: An introduction to concepts and methods. Machine learning 110, 3 (2021), 457–506. [24] Kalervo Järvelin and Jaana Kekäläinen. 2002. Cumulated gain-based evaluation of IR techniques. ACM Transactions on Information Systems (TOIS) 20, 4 (2002), 422–446. [25] Thorsten Joachims, Adith Swaminathan, and Tobias Schnabel. 2017. Unbiased learning-to-rank with biased feedback. In Proceedings of the tenth ACM interna-tional conference on web search and data mining . 781–789. [26] Mira Juergens, Nis Meinert, Viktor Bengs, Eyke Hüllermeier, and Willem Waege-man. 2024. Is Epistemic Uncertainty Faithfully Represented by Evidential Deep Learning Methods?. In Proceedings of the 41st International Conference on Machine Learning (Proceedings of Machine Learning Research, Vol. 235) , Rus-lan Salakhutdinov, Zico Kolter, Katherine Heller, Adrian Weller, Nuria Oliver, Jonathan Scarlett, and Felix Berkenkamp (Eds.). PMLR, 22624–22642. https: //proceedings.mlr.press/v235/juergens24a.html [27] Jingwei Kang, Maarten de Rijke, Santiago de Leon-Martinez, and Harrie Ooster-huis. 2025. Rethinking Click Models in Light of Carousel Interfaces: Theory-Based Categorization and Design of Click Models. In Proceedings of the 2025 Interna-tional ACM SIGIR Conference on Innovative Concepts and Theories in Information Retrieval (ICTIR) (Padua, Italy) (ICTIR ’25) . Association for Computing Machinery, New York, NY, USA, 44–55. doi:10.1145/3731120.3744585 [28] Armen Der Kiureghian and Ove Ditlevsen. 2009. Aleatory or epistemic? Does it matter? Structural Safety 31, 2 (2009), 105–112. doi:10.1016/j.strusafe.2008.06.020 Risk Acceptance and Risk Communication. [29] Haruka Kiyohara, Yuta Saito, Tatsuya Matsuhiro, Yusuke Narita, Nobuyuki Shimizu, and Yasuo Yamamoto. 2022. Doubly Robust Off-Policy Evaluation for Ranking Policies under the Cascade Behavior Model. In Proceedings of the Fifteenth ACM International Conference on Web Search and Data Mining (Virtual Event, AZ, USA) (WSDM ’22) . Association for Computing Machinery, New York, NY, USA, 487–497. doi:10.1145/3488560.3498380 [30] Norman Knyazev and Harrie Oosterhuis. 2023. A Lightweight Method for Model-ing Confidence in Recommendations with Learned Beta Distributions. In Proceed-ings of the 17th ACM Conference on Recommender Systems (Singapore, Singapore) 
+
+(RecSys ’23) . Association for Computing Machinery, New York, NY, USA, 306–317. doi:10.1145/3604915.3608788 [31] Wouter Kool, Herke van Hoof, and Max Welling. 2019. Buy 4 REINFORCE samples, get a baseline for free! (2019). [32] Chao Liu, Fan Guo, and Christos Faloutsos. 2009. Bbm: bayesian browsing model from petabyte-scale data. In Proceedings of the 15th ACM SIGKDD international conference on Knowledge discovery and data mining . 537–546. [33] Jianping Liu, Yingfei Wang, Jian Wang, Meng Wang, and Xintao Chu. 2024. Probabilistic graph model and neural network perspective of click models for web search. Knowledge and Information Systems 66, 10 (2024), 5829–5873. doi:10. 1007/s10115-024-02145-z [34] Tie-Yan Liu. 2009. Learning to Rank for Information Retrieval. Foundations and Trends ® in Information Retrieval 3, 3 (2009), 225–331. doi:10.1561/1500000016 [35] Weiru Liu. 2001. Propositional, Probabilistic and Evidential Reasoning: Integrating numerical and symbolic approaches . Vol. 77. Springer Science & Business Media. [36] Linyuan Lü, Matúš Medo, Chi Ho Yeung, Yi-Cheng Zhang, Zi-Ke Zhang, and Tao Zhou. 2012. Recommender systems. Physics Reports 519, 1 (2012), 1–49. doi:10.1016/j.physrep.2012.02.006 Recommender Systems. [37] Andrey Malinin, Sergey Chervontsev, Ivan Provilkov, and Mark Gales. 2020. Regression prior networks. arXiv preprint arXiv:2006.11590 (2020). [38] Andrey Malinin and Mark Gales. 2018. Predictive Uncertainty Estimation via Prior Networks. In Advances in Neural Information Processing Systems , S. Bengio, H. Wallach, H. Larochelle, K. Grauman, N. Cesa-Bianchi, and R. Garnett (Eds.), Vol. 31. Curran Associates, Inc. https://proceedings.neurips.cc/paper_files/paper/ 2018/file/3ea2db50e62ceefceaf70a9d9a56a6f4-Paper.pdf [39] Andrey Malinin and Mark Gales. 2019. Reverse kl-divergence training of prior networks: Improved uncertainty and adversarial robustness. Advances in neural information processing systems 32 (2019). [40] Nis Meinert, Jakob Gawlikowski, and Alexander Lavin. 2023. The unreasonable effectiveness of deep evidential regression. In Proceedings of the Thirty-Seventh AAAI Conference on Artificial Intelligence and Thirty-Fifth Conference on Innovative Applications of Artificial Intelligence and Thirteenth Symposium on Educational Advances in Artificial Intelligence (AAAI’23/IAAI’23/EAAI’23) . AAAI Press, Article 1027, 9 pages. doi:10.1609/aaai.v37i8.26096 [41] Harrie Oosterhuis. 2020. Learning from User Interactions with Rankings: A Uni-fication of the Field. Ph. D. Dissertation. Informatics Institute, University of Amsterdam. https://harrieo.github.io//publication/2021-phd-thesis [42] Harrie Oosterhuis. 2021. Computationally Efficient Optimization of Plackett-Luce Ranking Models for Relevance and Fairness. In Proceedings of the 44th Interna-tional ACM SIGIR Conference on Research and Development in Information Retrieval 
+
+(Virtual Event, Canada) (SIGIR ’21) . Association for Computing Machinery, New York, NY, USA, 1023–1032. doi:10.1145/3404835.3462830 [43] Harrie Oosterhuis. 2022. Reaching the End of Unbiasedness: Uncovering Implicit Limitations of Click-Based Learning to Rank. In Proceedings of the 2022 ACM SIGIR International Conference on Theory of Information Retrieval (Madrid, Spain) 
+
+(ICTIR ’22) . Association for Computing Machinery, New York, NY, USA, 264–274. doi:10.1145/3539813.3545137 [44] Harrie Oosterhuis. 2023. Doubly robust estimation for correcting position bias in click feedback for unbiased learning to rank. ACM Transactions on Information Systems 41, 3 (2023), 1–33. [45] Harrie Oosterhuis, Rolf Jagerman, and Maarten de Rijke. 2020. Unbiased learning to rank: counterfactual and online approaches. In Companion Proceedings of the Web Conference 2020 . 299–300. [46] Zohreh Ovaisi, Ragib Ahsan, Yifan Zhang, Kathryn Vasilaky, and Elena Zheleva. 2020. Correcting for selection bias in learning-to-rank systems. In Proceedings of The Web Conference 2020 . 1863–1873. [47] Deep Shankar Pandey and Qi Yu. 2023. Evidential conditional neural processes. In 
+
+Proceedings of the AAAI Conference on Artificial Intelligence , Vol. 37. 9389–9397. [48] Tao Qin and Tie-Yan Liu. 2013. Introducing LETOR 4.0 Datasets. CoRR 
+
+abs/1306.2597 (2013). http://arxiv.org/abs/1306.2597 [49] Behnam Rahdari, Peter Brusilovsky, and Branislav Kveton. 2024. Towards Simulation-Based Evaluation of Recommender Systems with Carousel Inter-faces. ACM Trans. Recomm. Syst. 2, 1, Article 9 (March 2024), 25 pages. doi:10.1145/3643709 [50] Behnam Rahdari, Branislav Kveton, and Peter Brusilovsky. 2022. The Magic of Carousels: Single vs. Multi-List Recommender Systems. In Proceedings of the 33rd ACM Conference on Hypertext and Social Media (Barcelona, Spain) (HT ’22) .Association for Computing Machinery, New York, NY, USA, 166–174. doi:10. 1145/3511095.3531278 [51] Matthew Richardson, Ewa Dominowska, and Robert Ragno. 2007. Predicting clicks: estimating the click-through rate for new ads. In Proceedings of the 16th International Conference on World Wide Web (Banff, Alberta, Canada) (WWW ’07) . Association for Computing Machinery, New York, NY, USA, 521–530. doi:10. 1145/1242572.1242643 [52] Mark Sanderson, Monica Lestari Paramita, Paul Clough, and Evangelos Kanoulas. 2010. Do user preferences and evaluation measures line up?. In Proceedings of the 33rd international ACM SIGIR conference on Research and development in information retrieval . 555–562. [53] Murat Sensoy, Lance Kaplan, and Melih Kandemir. 2018. Evidential deep learning to quantify classification uncertainty. Advances in neural information processing systems 31 (2018). [54] Ava P Soleimany, Alexander Amini, Samuel Goldman, Daniela Rus, Sangeeta N Bhatia, and Connor W Coley. 2021. Evidential deep learning for guided molecular property prediction and discovery. ACS central science 7, 8 (2021), 1356–1367. [55] Adith Swaminathan and Thorsten Joachims. 2015. The Self-Normalized Estimator for Counterfactual Learning. In Advances in Neural Information Processing Systems ,C. Cortes, N. Lawrence, D. Lee, M. Sugiyama, and R. Garnett (Eds.), Vol. 28. Curran Associates, Inc. https://proceedings.neurips.cc/paper_files/paper/2015/ file/39027dfad5138c9ca0c474d71db915c3-Paper.pdf [56] Ali Vardasbi, Maarten de Rijke, and Ilya Markov. 2020. Cascade Model-based Propensity Estimation for Counterfactual Learning to Rank. In Proceedings of the 43rd International ACM SIGIR Conference on Research and Development in Infor-mation Retrieval (Virtual Event, China) (SIGIR ’20) . Association for Computing Machinery, New York, NY, USA, 2089–2092. doi:10.1145/3397271.3401299 [57] Ali Vardasbi, Harrie Oosterhuis, and Maarten de Rijke. 2020. When Inverse Propensity Scoring does not Work: Affine Corrections for Unbiased Learning to Rank. In Proceedings of the 29th ACM International Conference on Information & Knowledge Management (Virtual Event, Ireland) (CIKM ’20) . Association for Computing Machinery, New York, NY, USA, 1475–1484. doi:10.1145/3340531. 3412031 [58] Xuanhui Wang, Michael Bendersky, Donald Metzler, and Marc Najork. 2016. Learning to Rank with Selection Bias in Personal Search. In Proceedings of the 39th International ACM SIGIR conference on Research and Development in Information Retrieval . ACM, 115–124. [59] Xuanhui Wang, Nadav Golbandi, Michael Bendersky, Donald Metzler, and Marc Najork. 2018. Position bias estimation for unbiased learning to rank in personal search. In Proceedings of the eleventh ACM international conference on web search and data mining . 610–618. [60] Ronald J Williams. 1992. Simple Statistical Gradient-Following Algorithms for Connectionist Reinforcement Learning. Machine Learning 8, 3-4 (1992), 229–256. [61] Xiaohui Xie, Jiaxin Mao, Maarten de Rijke, Ruizhe Zhang, Min Zhang, and Shaop-ing Ma. 2018. Constructing an Interaction Behavior Model for Web Image Search. In The 41st International ACM SIGIR Conference on Research & Development in In-formation Retrieval (Ann Arbor, MI, USA) (SIGIR ’18) . Association for Computing 11 SIGIR ’26, July 20–24, 2026, Melbourne, VIC, Australia Oscar Rolando Ramirez Milian and Harrie Oosterhuis 
+
+Machinery, New York, NY, USA, 425–434. doi:10.1145/3209978.3209990 [62] Le Yan, Zhen Qin, Honglei Zhuang, Xuanhui Wang, Michael Bendersky, and Marc Najork. 2022. Revisiting Two-tower Models for Unbiased Learning to Rank. In Proceedings of the 45th International ACM SIGIR Conference on Research and Development in Information Retrieval (Madrid, Spain) (SIGIR ’22) . Association for Computing Machinery, New York, NY, USA, 2410–2414. doi:10.1145/3477495. 3531837 [63] Hai-Tao Yu, Adam Jatowt, Roi Blanco, Joemon M. Jose, and Ke Zhou. 2019. A Rank-biased Neural Network Model for Click Modeling. In Proceedings of the 2019 Conference on Human Information Interaction and Retrieval (Glasgow, Scotland UK) (CHIIR ’19) . Association for Computing Machinery, New York, NY, USA, 183–191. doi:10.1145/3295750.3298920 [64] Honglei Zhuang, Zhen Qin, Xuanhui Wang, Michael Bendersky, Xinyu Qian, Po Hu, and Dan Chary Chen. 2021. Cross-Positional Attention for Debiasing Clicks. In Proceedings of the Web Conference 2021 (Ljubljana, Slovenia) (WWW ’21) . Association for Computing Machinery, New York, NY, USA, 788–797. doi:10. 1145/3442381.3450098 12
