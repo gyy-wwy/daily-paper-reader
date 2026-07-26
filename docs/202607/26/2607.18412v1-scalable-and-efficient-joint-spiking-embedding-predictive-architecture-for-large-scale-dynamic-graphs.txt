@@ -1,0 +1,628 @@
+Title: Scalable and Efficient Joint Spiking Embedding Predictive Architecture for Large-Scale Dynamic Graphs
+
+URL Source: https://arxiv.org/pdf/2607.18412v1
+
+Published Time: Wed, 22 Jul 2026 00:07:09 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# Scalable and Efficient Joint Spiking Embedding Predictive Architecture for Large-Scale Dynamic Graphs 
+
+# Huizhe Zhang 
+
+Sun Yat-sen University Guangzhou, China zhanghzh33@mail2.sysu.edu.cn 
+
+# Yuchang Zhu 
+
+Sun Yat-sen University Guangzhou, China zhuych27@mail2.sysu.edu.cn 
+
+# Huazhen Zhong 
+
+Sun Yat-sen University Guangzhou, China zhonghzh9@mail2.sysu.edu.cn 
+
+# Liang Chen ∗
+
+Sun Yat-sen University Guangzhou, China chenliang6@mail.sysu.edu.cn 
+
+# Zibin Zheng 
+
+Sun Yat-sen University Zhuhai, China zhzibin@mail.sysu.edu.cn 
+
+## Abstract 
+
+Dynamic graph learning aims to capture evolving structural and semantic patterns in real-world systems, such as fraud detection and recommender systems. Due to the scarcity of labeled data in real-world dynamic graphs, recent studies have introduced genera-tive or contrastive paradigms (e.g., masked graph autoencoders or graph contrastive learning) to generate task-agnostic graph embed-dings. However, these methods typically rely on complex edge-level reconstruction objectives and tailored graph augmentation strate-gies. It incurs substantial computational overhead when scaling to large-scale dynamic graphs. In this paper, we propose SG-JEPA ,a joint spiking embedding predictive architecture for large-scale dynamic graphs. In contrast to existing self-supervised methods, SG-JEPA partitions nodes into context and target sets along the temporal dimension to learn embeddings that are predictive of each other via additional spatial-temporal information. Further-more, through encoding sequential inputs into coarse-to-fine spike count embeddings, spiking neurons enable SG-JEPA to adapt to the varying computational constraints of downstream tasks. Extensive experiments demonstrate that SG-JEPA achieves competitive or even superior performance over discriminative baselines on node classification, while effectively scaling to the dynamic graph with 13 million edges. SG-JEPA avoids the complex machinery (negative sampling, graph augmentations, edge-level reconstruction, etc.), resulting in superior training efficiency and memory scalability compared with prior self-supervised dynamic graph baselines. 
+
+## CCS Concepts 
+
+• Computing methodologies → Learning latent representa-tions . 
+
+> ∗Corresponding author. Permission to make digital or hard copies of all or part of this work for personal or classroom use is granted without fee provided that copies are not made or distributed for profit or commercial advantage and that copies bear this notice and the full citation on the first page. Copyrights for components of this work owned by others than the author(s) must be honored. Abstracting with credit is permitted. To copy otherwise, or republish, to post on servers or to redistribute to lists, requires prior specific permission and/or a fee. Request permissions from permissions@acm.org.
+> Conference acronym ’XX, Woodstock, NY
+> ©2018 Copyright held by the owner/author(s). Publication rights licensed to ACM. ACM ISBN 978-1-4503-XXXX-X/2018/06 https://doi.org/XXXXXXX.XXXXXXX
+
+## Keywords 
+
+Dynamic Graphs, Graph Neural Networks, Self-Supervised, Spiking Neural Networks 
+
+ACM Reference Format: 
+
+Huizhe Zhang, Yuchang Zhu, Huazhen Zhong, Liang Chen, and Zibin Zheng. 2018. Scalable and Efficient Joint Spiking Embedding Predictive Architecture for Large-Scale Dynamic Graphs. In Proceedings of Make sure to enter the correct conference title from your rights confirmation email (Conference acronym ’XX). ACM, New York, NY, USA, 10 pages. https: //doi.org/XXXXXXX.XXXXXXX 
+
+## 1 Introduction 
+
+Graphs are a fundamental data structure for modeling complex relational systems, ranging from social interactions to traffic sys-tems. In many real-world scenarios, some systems evolving over time can be modeled as dynamic graphs that encode both structural and temporal dependencies. To capture such evolving patterns, Dy-namic Graph Neural Networks (DGNNs) are proposed to integrate graph representation learning with temporal modeling, which have achieved strong performance across tasks such as link prediction and node classification [ 15 , 31 ]. Different from vanilla static GNNs, DGNNs continuously update node representations by incorporating temporal information from evolving interactions or graph snap-shots [ 25 , 43 , 47 ]. However, most DGNNs tailored for supervised or semi-supervised settings rely heavily on labeled data, which is often scarce or expensive to obtain in real-world applications. This limitation motivates the exploration of self-supervised paradigms for dynamic graph representation learning. Recent efforts attempt to alleviate label dependency by introducing contrastive or genera-tive objectives for dynamic graphs. Contrastive methods construct multiple graph views through structural perturbations or temporal subgraph sampling, and then maximize agreement between rep-resentations of positive pairs while repelling negatives [ 2, 9, 22 ]. Although effective, such approaches typically rely on carefully de-signed graph augmentations and negative sampling strategies. As shown in Figure 1, it introduces substantial computational overhead and inductive biases. Inspired by masked autoencoders, generative methods tend to reconstruct masked edges or temporal signals from partial observations [ 21 ]. While they avoid explicit negative sam-pling, reconstruction-based objectives often emphasize low-level structural fidelity and incur computational cost when scaling to large dynamic graphs. More importantly, the choice of effective arXiv:2607.18412v1 [cs.LG] 20 Jul 2026 Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Huizhe Zhang, Yuchang Zhu, Huazhen Zhong, Liang Chen, and Zibin Zheng (a) Contrastive Architecture    
+
+> 𝐀 1
+> 𝐀 2
+> 𝐀 3
+> Encoder  𝐀 𝐀
+> Encoder  𝐀 𝐀
+> Graph
+> Augmentation
+> Encoder  𝐀 𝐀
+> 𝐀 𝐀 1
+> 𝐀 𝐀 2
+> 𝐀 𝐀 3
+> 𝐀 (ℎ𝐀 ,ℎ𝐀 )
+> ℎ1
+> ℎ2
+> ℎ3
+> ℎ𝐀 1
+> ℎ𝐀 2
+> ℎ𝐀 3
+> (b) Generative Architecture
+> 𝐀 1
+> 𝐀 2
+> 𝐀 3
+> Encoder  𝐀 𝐀
+> Decoder  𝐀 𝐀
+> 𝐀 (𝐀 ,𝐀 )
+> 𝐀 1
+> 𝐀 2
+> 𝐀 3
+> 𝐀 𝐀 1
+> 𝐀 𝐀 2
+> 𝐀 𝐀 3
+> 𝐀 𝐀 1
+> 𝐀 𝐀 2
+> 𝐀 𝐀 3
+> 𝐀 1
+> 𝐀 𝐀 1
+> (c) Joint-Embedding
+> Predictive Architecture
+> ...
+> Encoder
+> 𝐀 𝐀
+> Encoder
+> 𝐀 𝐀
+> ℎ1
+> ℎ𝐀 1
+> 𝐀 (ℎ𝐀 ,ℎ𝐀 )
+> Predictor
+> 𝐀 𝐀
+> z
+
+# 𝐀 
+
+Figure 1: Illustration of self-supervised learning frameworks for DGNNs. (a) Contrastive-based methods construct multiple augmented temporal graph views and align representations across different views via contrastive objectives, which rely on well-designed graph augmentation strategies. (b) Generative-based methods learn representations by reconstructing masked edges or temporal signals through decoder networks. They often incur high computational and memory overhead on large-scale dynamic graphs. (c) Joint-embedding predictive architecture models temporal evolution by predicting target node representations from historical context representations directly in embedding space. 
+
+augmentations (e.g., edge modification or node feature masking) is often task-dependent and requires careful manual selection, which limits adaptability and scalability in real-world dynamic graphs. Joint-Embedding Predictive Architecture (JEPA), as an emerging alternative, was recently proposed in computer vision as a non-generative framework for learning semantic representations [ 4–6 ]. Instead of reconstructing raw inputs or enforcing invariance across augmented views, JEPA learns representations that are predictive of each other when conditioned on additional latent information. By performing prediction directly in representation space, JEPA avoids pixel-level reconstruction and reduces reliance on handcrafted aug-mentations, leading to improved scalability and semantic abstrac-tion. Although JEPA has demonstrated strong performance in image modeling, its potential in dynamic graph learning remains largely underexplored. We believe that the predictive learning principle of JEPA naturally aligns with the temporal evolution in dynamic graphs, where representations at different time steps should be mutually predictive under spatio-temporal conditioning. However, directly extending it to dynamic graph representation learning is non-trivial.We identify two key challenges in applying JEPA to dynamic graphs. First, it remains unclear how to construct effective context–target partitions on evolving graph structures, where node neighborhoods and temporal dependencies continuously change. Second, JEPA critically depends on an appropriate encoder to model spatio-temporal dynamics on dynamic graphs. Most existing dy-namic graph neural networks are constrained by limited scalability. For example, recurrent designs require maintaining dense hidden states for each node over time, which leads to substantial memory and computational overhead, making them impractical for large-scale dynamic graphs. To address these challenges, we propose SG-JEPA , a Spiking Joint-Embedding Predictive Architecture for large-scale dynamic graph representation learning. Instead of reconstructing edges or enforcing invariance across augmented views, SG-JEPA formu-lates dynamic graphs as a temporal prediction problem by learn-ing to predict future node representations from historical context representations in embedding space. Specifically, SG-JEPA parti-tions nodes along the temporal dimension into context and tar-get sets, and learns representations that are mutually predictive under spatio-temporal conditioning. SG-JEPA further employs a time-aware spiking encoder to efficiently capture spatio-temporal evolution. This design enables scalable predictive learning on large dynamic graphs while avoiding the computational bottlenecks of conventional dynamic representation learning methods. Our con-tributions are summarized as follows: 
+
+• We are the first to introduce JEPA into dynamic graph repre-sentation learning. We propose a temporal context–target formulation that predicts future node representations from historical context representations in embedding space. 
+
+• We develop a spiking time-aware predictive module that en-codes dynamic graph events into coarse-to-fine spike-count embeddings, enabling adaptive and resource-efficient com-putation for downstream tasks. 
+
+• Extensive experiments demonstrate that SG-JEPA achieves competitive or superior performance compared to supervised or semi-supervised baselines on node classification tasks, while significantly improving training efficiency. Scalable and Efficient Joint Spiking Embedding Predictive Architecture for Large-Scale Dynamic Graphs Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+## 2 Related Work 2.1 Dynamic GNNs 
+
+Dynamic Graph Neural Networks (DGNNs) extend static graph representation learning to evolving relational data by modeling both structural dependencies and temporal dynamics. Existing dy-namic graph models can be broadly categorized into Discrete-Time Dynamic Graphs (DTDG) and Continuous-Time Dynamic Graphs (CTDG). Discrete-time methods represent dynamic graphs as se-quences of snapshots and apply recurrent or attention-based mod-ules to capture temporal evolution across snapshots [ 8 , 30 , 45 ]. For example, VGRNN [ 19 ] extends variational graph autoencoders to dynamic graphs by integrating recurrent neural networks to model temporal dependencies, learning evolving node representa-tions through probabilistic latent variables. Continuous-time meth-ods instead treat interactions as time-stamped events and update node representations through event-driven mechanisms or memory modules [ 23 , 29 , 43 ]. Wang et al. [ 34 ] propose Causal Anonymous Walks to inductively represent temporal networks by extracting anonymized temporal random walks, which enables efficient and generalizable link prediction. Recent works have explored self-supervised paradigms for dynamic graphs. Gao et al. [ 17 ] extend masked autoencoders with a temporally aware edge-masking strat-egy and a globally enhanced decoder to jointly capture evolving be-haviors and topological structures in dynamic graphs. DDGCL [ 33 ]proposes the first self-supervised contrastive learning framework for dynamic graphs through a time-dependent similarity function and a debiased GAN-style contrastive loss. Existing self-supervised dynamic graph methods mainly rely on contrastive or generative objectives with graph augmentations or reconstruction. In contrast, we explore a predictive learning paradigm that models temporal dependencies via latent-space representation prediction. 
+
+## 2.2 Spiking Neural Networks 
+
+Spiking Neural Networks (SNNs) have been widely studied as a biologically inspired and energy-efficient alternative to conven-tional artificial neural networks. SNNs operate via discrete spike events, where information is encoded in spike timing and firing patterns [ 12 ]. Building upon SNNs, a line of recent studies has explored spiking graph neural networks (SGNNs) to extend spik-ing computation to graph-structured data. Extensive experiments demonstrate their effectiveness in capturing temporal dependencies and improving scalability on dynamic graphs [ 32 , 44 , 46 ]. Yao et al. [ 40 ] introduce a multi-dimensional attention mechanism for SNNs that modulates membrane potentials across temporal channels and spatial dimensions, which effectively narrows the performance gap between SNNs and ANNs. Dy-SIGN [ 41 ] compensates information loss via cross-layer propagation and reduces memory overhead by extending implicit differentiation to learn the dynamic graph repre-sentations. However, existing works largely integrate SNNs within supervised or contrastive frameworks. The synergy between spik-ing temporal dynamics and predictive representation learning in dynamic graphs remains underexplored, motivating our integration of SNNs within a joint-embedding predictive paradigm. 
+
+## 2.3 Joint Embedding Predictive Architecture 
+
+Joint-Embedding Predictive Architectures (JEPAs) are a class of non-generative self-supervised learning methods that operate directly in embedding space by predicting the representation of a target view from that of a context view rather than reconstructing raw inputs or contrasting augmented pairs [ 5 ]. JEPA-style frameworks have shown improved scalability and semantic abstraction compared to generative or contrastive objectives [ 4, 27 , 38 ]. For example, VL-JEPA [ 7] is a vision–language model that replaces autoregressive token generation with JEPA-style latent embedding prediction. It achieves more efficient and versatile vision–language understand-ing and generation with fewer parameters and adaptive decoding. Fei et al. [ 14 ] extend the JEPA to audio by predicting masked spec-trogram region embeddings in latent space with time–frequency-aware curriculum masking. C-JEPA [ 1 ] enhances I-JEPA by integrat-ing VICReg-style variance–invariance–covariance regularization to prevent representation collapse and improve mean prediction, resulting in more stable and higher-quality self-supervised visual representations. In this work, we extend the JEPA to dynamic graph representa-tion learning by constructing temporal context–target partitions on evolving graphs and incorporating spiking-based temporal mod-eling, enabling efficient predictive learning under dynamic and large-scale settings. 
+
+## 3 Preliminaries 
+
+Dynamic Graph. We model a dynamic graph as a sequence of discrete-time graph snapshots G = {G 1, G2, . . . , G𝑇 }, where each snapshot G𝑡 = (V 𝑡 , E𝑡 ) represents the graph structure observed at time step 𝑡 . Here, V𝑡 ⊆ N denotes the set of nodes active at time 
+
+𝑡 . Each node 𝑢 ∈ V 𝑡 is associated with a node feature x𝑢,𝑡 ∈ R𝑑 𝑥 .
+
+E𝑡 ⊆ V 𝑡 × V 𝑡 denotes the set of edges at that snapshot. 
+
+Spiking Neural Network. To enable efficient temporal modeling with biologically inspired dynamics, we adopt the Parametric Leaky Integrate-and-Fire neuron (PLIF) as the basic computational unit of SNNs [ 13 ], which is characterized by three core operations: Inte-grate Fire and Reset . At each discrete time step 𝑡 , the membrane potential 𝑉 𝑡 integrates the input current 𝐼 𝑡 , emits a spike when exceeding a threshold, and is reset accordingly: 
+
+𝑉 𝑡 = 𝑉 𝑡 −1 + 11 + exp (− 𝛽 ) (𝐼 𝑡 − ( 𝑉 𝑡 −1 − 𝑉 𝑟𝑒𝑠𝑒𝑡 )) , (1) 
+
+𝑆 𝑡 = Θ(𝑉 𝑡 − 𝑉 th ), (2) 
+
+𝑉 𝑡 = 𝑉 𝑡 (1 − 𝑆 𝑡 ) + 𝑉 reset 𝑆 𝑡 , (3) where 𝑆 𝑡 ∈ { 0, 1} denotes the emitted spike, 𝑉 th is the firing thresh-old, and 𝑉 reset is the reset potential. For notational simplicity, we denote the above membrane potential update and spike generation process by a unified operator SNN (·) , hereafter. Since the spike function Θ(·) is non-differentiable, we adopt surrogate gradient methods to enable gradient-based optimization. Specifically, dur-ing backpropagation, the derivative of Θ(·) is approximated by a smooth surrogate function ˜Θ(·) as follows: 
+
+𝜕𝑆 𝑡 
+
+𝜕𝑉 𝑡 ≈ ˜Θ′ (𝑉 𝑡 − 𝑉 th ), (4) Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Huizhe Zhang, Yuchang Zhu, Huazhen Zhong, Liang Chen, and Zibin Zheng 
+
+which allows SNNs to be trained effectively using standard back-propagation through time while preserving their event-driven spik-ing dynamics. 
+
+## 4 PRESENT WORK: SG-JEPA 
+
+In this section, we present SG-JEPA , an efficient joint spiking em-bedding predictive architecture for scalable dynamic graph repre-sentation learning. SG-JEPA learns spiking-driven embeddings from context nodes across different graph snapshots and predicts the full-precision representations of target nodes. The overall workflow of SG-JEPA is illustrated in Figure 2. It consists of 5 sequential steps: (a) Temporal Partitioning constructs context and target node sets along the temporal dimension; (b) Target Encoding generates full-precision embeddings for target nodes; (c) Context Encod-ing produces coarse-to-fine spike-count embeddings from context nodes via spiking neural networks; (d) Target Representation Prediction , predicts target embeddings by integrating temporal and spatial contextual information; (e) Training Objective , which optimizes the model through multi-step predictive learning. At last, we describe how SG-JEPA is adapted to downstream tasks. 
+
+## 4.1 Temporal Partitioning 
+
+For each node 𝑣 ∈ V 𝑡 , we sample a fixed number of neighbors at each snapshot to construct a local subgraph. Specifically, let N𝑡 (𝑣 )
+
+denote the neighborhood of 𝑣 at time 𝑡 . We sample a fixed-size set of neighbors for each node to obtain a subgraph ˜G𝑡 = ÐV𝑡  
+
+> 𝑣
+
+˜N𝑡 (𝑣 ),where ˜N𝑡 (𝑣 ) is the sampled neighbors. This sampling operator captures the structural evolution along the temporal dimension while maintaining bounded computational cost. To enable predictive representation learning, we further partition the snapshot sequence into non-overlapping temporal windows. Given a window size 𝑤 , the snapshot sequence ˜G is divided into 
+
+𝑘 = ⌊𝑇 /𝑤 ⌋ groups: 
+
+˜G → { ˜G (1) , ˜G (2) , . . . , ˜G (𝑘 ) }, (5) 
+
+˜G (𝑖 ) = { ˜G(𝑖 −1)𝑤 +1, . . . , ˜G𝑖𝑤 }, 𝑖 = 1, . . . , 𝑘, (6) Within each temporal window ˜G (𝑖 ) , the nodes appearing in the latest snapshot ˜G𝑖𝑤 are designated as target nodes. The nodes from the preceding snapshots in the same window are treated as context nodes. Formally, for a node 𝑣 , its target representation is defined at time step 𝑖𝑤 , whereas its context information is aggregated from snapshots { ˜G(𝑖 −1)𝑤 +1, . . . , ˜G𝑖𝑤 −1 }. This temporal partitioning strat-egy enables SG-JEPA to leverage historical node representations within each window to predict future node representations, while ensuring scalability through fixed-size neighborhood sampling. 
+
+## 4.2 Target Encoding 
+
+After temporal partitioning, we generate target node representa-tions using graph neural networks, which serve as the predictive targets in the JEPA framework. Relying solely on node embeddings as context or target variables can make the self-predictive objective overly challenging, particularly for dynamic graphs with evolving structures. To alleviate this issue, we incorporate positional and temporal encodings into each sampled subgraph. The positional encoding helps disambiguate nodes with similar attributes but dif-ferent topological contexts. The temporal encoding enables the model to distinguish node representations across different snap-shots. Moreover, the inner product of temporal encodings can be expressed as the interval between context and target representa-tions. For each target node 𝑣 at snapshot 𝑡 , we integrate the raw node feature x ∈ R𝑑 𝑥 , structural positional encoding p ∈ R𝑑 𝑝 ,and temporal encoding e ∈ R𝑑 𝑡 into a unified temporal-spatial representation via concatenation: 
+
+p𝑣,𝑡 = PE (𝑣 | ˜G𝑡 ), e𝑡 = TE (𝑡 ), (7) 
+
+h𝑣,𝑡 = [x𝑣,𝑡 ∥ p𝑣,𝑡 ∥ e𝑡 ], (8) where ∥ denotes the concatenation operator. PE (·) and TE (·) are positional and temporal encoding functions, respectively. In our implementation, we adopt the random walk positional encoding [ 11 ] and the Sinusoidal Time Encoding [ 43 ] to generate additional temporal-spatial information. The integrated representations are then fed into a graph neural network to generate the target node embeddings. Specifically, the node representation h ∈ R𝑑 at layer ℓ
+
+is updated as 
+
+hℓ𝑣,𝑡 = UPD ℓ  hℓ −1 
+
+> 𝑣,𝑡
+
+, AGG ℓ ({ hℓ −1 
+
+> 𝑢,𝑡
+
+| 𝑢 ∈ ˜N𝑡 (𝑣 )}) , (9) where AGG (·) and UPD (·) are the aggregation and update oper-ations, respectively. Although we adopt GraphSAGE [ 20 ] in our implementation, the choice of the graph neural network is not re-stricted. The output embedding at the last snapshot of the window, 
+
+z𝑣,𝑖𝑤 = h(𝐿 ) 
+
+> 𝑣,𝑖𝑤
+
+, will be taken as the full-precision target representa-tion of node 𝑣 . This target encoding module produces expressive node embeddings that jointly capture structural context and tem-poral evolution, providing the prediction objective for the joint embedding predictive framework. 
+
+## 4.3 Context Encoding 
+
+The context encoder aims to transform sequential full-precision node representations into spiking embeddings that capture tempo-ral dynamics in an efficient and progressive way. In contrast to the target encoder, the context encoder leverages SNNs to generate a sequence of discrete spiking embeddings with increasing temporal resolution. For clarity, we just consider the first window here. For the node 𝑣 within a temporal window, the ordered sequence of full-precision embeddings can be obtained from the target encoder at different snapshots, {z𝑣, 1, z𝑣, 2, . . . , z𝑣,𝑤 −1 }. These embeddings are fed into an SNN to generate spiking counterparts: 
+
+s𝑣,𝑡 = SNN (z𝑣,𝑡 ), 𝑡 = 1, . . . , 𝑤 − 1, (10) where s𝑣,𝑡 ∈ { 0, 1}𝑑 represents the spiking embedding. To construct coarse-to-fine contextual representations, the spike count can be obtained via summing s𝑣,𝑡 over multiple time steps: 
+
+c𝑣,𝑡 =
+
+> 𝑤 −1
+
+∑︁ 
+
+> 𝑡 =1
+
+s𝑣,𝑡 , (11) The spike count sequence {c𝑣, 1, c𝑣, 2, . . . , c𝑣,𝑤 −1 } forms a hierarchy of spiking-driven context embeddings. Early elements capture coarse historical information with limited spike accumulation, while later elements progressively integrate more recent spiking activity. The context embeddings closer to the target snapshot incorporate a richer set of spike events and therefore provide finer-grained tem-poral information. It models temporal dependencies at multiple Scalable and Efficient Joint Spiking Embedding Predictive Architecture for Large-Scale Dynamic Graphs Conference acronym ’XX, June 03–05, 2018, Woodstock, NY GNN 
+
+> Encoder
+
+# 𝐀 
+
+Linear 
+
+𝐀 (𝐀 3, 𝐀 3) Pooling 
+
+... 
+
+... window 
+
+> 1
+> window
+> 2
+
+# ∥
+
+# ∥
+
+# ∥
+
+𝐀 1
+
+𝐀 2
+
+𝐀 3
+
+> 𝐀 1
+> 𝐀 2
+> 𝐀 3
+
+Spiking Neuron 
+
+# ＋
+
+# ＋
+
+> Integrate
+> Integrate
+> Reset
+> Fire
+> Fire
+> Rate
+> Coding
+> 𝐀 1
+> 𝐀 2
+> 1
+> 0
+> 1
+> 1
+> 1
+> 2
+> 𝐀 1
+> 𝐀 2
+
+MLP 𝐀 3
+
+> Context Target
+
+# ∥
+
+> Position
+> Encoding
+> Time
+> Encoding
+> Learnable
+> Token
+
+# ∥ Concat 
+
+> Operation
+
+# ＋ Add 
+
+> Operation
+> Stop
+> Gradient
+
+(a) (b) (c) 
+
+(e) 
+
+(d )
+
+Figure 2: The workflow of the SG-JEPA. 
+
+resolutions, while maintaining the computational efficiency and sparsity benefits of SNNs. 
+
+## 4.4 Target Representation Prediction 
+
+Given the spike count embeddings from the context encoder, the target representation predictor takes the context representations with multiple precision levels to align the full-precision target repre-sentation. Inspired by Matryoshka representation learning [ 24 ], the nested context embeddings with increasing precision progressively refine the prediction of target node representations. Specifically, we introduce a learnable projection matrix W ∈ R(𝑤 −1)𝑑 ×𝑑 to map the concatenation of the 𝑤 nested embeddings into a unified latent space. We define the first 𝑡 nested embeddings as c𝑣, 1: 𝑡 =
+
+[c𝑣, 1 ∥c𝑣, 2 ∥ · · · ∥ c𝑣,𝑡 ]. And the projected representation at precision-level 𝑡 is then computed as 
+
+ˆc𝑣,𝑡 = W⊤ 
+
+> 1: 𝑡𝑑
+
+c𝑣, 1: 𝑡 ∈ R𝑑 . (12) where W1: 𝑡𝑑 ∈ R𝑡𝑑 ×𝑑 denotes the sub-matrix formed by the first 
+
+𝑡𝑑 rows of W. We concatenate the temporal encoding of the target node to inject information. Besides, we introduce 𝑤 − 1 learnable tokens m ∈ R𝑑 which are shared across different time windows to capture global temporal dynamics: 
+
+u𝑣,𝑡 = [ˆc𝑣,𝑡 ∥ e𝑤 ∥ m𝑡 ]. (13) To obtain a single predictive embedding for each target node, we apply a learnable weighted pooling over predictive representations. The latent target representation at the first window is computed as 
+
+ˆz𝑣,𝑤 =
+
+> 𝑤 −1
+
+∑︁ 
+
+> 𝑡 =1
+
+𝛼 𝑡 𝛿 (u𝑣,𝑡 ), (14) where 𝛼 denotes the learnable pooling weights, and 𝛿 (·) is a shared Multi-Layer Perceptron (MLP) to generate latent target representa-tions. 
+
+## 4.5 Loss Function 
+
+For each temporal window, SG-JEPA produces a predicted embed-ding and a corresponding target embedding for every target node. Here, ˆz(𝑖 ) 
+
+> 𝑣
+
+∈ R𝑑 is denoted the predicted embedding of node 𝑣 in the 𝑖 -th temporal window. And z(𝑖 ) 
+
+> 𝑣
+
+∈ R𝑑 be the full-precision tar-get embedding generated from the target encoder. We adopt the InfoNCE objective [ 18 ] to align predicted and target embeddings as follows: 
+
+D ( ˆz(𝑖 ) 
+
+> 𝑣
+
+, z(𝑖 ) 
+
+> 𝑣
+
+) = − log exp 
+
+
+
+sim  ˆz(𝑖 ) 
+
+> 𝑣
+
+, z(𝑖 )
+
+> 𝑣
+
+/𝜏 
+
+Í   
+
+> 𝑢 ∈ V (𝑖 )
+
+exp 
+
+
+
+sim  ˆz(𝑖 ) 
+
+> 𝑣
+
+, z(𝑖 )
+
+> 𝑢
+
+/𝜏 
+
+ , (15) where V (𝑖 ) denotes the set of target nodes in the 𝑖 -th window. 𝜏 is a temperature hyperparameter and sim (· , ·) is a similarity function. We utilize the stop-gradient operation to prevent the representation collapse following the previous study [ 10 ]. The overall training objective is accumulated across all windows: 
+
+L = 1
+
+𝐾 |V (𝑖 ) |
+
+> 𝐾
+
+∑︁ 
+
+> 𝑖 =1
+
+∑︁ 𝑣 ∈ V (𝑖 )
+
+D  ˆz(𝑖 ) 
+
+> 𝑣
+
+, stopgrad (z(𝑖 ) 
+
+> 𝑣
+
+), (16) This objective encourages the predicted embeddings to be close to their corresponding target representations while remaining dis-criminative across different nodes and temporal windows. 
+
+## 4.6 Inference Step 
+
+For downstream tasks, SG-JEPA utilizes the last 𝑤 − 1 snapshots as the context to predict latent representations without requiring addi-tional training. Concretely, we obtain the sequential full-precision embeddings and transform them into spiking count embeddings 
+
+{c𝑣, (𝑘 −1)𝑤 +2, . . . , c𝑣,𝑘𝑤 }. We then obtain the final node representa-tion ˆz𝑣 by learnable pooling as the node representation for down-stream tasks. We employ a lightweight MLP as the task-specific classification head. Notably, SG-JEPA enables flexible precision control for the down-stream tasks. At inference time, SG-JEPA does not strictly require all 𝑤 − 1 context snapshots. Using fewer context snapshots yields lower-precision yet efficient representations, which are suitable for resource-constrained downstream scenarios. Since spiking count Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Huizhe Zhang, Yuchang Zhu, Huazhen Zhong, Liang Chen, and Zibin Zheng 
+
+embeddings and full-precision target embeddings are jointly opti-mized to predict each other during training, this process implicitly performs self-distillation across temporal resolutions. As a result, lower-precision spike count representations still preserve strong expressiveness. 
+
+## 5 Experiments 
+
+Datasets. To evaluate the effectiveness and scalability of the proposed framework, we conduct experiments on three large-scale temporal graph datasets with different scales: DBLP [ 28 ], Tmall 
+
+[28] and Patent [16]. The datasets statistics are listed in Table 1. 
+
+Table 1: Dataset Statistics. Datasets #Nodes #Edges #Classes #Time Steps 
+
+DBLP 28,085 236,894 10 27 Tmall 577,314 4,807,545 5 186 Patent 2,738,012 13,960,811 6 25 
+
+Baselines. We compare SG-JEPA with a diverse set of representa-tive dynamic graph models spanning full-precision, self-supervised and spiking paradigms. Specifically, we include four full-precision supervised or semi-supervised DGNNs, namely JODIE [ 23 ], EvolveGCN [ 30 ], TGAT [ 36 ] and ROLAND [ 42 ]. We introduce two represen-tative self-supervised baselines, CLDG [ 39 ] and MaskDGNN [ 21 ]. There are five spiking DGNN baselines, including GC-SNN [ 37 ], SpikeNet [ 26 ], Dy-SIGN [ 41 ], Delay-DSGN [ 35 ] and SiGNN [ 8 ]. For all baselines, we conduct a hyperparameter search to obtain optimal configurations on each dataset. Each experiment is repeated five times with different random seeds. We report the average Macro-F1 and Micro-F1 scores. We further assess performance under three different training ratios following the previous study [26]. 
+
+## 5.1 Overall Performance 
+
+Table 2 and Table 3 report the Macro-F1 and Micro-F1 results of all baselines on DBLP, Tmall and Patent under different training ratios. Overall, SG-JEPA achieves performance comparable to state-of-the-art supervised spiking DGNNs and consistently outperforms existing self-supervised baselines in most set-tings . Across all datasets and training ratios, SG-JEPA delivers competitive and stable performance, demonstrating the effective-ness of joint-embedding predictive learning for scalable dynamic graph representation learning with SNNs. Compared with full-precision supervised DGNNs, spiking-based models achieve comparable or even superior performance, particu-larly on datasets with pronounced temporal dynamics such as DBLP and Tmall. This observation suggests that spiking neural networks are effective in modeling temporal evolution in dynamic graphs through event-driven computation and temporal accumulation. De-spite operating with discrete spike-based representations, SG-JEPA achieves average relative improvements of 6.6% and 5.6% in Macro-F1 and Micro-F1, respectively, over full-precision base-lines across all datasets. Moreover, The average performance gap between SG-JEPA and the state-of-the-art supervised spik-ing baselines, SiGNN, is only 0.085% . It indicates nearly identical performance. SG-JEPA further demonstrates clear advantages in both effectiveness and scalability when compared with existing contrastive-based and generative-based dynamic graph methods. CLDG relies on contrastive objectives that are sensitive to training stability and data scale. Although we strictly follow the official im-plementation and employ an MLP-based classification head, CLDG exhibits unstable optimization and degraded performance on large-scale dynamic graphs. In contrast, SG-JEPA avoids explicit negative sampling and manually designed graph augmentations, resulting in more stable training and consistent performance gains. Moreover, MaskDGNN adopts an edge-level reconstruction objective that in-curs substantial memory overhead and becomes impractical on large graphs, leading to out-of-memory (OOM) issues on the Patent dataset. By contrast, SG-JEPA scales gracefully while maintaining competitive performance. Finally, compared with existing spiking DGNNs, SG-JEPA achieves consistent improvements despite being trained in a self-supervised manner, yielding average improvement of 1.6% and 1.4% in Macro-F1 and Micro-F1 across all datasets, respectively. These results indicate that JEPA effectively enhances spiking-driven representation, enabling strong performance without reliance on labeled supervision. 
+
+## 5.2 Training Efficiency Analysis 
+
+As we mentioned above, though existing self-supervised methods may achieve promising performance, they often incur substantial computational and memory overhead and may exhibit misalign-ment between pretext objectives and downstream node-level tasks. As a result, improvements in self-supervised training do not al-ways translate into consistent gains in downstream performance. SG-JEPA mitigates these issues via a joint-embedding predictive objective that operates directly in embedding space and captures temporal dynamics with a lightweight spiking neural network. Here, we investigate two key questions to compare SG-JEPA with existing self-supervised dynamic graph methods based on several efficiency metrics. 
+
+Q1: Does eliminating augmentation and reconstruction signifi-cantly improve training efficiency? 
+
+We measure two efficiency-related metrics during training: (i) the elapsed time of one training epoch and (ii) the maximum mem-ory usage. Figure 3 demonstrates the comparison of Micro-F1 and per-epoch training time across different baselines. Across both DBLP and Tmall datasets, SG-JEPA achieves substantially faster training. Specifically, compared to the average elapsed time across other baselines, SG-JEPA achieves a 5.2 × speedup on DBLP and a 2.8 × speedup on Tmall in terms of per-epoch train-ing time, while maintaining competitive Micro-F1 perfor-mance. This efficiency gain can be attributed to the simplified training pipeline of SG-JEPA, which performs joint-embedding prediction directly in latent space and avoids explicit edge-level reconstruction and multi-view graph augmentation. By contrast, contrastive and reconstruction-based methods incur substantial computational overhead due to complex machinery (e.g., augmen-tation and negative sampling). Regarding memory usage, SG-JEPA exhibits competitive efficiency, ranking second only to CLDG. In Scalable and Efficient Joint Spiking Embedding Predictive Architecture for Large-Scale Dynamic Graphs Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+Table 2: Macro-F1 scores (%) on dynamic graphs. The top first, second results are highlighted. 
+
+Methods DBLP Tmall Patent Ratio 40% 60% 80% 40% 60% 80% 40% 60% 80% 
+
+JODIE 66.73 ±1.0 67.32 ±1.0 67.53 ±1.3 52.62 ±0.8 54.02 ±0.6 54.17 ±0.2 77.57 ±0.8 77.69 ±0.6 77.67 ±0.4
+
+EvolveGCN 67.22 ±0.3 69.78 ±0.8 71.20 ±0.7 53.02 ±0.7 54.99 ±0.7 55.78 ±0.6 79.67 ±0.4 79.76 ±0.5 80.13 ±0.4
+
+TGAT 71.18 ±0.4 71.74 ±0.5 72.15 ±0.3 56.90 ±0.6 57.61 ±0.7 58.01 ±0.7 81.51 ±0.4 81.56 ±0.6 81.57 ±0.5
+
+ROLAND 68.97 ±1.1 70.53 ±0.3 71.21 ±1.5 52.54 ±0.7 53.67 ±0.3 53.85 ±0.6 OOM OOM OOM CLDG 73.10 ±0.5 72.83 ±1.2 73.34 ±0.6 50.47 ±0.8 47.31 ±1.2 44.91 ±0.9 12.68 ±0.3 8.07 ±0.8 6.63 ±0.40.7 MaskDGNN 65.40 ±0.7 66.92 ±0.3 68.36 ±0.5 55.90 ±0.2 55.96 ±0.7 56.12 ±0.3 OOM OOM OOM GC-SNN 70.70 ±0.5 72.70 ±0.5 73.07 ±0.3 58.27 ±0.1 59.65 ±0.3 60.43 ±0.3 82.62 ±0.8 82.79 ±1.0 82.92 ±0.9
+
+SpikeNet 71.38 ±0.5 73.28 ±1.0 74.43 ±0.8 59.07 ±0.6 60.84 ±0.5 62.53 ±0.7 83.92 ±0.9 94.03 ±0.9 94.20 ±0.6
+
+Dy-SIGN 70.94 ±0.1 72.01 ±0.1 74.67 ±0.5 57.48 ±0.1 60.94 ±0.2 61.89 ±0.1 83.57 ±0.3 83.77 ±0.2 83.91 ±0.2
+
+Delay-DSGN 72.32 ±0.4 74.16 ±0.3 76.54 ±0.4 60.25 ±0.1 62.56 ±0.3 64.02 ±0.2 83.72 ±0.1 84.01 ±0.1 84.20 ±0.1
+
+SiGNN 73.74 ±0.3 75.96 ±0.2 77.13 ±0.5 61.87 ±0.2 63.90 ±0.3 65.27 ±0.4 84.10 ±0.8 84.38 ±0.3 84.48 ±0.6
+
+SG-JEPA 74.17 ±0.7 75.64 ±0.4 77.21 ±0.3 61.89 ±0.2 63.94 ±0.3 64.85 ±0.2 83.84 ±0.1 84.33 ±0.1 84.37 ±0.3
+
+Table 3: Micro-F1 scores (%) on dynamic graphs. The top first, second results are highlighted. 
+
+Methods DBLP Tmall Patent Ratio 40% 60% 80% 40% 60% 80% 40% 60% 80% 
+
+JODIE 68.44 ±0.6 68.51 ±0.8 68.80 ±0.9 58.36 ±0.5 60.28 ±0.3 60.49 ±0.3 77.64 ±0.7 77.89 ±0.5 77.97 ±0.4
+
+EvolveGCN 69.12 ±0.8 70.43 ±0.6 71.32 ±0.5 59.96 ±0.7 61.19 ±0.6 61.77 ±0.6 79.39 ±0.5 79.75 ±0.3 80.01 ±0.3
+
+TGAT 71.10 ±0.2 71.85 ±0.4 73.12 ±0.3 62.05 ±0.5 62.92 ±0.4 93.32 ±0.7 80.79 ±0.7 80.81 ±0.6 80.93 ±0.6
+
+ROLAND 70.16 ±0.7 71.11 ±0.4 71.95 ±1.8 59.91 ±0.5 61.08 ±0.1 61.24 ±0.3 OOM OOM OOM CLDG 75.51 ±0.3 75.01 ±0.6 75.49 ±0.4 53.77 ±1.0 52.03 ±0.6 51.32 ±1.0 23.49 ±0.1 23.27 ±0.5 23.25 ±0.5
+
+MaskDGNN 66.30 ±0.5 67.10 ±0.4 68.86 ±0.6 58.81 ±0.2 59.17 ±0.4 59.19 ±0.5 OOM OOM OOM GC-SNN 71.73 ±0.5 73.86 ±0.3 74.26 ±0.8 62.60 ±0.3 64.14 ±0.2 64.65 ±0.4 82.52 ±0.8 82.65 ±0.7 82.84 ±0.6
+
+SpikeNet 72.03 ±0.3 74.18 ±0.6 75.72 ±0.3 63.43 ±0.6 65.13 ±1.0 66.51 ±0.5 83.89 ±0.7 83.99 ±0.8 84.18 ±0.2
+
+Dy-SIGN 71.90 ±0.1 72.61 ±0.4 74.96 ±0.2 62.93 ±0.3 64.10 ±0.3 65.82 ±0.2 83.50 ±0.2 83.47 ±0.1 83.90 ±0.2
+
+Delay-DSGN 72.56 ±0.2 74.44 ±0.3 76.87 ±0.5 64.32 ±0.1 66.20 ±0.2 67.88 ±0.4 83.66 ±0.1 83.97 ±0.1 84.15 ±0.1
+
+SiGNN 74.66 ±0.7 76.46 ±0.2 77.98 ±1.0 65.74 ±0.2 67.38 ±0.1 68.58 ±0.2 84.06 ±0.5 84.34 ±0.9 84.45 ±0.2
+
+SG-JEPA 74.86 ±0.4 76.68 ±0.4 78.00 ±0.1 65.36 ±0.2 67.22 ±0.2 68.24 ±0.1 83.80 ±0.2 84.26 ±0.4 84.30 ±0.7
+
+contrast, reconstruction-based methods such as MaskDGNN demon-strate significantly larger memory footprints due to edge-level de-coding. These results confirm that the predictive learning paradigm combined with spike dynamics substantially reduces both training time and memory overhead without sacrificing performance. 
+
+Q2: Does SG-JEPA avoid downstream task misalignment and rep-resentation collapse? 
+
+To analyze convergence behavior, we normalize self-supervised loss and downstream node classification loss to the same scale and monitor their evolution alongside downstream Micro-F1. Figure 4 illustrates the relationship among pretext loss, downstream loss and downstream performance across training epochs. As shown in Fig-ure 4, the self-supervised predictive loss decreases smoothly while maintaining stable downstream improvements. It indicates that SG-JEPA learning dynamic representations stably without signs of col-lapse. In contrast, MaskDGNN optimizes an edge-level reconstruc-tion objective whose loss continues to decrease while downstream performance degrades, highlighting a potential misalignment be-tween the pretext objective and node-level tasks. We notice that 20 21 22 23
+
+> Elapsed Time of One Epoch (s)
+> 64
+> 68
+> 72
+> 76
+> Micro-F1 (%)
+> ROLAND
+> SpikeNet
+> SiGNN SG-JEPA
+> CLDG
+> MaskDGNN
+
+DBLP    
+
+> 22232425
+> Elapsed Time of One Epoch (s)
+> 52
+> 56
+> 60
+> 64
+> 68
+> CLDG
+> SpikeNet
+> SiGNN
+> ROLAND
+> SG-JEPA
+> MaskDGNN
+
+Tmall 
+
+Figure 3: Comparison of per-epoch training time and Micro-F1 across different methods. The size of the circle indicates the maximum memory usage during the training. 
+
+SG-JEPA converges in a similar number of epochs as CLDG without Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Huizhe Zhang, Yuchang Zhu, Huazhen Zhong, Liang Chen, and Zibin Zheng 0 50 100 150 200           
+
+> Epoch
+> 0.0
+> 0.2
+> 0.4
+> 0.8
+> 0.6
+> 1.0
+> Value
+> Self-Supervised
+> Loss
+> 050 100 150 200
+> Epoch
+> 0.0
+> 0.2
+> 0.4
+> 0.8
+> 0.6
+> 1.0
+> Downstream
+> Loss
+> 050 100 150 200
+> Epoch
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> Downstream
+> Micro-F1
+> SG-JEPA CLDG MaskDGNN
+
+Figure 4: Learning curve of three self-supervised methods. 
+
+well-designed multi-view augmentations. The downstream perfor-mance of SG-JEPA closely matches that of CLDG, while employing a substantially simpler training pipeline. These results indicate that JEPA can achieve stable convergence and competitive downstream performance without contrastive view construction, while avoiding the degradation observed in reconstruction-based methods. 2 4 6 8 10               
+
+> Number of Timesteps
+> 65
+> 70
+> 75
+> 80
+> 85
+> Micro-F1 (%)
+> 12345
+> Number of Layers
+> 3579all
+> Number of Neighbors
+> 65
+> 70
+> 75
+> 80
+> 85
+> Micro-F1 (%)
+> 0.0005 0.005 0.05 0.5 1.0
+> Potential Threshold
+> DBLP Tmall Patent
+
+Figure 5: Parameter sensitivity analysis on the DBLP, Tmall and Patent datasets. 
+
+## 5.3 Parameter Sensitivity Analysis 
+
+We evaluate the robustness of SG-JEPA with respect to four key hyperparameters: window size, the number of GNN layers, the num-ber of sampled neighbors and the membrane potential threshold of the spiking neuron. For each hyperparameter, we vary one factor while keeping the others fixed at their default settings. Experiments are conducted on DBLP, Tmall and Patent, and we utilize Micro-F1 as the evaluation metric. The experimental results are illustrated in Figure 5. As depicted in the Figure 5, SG-JEPA demonstrates stable per-formance across a wide range of configurations. The window size determines the temporal resolution of spike-count embeddings. When the window size is very small, 𝑤 = 2, the model will degener-ate into binary spike encoding during the training. For this extreme case, quantization loss results in noticeable performance degrada-tion. Notably, benefiting from the nested spike-count embedding design, SG-JEPA achieves competitive performance with only a few time steps, matching or surpassing spiking baselines without re-quiring long temporal contexts. Increasing the number of layers or the number of sampled neighbors does not monotonically improve results. Deeper architectures are susceptible to over-smoothing on large-scale dynamic graphs, while sampling all neighbors may incur the over-squashing [ 3]. The membrane potential threshold regulates spike sparsity by controlling neuron firing frequency. Excessively high thresholds suppress spiking activity and hinder information propagation. Overall, the parameter sensitivity analy-sis shows that SG-JEPA delivers strong and consistent performance under diverse configurations, while preserving a promising bal-ance between representational expressiveness and computational efficiency. 
+
+## 5.4 Ablation Study 
+
+To uncover the contribution of each design choice in SG-JEPA, ablation studies are conducted on the DBLP and Tmall datasets. The results are summarized in Table 4. Specifically, we consider three different ablation studies: (1) w/ IF and w/ LIF, where the proposed PLIF neuron is replaced by IF or LIF neurons; (2) w/ EMA and w/o stopgrad, which aim to investigate different target encoder update strategies. For the former, it follows standard JEPA practice by removing the stop-gradient operation and updating a target encoder by exponential moving average. (3) w/ ℓ1, w/ ℓ2 and w/ 
+
+Cosine, where different loss functions are adopted to measure the discrepancy between the predicted and target embeddings. We first examine the influence of different spiking neurons. As shown in Table 4, replacing the proposed PLIF neuron with IF or LIF consistently degrades performance. It highlights the importance of learnable membrane dynamics for capturing temporal depen-dencies. For the choice of prediction objective, common distance losses result in inferior performance compared with the default formulation, suggesting that preserving directional consistency in embedding space is beneficial for predictive latent representations. Besides, a natural intuition is that the InfoNCE objective provides implicit anti-collapse regularization, which may allow the target encoder to be unfrozen during training. However, the results in Table 4 show that removing the stop-gradient constraint leads to a substantial performance drop. We believe that asymmetric gradi-ent flow remains critical for stable training in spiking JEPA-style models. Introducing EMA may partially mitigate this degradation and yield more stable performance. Scalable and Efficient Joint Spiking Embedding Predictive Architecture for Large-Scale Dynamic Graphs Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+Table 4: Ablation results (%) on DBLP and Tmall datasets. 
+
+Models DBLP Tmall Δ
+
+Macro-F1 Micro-F1 Macro-F1 Micro-F1 SG-JEPA 74.17 ±0.7 74.86 ±0.4 61.89 ±0.2 65.36 ±0.2 –
+
+w/ IF 71.25 ±0.2 71.98 ±0.2 61.23 ±0.1 64.35 ±0.1 -1.9 
+
+w/ LIF 73.11 ±0.3 73.54 ±0.2 59.78 ±0.7 63.84 ±0.1 -1.5 
+
+w/o stopgrad 71.73 ±0.2 72.23 ±0.9 58.44 ±0.5 63.68 ±0.3 -2.5 
+
+w/ EMA 73.11 ±0.1 73.72 ±0.2 60.61 ±0.4 64.03 ±0.3 -1.2 
+
+w/ L1 74.26 ±0.1 74.71 ±0.1 58.60 ±0.2 62.97 ±0.1 -1.4 
+
+w/ L2 73.23 ±0.2 73.81 ±0.1 60.52 ±0.2 64.28 ±0.3 -1.1 
+
+w/ Cosine 70.45 ±0.0 71.69 ±0.2 56.65 ±0.5 61.72 ±0.3 -3.9 
+
+## 6 Conclusion 
+
+In this work, we introduce SG-JEPA , the first attempt to bring the joint-embedding predictive paradigm to dynamic graph representa-tion learning. For graph data, Conventional self-supervised learning frameworks typically rely heavily on augmentation and reconstruc-tion processes, which often become computational bottlenecks in real-world deployments. SG-JEPA performs predictive learning di-rectly in embedding space, substantially reducing computational overhead. Our results indicate that latent-space prediction offers a promising and scalable alternative for self-supervised learning on large dynamic graphs and merits further exploration. 
+
+## References 
+
+[1] Mohamed Abdelfattah and Alexandre Alahi. 2024. S-jepa: A joint embedding predictive architecture for skeletal action recognition. In European Conference on Computer Vision . Springer, 367–384. [2] Mohammad Ali Alomrani, Mahdi Biparva, Yingxue Zhang, and Mark Coates. 2022. DyG2Vec: Efficient representation learning for dynamic graphs. arXiv preprint arXiv:2210.16906 (2022). [3] Uri Alon and Eran Yahav. 2020. On the bottleneck of graph neural networks and its practical implications. arXiv preprint arXiv:2006.05205 (2020). [4] Mido Assran, Adrien Bardes, David Fan, Quentin Garrido, Russell Howes, Matthew Muckley, Ammar Rizvi, Claire Roberts, Koustuv Sinha, Artem Zho-lus, et al . 2025. V-jepa 2: Self-supervised video models enable understanding, prediction and planning. arXiv preprint arXiv:2506.09985 (2025). [5] Mahmoud Assran, Quentin Duval, Ishan Misra, Piotr Bojanowski, Pascal Vincent, Michael Rabbat, Yann LeCun, and Nicolas Ballas. 2023. Self-supervised learning from images with a joint-embedding predictive architecture. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition . 15619–15629. [6] Adrien Bardes, Quentin Garrido, Jean Ponce, Xinlei Chen, Michael Rabbat, Yann LeCun, Mido Assran, and Nicolas Ballas. 2023. V-jepa: Latent video prediction for visual representation learning. arXiv preprint arXiv:2404.08471 (2023). [7] Delong Chen, Mustafa Shukor, Theo Moutakanni, Willy Chung, Jade Yu, Te-jaswi Kasarla, Allen Bolourchi, Yann LeCun, and Pascale Fung. 2025. Vl-jepa: Joint embedding predictive architecture for vision-language. arXiv preprint arXiv:2512.10942 (2025). [8] Dong Chen, Shuai Zheng, Muhao Xu, Zhenfeng Zhu, and Yao Zhao. 2025. SiGNN: A spike-induced graph neural network for dynamic graph representation learning. 
+
+Pattern Recognition 158 (2025), 111026. [9] Ke-Jia Chen, Linsong Liu, Linpu Jiang, and Jingqiang Chen. 2023. Self-supervised dynamic graph representation learning via temporal subgraph contrast. ACM Transactions on Knowledge Discovery from Data 18, 1 (2023), 1–20. [10] Ting Chen, Simon Kornblith, Mohammad Norouzi, and Geoffrey Hinton. 2020. A simple framework for contrastive learning of visual representations. In Interna-tional conference on machine learning . PmLR, 1597–1607. [11] Vijay Prakash Dwivedi, Anh Tuan Luu, Thomas Laurent, Yoshua Bengio, and Xavier Bresson. 2021. Graph neural networks with learnable structural and positional representations. arXiv preprint arXiv:2110.07875 (2021). [12] Jason K Eshraghian, Max Ward, Emre O Neftci, Xinxin Wang, Gregor Lenz, Girish Dwivedi, Mohammed Bennamoun, Doo Seok Jeong, and Wei D Lu. 2023. Training spiking neural networks using lessons from deep learning. Proc. IEEE 111, 9 (2023), 1016–1054. [13] Wei Fang, Zhaofei Yu, Yanqi Chen, Timothée Masquelier, Tiejun Huang, and Yonghong Tian. 2021. Incorporating learnable membrane time constant to en-hance learning of spiking neural networks. In Proceedings of the IEEE/CVF inter-national conference on computer vision . 2661–2671. [14] Zhengcong Fei, Mingyuan Fan, and Junshi Huang. 2023. A-jepa: Joint-embedding predictive architecture can listen. arXiv preprint arXiv:2311.15830 (2023). [15] ZhengZhao Feng, Rui Wang, TianXing Wang, Mingli Song, Sai Wu, and Shuibing He. 2025. A comprehensive survey of dynamic graph neural networks: Models, frameworks, benchmarks, experiments and challenges. IEEE Transactions on Knowledge and Data Engineering (2025). [16] Data File. 2001. Lessons, Insights and Methodological Tools,". NBER Working Paper 8498 (2001), 40. [17] Mengzhou Gao, Xinxun Zhang, Pengfei Jiao, Tianpeng Li, and Zhidong Zhao. 2025. DVGMAE: Self-Supervised Dynamic Variational Graph Masked Autoencoder. 
+
+IEEE Transactions on Neural Networks and Learning Systems (2025). [18] Michael Gutmann and Aapo Hyvärinen. 2010. Noise-contrastive estimation: A new estimation principle for unnormalized statistical models. In Proceedings of the thirteenth international conference on artificial intelligence and statistics . JMLR Workshop and Conference Proceedings, 297–304. [19] Ehsan Hajiramezanali, Arman Hasanzadeh, Krishna Narayanan, Nick Duffield, Mingyuan Zhou, and Xiaoning Qian. 2019. Variational graph recurrent neural networks. Advances in neural information processing systems 32 (2019). [20] Will Hamilton, Zhitao Ying, and Jure Leskovec. 2017. Inductive representation learning on large graphs. Advances in neural information processing systems 30 (2017). [21] Yiming He, Xiang Li, Zhongying Zhao, Haobing Liu, Peilan He, and Yanwei Yu. 2025. MaskDGNN: Self-Supervised Dynamic Graph Neural Networks with Activeness-aware Temporal Masking. In Proceedings of the Thirty-Fourth Interna-tional Joint Conference on Artificial Intelligence . 2892–2900. [22] Linpu Jiang, Ke-Jia Chen, and Jingqiang Chen. 2021. Self-supervised dynamic graph representation learning via temporal subgraph contrast. arXiv preprint arXiv:2112.08733 (2021). [23] Srijan Kumar, Xikun Zhang, and Jure Leskovec. 2019. Predicting dynamic em-bedding trajectory in temporal interaction networks. In Proceedings of the 25th ACM SIGKDD international conference on knowledge discovery & data mining .1269–1278. [24] Aditya Kusupati, Gantavya Bhatt, Aniket Rege, Matthew Wallingford, Aditya Sinha, Vivek Ramanujan, William Howard-Snyder, Kaifeng Chen, Sham Kakade, Prateek Jain, et al . 2022. Matryoshka representation learning. Advances in Neural Information Processing Systems 35 (2022), 30233–30249. [25] Jintang Li, Ruofan Wu, Xinzhou Jin, Boqun Ma, Liang Chen, and Zibin Zheng. 2024. State space models on temporal graphs: A first-principles study. Advances in Neural Information Processing Systems 37 (2024), 127030–127058. [26] Jintang Li, Zhouxin Yu, Zulun Zhu, Liang Chen, Qi Yu, Zibin Zheng, Sheng Tian, Ruofan Wu, and Changhua Meng. 2023. Scaling up dynamic graph representation learning via spiking neural networks. In Proceedings of the AAAI conference on artificial intelligence , Vol. 37. 8588–8596. [27] Xianhang Li, Chen Huang, Chun-Liang Li, Eran Malach, Josh Susskind, Vimal Thilak, and Etai Littwin. 2025. Rethinking JEPA: Compute-Efficient Video SSL with Frozen Teachers. arXiv preprint arXiv:2509.24317 (2025). [28] Yuanfu Lu, Xiao Wang, Chuan Shi, Philip S Yu, and Yanfang Ye. 2019. Temporal network embedding with micro-and macro-dynamics. In Proceedings of the 28th ACM international conference on information and knowledge management . 469– 478. [29] Yao Ma, Ziyi Guo, Zhaocun Ren, Jiliang Tang, and Dawei Yin. 2020. Stream-ing graph neural networks. In Proceedings of the 43rd international ACM SIGIR conference on research and development in information retrieval . 719–728. [30] Aldo Pareja, Giacomo Domeniconi, Jie Chen, Tengfei Ma, Toyotaro Suzumura, Hiroki Kanezashi, Tim Kaler, Tao Schardl, and Charles Leiserson. 2020. Evolvegcn: Evolving graph convolutional networks for dynamic graphs. In Proceedings of the AAAI conference on artificial intelligence , Vol. 34. 5363–5370. [31] Joakim Skarding, Bogdan Gabrys, and Katarzyna Musial. 2021. Foundations and modeling of dynamic networks using dynamic graph neural networks: A survey. 
+
+iEEE Access 9 (2021), 79143–79168. [32] Li Sun, Zhenhao Huang, Qiqi Wan, Hao Peng, and Philip S Yu. 2024. Spiking graph neural network on riemannian manifolds. Advances in Neural Information Processing Systems 37 (2024), 34025–34055. [33] Sheng Tian, Ruofan Wu, Leilei Shi, Liang Zhu, and Tao Xiong. 2021. Self-supervised representation learning on dynamic graphs. In Proceedings of the 30th ACM international conference on information & knowledge management .1814–1823. [34] Yanbang Wang, Yen-Yu Chang, Yunyu Liu, Jure Leskovec, and Pan Li. 2021. Inductive representation learning in temporal networks via causal anonymous walks. arXiv preprint arXiv:2101.05974 (2021). [35] Zhiqiang Wang, Jianghao Wen, and Jianqing Liang. 2025. Delay-DSGN: A Dy-namic Spiking Graph Neural Network with Delay Mechanisms for Evolving Graph. In Forty-second International Conference on Machine Learning .Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Huizhe Zhang, Yuchang Zhu, Huazhen Zhong, Liang Chen, and Zibin Zheng 
+
+[36] Da Xu, Chuanwei Ruan, Evren Korpeoglu, Sushant Kumar, and Kannan Achan. 2020. Inductive representation learning on temporal graphs. arXiv preprint arXiv:2002.07962 (2020). [37] Mingkun Xu, Yujie Wu, Lei Deng, Faqiang Liu, Guoqi Li, and Jing Pei. 2021. Exploiting spiking dynamics with spatial-temporal feature normalization in graph learning. arXiv preprint arXiv:2107.06865 (2021). [38] Sihan Xu, Ziqiao Ma, Wenhao Chai, Xuweiyi Chen, Weiyang Jin, Joyce Chai, Saining Xie, and Stella X Yu. 2025. Next-Embedding Prediction Makes Strong Vision Learners. arXiv preprint arXiv:2512.16922 (2025). [39] Yiming Xu, Bin Shi, Teng Ma, Bo Dong, Haoyi Zhou, and Qinghua Zheng. 2023. Cldg: Contrastive learning on dynamic graphs. In 2023 IEEE 39th International Conference on Data Engineering (ICDE) . IEEE, 696–707. [40] Man Yao, Guangshe Zhao, Hengyu Zhang, Yifan Hu, Lei Deng, Yonghong Tian, Bo Xu, and Guoqi Li. 2023. Attention spiking neural networks. IEEE transactions on pattern analysis and machine intelligence 45, 8 (2023), 9393–9410. [41] Nan Yin, Mengzhu Wang, Zhenghan Chen, Giulia De Masi, Huan Xiong, and Bin Gu. 2024. Dynamic spiking graph neural networks. In Proceedings of the AAAI Conference on Artificial Intelligence , Vol. 38. 16495–16503. [42] Jiaxuan You, Tianyu Du, and Jure Leskovec. 2022. ROLAND: graph learning framework for dynamic graphs. In Proceedings of the 28th ACM SIGKDD conference on knowledge discovery and data mining . 2358–2366. [43] Le Yu, Leilei Sun, Bowen Du, and Weifeng Lv. 2023. Towards better dynamic graph learning: New architecture and unified library. Advances in Neural Information Processing Systems 36 (2023), 67686–67700. [44] Huizhe Zhang, Jintang Li, Yuchang Zhu, Liang Chen, and Zibin Zheng. 2025. GT-SVQ: A Linear-Time Graph Transformer for Node Classification Using Spiking Vector Quantization. arXiv preprint arXiv:2504.11840 (2025). [45] Yifan Zhu, Fangpeng Cong, Dan Zhang, Wenwen Gong, Qika Lin, Wenzheng Feng, Yuxiao Dong, and Jie Tang. 2023. Wingnn: Dynamic graph neural networks with random gradient aggregation window. In Proceedings of the 29th ACM SIGKDD conference on knowledge discovery and data mining . 3650–3662. [46] Zulun Zhu, Jiaying Peng, Jintang Li, Liang Chen, Qi Yu, and Siqiang Luo. 2022. Spiking graph convolutional networks. arXiv preprint arXiv:2205.02767 (2022). [47] Zulun Zhu, Kai Wang, Haoyu Liu, Jintang Li, and Siqiang Luo. 2024. Topology-monitorable contrastive learning on dynamic graphs. In Proceedings of the 30th ACM SIGKDD Conference on Knowledge Discovery and Data Mining . 4700–4711. 
+
+Received 20 February 2007; revised 12 March 2009; accepted 5 June 2009

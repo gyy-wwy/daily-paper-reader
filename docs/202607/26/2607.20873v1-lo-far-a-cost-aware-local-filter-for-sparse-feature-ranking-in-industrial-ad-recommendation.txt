@@ -1,0 +1,360 @@
+Title: LO-FAR: A Cost-Aware Local Filter for Sparse Feature Ranking in Industrial Ad Recommendation
+
+URL Source: https://arxiv.org/pdf/2607.20873v1
+
+Published Time: Fri, 24 Jul 2026 00:25:39 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# LO-FAR: A Cost-Aware Local Filter for Sparse Feature Ranking in Industrial Ad Recommendation 
+
+# Egemen Erbayat ∗
+
+egemen@meta.com Meta Platforms, Inc. USA 
+
+# Luis Duque 
+
+luisduque@meta.com Meta Platforms, Inc. USA 
+
+# Sohini Roychowdhury 
+
+sroychowdhury1@meta.com Meta Platforms, Inc. USA 
+
+# Mohammad Amin 
+
+shafkat@meta.com Meta Platforms, Inc. USA 
+
+# Srihari Reddy 
+
+sriharir@meta.com Meta Platforms, Inc. USA 
+
+## Abstract 
+
+Industrial ad recommendation models rely heavily on sparse, high-cardinality ID-list features that encode user histories and contextual identifiers. Each is backed by a dedicated embedding table, so these features dominate storage, training, and serving cost and must be revisited as traffic and downstream models evolve. Therefore, sparse feature ranking is not just an offline modeling problem but also a re-current systems decision limited by compute budgets and iteration cadence. We present Localized Feature Ranking (LO-FAR), a CPU-only, model-agnostic workflow that ranks each candidate feature from its stand-alone held-out predictive signal using lightweight local estimators rather than the GPU-bound retraining loops of permutation- and stochastic-gate-based methods. On a production dataset of more than one million logged interactions and 475 sparse ID-list features, LO-FAR completes ranking in approximately two CPU-hours and preserves downstream Normalized Entropy gains on CTR and CVR tasks that are competitive with shuffle-based im-portance, Binary Stochastic Neurons, and a coverage-based heuris-tic across budgets of 100–400 retained features. The contribution is a deployable workflow showing that, when cost and turnaround constraints are binding, a simple local filter can be a practical pro-duction choice over heavier interaction-aware alternatives. 
+
+## Keywords 
+
+Recommender systems; Online advertising; Sparse ID-list features; Feature selection; CTR/CVR prediction; Embedding tables; Indus-trial machine learning; Normalized Entropy. 
+
+ACM Reference Format: 
+
+Egemen Erbayat, Luis Duque, Sohini Roychowdhury, Mohammad Amin, and Srihari Reddy. 2026. LO-FAR: A Cost-Aware Local Filter for Sparse Feature Ranking in Industrial Ad Recommendation. In 20th ACM Con-ference on Recommender Systems (RecSys ’26), September 27-October 02, 2026, Minneapolis, MN, USA. ACM, New York, NY, USA, 10 pages. https: //doi.org/10.1145/3773078.3831906  
+
+> ∗This paper was completed during Egemen Erbayat’s internship at Meta Platforms, Inc..
+> This work is licensed under a Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International License.
+> RecSys ’26, Minneapolis, MN, USA
+> ©2026 Copyright held by the owner/author(s). ACM ISBN 979-8-4007-2284-4/2026/09 https://doi.org/10.1145/3773078.3831906
+
+## 1 Introduction 
+
+Industrial ad recommendation systems are large-scale deployed pipelines that must score thousands of candidate items per re-quest under tight latency budgets, while continuously adapting to shifting user behavior, advertiser inventory, and platform poli-cies [ 2 , 3, 9, 26 , 28 ]. The core supervised learning problem in these pipelines is to predict the probability that a given (user, context, ad) triple will result in a desired outcome, most commonly a click in click-through rate (CTR) prediction or a downstream action in conversion rate (CVR) prediction. Deep models that mix dense numerical features with sparse ID-list features, which are variable-length lists of high-cardinality categorical IDs that encode entities like user histories, page elements, ad identifiers, and context tokens, are used by modern rankers to address these issues[ 26 , 39 ]. Each sparse feature is associated with a dedicated embedding table that maps its identifier vocabulary into a dense vector space. On the other hand, sparse ID-list features dominate the parame-ter count, memory footprint, and infrastructure cost of contempo-rary rankers. In the production-grade model studied in this work, sparse embedding tables account for over 97% of all trainable pa-rameters; similar proportions have been reported across industrial systems [ 11 , 15 , 20 ]. Because each feature has its own vocabulary, lookup path, monitoring contract, and refresh schedule, every ad-ditional sparse feature adds engineering surface area beyond its training-time cost. Consequently, the question of which sparse fea-tures to keep is not only a modeling decision but an operational decision that shapes storage, serving memory, retraining through-put, and the velocity of downstream feature work. At the same time, sparse feature ranking is not a one-shot offline study in an industrial setting. It must be repeated whenever new candidate features are introduced, vocabularies drift, traffic distri-butions shift, or downstream model architectures change [ 25 , 37 ]. Each rerun consumes engineering time, accelerator capacity, and re-view effort. A ranking method whose offline accuracy is marginally higher but whose rerun cost is substantially larger may therefore yield a worse system-level outcome, because pruning decisions be-come stale before they can be re-validated. The dominant academic baselines for high-quality sparse feature selection illustrate this trade-off. Permutation-based importance [ 5] requires repeated full-model retraining cycles, one per feature or feature group, on accel-erator hardware. Stochastic-gate methods, such as those built on 𝐿 0
+
+regularization and Binary Stochastic Neurons (BSN) [ 21 , 35 ], embed arXiv:2607.20873v1 [cs.IR] 23 Jul 2026 RecSys ’26, September 27-October 02, 2026, Minneapolis, MN, USA Erbayat et al. 
+
+selection into end-to-end training and inherit its computational pro-file. Recent recommender-system work on training-coupled feature and embedding optimization has further sharpened this coupling [17 , 23 , 24 ]. These methods can recover interaction-sensitive signal that simpler procedures cannot, but they are difficult to operate at the cadence required by production teams. We address a complementary operating point. Specifically, we focus on first-stage pruning of large sparse feature pools under ex-plicit storage and retraining budgets, where the value of a method is determined by the joint quality, turnaround time, and opera-tional simplicity of repeated reruns. We propose Localized Feature Ranking (LO-FAR), a CPU-only ranking workflow that scores each candidate sparse ID-list feature from its stand-alone held-out pre-dictive signal using lightweight local estimators, without invoking the downstream ranker during the ranking pass. LO-FAR processes each feature independently, parallelizes linearly across CPU work-ers, and produces a ranked list that downstream training pipelines can consume directly. We position LO-FAR as a first-stage filter rather than a replacement for interaction-aware methods. It is in-tended to remove the long tail of low-signal sparse features cheaply, which leaves more expensive procedures available for cases where they are clearly justified. We evaluate LO-FAR on a production-grade dataset comprising more than one million logged interactions and 475 short sparse ID-list features drawn from a large ad recommendation system. We compare against three baselines selected to span the operational spectrum: a coverage-based naive heuristic, shuffle-based permuta-tion importance [ 5], and BSN [ 21 , 35 ]. Following standard practice in industrial CTR/CVR modeling, we evaluate downstream ranker quality with Normalized Entropy (NE) gain relative to a dense-only reference model trained without sparse features [ 9], measured at feature budgets of 100, 200, 300, and 400 retained features. Across both CTR and CVR tasks and all four budgets, LO-FAR preserves NE gains that are comparable to or better than shuffle-based importance and BSN, while completing ranking in approximately two CPU-hours. In the same environment, the heavier baselines required multiple GPU-days when accumulated retraining and tuning runs are accounted for. Because sparse embeddings dominate parameter count in our model, the chosen feature budgets correspond to deter-ministic reductions of approximately 40–75% in sparse embedding storage. Taken together, this paper makes the following contributions: (1) We frame industrial sparse ID-list feature ranking as a recur-ring operational problem in which rerun cost, accelerator dependency, and integration with existing training infras-tructure are first-class evaluation criteria, and we formalize the recurring-cost view in Section 3. (2) We present LO-FAR, a CPU-only, model-agnostic local rank-ing workflow that scores each sparse ID-list feature from its stand-alone held-out predictive signal, provide its computa-tional complexity, and characterize its scope and limitations explicitly. (3) We report a production-scale evaluation on more than 1M logged interactions and 475 sparse ID-list features. LO-FAR achieves downstream NE gains competitive with shuffle-based importance and BSN across feature budgets of 100–400 retained features and completes ranking in approximately two CPU-hours. (4) We describe the deployment implications, including 40–75% deterministic reductions in sparse embedding storage at the studied budgets, the operational comparison against shuffle-based importance and BSN, and the conditions under which LO-FAR should not be used in isolation. 
+
+## 2 Related Work 
+
+We organize related work along four axes that frame the contribu-tion of this paper. These include industrial CTR/CVR ranking mod-els that depend on large sparse feature spaces, interaction-learning architectures that intensify the value and the cost of sparse capacity, training-coupled feature and embedding selection methods, and model-agnostic importance estimation. Table 1 summarizes these directions and their relation to LO-FAR. 
+
+## 2.1 Industrial CTR/CVR Models and Sparse Feature Economics 
+
+Modern industrial recommenders evolved from logistic regression and tree-augmented linear models for CTR prediction [ 9 , 28 ] into deep architectures that combine memorization and generalization through embedded categorical features and dense numerical in-puts [ 2 , 3 , 26 ]. Across this trajectory, sparse categorical features have remained the dominant carrier of personalization signal. Re-cent work extends this tradition along two distinct lines. The first emphasizes capacity scaling and richer interaction modeling for web-scale ranking, exemplified by DCN V2 [ 30 ], large-capacity AutoML search at Meta [ 37 ], and long-history user representation at Instagram [ 25 ]. The second confronts the systems burden im-posed by sparse embeddings through hash-based table alternatives [ 11 , 19 ], distributed training systems for huge embedding tables [ 7, 29 , 33 ], online collisionless embedding infrastructure [ 20 ], and surveys of embedding compression techniques [ 15 ]. Recent work on cost-effective model architecture design at industry scale [ 22 ]further underscores the need for principled decisions about which features and model components to retain under budget constraints. These two directions share an underlying premise. Sparse features carry substantial behavioral signal, but every additional feature imposes recurring cost in the form of vocabulary management, embedding-table lookups, monitoring, and retraining. The litera-ture does not resolve this trade-off; it characterizes the engineering required to sustain it. 
+
+## 2.2 Interaction Learning and Adaptive Sparse Capacity 
+
+A complementary line of work targets the explicit modeling of feature interactions in sparse spaces. Factorization-machine–based architectures, such as DeepFM and its variants [ 8 , 16 ], learn pair-wise interactions in low-dimensional embedding spaces. Automatic interaction selection methods, such as AutoFIS, prune the resulting interaction lattice during training [ 18 ]. Adaptive sparse architec-tures, including AdaSparse and AdaFS, allocate model capacity dynamically across domains and tasks [ 17 , 36 ]. Sequential and transformer-based architectures, such as SASRec and Hiformer, broaden the effective sparse context available to the ranker [ 6 , 12 ]. LO-FAR: A Cost-Aware Local Filter for Sparse Feature Ranking in Industrial Ad Recommendation RecSys ’26, September 27-October 02, 2026, Minneapolis, MN, USA 
+
+While these methods raise the achievable quality ceiling, they also intensify the operational problem. As interaction depth and his-tory length increase, the marginal cost of each additional candidate sparse feature grows in tandem. This makes principled, low-cost first-stage pruning more rather than less important. 
+
+## 2.3 Training-Coupled Feature and Embedding Selection 
+
+Several recent methods integrate feature selection into model train-ing. Stochastic-gate methods learn binary or relaxed gates over input features under 𝐿 0 regularization, with BSN as a representative instance [ 21 , 35 ]. OptEmbed and OptFS jointly optimize embed-ding structure and feature subsets within the training loop [ 23 , 24 ]. AutoField [ 31 ] further automates feature-level selection for deep recommender systems through a controller network that learns to include or exclude input features during training. The strength of this family is that selection is performed in the presence of fea-ture interactions and correlations, so that features whose value emerges only in combination can in principle be retained. The cor-responding limitation is operational. Ranking decisions are tied to the downstream model architecture, the training hyperparameters, and the availability of accelerator-heavy retraining. Each change in the ranker, the candidate feature pool, or the training data may require rerunning the joint optimization. In high-churn industrial settings, where heterogeneity in user behavior is the norm rather than the exception [ 38 ], and where infrastructure papers devote substantial engineering effort to keeping the training loop fast and stable under load [7, 33], this coupling becomes a non-trivial cost. 
+
+## 2.4 Model-Agnostic Importance Estimation 
+
+Model-agnostic methods evaluate the importance of input features after training without modifying the model itself. Permutation im-portance [ 5] and its variants estimate the marginal contribution of each feature by measuring the degradation of model performance under random permutation of feature values. These methods are conceptually simple and architecturally portable, but they require repeated full-model evaluation passes and, in CTR/CVR settings with large embedding tables, repeated retraining or recalibration to obtain stable estimates. Statistical filter methods such as mu-tual information offer linear scaling in the number of features but were developed for low-cardinality or moderately sparse regimes [ 4, 14 , 27 ]. Wrapper and metaheuristic approaches [ 13 , 34 ] provide accuracy guarantees on small problems but do not scale to feature pools that contain hundreds to thousands of high-cardinality sparse ID-list features. The practical consequence is that, despite a rich literature on importance estimation, there is no widely adopted procedure that simultaneously satisfies the four requirements rele-vant to industrial first-stage pruning. These requirements include high feature count, embedding-aware treatment of sparse ID-list inputs, low and predictable turnaround on standard infrastructure, and decoupling from the downstream training loop. Concurrent work by Jia et al. [ 10 ] provides a comprehensive benchmark of feature selection methods for deep recommender sys-tems, evaluating gate-based, gradient-based, and sensitivity-based approaches. LO-FAR differs by targeting the industrial operating point of short sparse ID-list features under explicit cost and turn-around constraints, with evaluation through end-to-end retraining rather than proxy metrics alone. 
+
+## 2.5 Positioning of LO-FAR 
+
+LO-FAR addresses the gap identified in the preceding subsections. It is not positioned against the broader literature on representa-tion learning or interaction modeling; rather, it complements that literature by making the first-stage decision of which sparse ID-list features to retain cheap, repeatable, and operable on standard CPU infrastructure. We frame this contribution as a system-level reformulation. Importance estimation for sparse ID-list features is decoupled from full-model retraining and, instead, is reduced to a per-feature held-out prediction problem solved by a lightweight local estimator. We emphasize that ranking divergence between LO-FAR and interaction-aware methods is not a defect but a structural property. In correlated sparse spaces, multiple feature subsets may encode overlapping signal, so two ranking methods can disagree while still inducing comparable downstream model quality once the retained subsets are retrained. 
+
+## 3 Production Setting and Problem Definition 3.1 Deployed Ranking Model 
+
+The system studied in this work is a deployed industrial ad ranker built on the Deep Learning Recommendation Model (DLRM) family of architectures [ 1, 26 ], trained on logged user–ad interactions and used to produce CTR and CVR predictions. The model consumes three categories of input: 
+
+• Binary features encode true/false events, such as whether a previous user-level signal is present. 
+
+• Dense features are continuous numerical inputs, such as engagement durations and aggregate counters, processed by a multilayer perceptron (MLP). 
+
+• Sparse ID-list features are variable-length lists of high-cardinality categorical identifiers, such as recently seen page or ad IDs. Each such feature is associated with a dedicated embedding table that maps its identifier vocabulary to dense vectors. Variable-length lists are pooled (typically by sum or mean) before being combined with dense and binary repre-sentations. The dense, binary, and pooled-sparse representations are fused through MLP transformations and pairwise dot-product feature interactions [ 26 ], and the resulting representation is mapped to a probability through a logistic head. In the deployed model studied here, sparse embedding tables account for more than 97% of all trainable parameters and are the primary driver of storage, training memory, and serving footprint. 
+
+## 3.2 Notation and Problem Statement 
+
+Let D = {( 𝑥 𝑖 , 𝑦 𝑖 )} 𝑛 𝑖 =1 denote a logged training sample, where 𝑥 𝑖 is the feature vector for the 𝑖 -th interaction and 𝑦 𝑖 ∈ { 0, 1} is a binary label encoding the supervised target (a click for CTR; a downstream action for CVR). Let F = {𝑓 1, . . . , 𝑓 𝑝 } denote the candidate set of 
+
+𝑝 sparse ID-list features. For each feature 𝑓 𝑗 and example 𝑖 , the RecSys ’26, September 27-October 02, 2026, Minneapolis, MN, USA Erbayat et al. 
+
+Table 1: Schools of thought in recent industrial recommendation literature and their relation to LO-FAR. The first three rows describe complementary directions; LO-FAR addresses a distinct operating point that those directions do not target.                      
+
+> School of thought Representative recent work Dominant objective Relation to our setting Capacity scaling and richer inter-actions DCN V2 [ 30 ], AdaSparse [ 36 ], AdaFS [ 17 ], DV365 [ 25 ], Meta AutoML [37] Increase ranking quality by expand-ing expressive capacity and model-ing higher-order crosses Assumes that firms can sustain repeated optimization of increasingly complex sparse stacks Embedding efficiency and infras-tructure optimization DHE [ 11 ], ScaleFreeCTR [ 7], agile CTR training [ 33 ], Monolith [20], and the embedding-compression survey [15] Keep large sparse spaces trainable and serveable through systems-level engineering Reduces the cost of retaining many sparse features but does not decide which fea-tures to retain Training-coupled feature and embedding selection BSN-style gates [21, 35], OptEmbed [24], OptFS [23] Select features and embedding struc-ture jointly with the downstream model Captures interaction-sensitive signal but couples ranking cost to the training stack First-stage operational filtering (this paper) LO-FAR Reduce the sparse candidate pool be-fore expensive retraining under ex-plicit budgets Sacrifices interaction awareness for cheap reruns, linear CPU parallelization, and predictable cadence
+
+feature value is an unordered list of categorical identifiers 
+
+𝑥 ( 𝑗 ) 
+
+> 𝑖
+
+=  𝑖𝑑 ( 𝑗 ) 
+
+> 𝑖, 1
+
+, 𝑖𝑑 ( 𝑗 ) 
+
+> 𝑖, 2
+
+, . . . , 𝑖𝑑 ( 𝑗 )
+
+> 𝑖,𝑘 𝑖
+
+, (1) where 𝑘 𝑖 is the (variable) list length for example 𝑖 and feature 𝑗 ,and the identifier 𝑖𝑑 ( 𝑗 ) 
+
+> 𝑖,𝑡
+
+is drawn from the vocabulary of feature 
+
+𝑓 𝑗 . Empty lists are admissible and are filled with a placeholder identifier. The objective of sparse feature ranking is to produce an ordering 
+
+𝜋 : {1, . . . , 𝑝 } → { 1, . . . , 𝑝 } over F such that, for any practitioner-chosen budget 𝐵 ≤ 𝑝 , the top-𝐵 subset F𝐵 = {𝑓 𝜋 (1) , . . . , 𝑓 𝜋 (𝐵 ) }
+
+supports a downstream ranker whose end-to-end quality is compet-itive with the model trained on the full sparse pool. The evaluation criterion is downstream NE gain (Section 5.2) after retraining the ranker with the selected subset, not agreement with any other ranking method. 
+
+## 3.3 Operational Requirements 
+
+In industrial pipelines, sparse feature ranking is rerun whenever new candidate features arrive, vocabularies are refreshed, traffic distributions shift, or the downstream model is updated. A rank-ing workflow that is to be useful in this regime must satisfy four practical requirements: (1) it must scale to hundreds to thousands of sparse features without quadratic cost in 𝑝 ;(2) it must have predictable turnaround on commodity infras-tructure, ideally without contending with accelerator capac-ity needed for model training and large-scale evaluation; (3) it must be simple to operate, parallelize, monitor, and rerun within existing data pipelines; and (4) it must preserve enough downstream model quality at the chosen feature budget to justify the pruning decision. LO-FAR is designed for this operating point. It does not attempt to solve full joint feature selection for the downstream ranker. Instead, it provides a low-cost first-stage filter that removes low-signal sparse features before more expensive procedures are invoked. 
+
+## 3.4 Storage Implications of Pruning 
+
+The reported storage reduction is a deterministic consequence of pruning, not a separate empirical metric. Each retained sparse ID-list feature 𝑓 𝑗 contributes an embedding table whose size is de-termined by its vocabulary cardinality and embedding dimension. Removing 𝑓 𝑗 removes the corresponding table from both training and serving artifacts. In the studied model, sparse tables account for more than 97% of the parameter count, so retaining 𝐵 out of 
+
+𝑝 = 475 features removes approximately 1 − 𝐵 /𝑝 of the sparse pa-rameter budget under the (approximately satisfied) assumption that retained and removed features have comparable per-table size. For 
+
+𝐵 ∈ { 100 , 200 , 300 , 400 }, this corresponds to roughly 79% , 58% , 37% ,and 16% removal, respectively, which we report as the practitioner-relevant range of 40–75% sparse-storage reduction at the budgets that preserve downstream NE most effectively. 
+
+## 3.5 A Recurring-Cost View of Feature Ranking 
+
+The choice of ranking workflow has consequences that compound over time. To make this explicit, consider a workflow 𝑚 , a feature budget 𝐵 , and a refresh cadence 𝑅 (the number of times the workflow must be rerun per accounting period). The recurring cost incurred by the firm can be decomposed as 
+
+𝐶 (𝑚, 𝐵, 𝑅 ) = 𝐶 rank (𝑚, 𝑅 )+ 𝑅 ·  𝐶 train (𝐵 ) + 𝐶 store (𝐵 ) + 𝐶 serve (𝐵 ), (2) where 𝐶 rank aggregates the cost of running the ranking workflow itself, and 𝐶 train , 𝐶 store , and 𝐶 serve are the per-cycle training, storage, and serving costs at the chosen budget 𝐵 . Equation (2) is not a com-plete cost model; its purpose is to make explicit a structural fact often left implicit in the literature. Training-coupled selection meth-ods reduce 𝐶 train , 𝐶 store , and 𝐶 serve at the chosen budget but increase 
+
+𝐶 rank , because importance estimation and downstream training are entangled. A first-stage local filter targets the same downstream savings while keeping 𝐶 rank small and predictable, which becomes important when 𝑅 is large. In ad recommendation systems with multiple ranking tasks, several feature owners, and frequent retrain-ing schedules, even modest reductions in 𝐶 rank can compound into substantial savings, and the marginal cost of a sparse feature must be evaluated relative to its recurring contribution to all four terms in equation (2) . The challenge of feature freshness in production CTR systems has been studied from the model update perspective [ 32 ], where stale feature embeddings degrade prediction quality over time; this reinforces the argument that ranking workflows must be rerun frequently and cheaply. LO-FAR: A Cost-Aware Local Filter for Sparse Feature Ranking in Industrial Ad Recommendation RecSys ’26, September 27-October 02, 2026, Minneapolis, MN, USA 
+
+## 4 LO-FAR: A Local Ranking Workflow for Sparse ID-List Features 
+
+LO-FAR ranks each candidate sparse ID-list feature 𝑓 𝑗 ∈ F from its stand-alone held-out predictive signal, computed by a lightweight local estimator that operates only on the values of 𝑓 𝑗 and the super-vised label 𝑦 . This per-feature independence is the central design choice. It eliminates the need to invoke or retrain the downstream ranker during the ranking pass, makes parallelization across fea-tures trivial, and reduces the ranking workflow to a CPU-only batch job that fits standard data pipelines. 
+
+## 4.1 Workflow 
+
+LO-FAR consists of six stages applied uniformly to each candidate sparse feature: (1) Sampling. Draw a representative subset of the logged data (in our experiments, 𝑛 ≈ 10 6 rows) to balance statistical fidelity against ranking turnaround time. Stratified sampling by the supervised label is used to preserve the empirical positive rate. (2) Train/test split. Partition the sampled rows into Dtrain and 
+
+Dtest to enable held-out evaluation of feature-specific pre-dictors. Splits are stratified by label. (3) Feature explosion. For each example 𝑖 , the variable-length list 𝑥 ( 𝑗 ) 
+
+> 𝑖
+
+= [𝑖𝑑 ( 𝑗 ) 
+
+> 𝑖, 1
+
+, . . . , 𝑖𝑑 ( 𝑗 ) 
+
+> 𝑖,𝑘 𝑖
+
+] is unrolled into one row per iden-tifier, with the example label 𝑦 𝑖 replicated across rows. Empty lists are filled with a placeholder identifier −1. Formally, 
+
+D ( 𝑗 ) 
+
+> train,exp
+
+= (𝑖𝑑 ( 𝑗 ) 
+
+> 𝑖,𝑡
+
+, 𝑦 𝑖 ) : 𝑡 = 1, . . . , 𝑘 𝑖 , 𝑖 ∈ 𝐼 train , (3) and analogously for D ( 𝑗 )
+
+> test,exp
+
+.(4) Local estimator. A lightweight ID-level predictor 𝑠 𝑗 : Vocab (𝑓 𝑗 )→ [ 0, 1] is fit on D ( 𝑗 )
+
+> train,exp
+
+. For an identifier 𝑖𝑑 that occurs at least 𝐾 times in the exploded training data, 𝑠 𝑗 (𝑖𝑑 ) is set to the empirical positive rate of that identifier. For rare or unseen identifiers, 𝑠 𝑗 (𝑖𝑑 ) backs off to a 𝑘 -nearest-neighbor estimate over the 𝐾 closest training identifiers in the fea-ture’s vocabulary, where the neighborhood is induced by frequency-weighted token distance. (5) Aggregation. The example-level score for feature 𝑓 𝑗 is ob-tained by aggregating ID-level scores back to the example, 
+
+ˆ𝑦 ( 𝑗 ) 
+
+> 𝑖
+
+= 1
+
+𝑘 𝑖 𝑘 𝑖 ∑︁ 
+
+> 𝑡 =1
+
+𝑠 𝑗 
+
+ 𝑖𝑑 ( 𝑗 )
+
+> 𝑖,𝑡
+
+, (4) where mean aggregation is used in our experiments. Median and max aggregation produced statistically indistinguishable downstream NE in preliminary studies; mean was selected for stability. (6) Scoring and ranking. The held-out predictive utility of 𝑓 𝑗 is computed on D ( 𝑗 ) 
+
+> test,exp
+
+using log loss as the primary criterion, with average precision and AUC retained as secondary diag-nostics. Features are ranked in descending order of held-out predictive utility. The use of large but tractable samples in stage (1) is a deliberate design choice rather than a stop-gap. Industrial pipelines do not require an exact ranking over the full corpus; they require a stable, actionable ranking obtained quickly enough that the analysis can be rerun whenever the candidate sparse pool changes. Sampling with a held-out split offers a controlled point on this trade-off and is well aligned with how feature owners interact with such pipelines in practice. 
+
+## 4.2 Theoretical and Computational Properties 
+
+The independence assumption underpinning LO-FAR has two con-sequences. First, the ranking pass scales linearly in the feature count 
+
+𝑝 , in contrast to correlation- or interaction-aware methods whose cost typically scales superlinearly in 𝑝 once pairwise structure is considered. This per-feature marginal screening approach shares the spirit of sure independence screening [ 4] in classical statistics, adapted here to the sparse ID-list setting. For 𝑛 training examples, 
+
+𝑝 candidate features, and an average list length ℓ per example, the dominant cost per feature is incurred by the construction and lookup of the local ID-level estimator on the exploded data, which gives total complexity 
+
+O  𝑝 · 𝑛 · ℓ · log (𝑛 ℓ ). (5) Second, because each feature is processed in isolation, the work-flow exhibits embarrassingly parallel structure across features. A pool of 𝑤 CPU workers reduces wall-clock time to approximately 
+
+O  𝑝 · 𝑛 · ℓ · log (𝑛 ℓ )/ 𝑤  in the limit where worker overhead is negligible. The execution model is CPU-only, model-agnostic, and per-feature independent, which matches commodity production data infrastructure more naturally than repeated GPU retraining loops and supports straightforward caching, retry, and monitoring at per-feature granularity. 
+
+## 4.3 Hyperparameters and Sensitivity 
+
+LO-FAR exposes a small number of hyperparameters: the sample size 𝑛 , the train/test split ratio, the neighbor count 𝐾 used in the rare-identifier back-off, and the aggregation function. In our experi-ments, varying 𝐾 within a reasonable range had marginal effect on the resulting ranking. Mean, median, and maximum aggregation produced nearly identical downstream NE; mean was selected for stability. Frequent identifiers, which dominate the empirical signal in production logs, are largely insensitive to 𝐾 because they admit direct estimation from their per-identifier label rate; the back-off rule affects only the rare-identifier tail. These observations are con-sistent with the expectation that the leading sources of feature-level variance are the vocabulary statistics rather than the precise local model. 
+
+## 4.4 Scope and Limitations 
+
+LO-FAR is intentionally a stand-alone, model-agnostic ranking method, and we make its scope explicit in three respects. 
+
+• Interaction-only features: A feature whose value emerges only through pairwise or higher-order interactions with other features can receive a low LO-FAR score even when its inclusion would benefit the downstream ranker. We position LO-FAR as a first-stage filter rather than a replacement for interaction-aware methods. After first-stage pruning, more expensive procedures can be invoked selectively on the re-duced feature pool when the marginal cost is justified. RecSys ’26, September 27-October 02, 2026, Minneapolis, MN, USA Erbayat et al. 
+
+• List length: The current workflow is best suited to short sparse ID-list features, in line with the deployment setting that motivated its design. Longer lists increase the cost of the explosion step in equation (3) and may require additional approximation, sampling, or sequence-aware estimators. Pre-liminary post-submission experiments suggest that the work-flow continues to produce useful rankings on longer lists at higher cost, but those experiments are outside the scope of the present paper. 
+
+• Ranking as input to retraining: The output of LO-FAR is a ranking, not a launch decision. Any pruning derived from LO-FAR should be validated through end-to-end retraining of the downstream ranker on the retained subset before deployment. Aggregate scores alone are not sufficient to justify launches in industrial settings. 
+
+## 5 Experimental Setup 5.1 Dataset and Feature Pool 
+
+Experiments are conducted on a production-grade dataset of more than one million logged user–ad interactions, drawn from a large industrial ad recommendation system over an extended observation window in order to span representative variation in user behavior, advertiser inventory, and contextual conditions. After applying standard production filters for data quality and feature eligibility, the candidate sparse feature pool comprises 475 short ID-list fea-tures, defined as features whose 99th-percentile list length is below five identifiers. Short lists are the dominant family in the deployed system and are the setting in which LO-FAR was originally designed to operate. The dataset is partitioned into training and held-out evaluation subsets; the training subset is used to fit the LO-FAR local estimators (Section 4) and to retrain the downstream ranker for each method and each feature budget, while the held-out subset is used exclusively for end-to-end NE evaluation. 
+
+## 5.2 Evaluation Metric: Normalized Entropy 
+
+We adopt Normalized Entropy (NE) as the primary downstream evaluation metric for both CTR and CVR prediction tasks. This follows standard industrial practice for click-prediction systems [ 9 ]. NE is defined as the average per-example log loss of the model normalized by the entropy of the empirical class distribution, 
+
+NE =
+
+> 1
+> 𝑁
+
+Í𝑁 𝑖 =1
+
+ 𝑦 𝑖 log 𝑝 𝑖 + ( 1 − 𝑦 𝑖 ) log (1 − 𝑝 𝑖 )
+
+ˆ𝑝 log ˆ 𝑝 + ( 1 − ˆ𝑝 ) log (1 − ˆ𝑝 ) , (6) where 𝑦 𝑖 ∈ { 0, 1} is the binary label, 𝑝 𝑖 is the model’s predicted probability for example 𝑖 , 𝑁 is the number of evaluation examples, and ˆ𝑝 = 1
+
+> 𝑁
+
+Í𝑖 𝑦 𝑖 is the empirical positive rate. NE is a sensitive and class-imbalance-aware quality measure. Lower NE corresponds to better calibrated predictions, and small absolute reductions translate into commercially meaningful improvements at industrial scale. We report NE gain relative to a fixed reference model. Through-out this paper, the reference model is a dense-only ranker trained on exactly the same logged data as the sparse-augmented models but with all sparse ID-list features removed. The relative NE gain of a method is defined as 
+
+ΔNE = NE method − NE baseline 
+
+NE baseline 
+
+, (7) where NE method is computed on the downstream ranker retrained with the top-𝐵 sparse features selected by the candidate ranking method and NE baseline is the NE of the dense-only reference. 
+
+## 5.3 Baselines 
+
+LO-FAR is compared against three baselines that span the oper-ational spectrum of feature ranking methods used in industrial CTR/CVR pipelines: 
+
+• Naive (coverage-based). A statistical heuristic that ranks features by simple input properties such as coverage (the proportion of examples in which the feature is non-empty) and basic distributional summaries. The naive baseline has 
+
+O( 𝑝 ) cost and is included because, in practice, teams without access to a dedicated ranking workflow frequently rely on similar heuristics. Comparing against it clarifies whether LO-FAR offers material gains over the cheapest plausible alternative. 
+
+• Shuffle-based importance. A model-agnostic permutation-importance procedure that estimates the importance of each feature by measuring the degradation of model NE when the feature’s values are randomly permuted in the held-out set [ 5 ]. The procedure requires repeated evaluation passes of the downstream model, and stable estimates in industrial CTR/CVR settings typically require recalibration or partial retraining for each feature. 
+
+• Binary Stochastic Neurons (BSN). A training-coupled feature selection method based on 𝐿 0-style stochastic gates over input features, jointly optimized with the ranker [ 21 ,35 ]. BSN is interaction-aware in the sense that gates are learned in the presence of all features simultaneously, and it represents the upper end of the cost–quality trade-off considered here. 
+
+## 5.4 Evaluation Protocol 
+
+For each ranking method 𝑚 ∈ { Naive , Shuffle , BSN , LO-FAR } and each feature budget 𝐵 ∈ { 100 , 200 , 300 , 400 }, we form the top-𝐵 
+
+subset F (𝑚 ) 
+
+> 𝐵
+
+produced by 𝑚 , retrain the downstream ranker from scratch on F (𝑚 ) 
+
+> 𝐵
+
+, and report ΔNE on the held-out evaluation subset for both CTR and CVR tasks. The choice of budgets covers aggres-sive ( 𝐵 = 100 ), moderate ( 𝐵 = 200 ), conservative ( 𝐵 = 300 ), and near-full ( 𝐵 = 400 ) pruning. As a secondary diagnostic, we report Jaccard similarity over the top-𝑁 retained features across pairs of ranking methods. Note that ranking similarity is treated as an interpretability and diagnostic tool, not as a success criterion. The criterion of interest is downstream NE gain at the chosen budget after retraining. 
+
+## 5.5 Operational Comparison 
+
+Table 2 summarizes the operational profile of each method as ob-served in our environment. LO-FAR completed feature ranking in approximately two CPU-hours when parallelized across CPU work-ers; the naive baseline completed in minutes. The shuffle-based and BSN procedures required multiple GPU-days when their full retraining and tuning workloads are accumulated. In the same envi-ronment and accounting for repeated runs and tuning, the resulting compute spend was below approximately $100 USD for LO-FAR LO-FAR: A Cost-Aware Local Filter for Sparse Feature Ranking in Industrial Ad Recommendation RecSys ’26, September 27-October 02, 2026, Minneapolis, MN, USA 
+
+Table 2: Operational characteristics of the four ranking work-flows. Interact = interaction-aware; Retrain = requires down-stream retraining during the ranking pass. Turnaround is as observed in our environment; absolute durations and costs are environment-dependent                          
+
+> Method Interact. Retrain CPU-only HW Turnaround Naive No No Yes CPU Minutes LO-FAR No No Yes CPU ∼2 CPU-h Shuffle Indirect Yes No GPU Multi-day BSN Yes Yes No GPU Multi-day
+
+and exceeded approximately $4,000 USD for each of shuffle-based importance and BSN. We report these numbers as observed operat-ing points in our setting rather than as universal claims; absolute costs depend on hardware, scheduler contention, and the exact tuning regimen used. The storage implications of the evaluated budgets are deter-ministic, as discussed in Section 3. Retaining 100–300 of the 475 sparse ID-list features removes approximately 40–75% of sparse embedding tables and a comparable fraction of sparse parameters in the deployed model. We emphasize this distinction because, al-though the storage reduction is not a separate empirical gain, it is a primary driver of the deployment-relevant benefits of pruning. Smaller sparse models lower training-time memory pressure, re-duce serving footprint, and shorten retraining cycles. The feature budget therefore acts as a direct systems control rather than only a reporting choice. 
+
+## 6 Results and Discussion 6.1 Downstream Quality After Pruning 
+
+Figure 1 reports the primary outcome of our evaluation. We plot downstream NE gain ΔNE relative to the dense-only reference, measured after retraining the downstream ranker with the top-𝐵 
+
+sparse features selected by each method. Across both CTR and CVR tasks and across all four feature budgets 𝐵 ∈ { 100 , 200 , 300 , 400 },LO-FAR achieves NE gains that are competitive with those obtained by shuffle-based importance and BSN across the evaluated budget range. At individual budget points, the relative ordering among methods varies; the practitioner-relevant finding is that LO-FAR consistently produces a viable quality–cost trade-off across the full range without requiring GPU retraining during the ranking pass. The naive coverage-based baseline tracks LO-FAR closely on the simpler regime of clearly informative features but degrades as the budget tightens. This indicates that LO-FAR captures meaningful held-out predictive structure beyond what coverage statistics alone provide. The strongest quality–cost trade-off is observed near 𝐵 = 200 .At this budget, the retrained ranker preserves a large share of the NE gain available with the full sparse pool while removing more than half of the sparse embedding tables. More conservative operating points ( 𝐵 = 300 or 𝐵 = 400 ) are appropriate when sparse storage is not the dominant constraint and feature owners prefer minimal disruption to the downstream model. More aggressive points ( 𝐵 = 100 ) are appropriate when serving footprint or training memory pressure is the binding constraint. The fact that LO-FAR remains competitive across this range is the practitioner-relevant outcome. It produces a usable quality–cost frontier rather than a single operating point tuned to a particular budget. 
+
+## 6.2 Ranking Overlap as a Diagnostic 
+
+Figure 2 reports Jaccard similarity between the top-𝑁 retained fea-tures under each pair of ranking methods. The naive heuristic and LO-FAR rankings exhibit relatively high overlap, while both differ markedly from BSN; at 𝑁 = 300 , the Jaccard similarity between LO-FAR and BSN is approximately 60% . This pattern is expected and follows from the structural difference between the methods. BSN jointly optimizes feature gates in the presence of feature in-teractions and correlations, and can therefore down-weight fea-tures whose marginal value is largely subsumed by other retained features. LO-FAR, by construction, ranks features on stand-alone predictive utility and does not model such redundancy. In high-dimensional sparse spaces, where many features carry overlapping signal, multiple distinct subsets of comparable size can support com-parable downstream quality after retraining. Ranking similarity is therefore not a proxy for end-to-end performance. We retain Figure 2 as an interpretability and diagnostic tool, not as a success criterion. The deployment-relevant criterion is the downstream NE gain reported in Section 6.1, which shows that LO-FAR identifies a sufficiently informative subset under each budget despite producing rankings that diverge from BSN. The overlap pattern also offers a structural explanation for why a local method can be effective at first-stage filtering. Much of the first-stage decision consists of separating clearly weak sparse features from the rest of the pool. Interaction-aware methods are most useful near the difficult boundary where several strong, par-tially redundant features compete for the final retained slots. In large industrial feature pools, a stand-alone filter such as LO-FAR can therefore remove substantial low-signal capacity at low cost. This leaves the harder near-boundary decisions to more expensive methods if they are warranted. 
+
+## 6.3 Practical Implications for Industrial Pipelines 
+
+The results above carry several deployment-relevant implications. 
+
+• Iteration velocity: A ranking pass that finishes on commodity CPUs in roughly two CPU-hours is far easier to operate than one requiring repeated GPU retraining. CPU jobs can be scheduled off the accelerator queues used for training and evaluation, removing contention and letting feature owners test new candidate vocabularies or behavioral signals on a near-daily cadence rather than waiting for a centralized retraining slot. 
+
+• Pipeline integration: Per-feature independence simplifies operational concerns often invisible in algorithmic compar-isons: jobs are easy to parallelize, cache, retry, and monitor; failures are isolated to individual features rather than a global training run; and partial pipelines still yield useful interme-diate rankings. These properties matter when ranking is one stage in a larger pipeline managing joins, vocabulary updates, and data snapshots. RecSys ’26, September 27-October 02, 2026, Minneapolis, MN, USA Erbayat et al.  
+
+> (a) CTR prediction (b) CVR prediction
+
+Figure 1: Downstream NE gain ( ΔNE ) relative to a dense-only reference model trained without sparse features. Each curve corresponds to a ranking method, and the horizontal axis sweeps the retained feature budget 𝐵 . LO-FAR remains competitive with shuffle-based importance and BSN across realistic feature budgets while requiring substantially less ranking compute. 
+
+Figure 2: Jaccard similarity over the top-𝑁 retained features for each pair of ranking methods. Similarity is reported as a diagnostic only; end-to-end NE gain (Figure 1) is the pri-mary evaluation criterion. LO-FAR overlaps strongly with the naive baseline and diverges from BSN, as expected from their differing treatments of feature interactions. 
+
+• Staged use with interaction-aware methods: The results sup-port a staged workflow rather than a categorical replace-ment. LO-FAR can shrink a pool of several hundred can-didate features into a smaller retained subset, after which interaction-aware methods are applied selectively where their marginal cost is justified—mirroring how many indus-trial RecSys pipelines reserve expensive procedures for the highest-return parts of the stack. 
+
+• Organizational consequences: Because the ranking pass needs no accelerators, it also changes who can run it. Where mul-tiple teams share a ranking platform, feature owners can revisit feature budgets autonomously rather than queuing be-hind accelerator-bound training and evaluation workloads. 
+
+## 6.4 Competing Interpretations and Boundaries of the Result 
+
+Two interpretations of the broader literature are consistent with the present findings. The first holds that improvements in rank-ing architectures [ 30 ], distributed training systems [ 7], and online embedding infrastructure [ 20 ] reduce the urgency of aggressive feature pruning by absorbing more sparse capacity efficiently. The second holds that the same advances increase the value of disci-plined sparse-feature management, because each additional feature now enters a more complex and more expensive stack [ 15 , 23 ]. Our findings are more consistent with the second interpretation in the regime of first-stage filtering on large pools of short ID-list fea-tures. We do not claim the broader debate is settled. The evidence reported here is strongest for short ID-list features and budgeted re-training; for longer histories or models with stronger cross-feature dependence, training-coupled selectors may recover gains that jus-tify their additional cost. Identifying the conditions under which each strategy dominates is an open and important question for industry-track research. 
+
+## 7 Conclusion 
+
+We present LO-FAR, a CPU-only local ranking workflow that scores each sparse ID-list feature from its stand-alone held-out predictive signal and decouples first-stage pruning from the downstream train-ing loop. On a production-grade dataset of more than one million logged interactions and 475 candidate features, LO-FAR completes ranking in approximately two CPU-hours, achieves NE gains com-petitive with shuffle-based importance and BSN across budgets of 100–400 retained features, and yields deterministic 40–75% reduc-tions in sparse embedding storage. The contribution is system-level rather than purely algorithmic, and argues that feature ranking in industrial recommendation should be evaluated by the joint cost, turnaround time, and operational simplicity of repeated reruns LO-FAR: A Cost-Aware Local Filter for Sparse Feature Ranking in Industrial Ad Recommendation RecSys ’26, September 27-October 02, 2026, Minneapolis, MN, USA 
+
+rather than offline expressiveness alone. Under that lens, LO-FAR shifts first-stage sparse feature management toward a repeatable, parallelizable, CPU-bound workflow and complements interaction-aware selectors by leaving them only the harder near-boundary decisions on a smaller, pre-filtered pool. Extending the workflow to longer ID-list features and combining its stand-alone signal with selectively applied interaction-aware steps remain open directions for future work. 
+
+## References 
+
+[1] Bilge Acun, Matthew Murphy, Xiaodong Wang, Jade Nie, Carole-Jean Wu, and Kim Hazelwood. 2021. Understanding Training Efficiency of Deep Learning Recommendation Models at Scale. In IEEE International Symposium on High-Performance Computer Architecture (HPCA) .[2] Heng-Tze Cheng, Levent Koc, Jeremiah Harmsen, Tal Shaked, Tushar Chandra, Hrishi Aradhye, Glen Anderson, Greg Corrado, Wei Chai, Mustafa Ispir, Rohan Anil, Zakaria Haque, Lichan Hong, Vihan Jain, Xiaobing Liu, and Hemal Shah. 2016. Wide & Deep Learning for Recommender Systems. In Proceedings of the 1st Workshop on Deep Learning for Recommender Systems (Boston, MA, USA) 
+
+(DLRS 2016) . Association for Computing Machinery, New York, NY, USA, 7–10. doi:10.1145/2988450.2988454 [3] Paul Covington, Jay Adams, and Emre Sargin. 2016. Deep neural networks for YouTube recommendations. In Proceedings of the 10th ACM Conference on Recommender Systems . ACM, 191–198. [4] Jianqing Fan and Jinchi Lv. 2008. Sure Independence Screening for Ultrahigh Dimensional Feature Space. Journal of the Royal Statistical Society: Series B (Statistical Methodology) 70, 5 (2008), 849–911. [5] Aaron Fisher, Cynthia Rudin, and Francesca Dominici. 2019. All models are wrong, but many are useful: Learning a variable’s importance by studying an entire class of prediction models simultaneously. Journal of Machine Learning Research 20, 177 (2019), 1–81. [6] Huan Gui, Ruoxi Wang, Ke Yin, Long Jin, Maciej Kula, Taibai Xu, Lichan Hong, and Ed H Chi. 2023. Hiformer: Heterogeneous feature interactions learning with transformers for recommender systems. arXiv preprint arXiv:2311.05884 (2023). [7] Huifeng Guo, Wei Guo, Yong Gao, Ruiming Tang, Xiuqiang He, and Wenzhi Liu. 2021. ScaleFreeCTR: MixCache-based Distributed Training System for CTR Models with Huge Embedding Table. In Proceedings of the 44th International ACM SIGIR Conference on Research and Development in Information Retrieval .1269–1278. doi:10.1145/3404835.3462976 [8] Huifeng Guo, Ruiming Tang, Yunming Ye, Zhenguo Li, and Xiuqiang He. 2017. DeepFM: A Factorization-Machine based Neural Network for CTR Prediction. In Proceedings of the Twenty-Sixth International Joint Conference on Artificial Intelligence (IJCAI-17) . 1725–1731. [9] Xinran He, Junfeng Pan, Ou Jin, Tianbing Xu, Bo Liu, Tao Xu, Yanxin Shi, Antoine Atallah, Ralf Herbrich, Stuart Bowers, and Joaquin Quiñonero-Candela. 2014. Practical Lessons from Predicting Clicks on Ads at Facebook. In Proceedings of the Eighth International Workshop on Data Mining for Online Advertising (New York, NY, USA) (ADKDD’14) . Association for Computing Machinery, New York, NY, USA, 1–9. doi:10.1145/2648584.2648589 [10] Pengyue Jia, Yejing Wang, Zhaocheng Du, Xiangyu Zhao, Yichao Wang, Bo Chen, Wanyu Wang, Huifeng Guo, and Ruiming Tang. 2024. ERASE: Benchmarking Feature Selection Methods for Deep Recommender Systems. In Proceedings of the 30th ACM SIGKDD Conference on Knowledge Discovery and Data Mining 
+
+(Barcelona, Spain) (KDD ’24) . Association for Computing Machinery, New York, NY, USA. doi:10.1145/3637528.3671571 [11] Wang-Cheng Kang, Derek Zhiyuan Cheng, Tiansheng Yao, Xinyang Yi, Ting Chen, Lichan Hong, and Ed H. Chi. 2021. Learning to Embed Categorical Features without Embedding Tables for Recommendation. In Proceedings of the 27th ACM SIGKDD Conference on Knowledge Discovery & Data Mining . 840–850. doi:10. 1145/3447548.3467304 [12] Wang-Cheng Kang and Julian McAuley. 2018. Self-attentive sequential recom-mendation. In 2018 IEEE international conference on data mining (ICDM) . IEEE, 197–206. [13] Ron Kohavi and George H. John. 1997. Wrappers for Feature Subset Selection. 
+
+Artificial Intelligence 97, 1–2 (1997), 273–324. [14] Arjun Krishnan et al . 2023. Mutual information-based filter hybrid feature selec-tion method for medical dataset classification. Multimedia Tools and Applications 
+
+82, 15 (2023), 22193–22216. doi:10.1007/s11042-023-15143-0 [15] Shiwei Li, Huifeng Guo, Xing Tang, Ruiming Tang, Lu Hou, Ruixuan Li, and Rui Zhang. 2024. Embedding Compression in Recommender Systems: A Survey. 
+
+Comput. Surveys 56, 5 (2024), 130:1–130:21. doi:10.1145/3637841 [16] Yu Li, Chiawei Chu, and Xingyu Liu. 2024. Improved DeepFM-Based Model with LSTM on Click-Through-Rate. In Proceedings of the 5th International Conference on Computer Information and Big Data Applications (Wuhan, China) (CIBDA ’24) .Association for Computing Machinery, New York, NY, USA, 52–56. doi:10.1145/ 3671151.3671161 [17] Weilin Lin, Xiangyu Zhao, Yejing Wang, Tong Xu, and Xian Wu. 2022. AdaFS: Adaptive feature selection in deep recommender system. In Proceedings of the 28th ACM SIGKDD conference on knowledge discovery and data mining . 3309–3317. [18] Bin Liu, Chenxu Zhu, Guilin Li, Weinan Zhang, Jincai Lai, Ruiming Tang, Xi-uqiang He, Zhenguo Li, and Yong Yu. 2020. AutoFIS: Automatic Feature In-teraction Selection in Factorization Models for Click-Through Rate Prediction. In Proceedings of the 26th ACM SIGKDD International Conference on Knowledge Discovery & Data Mining . 2636–2645. [19] Siyi Liu, Chen Gao, Yihong Chen, Depeng Jin, and Yong Li. 2021. Learnable Em-bedding Sizes for Recommender Systems. In International Conference on Learning Representations (ICLR) .[20] Zhuoran Liu, Leqi Zou, Xuan Zou, Caihua Wang, Biao Zhang, Da Tang, Bolin Zhu, Yijie Zhu, Peng Wu, Ke Wang, and Youlong Cheng. 2022. Monolith: Real Time Recommendation System With Collisionless Embedding Table. arXiv preprint arXiv:2209.07663 (2022). [21] Christos Louizos, Max Welling, and Diederik P. Kingma. 2018. Learning Sparse Neural Networks through 𝐿 0 Regularization. In International Conference on Learn-ing Representations (ICLR) .[22] Liang Luo, Yuxin Chen, Zhengyu Zhang, Mengyue Hang, Andrew Gu, Buyun Zhang, Boyang Liu, Chen Chen, et al . 2026. Meta Lattice: Model Space Redesign for Cost-Effective Industry-Scale Ads Recommendations. In Proceedings of the 32nd ACM SIGKDD Conference on Knowledge Discovery and Data Mining (KDD ’26) . Association for Computing Machinery. arXiv preprint arXiv:2512.09200. [23] Fuyuan Lyu, Xing Tang, Dugang Liu, Liang Chen, Xiuqiang He, and Xue Liu. 2023. Optimizing Feature Set for Click-Through Rate Prediction. In Proceedings of the ACM Web Conference 2023 . 3386–3395. [24] Fuyuan Lyu, Xing Tang, Hong Zhu, Huifeng Guo, Yingxue Zhang, Ruiming Tang, and Xue Liu. 2022. OptEmbed: Learning Optimal Embedding Table for Click-through Rate Prediction. In Proceedings of the 31st ACM International Conference on Information & Knowledge Management . 1399–1409. [25] Wenhan Lyu, Devashish Tyagi, Yihang Yang, Ziwei Li, Ajay Somani, Karthikeyan Shanmugasundaram, Nikola Andrejevic, Ferdi Adeputra, Curtis Zeng, Arun K. Singh, Maxime Ransan, and Sagar Jain. 2025. DV365: Extremely Long User History Modeling at Instagram. In Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining .[26] Maxim Naumov, Dheevatsa Mudigere, Hao-Jun Michael Shi, Jianyu Huang, Narayanan Sundaraman, Jongsoo Park, Xiaodong Wang, Udit Gupta, Carole-Jean Wu, Alisson G. Azzolini, Dmytro Dzhulgakov, Andrey Mallevich, Ilia Cherni-avskii, Yinghai Lu, Raghuraman Krishnamoorthi, Ansha Yu, Volodymyr Kon-dratenko, Stephanie Pereira, Xianjie Chen, Wenlin Chen, Vijay Rao, Bill Jia, Liang Xiong, and Misha Smelyanskiy. 2019. Deep Learning Recommendation Model for Personalization and Recommendation Systems. arXiv preprint arXiv:1906.00091 
+
+(2019). [27] Hanchuan Peng, Fuhui Long, and Chris Ding. 2005. Feature selection based on mutual information: criteria of max-dependency, max-relevance, and min-redundancy. IEEE Transactions on pattern analysis and machine intelligence 27, 8 (2005), 1226–1238. [28] Matthew Richardson, Ewa Dominowska, and Robert Ragno. 2007. Predicting clicks: estimating the click-through rate for new ads. In Proceedings of the 16th international conference on World Wide Web . 521–530. [29] Geet Sethi, Bilge Acun, Niket Agarwal, Christos Kober, Carole-Jean Wu, and Kim Hazelwood. 2022. RecShard: Statistical Feature-Based Memory Optimization for Industry-Scale Neural Recommendation. In Proceedings of Machine Learning and Systems (MLSys) .[30] Ruoxi Wang, Rakesh Shivanna, Derek Zhiyuan Cheng, Sagar Jain, Dong Lin, Lichan Hong, and Ed H. Chi. 2021. DCN V2: Improved Deep & Cross Network and Practical Lessons for Web-scale Learning to Rank Systems. In Proceedings of the Web Conference 2021 . 1785–1797. doi:10.1145/3442381.3450078 [31] Yejing Wang, Xiangyu Zhao, Tong Xu, and Xian Wu. 2022. AutoField: Automating Feature Selection in Deep Recommender Systems. In Proceedings of the ACM Web Conference 2022 . Association for Computing Machinery, New York, NY, USA, 1977–1986. doi:10.1145/3485447.3512071 [32] Zhikai Wang, Kangyi Lin, Yanyan Shen, and Zibin Zhang. 2023. Feature Staleness Aware Incremental Learning for CTR Prediction. In Proceedings of the Thirty-Second International Joint Conference on Artificial Intelligence (IJCAI) . 2348–2356. doi:10.24963/ijcai.2023/261 [33] Zhiqiang Xu, Dong Li, Weijie Zhao, Xing Shen, Tianbo Huang, Xiaoyun Li, and Ping Li. 2021. Agile and Accurate CTR Prediction Model Training for Massive-Scale Online Advertising Systems. In Proceedings of the 2021 International Confer-ence on Management of Data . 2404–2409. doi:10.1145/3448016.3457236 [34] Bing Xue, Mengjie Zhang, Will N Browne, and Xin Yao. 2015. A survey on evolutionary computation approaches to feature selection. IEEE Transactions on evolutionary computation 20, 4 (2015), 606–626. [35] Yutaro Yamada, Ofir Lindenbaum, Sahand Negahban, and Yuval Kluger. 2020. Feature selection using stochastic gates. In International conference on machine learning . PMLR, 10648–10659. RecSys ’26, September 27-October 02, 2026, Minneapolis, MN, USA Erbayat et al. 
+
+[36] Xuanhua Yang, Xiaoyu Peng, Penghui Wei, Shaoguo Liu, Liang Wang, and Bo Zheng. 2022. Adasparse: Learning adaptively sparse structures for multi-domain click-through rate prediction. In Proceedings of the 31st ACM International Con-ference on Information & Knowledge Management . 4635–4639. [37] Hang Yin, Kuang-Hung Liu, Mengying Sun, Yuxin Chen, Buyun Zhang, Jiang Liu, Vivek Sehgal, Rudresh Rajnikant Panchal, Eugen Hotaj, Xi Liu, et al . 2024. AutoML for Large Capacity Modeling of Meta’s Ranking Systems. In Companion Proceedings of the ACM Web Conference 2024 . 374–382. [38] Junqi Zhang, Yiqun Liu, Jiaxin Mao, Xiaohui Xie, Min Zhang, Shaoping Ma, and Qi Tian. 2022. Global or Local: Constructing Personalized Click Models for Web Search. In Proceedings of the ACM Web Conference 2022 (Virtual Event, Lyon, France) (WWW ’22) . Association for Computing Machinery, New York, NY, USA, 213–223. doi:10.1145/3485447.3511950 [39] Xiangyu Zhao, Maolin Wang, Xinjian Zhao, Jiansheng Li, Shucheng Zhou, Dawei Yin, Qing Li, Jiliang Tang, and Ruocheng Guo. 2023. Embedding in Recom-mender Systems: A Survey. arXiv preprint arXiv:2310.18608 (2023). https: //arxiv.org/html/2310.18608v2 Comprehensive survey on embedding techniques for recommendation systems, covering high-dimensional sparse features and categorical variables.

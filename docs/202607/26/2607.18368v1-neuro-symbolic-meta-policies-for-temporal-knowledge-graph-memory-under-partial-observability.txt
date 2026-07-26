@@ -1,0 +1,1713 @@
+Title: Neuro-Symbolic Meta-Policies for Temporal Knowledge-Graph Memory under Partial Observability
+
+URL Source: https://arxiv.org/pdf/2607.18368v1
+
+Published Time: Wed, 22 Jul 2026 00:05:20 GMT
+
+Number of Pages: 19
+
+Markdown Content:
+## Neuro-Symbolic Meta-Policies for Temporal Knowledge-Graph Memory under Partial Observability 
+
+Taewoon Kim 1,2, Vincent François-Lavet 2, and Michael Cochez 3 
+
+> 1
+
+HumemAI, The Netherlands 
+
+taewoon@humem.ai  
+
+> 2
+
+Vrije Universiteit Amsterdam, The Netherlands 
+
+vincent.francoislavet@vu.nl  
+
+> 3
+
+ELLIS Institute Finland & Abo Akademi University, Finland 
+
+michael.cochez@abo.fi 
+
+Abstract. Partially observable reinforcement learning requires deciding what to retain, retrieve, and forget over time. We introduce a neuro-symbolic meta-policy that learns which symbolic memory heuristic to apply at each decision point while keeping execution symbolic. Our set-ting uses temporal knowledge-graph memory in RoomKG, where hidden state and observations are represented as Resource Description Frame-work (RDF) graphs and memory is augmented with temporal RDF triple annotations. The model combines knowledge-graph encoding of memory contents with value heads for question answering, exploration, and for-getting, yielding a controller that is both adaptive and inspectable. This gives the work a direct Semantic Web grounding through RDF-based representation, annotation-compatible graph semantics, and graph-based symbolic operations over explicit memory state. On train/test room splits at long-term memory capacity of 512, the qualifier-aware StarE-GNN configuration achieves the best held-out performance among the com-pared symbolic, neural, and neuro-symbolic systems while preserving step-level traceability of memory-management decisions. 
+
+Keywords: Neuro-symbolic reinforcement learning · Partial observabil-ity · Knowledge-graph memory · Meta-policy learning · Explicit symbolic control 
+
+1 Introduction 
+
+Reinforcement learning (RL) in partially observable environments requires effec-tive memory management: the agent must decide what to retain, what to for-get, and how to retrieve task-relevant information over long horizons. Classical deep RL approaches improve control performance with function approximation [25,32], and recurrent extensions mitigate partial observability by integrating observation histories [14,16]. However, latent memory in recurrent or end-to-end neural systems is often difficult to inspect and trace, which limits their suitability when explicit reasoning and explanation are important. arXiv:2607.18368v1 [cs.AI] 20 Jul 2026 2 T. Kim et al. 
+
+At the same time, symbolic and knowledge-graph-based approaches show that structured representations can improve transfer and make control decisions easier to inspect [8,34]. For graph-structured representations, relation-aware en-coders such as the relational graph convolutional network (R-GCN) and qualifier-aware hyper-relational message passing are especially relevant [29,7]. In our setting, hidden state and observations are represented as Resource Description Framework (RDF) graphs [5,15,19,20]. Memory additionally uses temporal anno-tation properties on observed facts, enabling explicit time- and provenance-like metadata over the memory graph. Concretely, the agent must answer object-location queries while navigating from partial room-level observations under a bounded long-term memory budget, so the core problem is how to coordinate retrieval, exploration, and forgetting when not all relevant facts can be retained. This provides the paper’s Semantic Web grounding: the agent’s internal state is an RDF-based knowledge graph with explicit annotations, and its operators act over that graph through retrieval and update procedures. This structure creates a practical design tension. Fixed symbolic heuristics (e.g., predetermined policies for forgetting or retrieval) are explicit but inflexible across contexts. Fully neural policies are adaptive but typically opaque. We build on the RoomKG temporal knowledge-graph memory substrate. The environment, its episodes, its symbolic memory heuristics, and the tem-porally annotated RDF memory representation are prior work [21]. On top of this substrate, we treat memory decisions as a meta-decision problem: a learned meta-policy selects among named symbolic heuristics at each decision point. The contribution of this paper is this meta-policy layer and its controlled evaluation, not the benchmark or the memory substrate itself. This perspective is related to hierarchical policy selection and options [30,3], but here the selectable actions are explicit symbolic operators rather than latent option embeddings. In the bounded-memory RoomKG setting we study, this lets us ask a narrower ques-tion than broad end-to-end superiority: can learned heuristic selection improve adaptivity over strong fixed symbolic controls while preserving explicit symbolic execution, and are qualifier-aware graph encoders especially well matched to that decision problem? Our main contributions are as follows: 
+
+– We introduce a neuro-symbolic meta-policy formulation for partially observ-able RL in which adaptation is achieved by selecting among named symbolic memory heuristics, not by replacing symbolic control with opaque latent actions. 
+
+– We design a qualifier-aware temporal knowledge-graph memory meta-policy that combines an RDF-based memory representation with RDF triple anno-tations, knowledge-graph-based encoding, and task-specific value heads for question answering, exploration, and forgetting. 
+
+– We demonstrate strong train/test generalization in RoomKG at long-term memory capacity of 512, with the StarE-GNN-based configuration deliver-ing the best overall performance while preserving step-level traceability of memory-management decisions. Neuro-Symbolic Meta-Policies for Temporal KG Memory 3living                  
+
+> david
+> jennifer
+> amanda
+> kitchen bedroom
+> bed
+> bathroom office den
+> john
+> jessica
+> study
+> christopher
+> garage
+> door
+> william
+> basement attic
+> floorlamp
+> dining
+> window
+> family
+> sarah
+> guest
+> mary
+> michael
+> master
+> laundry
+> armchair
+> pantry
+> agent
+> closet foyer
+> dresser
+> hallway porch deck
+> patio
+> wardrobe
+> balcony sunroom
+> ceilingfan
+> library nursery
+> chair
+> playroom gameroom
+> coffeetable
+> studio
+> table
+> workshop gym
+> desk
+> spa sauna
+> wall
+> cellar storage
+> ashley
+> utility
+> emily
+> mudroom
+> sofa
+> robert
+> daniel
+> powder
+> bookshelf
+> wardrobe loft
+> nightstand
+> cabin
+> matthew
+> lodge
+> cottage
+> james
+> suite parlor
+> cabinet
+> lounge bar cafe
+> stephanie
+> nook
+> diningtable
+> lisa
+> Bird Eye View - Step 99
+
+Fig. 1. Bird’s-eye schematic of the hidden state at t = 99 (st=99 ) in RoomKG, showing spatial layout and entity placement. This view is only a schematic for intuition: the actual environment state and agent-facing world are represented in the RDF knowledge-graph world (Figure 2). The agent does not directly observe st; its observation ot is the induced RDF subgraph of the current room and visible adjacency relations. The figure helps ground the later graph view in an intuitive spatial picture, making clear why partial observability is nontrivial even in a structured environment. The full original figure is provided in the supplemental material. 
+
+2 Background and Problem Setting 
+
+2.1 Environment and Partial Observability 
+
+We consider the RoomKG benchmark [21], a sequential decision-making envi-ronment in which the agent receives only partial observations while the full environment state is hidden. Let st denote the hidden state at time t and ot the raw observation. The agent must act using a history-dependent internal mem-ory, because ot alone is generally insufficient to infer all task-relevant facts. This places the problem in the standard partially observable setting, where perfor-mance depends critically on what information is stored, updated, and retrieved over time. 4 T. Kim et al. south 
+
+east 
+
+> west
+> north
+
+north 
+
+> west
+
+south 
+
+east 
+
+> north
+> south
+> east
+
+west 
+
+> south
+> east
+
+west 
+
+north 
+
+> west
+> north
+> south
+
+east 
+
+> east
+
+west 
+
+south 
+
+> north
+
+at_location 
+
+> south
+
+east 
+
+> north
+
+west 
+
+> east
+> west
+
+south 
+
+> west
+
+north 
+
+south 
+
+> west
+> north
+> south
+> east
+
+at_location 
+
+> west
+> south
+
+north 
+
+> south  east
+> west
+
+north 
+
+south 
+
+> west
+> north
+
+east 
+
+> north
+> south
+
+at_location 
+
+> at_location
+
+south 
+
+> east
+> south
+> west
+> north
+
+east 
+
+> north
+> west
+
+south 
+
+east 
+
+> at_location
+
+south 
+
+west 
+
+east 
+
+> south
+> west
+
+north 
+
+> at_location
+
+west 
+
+> south
+> north
+
+east 
+
+east 
+
+> south
+
+west 
+
+west 
+
+north 
+
+> east
+
+west 
+
+> north
+
+south 
+
+east 
+
+> south
+> west
+
+east 
+
+> north
+
+east 
+
+> north
+> west
+
+south south 
+
+north 
+
+> east
+> south
+
+west 
+
+> west
+> north
+> east
+
+south 
+
+> east
+> west
+> north
+
+south 
+
+> east
+
+north 
+
+> west
+
+at_location 
+
+> east
+
+north 
+
+> west
+> north
+
+south 
+
+west 
+
+at_location 
+
+south 
+
+west 
+
+north 
+
+east 
+
+> south
+> west
+
+west 
+
+north 
+
+east 
+
+south 
+
+> at_location
+> south
+> north
+
+west 
+
+> north
+> east
+> east
+
+north 
+
+south 
+
+west 
+
+> east
+> west
+
+north 
+
+> at_location
+> at_location
+
+west 
+
+north 
+
+> north
+
+west 
+
+> east
+
+at_location 
+
+at_location 
+
+> at_location
+
+north 
+
+> south
+
+west 
+
+east 
+
+> at_location
+
+at_location 
+
+> south
+
+west 
+
+> at_location
+
+east 
+
+> south
+> north
+
+east 
+
+north 
+
+> south
+> at_location
+> at_location
+> at_location
+> north
+> west
+> east
+> at_location
+
+at_location 
+
+east 
+
+west 
+
+south 
+
+south 
+
+west 
+
+north 
+
+at_location 
+
+> north
+
+west 
+
+south 
+
+east 
+
+at_location 
+
+at_location 
+
+> at_location
+> at_location
+> at_location
+
+at_location 
+
+> at_location
+> at_location
+
+at_location 
+
+> at_location
+
+at_location 
+
+> at_location
+> at_location
+
+at_location 
+
+bedroom 
+
+attic 
+
+nursery 
+
+hallway 
+
+guest 
+
+family 
+
+john 
+
+den 
+
+kitchen 
+
+storage 
+
+cellar 
+
+floorlamp 
+
+porch 
+
+closet 
+
+sunroom 
+
+living 
+
+wall 
+
+james 
+
+cottage 
+
+playroom 
+
+wardrobe 
+
+cafe 
+
+gym 
+
+agent 
+
+library 
+
+office 
+
+nook 
+
+loft 
+
+laundry 
+
+patio 
+
+basement 
+
+workshop 
+
+mudroom 
+
+utility 
+
+suite 
+
+bed 
+
+parlor 
+
+bathroom 
+
+mary 
+
+balcony 
+
+foyer 
+
+dining 
+
+door 
+
+garage 
+
+spa 
+
+lodge 
+
+lounge 
+
+armchair cabinet 
+
+gameroom 
+
+pantry 
+
+diningtable 
+
+jessica 
+
+ashley 
+
+studio 
+
+daniel 
+
+christopher study 
+
+robert 
+
+sauna 
+
+bar 
+
+dresser 
+
+david 
+
+william 
+
+powder 
+
+coffeetable 
+
+lisa 
+
+master 
+
+deck 
+
+michael 
+
+cabin 
+
+sarah 
+
+desk 
+
+chair 
+
+ceilingfan 
+
+nightstand 
+
+amanda 
+
+sofa 
+
+matthew 
+
+bookshelf 
+
+emily 
+
+jennifer 
+
+window 
+
+table 
+
+stephanie 
+
+Knowledge Graph View - Step 99 
+
+Fig. 2. Knowledge-graph view of the same hidden state at t = 99 (st=99 ), expressed as RDF structure. Node colors indicate semantic categories: rooms (yellow), agent (pur-ple), static objects (blue), moving objects (green), and walls (grey). This is the struc-tural form that motivates relation-aware encoders and explicit memory annotations in the proposed meta-policy. The full original figure is provided in the supplemental material. 
+
+Concretely, RoomKG is a grid world whose hidden state is an RDF knowledge graph over rooms, objects, walls, and the agent. At each step, the observation ot
+
+is the RDF subgraph induced by the current room (local adjacency and object-location triples). Each step also issues a query asking for the current location of a named object, and the environment-facing action consists of an answer plus a movement choice from {north, east, south, west, stay}. This design forces agents to integrate partial observations over time to answer correctly. In an end-to-end neural formulation, this becomes a joint discrete action problem over 49 candidate room answers and 5 movement directions (245 actions). The hidden dynamics are structured but nontrivial: inner-wall availability follows fixed periodic schedules, and moving objects follow deterministic pref-Neuro-Symbolic Meta-Policies for Temporal KG Memory 5
+
+erence rules subject to wall constraints. This keeps the benchmark replayable while still requiring long-horizon memory under local observability. Formally, we model interaction as a partially observable process [18] 
+
+⟨S , O, A, P, R, Ω, γ ⟩,
+
+where S is the hidden-state space, O the observation space, A the action space, 
+
+P (st+1 | st, a t) the transition model, R(st, a t) the reward function, Ω(ot | st)
+
+the observation model, and γ ∈ [0 , 1) the discount factor. The agent does not have direct access to st at decision time, and therefore must approximate belief-relevant information through an explicit memory representation. In RoomKG, this requirement is particularly important because useful cues can be temporally delayed and distributed across distinct observations. Our focus is the memory-decision layer that determines which symbolic op-eration to apply given the current observation and memory contents. 
+
+2.2 Temporal Knowledge-Graph Memory Representation 
+
+Both hidden states and observations are represented as RDF graphs grounded in RDF [5,15,19,20]. The agent maintains a temporal knowledge-graph mem-ory Mt that extends observed facts with temporal annotation properties using RDF triple annotations: time_added , last_accessed , and num_recalled . This makes memory contents explicit and inspectable at the level of annotated triples. In other words, each remembered fact is stored as a base RDF triple together with statement-level metadata about when it was added, last used, and how often it has been recalled. We use this annotation mechanism as the implemen-tation substrate for explicit memory metadata, not as a new contribution to temporal RDF semantics. For example, an observation such as (agent, at_location, room) can enter short-term memory with a current_time annotation at step t and, if retained, the same RDF triple carries annotations such as time_added = t,
+
+last_accessed = t′, and num_recalled = n, so the agent’s memory remains an explicit RDF graph with statement-level temporal metadata. We keep separate short- and long-term memories, M short  
+
+> t
+
+and M long  
+
+> t
+
+, with 
+
+Mt = ( M short  
+
+> t
+
+, M long  
+
+> t
+
+). Raw observations ot become short-term items by at-taching current_time , and symbolic remember/forget heuristics either refresh long-term entries with these items or evict long-term items when capacity is hit. At each step, observed RDF triples are merged into memory according to the selected symbolic heuristic. Qualifiers encode insertion time, access recency, and recall frequency, so the agent distinguishes facts both by graph content and by temporal role. Long-term memory is bounded, |M long  
+
+> t
+
+| ≤ K, so control must coordinate question answering (QA), exploration, and forgetting under explicit capacity pressure. Figures 1 and 2 ground the representational gap the controller must bridge: the hidden world has rich relational structure, while the agent receives only room-local RDF observations and must maintain its own bounded memory over time. 6 T. Kim et al. 
+
+2.3 Symbolic Heuristic Action Space 
+
+Instead of outputting opaque latent actions, the meta-policy selects among named symbolic heuristics for QA, exploration, and forgetting. Let Hforget , Hqa , and Hexplore denote the candidate sets for the three decision categories. At each decision point, the meta-policy selects one heuristic from each set, yielding a joint symbolic action ht = ( hforget  
+
+> t
+
+, h qa  
+
+> t
+
+, h explore  
+
+> t
+
+) in the finite product space Hforget × H qa × H explore .Rather than learning the full environment-facing combinatorial action di-rectly, the meta-policy operates over a modular 3 × 3 × 3 = 27 symbolic space. The operators themselves are fixed RoomKG primitives: QA retrieves over anno-tated RDF memory, exploration plans over the remembered map, and forgetting applies cache-like eviction rules. The learned component is which heuristic to activate online. Operationally, QA uses most-recently-added (MRA), most-recently-used (MRU), and most-frequently-used (MFU) ranking over qualifier metadata, ex-ploration uses the same qualifier priorities to filter remembered graph structure before planning, and forgetting uses first-in-first-out (FIFO), least-recently-used (LRU), and least-frequently-used (LFU) eviction when capacity is reached. 
+
+2.4 Problem Formulation 
+
+At each decision point, a parametric meta-policy πθ (ht | Mt) maps memory state Mt to a joint symbolic action ht = ( hforget  
+
+> t
+
+, h qa  
+
+> t
+
+, h explore  
+
+> t
+
+). In the partially observable Markov decision process (POMDP) setting, Mt is a bounded internal summary of observation history rather than an exact belief state. We write the symbolic execution step abstractly as 
+
+M short  
+
+> t
+
+= Aug( ot), Mt = ( M short  
+
+> t
+
+, M long  
+
+> t
+
+), (1) followed by 
+
+(Mt+1 , a t) = Φ Mt, h t
+
+, (2) where Aug( ·) converts raw observation triples into short-term memory items by attaching current_time , and Φ deterministically executes the selected heuristics to update memory and choose environment-facing behavior. Training maximizes expected return under a bounded-memory constraint, 
+
+max  
+
+> θ
+
+Eπθ
+
+" TX
+
+> t=0
+
+γtrt
+
+#
+
+s.t. |M long  
+
+> t
+
+| ≤ K ∀t, (3) Here, γ is the discount factor and rt is the reward at time t; in RoomKG, reward is generated only by question-answering correctness ( +1 for correct an-swers, 0 otherwise), so exploration and forgetting are learned through their down-stream contribution to future QA outcomes. Neuro-Symbolic Meta-Policies for Temporal KG Memory 7
+
+Algorithm 1 One-step neuro-symbolic decision loop 
+
+1: Observe raw triples ot.2: Build short-term memory: M short  
+
+> t
+
+← Aug( ot).3: Form memory state: Mt ← (M short  
+
+> t
+
+, M long  
+
+> t
+
+).4: Encode memory: Zt ← Enc θ (Mt).5: Score symbolic heuristic candidates with policy-specific value heads. 6: Select joint symbolic action ht = ( hforget  
+
+> t
+
+, h qa  
+
+> t
+
+, h explore  
+
+> t
+
+) (or a 27-way combinatorial action). 7: Execute selected heuristics symbolically: (Mt+1 , a t) ← Φ(Mt, h t).8: Receive reward rt and update replay buffers. 9: Update neural parameters by off-policy learning. 
+
+3 Method 
+
+3.1 Overview 
+
+Our meta-policy takes memory state Mt and predicts symbolic heuristic choices for QA, exploration, and forgetting. Neural components score candidate sym-bolic heuristics; deterministic symbolic procedures execute the selected ones. Concretely, the pipeline is to encode memory contents, score heuristic candi-dates, select heuristics with ϵ-greedy exploration during training, and execute them through Φ (Algorithm 1). 4
+
+Worked example. Suppose at t=12 long-term memory holds f1 = (book, at_location, room_3) with (time_added , last_accessed , num_recalled )= (4 , 11 , 5) , f2 = (book, at_location, room_7) with (10 , 10 , 1) , and f3 =
+
+(lamp, at_location, room_1) with (2 , 9, 3) . For the query “where is book ?”, MRA answers room_7 (largest time_added among matching facts), whereas MRU and MFU answer room_3 ; if the book recently moved, only MRA is correct. If a new observation arrives at capacity K=3 , LFU evicts f2 (fewest recalls), while LRU and FIFO evict f3 (oldest access; earliest insertion). The learned heads score exactly these named alternatives, so every decision remains attributable to an explicit heuristic over explicit annotations. 
+
+3.2 Knowledge-Graph Memory Encoding 
+
+Each memory item is represented as a knowledge-graph fact with qualifiers (e.g., 
+
+current_time , time_added , last_accessed , num_recalled ). We encode the working memory graph with one of three interchangeable function approxima-tors: a graph convolutional network (GCN), an R-GCN, or a StarE graph neural network (StarE-GNN) [22,29,7,34]. We compare them to isolate the contribution of topology-only, relation-aware, and qualifier-aware encoding, respectively. For  
+
+> 4
+
+Source code is openly available at https://github.com/humemai/ roomkg-meta-policies. 8 T. Kim et al. 
+
+graph encoders, we include inverse relations and qualifier relations in the relation vocabulary. Because memory is a variable-size knowledge graph, we use message-passing GNN variants (GCN, R-GCN, StarE-GNN) that operate naturally on non-fixed graph structure [29,7,34]. The encoder outputs contextual embeddings reused by policy-specific heads. For GNN encoders, we compute node embeddings by message passing on the memory graph. GCN is the simplest case and ignores relation types and qualifiers, using only topology: 
+
+g(k) 
+
+> v
+
+= σ
+
+ X 
+
+> u∈N (v)
+
+W (k)g(k−1) 
+
+> u
+
+ . (4) R-GCN conditions on relation types but does not encode qualifier values: 
+
+g(k) 
+
+> v
+
+= σ
+
+X
+
+> r∈R
+
+X 
+
+> u∈N r(v)
+
+1
+
+cv,r 
+
+W (k) 
+
+> r
+
+g(k−1) 
+
+> u
+
+ . (5) StarE-GNN extends R-GCN by incorporating qualifier embeddings qu,r,v in the message function, enabling qualifier-aware aggregation: 
+
+g(k) 
+
+> v
+
+= σ
+
+ X 
+
+> (u,r )∈N (v)
+
+W (k) 
+
+> λ(r)
+
+ϕr
+
+ g(k−1)  
+
+> u
+
+, ψ (gr , qu,r,v ) . (6) Here, N (v) and Nr (v) denote the (relation-agnostic and relation-specific) neigh-bor sets of node v, σ is a pointwise nonlinearity, W (k) and W (k) 
+
+> r
+
+are layer-k train-able weights, cv,r is the R-GCN normalization constant, gr is the embedding of relation r, R is the set of relation types, and k indexes message-passing layers, 
+
+λ(r) maps directed edges to relation types (including inverse types), and ϕr (·)
+
+and ψ(·) denote relation-specific message composition and qualifier-combination functions, respectively. The encoder maps the memory to contextual vectors 
+
+Zt = Enc θ (Mt) = {zt,j }|Mt| 
+
+> j=1
+
+. (7) To feed fixed-size value heads, we apply head-specific attention pooling [4] 
+
+α(p) 
+
+> t,j
+
+=exp 
+
+
+
+(q(p))⊤WK zt,j /√d
+
+P 
+
+> ℓ
+
+exp 
+
+
+
+(q(p))⊤WK zt,ℓ /√d
+
+ , (8) 
+
+m(p) 
+
+> t
+
+= X
+
+> j
+
+α(p) 
+
+> t,j
+
+WV zt,j , (9) for p ∈ { qa, e, f } (QA, explore, forget). Here α(p) 
+
+> t,j
+
+is the attention weight that head p assigns to memory item j at time t, and m(p) 
+
+> t
+
+is the resulting head-specific pooled memory summary that serves as the fixed-size input to head p’s value function; q(p) is a learned query vector for head p, WK and WV are learned key/value projections, and d is the embedding dimension. Neuro-Symbolic Meta-Policies for Temporal KG Memory 9
+
+3.3 Heuristic-Selection Heads 
+
+Let m(qa ) 
+
+> t
+
+, m(e) 
+
+> t
+
+, and m(f ) 
+
+> t
+
+denote the head-specific pooled contexts above. We define three value functions over symbolic heuristic sets: 
+
+Qqa ([ m(qa ) 
+
+> t
+
+, ϕ (qt)] , h qa ), Qe(m(e) 
+
+> t
+
+, h explore ), Qf (m(f ) 
+
+> t
+
+, h forget ), (10) where Qqa , Qe, and Qf are the QA-, exploration-, and forget-head action-value functions, respectively. Here, qt is the current question tuple and ϕ(·) is its learned embedding used to condition the QA head. In the independent-head configuration, these heads output values over |H qa | = 3 (most-recently-added (MRA), most-recently-used (MRU), most-frequently-used (MFU)), |H explore | =3 (MRA/MRU/MFU), and |H forget | = 3 (first-in-first-out (FIFO), least-recently-used (LRU), least-frequently-used (LFU)). The corresponding greedy selections are 
+
+hqa  
+
+> t
+
+= arg max 
+
+> h∈H qa
+
+Qqa ([ m(qa ) 
+
+> t
+
+, ϕ (qt)] , h ), (11) 
+
+hexplore  
+
+> t
+
+= arg max 
+
+> h∈H explore
+
+Qe(m(e) 
+
+> t
+
+, h ), (12) 
+
+hforget  
+
+> t
+
+= arg max 
+
+> h∈H forget
+
+Qf (m(f ) 
+
+> t
+
+, h ), (13) with ϵ-greedy exploration during training for each head. At decision time, we select 
+
+ht =  hqa  
+
+> t
+
+, h explore  
+
+> t
+
+, h forget 
+
+> t
+
+ (14) by ϵ-greedy maximization of the corresponding head outputs. The implemen-tation also supports a combinatorial variant with a single 27-way head over 
+
+Hforget × H qa × H explore .
+
+3.4 Symbolic Execution and Learning 
+
+Given ht, symbolic execution applies the selected heuristics using the same observation-ingestion and transition definitions in Eqs. (1)–(2). In our implemen-tation, short-term ingestion is deterministic in the main setting, while learned control focuses on QA, exploration, and forgetting. Here, Φ is simply shorthand for this fixed symbolic execution routine. Training uses off-policy replay with a target network for temporal-difference updates with ϵ-greedy exploration and periodic target-network synchronization. Forget and explore heads are trained with bootstrapped temporal-difference up-dates, while QA is trained as an immediate-reward (contextual-bandit) head. The overall training objective is the sum of active per-head losses. For each head p ∈ { qa, e, f }, we use a unified deep Q-network (DQN)-style objective [25] 
+
+L(p)(θp) = E (x,a,r,x ′,d )∼D p
+
+
+
+y(p) − Q(p) 
+
+> θp
+
+(x, a )
+
+2
+
+, (15) 10 T. Kim et al. 
+
+with target 
+
+y(p) = r + γp(1 − d) max  
+
+> a′
+
+Q(p)
+
+> θ−
+> p
+
+(x′, a ′). (16) Here Dp is the replay distribution for head p, θp and θ− 
+
+> p
+
+are online and target parameters, and d ∈ { 0, 1} is the terminal indicator. We set γqa = 0 for QA, so the QA target reduces to immediate reward, while γf , γ e > 0 retain temporal credit assignment for forget and explore. For notation, a training sample for forget/explore is (x, a, r, x ′, d ) with memory-state input x, symbolic heuristic action a, reward r, next input x′, and terminal indicator d ∈ { 0, 1}; for QA, the head input is question-conditioned (memory plus question embedding). We model QA as contextual bandit because its decision is primarily tied to immediate answer correctness and has only limited downstream state effect (mainly qualifier updates such as access/recall metadata). In contrast, explo-ration and forgetting alter which memory items are retained or encountered, so their consequences are genuinely long-horizon and require TD (temporal dif-ference) credit assignment. Because RoomKG reward is emitted only by QA correctness, exploration and forgetting heuristics are learned through delayed credit assignment via their downstream effect on future QA reward. 
+
+4 Experimental Setup 
+
+We evaluate in RoomKG using the standard train /test split: train for train-ing/model selection and test as the held-out environment (same underlying dynamics with permuted question order). Episodes terminate at step 99 (100 interaction steps). 
+
+4.1 Compared Methods 
+
+We compare three families. 
+
+– Symbolic-TKG : temporal annotated RDF memory with fixed symbolic heuristics for QA/exploration/forgetting. 
+
+– Neural (Simple DQN) : end-to-end sequence agent (long short-term mem-ory (LSTM) or Transformer) [16,31] that directly predicts the environment-level combinatorial action (49 rooms × 5 directions = 245 discrete actions). 
+
+– Neuro-Symbolic TKG : shared symbolic memory/execution with learned heuristic selection heads, using one of {GCN, R-GCN, StarE-GNN} as the encoder backbone. Neuro-Symbolic TKG is our contribution; the other families are in-domain reference systems from prior RoomKG work. For the neuro-symbolic model, we evaluate both independent policy heads and a 27-way combinatorial head, and both shared-network and separate-network training variants. We also include stronger non-learning symbolic controls: memory pressure (MP), random meta (RM), intersection vote (IV), and ranked voting (RankVote). These serve as additional reference policies for testing learned meta-selection. Neuro-Symbolic Meta-Policies for Temporal KG Memory 11                                                                                            
+
+> Method Memory Encoder QA Explore Forget Train QA Test QA
+> S-TKG Ann. RDF –MRU MRU LRU 44.48 (1.23) 45.64 (1.21) S-TKG Ann. RDF –MP MP MP 43.60 (1.11) 45.88 (2.32) S-TKG Ann. RDF –RM RM RM 43.36 (0.83) 46.28 (1.46) S-TKG Ann. RDF –RV RV RV 43.32 (1.12) 44.16 (1.52) S-TKG Ann. RDF –IV IV IV 43.08 (1.40) 46.28 (0.89) Neural (E2E) ObsHist LSTM RL RL FIFO 13.20 (2.04) 9.40 (2.58) Neural (E2E) ObsHist Transf. RL RL FIFO 18.60 (0.49) 11.40 (2.42) NS-TKG Ann. RDF GCN RL RL RL 46.92 (0.41) 46.04 (1.44) NS-TKG Ann. RDF R-GCN RL RL RL 47.08 (0.30) 47.00 (1.67) NS-TKG Ann. RDF StarE-GNN RL RL RL 46.72 (0.89) 47.28 (0.98)
+> NS-TKG Ann. RDF StarE-GNN sRL RL RL 47.16 (0.66) 47.16 (1.49) NS-TKG Ann. RDF StarE-GNN cRL RL RL 42.28 (1.25) 46.12 (2.24)
+
+Table 1. Main train/test results at long-term memory capacity of 512 (mean with stan-dard deviation in parentheses). Abbreviations: symbolic temporal knowledge graph (S-TKG), neuro-symbolic temporal knowledge graph (NS-TKG), annotated RDF (Ann. RDF), end-to-end (E2E), observation history (ObsHist), memory pressure (MP), ran-dom meta (RM), intersection vote (IV), ranked voting (RV), and learned independent heads (RL). For the E2E neural baselines, RL denotes the joint DQN policy over com-posite actions. BFS denotes breadth-first exploration in the symbolic baselines. StarE-GNN s is the shared-network ablation, and StarE-GNN c is the learned combinatorial-head ablation. 
+
+4.2 Training Protocol 
+
+All learned agents use off-policy Q-learning with replay and target-network up-dates [25]. For the main experiments, each run uses 200 training episodes (20,000 environment steps), batch size 32, replay buffer size equal to the training hori-zon, warm-start of 10% of training steps, target update interval 50, and linear 
+
+ϵ-decay from 1.0 to 0.01 over the first half of training. We use learning rate 10 −4,discount γ = 0 .95 (with head-specific handling for QA as described in Section 4), and gradient clipping. 
+
+4.3 Memory-Capacity Settings and Reporting Scope 
+
+Kim et al. [21] report the long-term memory-capacity sweep from 0 to 512. Following that setup, we focus this paper on 512, which is large enough to expose meaningful differences between heuristic-selection strategies and encoder choices while still enforcing a strict capacity bound. 
+
+4.4 Evaluation Metrics 
+
+Episode return corresponds to cumulative QA success under the reward defined in the problem formulation. We report test performance on the held-out en-vironment as mean and standard deviation across 5 random seeds; validation follows the same train-environment protocol for model selection. Supporting re-producibility details are provided in the supplemental material package. 12 T. Kim et al. 0 10 20 30 40 50 60 70 80 90 100 
+
+> Step
+> 0.4
+> 0.2
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Q-value
+> QA Q-Values
+> MRA
+> MRU
+> MFU
+
+Fig. 3. Per-step Q-value trajectories for the QA head of the learned StarE-GNN neuro-symbolic model on the held-out test trace. Each curve corresponds to one symbolic QA heuristic, showing how preference shifts over semantically named choices rather than over opaque latent actions. The full three-head figure set, including exploration and forgetting, is provided in the supplemental material. 
+
+5 Results 
+
+5.1 Main Quantitative Results 
+
+Table 1 shows three clear patterns. First, the qualifier-aware neuro-symbolic variants are strongest overall on held-out test, with StarE-GNN best and R-GCN close behind. Second, the end-to-end neural baselines are far weaker than both symbolic-TKG and neuro-symbolic TKG, indicating that direct 245-way action prediction is poorly matched to this bounded-memory setting. Third, the best symbolic controls remain strong, but learned neuro-symbolic selection still gives the best held-out result. Because reward is defined through QA correctness, train/test QA in Table 1 is the central end-to-end metric: improvements reflect better coordination between forgetting, exploration, and retrieval. The strongest gains also align with encoder design. StarE-GNN and R-GCN preserve the relation and qualifier signals that the symbolic heuristics depend on, whereas topology-only GCN and the direct combinatorial ablation are less well aligned with the decision problem. 
+
+5.2 Ablations: Neuro-Symbolic Variants 
+
+Within the neuro-symbolic family, the main pattern is that relation-aware and qualifier-aware encoders outperform topology-only aggregation, with R-GCN Neuro-Symbolic Meta-Policies for Temporal KG Memory 13 east (2) 
+
+west 
+
+> south
+
+north 
+
+east (3) 
+
+> south (3)
+
+north (2) 
+
+> west (2)
+> at_location (3)
+
+north (3) 
+
+> east (2)
+> east
+
+west (3) 
+
+> south (2)
+> south (2)
+> east
+> north (2)
+> east
+
+west 
+
+west (2) 
+
+> south
+> north
+> south
+
+east 
+
+north 
+
+> at_location
+> at_location
+> at_location
+> at_location (2)
+
+west (2) 
+
+> north
+> south
+> east
+> west (3)
+
+east (2) 
+
+south 
+
+> north (2)
+> south
+> east (3)
+> south (3)
+> north (2)
+
+north 
+
+> west
+
+east (2) 
+
+west 
+
+north 
+
+> south
+> east (2)
+> north
+> south
+> east (3)
+> west (2)
+> north (2)
+
+south (2) 
+
+> north
+> west
+> east (3)
+
+north (2) 
+
+> west (2)
+> south
+> south
+> east
+> west (2)
+> south (2)
+> at_location (2)
+> west
+
+west (2) 
+
+> north (3)
+> south (3)
+
+east (2) 
+
+> west (2)
+
+south (3) 
+
+> west
+> at_location (3)
+> at_location (3)
+> at_location (3)
+> at_location (2)
+> at_location
+> at_location
+> at_location (2)
+
+at_location (3) 
+
+> at_location (3)
+> at_location (2)
+> at_location
+
+at_location 
+
+> at_location
+> at_location
+
+at_location 
+
+at_location 
+
+> at_location
+> at_location (2)
+
+at_location (2) 
+
+at_location 
+
+> at_location (2)
+> at_location
+> at_location (3)
+> at_location (2)
+
+at_location (3) 
+
+> at_location (3)
+> at_location
+
+at_location 
+
+at_location (3) 
+
+at_location (2) 
+
+at_location (2) 
+
+> at_location
+> at_location
+> at_location (2)
+> at_location
+> at_location (2)
+
+at_location (2) 
+
+at_location (4) 
+
+> at_location (2)
+> at_location (2)
+> at_location (4)
+
+at_location (2) 
+
+at_location (2) 
+
+> at_location
+
+at_location 
+
+> at_location
+> at_location
+> at_location
+> at_location (2)
+> south (2)
+> north (2)
+
+at_location 
+
+at_location (2) 
+
+> at_location
+> at_location (2)
+> at_location
+> at_location
+> at_location
+> at_location (2)
+
+at_location (3) 
+
+> east (2)
+> north (3)
+
+south (3) 
+
+> west (3)
+> east
+
+north (2) 
+
+> south (2)
+
+east (2) 
+
+> west (2)
+
+east (2) 
+
+south (2) west (2) 
+
+north (2) 
+
+> north
+> west (3)
+> east (3)
+
+north (2) 
+
+> south
+> at_location (2)
+
+west 
+
+north 
+
+> east
+
+at_location 
+
+west 
+
+> south
+> north
+
+south 
+
+west 
+
+> east
+> north
+> at_location (3)
+
+west north 
+
+> south
+> east
+
+north 
+
+> west
+> east (4)
+
+south (4) 
+
+> west (4)
+> north (4)
+
+east 
+
+> west
+
+north 
+
+north (2) 
+
+> west
+> east (2)
+> west
+
+at_location 
+
+west 
+
+> south
+> east
+
+north 
+
+east 
+
+> north
+> west
+
+west (2) 
+
+south (2) 
+
+> east (2)
+
+north (2) 
+
+east (2) 
+
+> south
+> north (2)
+> south
+> west (2)
+> east (2)
+> south (2)
+
+north (2) 
+
+at_location (2) 
+
+> at_location
+> at_location (2)
+> west
+> north
+
+south (3) 
+
+> west (3)
+> east (3)
+
+north (3) 
+
+> north
+> west (2)
+> south (2)
+> east (2)
+> north
+
+south (3) 
+
+> north (3)
+> west (3)
+> east (3)
+> east
+> north
+> south
+> at_location (3)
+
+at_location 
+
+at_location north 
+
+> east
+> south
+
+at_location 
+
+west 
+
+> south (3)
+> east (3)
+> west (2)
+
+east (2) 
+
+south (2) 
+
+> north (2)
+
+at_location (2) 
+
+> at_location (2)
+> at_location
+
+west (2) 
+
+> south (2)
+
+east 
+
+> north (4)
+> south (3)
+> west (4)  east (4)
+
+south 
+
+> north (2)
+> west (2)
+> east (2)
+> south (2)
+
+east (2) 
+
+> west (2)
+
+north (2) 
+
+at_location (2) 
+
+> at_location
+> south
+> west
+> at_location (4)
+> north
+
+south 
+
+east 
+
+west 
+
+at_location 
+
+library 
+
+nursery 
+
+chair 
+
+playroom 
+
+sauna 
+
+hallway 
+
+foyer 
+
+emily 
+
+family dining 
+
+attic 
+
+bathroom 
+
+office 
+
+den 
+
+study 
+
+guest 
+
+master 
+
+wall 
+
+deck 
+
+porch 
+
+agent 
+
+gameroom 
+
+john 
+
+coffeetable 
+
+sarah 
+
+dresser 
+
+window 
+
+floorlamp 
+
+closet 
+
+bedroom 
+
+sunroom 
+
+pantry 
+
+ceilingfan 
+
+gym 
+
+desk 
+
+spa 
+
+wardrobe lounge 
+
+powder 
+
+loft 
+
+parlor 
+
+bar 
+
+cabinet 
+
+suite 
+
+cottage mudroom 
+
+utility 
+
+studio 
+
+sofa 
+
+bookshelf 
+
+table 
+
+workshop 
+
+patio 
+
+balcony 
+
+laundry 
+
+garage 
+
+armchair 
+
+william 
+
+living 
+
+door 
+
+kitchen 
+
+basement 
+
+bed 
+
+jessica 
+
+cellar 
+
+cabin 
+
+cafe 
+
+lodge 
+
+stephanie 
+
+nook 
+
+nightstand 
+
+storage 
+
+diningtable 
+
+Memory State 099 
+
+Fig. 4. Memory-state graph at the end of the held-out test trace. For visibility, edge la-bels use parentheses (N ), where N is the number of memories associated with the same RDF triple. Because one RDF triple can correspond to multiple annotated statements, these are condensed into a single displayed triple with count (N ) rather than listing all annotations individually. This figure makes visible what the bounded long-term memory actually retains, which is central to comparing learned heuristic preferences with their resulting memory state. The supplement includes the full figure and memory evolution from steps 0 to 99. 
+
+and StarE-GNN strongest on held-out test. The shared-network StarE-GNN s
+
+is close to the main StarE-GNN configuration, so the shared-vs-separate differ-ence is small in absolute QA terms. By contrast, the combinatorial StarE-GNN c
+
+is weaker and more variable, supporting the modular three-head design over direct 27-way symbolic control. This ablation pattern is consistent with the task structure: the heuristics de-pend on relation and qualifier semantics, so encoders that preserve those signals are better matched to the decision problem than topology-only aggregation. It is also consistent with the optimization setting: three independent 3-way heads receive denser supervision than one joint 27-way action head under the same reward stream. 14 T. Kim et al. 
+
+5.3 Symbolic Baseline Diagnostics 
+
+The fixed symbolic baselines in Table 1 remain competitive, which shows that the underlying symbolic memory substrate is already strong. At the same time, their spread in test performance shows that heuristic choice matters even with-out learning. This supports the paper’s core premise: in partially observable tasks, which symbolic heuristic is active is itself a consequential decision variable. Against this stronger non-learning baseline set, the best learned neuro-symbolic model still remains highest on held-out test, supporting learned online selection over fixed global combination rules. 
+
+6 Qualitative Analysis and Decision Traces 
+
+6.1 QA-Value Dynamics 
+
+Figure 3 shows that QA heuristic preferences evolve over the episode in an inter-pretable way. The QA head remains mostly in the [0 , 1] range, consistent with its immediate-reward formulation, and shifts from earlier MRU preference toward MRA later in the trace: early in the episode, reuse is favored because recently ac-cessed facts are still likely relevant, whereas later the newest observations more often provide the decisive evidence for the current query. The trace therefore shows adaptive switching among named symbolic QA heuristics as memory con-text changes: the controller exposes changing preferences over named choices rather than a single opaque action index. The corresponding exploration and forgetting traces are included in the supplemental material. 
+
+6.2 Final Memory State vs. Hidden-State Ground Truth 
+
+Figure 2 is the ground-truth hidden graph at t = 99 ; Figure 4 is the agent’s long-term memory at the same time. Memory covers all 49 rooms, showing that exploration reached every area. Object facts are selective: in this run the memory retains 16 static-object facts and 6 moving-object facts, while the hidden state has 18 of each. This gap is expected under partial observability and a capacity limit. Static facts are persistent and can be refreshed when rooms are revisited. Moving ob-jects change and are harder to reconfirm, so some are displaced once memory fills. The final memory is therefore a task-driven summary, not a full reconstruction of the hidden graph. Together, Figures 3 and 4 show both policy-side preferences and the resulting memory contents, supporting the claim that the controller remains inspectable without relying on latent internal states. 
+
+7 Related Work 
+
+Memory for partial observability in RL. Deep RL under partial observ-ability is commonly addressed with recurrent or external memory mecha-nisms, including DRQN-style recurrence and differentiable memory systems Neuro-Symbolic Meta-Policies for Temporal KG Memory 15 
+
+[25,14,9,10,27,28,33,32]. These approaches improve long-horizon control, but the dominant memory state is typically latent, making policy-level diagnosis difficult when one needs to explain what was retained, forgotten, or retrieved at each step. Related analyses also highlight generalization and bias issues under partial observability in batch RL settings [6]. Our design keeps the memory symbolic and the control choices named. 
+
+Relational and knowledge-graph representations. Relational inductive biases improve decision making in structured environments [34,29], and qualifier-aware message passing further extends this to hyper-relational/ qualified knowledge graphs [7]. Broad knowledge-graph overviews provide the larger representa-tional context [17]. In parallel, RDF and RDF triple-annotation formalisms provide explicit graph semantics and annotation-compatible representations for temporal/provenance-style metadata [5,15,19,20,13]. Our work builds directly on this combination by learning over annotated RDF memory while keeping executed memory operations symbolic. For neural KG query reasoning, related lines include complex query answering and hyper-relational query embedding approaches [2,1]. Earlier temporal-RDF work studied validity-time semantics and querying directly in RDF/OWL [11,26]. We position our use of annotations differently: they serve as an implementation substrate for explicit agent-memory metadata rather than as a new proposal for temporal RDF semantics or query languages. We use qualifier-aware encoding to select symbolic memory operators online, not to answer queries over a fixed graph. The encoder therefore serves control rather than retrieval, aligning its signals with the recency/frequency/timestamp heuristics scored by the meta-policy. 
+
+Symbolic and neuro-symbolic control. Prior symbolic RL and neuro-symbolic RL studies emphasize that explicit symbolic structure can improve interpretability and generalization [8,24,23,12]. For RoomKG specifically, Kim et al. [21] intro-duced temporal KG memory and established strong symbolic and neural refer-ence points. In this paper, we evaluate against representative in-domain base-lines from both sides: fixed symbolic heuristics and end-to-end neural sequence policies (LSTM/Transformer), in addition to our neuro-symbolic variants. Our contribution lies in learning which symbolic heuristic to activate at each step while preserving symbolic execution. 
+
+Hierarchical and meta-policy perspectives. Our formulation is also related to temporal abstraction and option selection [30,3]. The key distinction is that our selectable units are explicit symbolic heuristics (for QA, exploration, and forgetting), not latent option embeddings. 
+
+8 Conclusion 
+
+We presented a neuro-symbolic meta-policy for partially observable control with temporal knowledge-graph memory. The central idea is to learn which symbolic 16 T. Kim et al. 
+
+heuristic to apply (QA, exploration, forgetting) while keeping execution sym-bolic and inspectable. In RoomKG at a memory capacity of 512, this improves over strong symbolic and neural references; qualifier-aware StarE-GNN gives the best held-out test performance while preserving step-level traceability. The main result is that adaptivity and inspectability need not be traded off here: learned meta-selection improves held-out performance while preserving symbolic execu-tion over explicit RDF memory. The scope of our claims is this bounded-memory RoomKG setting. At the design level, the method assumes only that (i) memory is an annotated RDF graph and (ii) memory operations are expressible as named heuristics ranked over annotation values such as recency and frequency; neither assumption is RoomKG-specific, so the formulation transfers in principle to other temporal-knowledge-graph and memory-management settings. Scalability to larger knowl-edge graphs is bounded by design: the controller only ever encodes its bounded memory ( ≤ K facts) and the room-local observation, never the full world graph, so per-step cost does not grow with world size, though richer worlds may war-rant a larger K. Limitations remain: evidence covers one benchmark family and one primary capacity (512); deterministic dynamics do not cover stochastic or non-stationary regimes; and performance depends on the heuristic library. The spread among the fixed baselines in Table 1 shows that heuristic choice matters, and a poor library would cap what learned selection can achieve. Future work should broaden environments and capacity regimes, test stochastic robustness, and expand heuristic libraries while retaining explicit decision traces.  
+
+> Acknowledgments. This research was (partially) funded by the Hybrid Intelligence Center, a 10-year program funded by the Dutch Ministry of Education, Culture and Science through the Netherlands Organization for Scientific Research, https://www. hybrid-intelligence-centre.nl/.
+
+Supplemental Material Statement 
+
+Source code and the full supplemental material are openly available at https: //github.com/humemai/roomkg-meta-policies (release v0.1.0 ). The repository includes the training, evaluation, and plotting code; reproducibility documenta-tion with the complete hyperparameter settings; and the full-size/original figures referenced in the paper, including the diagnostic Q-value plots for all three heads and the memory-evolution sequence from steps 0 to 99. The main paper remains self-contained for understanding the method and assessing the core claims. 
+
+Declaration of use of Generative AI 
+
+GPT-5.4 (OpenAI) and Fable 5 (Anthropic) were used to polish and revise the text and figures of this manuscript. All research, code, experiments, and writing were carried out by the authors. Neuro-Symbolic Meta-Policies for Temporal KG Memory 17 
+
+References 
+
+1. Alivanistos, D., Berrendorf, M., Cochez, M., Galkin, M.: Query embedding on hyper-relational knowledge graphs. In: International Conference on Learning Rep-resentations (2022), https://openreview.net/forum?id=4rLw09TgRw9 2. Arakelyan, E., Daza, D., Minervini, P., Cochez, M.: Complex query answering with neural link predictors. In: International Conference on Learning Representations (2021) 3. Bacon, P.L., Harb, J., Precup, D.: The option-critic architecture. In: Proceedings of the AAAI Conference on Artificial Intelligence (2017) 4. Bahdanau, D., Cho, K., Bengio, Y.: Neural machine translation by jointly learning to align and translate. In: International Conference on Learning Representations (2015) 5. Cyganiak, R., Wood, D., Lanthaler, M.: Rdf 1.1 concepts and abstract syntax. W3C Recommendation (Feb 2014), https://www.w3.org/TR/rdf11-concepts/, 25 February 2014 6. Francois-Lavet, V., Rabusseau, G., Pineau, J., Ernst, D., Fonteneau, R.: On overfitting and asymptotic bias in batch reinforcement learning with partial ob-servability. Journal of Artificial Intelligence Research 65 , 1–30 (2019). https: //doi.org/10.1613/jair.1.11478 7. Galkin, M., Trivedi, P., Maheshwari, G., Usbeck, R., Lehmann, J.: Message passing for hyper-relational knowledge graphs. In: Proceedings of the 2020 Conference on Empirical Methods in Natural Language Processing (2020) 8. d’Avila Garcez, A., Dutra, A.R.R., Alonso, E.: Towards symbolic reinforcement learning with common sense (2018), https://arxiv.org/abs/1804.08597 9. Graves, A., Wayne, G., Danihelka, I.: Neural turing machines (2014), https://arxiv. org/abs/1410.5401 10. Graves, A., Wayne, G., Reynolds, M., Harley, T., Danihelka, I., Grabska-Barwinska, A., Colmenarejo, S.G., Grefenstette, E., Ramalho, T., Agapiou, J.P., Badia, A.P., Hermann, K.M., Zwols, Y., Ostrovski, G., Cain, A., King, H., Sum-merfield, C., Blunsom, P., Kavukcuoglu, K., Hassabis, D.: Hybrid computing using a neural network with dynamic external memory. Nature 538 , 471–476 (2016) 11. Gutierrez, C., Hurtado, C.A., Vaisman, A.A.: Temporal RDF. In: The Semantic Web: Research and Applications. Lecture Notes in Computer Science, vol. 3532, pp. 93–107. Springer (2005) 12. Harini, S.I., Shroff, G., Srinivasan, A., Faldu, P., Vig, L.: Neuro-symbolic meta reinforcement learning for trading (2023), https://arxiv.org/abs/2302.08996 13. Hartig, O., Seaborne, A., Taelman, R., Williams, G., Tanon, T.P.: SPARQL 1.2 query language. W3C working draft, W3C (Mar 2026), https://www.w3.org/TR/sparql12-query/ 14. Hausknecht, M., Stone, P.: Deep recurrent q-learning for partially observable mdps (2017), https://arxiv.org/abs/1507.06527 15. Hayes, P.J., Patel-Schneider, P.F.: Rdf 1.1 semantics. W3C Recommendation (Feb 2014), https://www.w3.org/TR/rdf11-mt/, 25 February 2014 16. Hochreiter, S., Schmidhuber, J.: Long short-term memory. Neural Comput. 9(8), 1735–1780 (Nov 1997). https://doi.org/10.1162/neco.1997.9.8.1735 17. Hogan, A., Blomqvist, E., Cochez, M., D’amato, C., Melo, G.D., Gutierrez, C., Kirrane, S., Gayo, J.E.L., Navigli, R., Neumaier, S., Ngomo, A.C.N., Polleres, A., Rashid, S.M., Rula, A., Schmelzeisen, L., Sequeda, J., Staab, S., Zimmermann, A.: Knowledge graphs. ACM Computing Surveys 54 (4), 1–37 (Jul 2021). https: //doi.org/10.1145/3447772 18 T. Kim et al. 18. Kaelbling, L.P., Littman, M.L., Cassandra, A.R.: Planning and acting in partially observable stochastic domains. Artificial Intelligence 101 (1-2), 99–134 (1998). https://doi.org/10.1016/S0004-3702(98)00023-X 19. Kellogg, G., Hartig, O., Champin, P.A., Seaborne, A.: RDF 1.2 concepts and ab-stract data model. W3C candidate recommendation snapshot, W3C (Apr 2026), https://www.w3.org/TR/rdf12-concepts/ 20. Kellogg, G., Seaborne, A., Tomaszuk, D.: RDF 1.2 turtle. W3C working draft, W3C (Apr 2026), https://www.w3.org/TR/rdf12-turtle/ 21. Kim, T., François-Lavet, V., Cochez, M.: Temporal knowledge-graph memory in a partially observable environment (2026), https://arxiv.org/abs/2408.05861 22. Kipf, T.N., Welling, M.: Semi-supervised classification with graph convolutional networks. In: International Conference on Learning Representations (2017) 23. Landajuela, M., Petersen, B.K., Kim, S., Santiago, C.P., Glatt, R., Mundhenk, N., Pettit, J.F., Faissol, D.: Discovering symbolic policies with deep reinforcement learning. In: Meila, M., Zhang, T. (eds.) Proceedings of the 38th International Conference on Machine Learning. Proceedings of Machine Learning Research, vol. 139, pp. 5979–5989. PMLR (18–24 Jul 2021), https://proceedings.mlr.press/ v139/landajuela21a.html 24. Mitchener, L., Tuckey, D., Crosby, M., Russo, A.: Detect, understand, act: A neuro-symbolic hierarchical reinforcement learning framework (extended abstract). In: Raedt, L.D. (ed.) Proceedings of the Thirty-First International Joint Conference on Artificial Intelligence, IJCAI-22. pp. 5314–5318. International Joint Conferences on Artificial Intelligence Organization (7 2022). https://doi.org/10.24963/ijcai.2022/ 742, sister Conferences Best Papers 25. Mnih, V., Kavukcuoglu, K., Silver, D., Rusu, A.A., Veness, J., Bellemare, M.G., Graves, A., Riedmiller, M., Fidjeland, A.K., Ostrovski, G., Petersen, S., Beattie, C., Sadik, A., Antonoglou, I., King, H., Kumaran, D., Wierstra, D., Legg, S., Hassabis, D.: Human-level control through deep reinforcement learning. Nature 518 (7540), 529–533 (2015). https://doi.org/10.1038/nature14236 26. Motik, B.: Representing and querying validity time in RDF and OWL: A logic-based approach. Journal of Web Semantics 12-13 , 3–21 (2012). https://doi.org/ 10.1016/j.websem.2011.11.004 27. Parisotto, E., Salakhutdinov, R.: Neural map: Structured memory for deep re-inforcement learning. In: International Conference on Learning Representations (2017) 28. Pritzel, A., Uria, B., Srinivasan, S., Puigdomènech, A., Vinyals, O., Hassabis, D., Wierstra, D., Blundell, C.: Neural episodic control. In: Proceedings of the 34th International Conference on Machine Learning (2017) 29. Schlichtkrull, M., Kipf, T.N., Bloem, P., van den Berg, R., Titov, I., Welling, M.: Modeling relational data with graph convolutional networks. In: The Semantic Web: ESWC 2018. pp. 593–607. Springer (2018) 30. Sutton, R.S., Precup, D., Singh, S.: Between mdps and semi-mdps: A framework for temporal abstraction in reinforcement learning. Artificial Intelligence 112 (1), 181–211 (1999). https://doi.org/https://doi.org/10.1016/S0004-3702(99)00052-1 31. Vaswani, A., Shazeer, N., Parmar, N., Uszkoreit, J., Jones, L., Gomez, A.N., Kaiser, L., Polosukhin, I.: Attention is all you need. In: Guyon, I., Luxburg, U.V., Bengio, S., Wallach, H., Fergus, R., Vishwanathan, S., Garnett, R. (eds.) Advances in Neural Information Processing Systems 30 (NeurIPS 2017). pp. 5998–6008 (2017) 32. Vincent, F.L., Peter, H., Riashat, I., Marc, G.B., Joelle, P.: An introduction to deep reinforcement learning. Foundations and Trends ® in Machine Learning 11 (3–4), 219–354 (Dec 2018). https://doi.org/10.1561/2200000071 Neuro-Symbolic Meta-Policies for Temporal KG Memory 19 33. Wayne, G., Hung, C.C., Amos, D., Mirza, M., Ahuja, A., Grabska-Barwinska, A., Rae, J., Mirowski, P., Leibo, J.Z., Santoro, A., Gemici, M., Reynolds, M., Harley, T., Abramson, J., Mohamed, S., Rezende, D., Saxton, D., Cain, A., Hillier, C., Silver, D., Kavukcuoglu, K., Botvinick, M., Hassabis, D., Lillicrap, T.: Unsuper-vised predictive memory in a goal-directed agent (2018), https://arxiv.org/abs/ 1803.10760 34. Zambaldi, V., Raposo, D., Santoro, A., Bapst, V., Li, Y., Babuschkin, I., Tuyls, K., Reichert, D., Lillicrap, T., Lockhart, E., Shanahan, M., Langston, V., Pascanu, R., Botvinick, M., Vinyals, O., Battaglia, P.W.: Deep reinforcement learning with rela-tional inductive biases. In: International Conference on Learning Representations (2019)

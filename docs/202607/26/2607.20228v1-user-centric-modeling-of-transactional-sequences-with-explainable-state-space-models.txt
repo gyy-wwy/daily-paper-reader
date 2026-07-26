@@ -1,0 +1,168 @@
+Title: User-Centric Modeling of Transactional Sequences with Explainable State Space Models
+
+URL Source: https://arxiv.org/pdf/2607.20228v1
+
+Published Time: Thu, 23 Jul 2026 01:02:14 GMT
+
+Number of Pages: 4
+
+Markdown Content:
+# User-Centric Modeling of Transactional Sequences with Explainable State Space Models 
+
+## Ivan Palagin 
+
+idpalagin@edu.hse.ru HSE University Moscow, Russia 
+
+## Abstract 
+
+We propose a hybrid approach for user-centric modeling of trans-actional event sequences that combines contrastive representation learning (CoLES) with State Space Models (SSMs). While contrastive methods yield high-quality compressed user representations, ex-isting encoders—RNNs and Transformers—suffer from vanishing gradients or quadratic complexity, respectively. Mamba, a selec-tive SSM, efficiently handles long-range dependencies but remains underexplored for personalized user analysis. We investigate two integration strategies: (1) initializing the Mamba hidden state with a CoLES embedding, and (2) prepending the projected CoLES em-bedding as a prefix token to the input sequence. Both approaches supply the model with an informative user prior from the first step. Experiments on three public datasets—Age (multiclass age-group prediction), MBD (multi-label product acquisition), and Taobao (bi-nary purchase prediction)—demonstrate consistent improvements over standalone Mamba and CoLES with a linear classifier, with the hybrid models converging 2–3 × faster than the plain SSM baseline. Explainability analysis via discretization-step maps and Integrated Gradients reveals selective event filtering on behavior-rich datasets and identifies the most informative transaction features. 
+
+## Keywords 
+
+State Space Models, Mamba, CoLES, contrastive learning, transac-tional sequences, event sequences, user embeddings, explainability, Integrated Gradients 
+
+ACM Reference Format: 
+
+Ivan Palagin. 2026. User-Centric Modeling of Transactional Sequences with Explainable State Space Models. In . ACM, New York, NY, USA, 4 pages. https://doi.org/10.1145/nnnnnnn.nnnnnnn 
+
+## 1 Introduction 
+
+In modern digital services virtually every user interaction is recorded as a timestamped event. Sequences of such events—purchases, page views, financial transactions—encode rich behavioral patterns com-monly referred to as transactional event sequences . Accurate model-ing of these sequences is critical for fraud detection, credit scoring, churn prediction, and personalized recommendation [12, 16]. A particularly valuable objective is learning user-level represen-tations : a compact profile that summarizes behavioral history can serve as a powerful prior for multiple downstream tasks without reprocessing the full sequence at inference time. Contrastive Learn-ing for Event Sequences (CoLES) [ 3] is a prominent self-supervised paradigm for this purpose, constructing positive pairs through sequence augmentations (masking, time jitter, within-window per-mutation) and optimizing a contrastive objective. The resulting embeddings capture stable user profiles without label supervision. However, CoLES depends on a sequential encoder backbone, in practice an RNN or Transformer, both of which have fundamental limitations for long sequences. Table 1 summarizes the trade-offs among encoder architectures. RNNs process events strictly sequentially and suffer from vanish-ing gradients, preventing reliable long-range dependency capture. Transformers overcome this via self-attention but at O( 𝐿 2) com-plexity, which is prohibitive for banking sequences averaging 881 events/user (Age dataset, 21M total events) or 156M total events (MBD). State Space Models (SSMs)—specifically Mamba [ 8 ]—offer 
+
+O( 𝐿 ) complexity, stable long-range memory via HiPPO initializa-tion [7], and a parallelizable convolutional training form. 
+
+Table 1: Comparison of sequence encoder architectures. 
+
+Architecture Long-range Complexity Parallel 
+
+GRU / LSTM × O ( 𝐿 ) ×
+
+Transformer ✓ O ( 𝐿 2 ) ✓
+
+Mamba (SSM) ✓ O ( 𝐿 ) ✓
+
+Despite these advantages, SSMs remain underexplored in the context of user-centric personalized modeling. This work closes the gap with two hybrid architectures that inject CoLES user embed-dings into Mamba: (1) hidden-state initialization —the CoLES embedding is projected into Mamba’s initial hidden state h0; and 
+
+(2) prefix concatenation —the projected embedding is prepended as an extra context token (Figure 1). Both strategies are evaluated with per-pair Optuna [ 1] hyperparameter tuning, and model deci-sions are interpreted with discretization-step maps and Integrated Gradients [19]. 
+
+## 2 Related Work 
+
+Event sequence modeling. EBES [ 12 ] provides a large-scale bench-mark showing that GRU-like models [ 10 ] dominate on short se-quences while long-range architectures become competitive as se-quence length grows. Transformer-based encoders such as BST [ 4]and BERT4Rec [ 18 ] achieve strong results on behavioral sequences from e-commerce platforms but incur quadratic attention over-head that is prohibitive for banking sequences with hundreds to thousands of events per user. 
+
+LLM-based and hybrid approaches. LLM4ES [ 15 ] learns user embeddings by converting event sequences into textual descrip-tions fed to a language model, demonstrating strong zero-shot transfer to downstream tasks. LATTE [ 6 ] reduces inference costs by aligning compact transaction embeddings with LLM-generated behavioral summaries via contrastive training, showing that frozen LLM semantic priors improve downstream quality at lower latency. arXiv:2607.20228v1 [cs.LG] 22 Jul 2026 HSE University, 2026, Moscow, Russia I.D. Palagin 
+
+EAFD [ 13 ] uses a pretrained-embedding-guided LLM agent to dis-cover interpretable features complementary to the latent represen-tation, achieving up to +5.8% relative gains over state-of-the-art embeddings on transaction benchmarks. FinTRACE [ 14 ] proposes a retrieval-first pipeline that converts raw transaction histories into behavioral features stored in a knowledge base, enabling grounded LLM reasoning for financial analytics in low-supervision settings. Despite competitive accuracy, all LLM-based approaches impose substantial inference overhead, motivating lightweight SSM-based alternatives [16]. 
+
+Contrastive learning for event sequences. CoLES [ 3 ] pio-neered self-supervised contrastive learning for event sequences. MLEM [ 11 ] combines contrastive and generative objectives; Yugay and Zaytsev [ 24 ] study joint training strategies, both showing gains over pure contrastive baselines. Our work is complementary: we keep CoLES fixed as a pretrained user-profile module and focus on integrating its embeddings into a more expressive SSM-based downstream encoder. 
+
+State Space Models. S4 [ 9 ] introduced structured SSMs with near-linear complexity, setting competitive Long Range Arena [ 20 ]scores. Mamba [ 8 ] added selective state gating via input-dependent 
+
+𝐵 𝑡 , 𝐶 𝑡 , Δ𝑡 ; Mamba-2 [ 5 ] simplified the state matrix to scalar-diagonal form, yielding faster training and improved long-range retention. ReMamba [ 23 ] explores selective compression for very long con-texts. A comprehensive survey of SSM variants is provided in [ 17 ]. At scale, Mamba-based language models match Transformers on most tasks while offering up to 8× inference speedup [21]. 
+
+Explainability of Mamba. Ali et al. [ 2 ] proved that selective SSMs are mathematically equivalent to linear-attention models, en-abling derivation of implicit attention matrices and direct applica-tion of gradient-based XAI methods. Yang and Wang [ 22 ] proposed discretization-step maps and cross-modal attention weights for Vi-sion Mamba; these maps generalize to any sequential domain and constitute the primary interpretability tool in this work alongside Integrated Gradients [19]. 
+
+## 3 Methodology 3.1 Datasets 
+
+Experiments are conducted on three public benchmarks (Table 2). 
+
+Age contains real banking transactions labeled with one of four age groups (balanced, 25% each; evaluated by Accuracy). MBD 
+
+contains banking transactions with four binary product-acquisition labels (severe class imbalance: ≈ 0.3% positive per label; evaluated by mean ROC-AUC). Taobao captures e-commerce user behavior; the target is whether a user makes a purchase within 7 days (43/57 class split; evaluated by ROC-AUC). 
+
+## 3.2 Feature Preprocessing 
+
+Numerical features are transformed via log (1 + | 𝑥 |) · sign (𝑥 ), nor-malized with per-sequence 𝑧 -score, and projected with a linear layer. Categorical features are mapped to learned embedding tables. Timestamps are encoded as successive differences 𝛿𝑡 𝑖 = 𝑡 𝑖 −𝑡 𝑖 −1 and projected analogously to numerical features. All per-feature vectors are concatenated to form the per-event input token x𝑡 ∈ R𝑑 model .The timestamp encoding strategy (difference, categorical bucketing, or none) is treated as a tunable hyperparameter. 
+
+Table 2: Dataset characteristics. Age MBD Taobao 
+
+Task Multiclass Multi-label Binary Metric Accuracy Mean ROC-AUC ROC-AUC Clients 24K 781K 18K Events 21M 156M 5.1M Avg. len 881 21/window 280 Cat. feat 1 11 2Num. feat 1 1 0
+
+## 3.3 Baseline Models 
+
+Plain Mamba. Transaction tokens are projected into the model dimension 𝑑 model , processed by a stack of Mamba blocks (each with RMSNorm and residual connection), and the last hidden state is fed to a linear classifier. The initial hidden state h0 is the zero vector. 
+
+CoLES + linear classifier. CoLES is trained self-supervisedly on the full dataset (train + test union; no label leakage) for 100K gradient steps. User embeddings are extracted and cached. A linear classifier trained on these embeddings isolates the quality of the contrastive representation as a standalone predictor. 
+
+## 3.4 Proposed Approaches 
+
+Figure 1 illustrates both proposed hybrid methods. In both cases CoLES is pretrained independently and its weights are frozen during the downstream phase. 
+
+Hidden-state initialization. We replace the zero initial state with a two-step projection of the user embedding: 
+
+h0 = 𝑊 2 𝜎 (𝑊 1 eCoLES ), (1) where 𝑊 1 ∈ R𝑑 mid ×𝑑 coles and 𝑊 2 ∈ R(𝑑 𝑁 ·𝐿 ssm ) × 𝑑 mid are learnable. This initialization is applied only to the first Mamba layer; subsequent layers receive the preceding layer’s output state. The user profile is thus available as a prior before the first transaction is processed. 
+
+Prefix concatenation. The CoLES embedding is projected into the transaction token space and prepended to the input sequence: 
+
+˜X = [ 𝑃 eCoLES ; X ], (2) where 𝑃 ∈ R𝑑 model ×𝑑 coles . Mamba can learn at each subsequent posi-tion how strongly to condition on the user prior in the prefix. 
+
+## 3.5 Hyperparameter Optimization 
+
+For each (architecture, dataset) pair we run Optuna [ 1] with Tree-structured Parzen Estimation (TPE) for 50 trials. To keep tuning tractable: epochs are capped at 10, sequence lengths are halved, and for MBD a 1M-sequence subsample is used. Key search ranges: learn-ing rate [10 −5, 10 −1] (log-uniform), Mamba layers {1, 2, 3}, state-space dimension {16 , 32 }, timestamp encoding {diff , cat , none }, and categorical/numerical embedding dimensions [4, 64 ]. The first 5 tri-als use random sampling; TPE guides the remaining search. Results are stored in a SQL database for resumable, reproducible tuning. 
+
+## 3.6 Training Protocol 
+
+All models are optimized with AdamW. CoLES pretraining runs on the train ∪test union for 100K gradient steps with batch sizes in User-Centric Modeling of Transactional Sequences with Explainable State Space Models HSE University, 2026, Moscow, Russia Mamba 
+
+> CoLES
+> Project
+> Mamba
+> CoLES
+> Project
+> Prefix concatenation Hidden-state initialization
+> h0
+> xt
+> xt
+
+Figure 1: Proposed hybrid architectures. Left : hidden-state initialization—the CoLES embedding is projected into Mamba’s initial state h0. Right : prefix concatenation—the embedding is prepended as a context token before the trans-action sequence x𝑡 .
+
+[32 , 256 ]; embeddings are extracted and cached for all users. Plain Mamba and both hybrid models are then trained on the training split with early stopping (patience = 3, max 100 epochs) monitored on the held-out validation metric. For users without a precomputed embedding at inference time, a zero vector is substituted, reducing the hybrid model exactly to plain Mamba and providing a natural cold-start fallback. 
+
+## 4 Results 4.1 Main Results 
+
+Table 3 reports test-set performance. Both hybrid methods consis-tently outperform all baselines on all three datasets. The largest absolute gains appear on Age ( +3.2 pp for hidden-state initialization over plain Mamba) and MBD ( +2.6 pp). On Taobao improvements are smaller ( +0.7 pp) but consistent across both methods. CoLES with a linear classifier underperforms plain Mamba on all three datasets, confirming that sequential context provided by Mamba is important and that CoLES embeddings are most effective as a complementary user-level prior rather than a standalone predictor. 
+
+Table 3: Test-set performance. Bold: best per dataset. Model Age MBD Taobao 
+
+Accuracy mROC-AUC ROC-AUC Mamba 0.354 0.711 0.692 CoLES + linear 0.321 0.703 0.641 Mamba + init 0.386 0.737 0.695 Mamba + prefix 0.384 0.727 0.699 
+
+## 4.2 Convergence Analysis 
+
+Learning-curve analysis reveals a second advantage of the hybrid architectures beyond final metric values. Both CoLES-augmented models reach peak validation performance at epochs 2–3, while plain Mamba requires 6 epochs to converge. This accelerated con-vergence indicates that the user prior injected via CoLES—whether as an initial hidden state or as a prefix token—provides the model with a meaningful starting point that reduces the number of gradi-ent steps needed to learn user-level behavioral patterns from the raw transaction stream. Faster convergence is practically relevant for large-scale industrial deployments where training time and compute costs are critical constraints. 
+
+## 4.3 Hyperparameter Sensitivity 
+
+Tuning across all (model, dataset) pairs reveals stable patterns: (i) optimal learning rates cluster around 10 −4; higher values cause training instability for all architectures; (ii) three Mamba layers consistently outperform shallower configurations; (iii) categorical and numerical embedding dimensions in [15 , 40 ] balance expres-siveness and parameter cost; (iv) for long sequences (Age, avg. 881 events), a state-space dimension of 32 outperforms 16, while short-sequence datasets (MBD: 21 events/window) show less sensitivity to this parameter. 
+
+## 4.4 Explainability Analysis 
+
+We apply two complementary XAI techniques to the hidden-state initialization model, sampling 16 test clients per dataset. Figure 2 summarizes the results. 
+
+Discretization-step maps. The scalar Δ𝑡 controls how strongly the hidden state is updated at position 𝑡 . On Age and MBD, Δ𝑡 
+
+lies uniformly in [0.75 , 1.0] across all positions, indicating that the model updates its state equally on every transaction without selec-tive filtering. On Taobao, Δ𝑡 exhibits pronounced dips at specific positions: the model learns to suppress low-intent events (item browsing) and amplify high-intent ones (add-to-cart, purchase), reflecting the qualitatively distinct interaction types present in e-commerce data. 
+
+Integrated Gradients. IG [ 19 ] attributes output logits to input features via path-integral gradients from a zero baseline. On Age, im-portance is nearly uniform across transaction amount ( num_0 ≈0.345), timestamp ( num_1 ≈0.328), and category ( cat_0 ≈0.328). On MBD, the currency feature ( cat_0 ) dominates with importance 0.154, substantially exceeding all other features, implying that foreign-currency transactions correlate strongly with holding specific bank products. On Taobao, importance is split between item identifier (cat_1 ≈0.524) and behavior type ( cat_0 ≈0.476). Taken together, selective event filtering emerges only when transaction types carry qualitatively different behavioral signals (Taobao), while banking datasets elicit broad, uniform reliance on all transaction features—consistent with the less structured nature of financial event streams compared to e-commerce interaction logs. 
+
+## 5 Conclusion 
+
+We presented two hybrid user-centric architectures that integrate frozen CoLES user embeddings into the Mamba SSM via hidden-state initialization and prefix concatenation. Experiments on three diverse transactional datasets demonstrate consistent improve-ments over standalone Mamba and CoLES baselines, with notably faster convergence (peak validation at epochs 2–3 vs. 6 for plain HSE University, 2026, Moscow, Russia I.D. Palagin Age Taobao MBD   
+
+> Age MBD Taobao
+
+Figure 2: Explainability results for Mamba with hidden-state initialization (16 test clients per dataset). Top row : normal-ized discretization-step ( Δ𝑡 ) curves (Age, Taobao, MBD). Pro-nounced dips in Taobao indicate selective event filtering. 
+
+Bottom row : feature importance from Integrated Gradients. Currency ( cat_0 ) dominates in MBD; importance is near-uniform in Age and Taobao. 
+
+Mamba) attributable to the user-level prior. Explainability anal-ysis confirms that the models develop selective event filtering on e-commerce data while processing banking sequences more uniformly—findings that are interpretable in terms of domain knowl-edge about financial vs. behavioral event types. The moderate magnitude of metric gains suggests that CoLES and Mamba extract partially overlapping information from the same sequence. Contributing factors include: (1) CoLES trains on short random sub-sequences and ignores global event chronology; (2) the linear projection from CoLES space into Mamba’s state space may be insufficiently expressive; (3) separate optimization of CoLES and Mamba misses potential synergies from joint training. Promising directions for future work include: (i) joint end-to-end training of CoLES and Mamba so the contrastive representation adapts to the SSM encoder’s needs; (ii) replacing the linear projec-tion with a multi-layer or cross-attention module; (iii) evaluation with Mamba-2 [ 5], which offers improved long-range retention at lower cost; (iv) scaling to sequences with 𝐿 > 1000 events to fully leverage the O( 𝐿 ) complexity advantage over Transform-ers; and (v) combining CoLES-initialized SSMs with LLM-based pipelines [ 6, 13 ] to unite user-level priors with language grounding and interpretable feature discovery. 
+
+## Acknowledgments 
+
+The author thanks M. O. Makarenko for supervision and valuable guidance throughout this research. 
+
+## References 
+
+[1] Takuya Akiba, Shotaro Sano, Toshihiko Yanase, Takeru Ohta, and Masanori Koyama. 2019. Optuna: A Next-Generation Hyperparameter Optimization Frame-work. In Proceedings of the 25th ACM SIGKDD International Conference on Knowl-edge Discovery and Data Mining . 2623–2631. [2] Ameen A. Ali, Itamar Zimerman, and Lior Wolf. 2025. The Hidden Attention of Mamba Models. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics . 1516–1534. [3] Dmitry Babaev et al . 2022. CoLES: Contrastive Learning for Event Sequences with Self-Supervision. In Proceedings of the 2022 International Conference on Management of Data . 1190–1199. [4] Qiwei Chen, Huan Zhao, Wei Li, Pipei Huang, and Wenwu Ou. 2019. Behavior Se-quence Transformer for E-Commerce Recommendation in Alibaba. In Proceedings of the 1st International Workshop on Deep Learning Practice for High-Dimensional Sparse Data .[5] Tri Dao and Albert Gu. 2024. Transformers are SSMs: Generalized Models and Efficient Algorithms through Structured State Space Duality. arXiv preprint arXiv:2405.21060 (2024). [6] Egor Fadeev, Dzhambulat Mollaev, Aleksei Shestov, Dima Korolev, Omar Zoloev, Ivan A. Kireev, Andrey Savchenko, and Maksim Makarenko. 2025. LATTE: Learning Aligned Transactions and Textual Embeddings for Bank Clients. In 
+
+Proceedings of the 2025 Conference on Empirical Methods in Natural Language Processing: Industry Track . 2635–2647. [7] Albert Gu et al . 2020. HiPPO: Recurrent Memory with Optimal Polynomial Projections. In Advances in Neural Information Processing Systems , Vol. 33. 1474– 1487. [8] Albert Gu and Tri Dao. 2023. Mamba: Linear-Time Sequence Modeling with Selective State Spaces. arXiv preprint arXiv:2312.00752 (2023). [9] Albert Gu, Karan Goel, and Christopher Ré. 2022. Efficiently Modeling Long Sequences with Structured State Spaces. arXiv preprint arXiv:2111.00396 (2022). [10] Balázs Hidasi, Alexandros Karatzoglou, Linas Baltrunas, and Domonkos Tikk. 2016. Session-Based Recommendations with Recurrent Neural Networks. In 
+
+International Conference on Learning Representations .[11] Viktor Moskvoretskii et al . 2024. MLEM: Generative and Contrastive Learning for Event Sequences. arXiv preprint arXiv:2401.15935 (2024). [12] Denis Osin, Ivan Udovichenko, Evgeny Shvetsov, et al . 2025. EBES: Easy Bench-marking for Event Sequences. In Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining , Vol. 2. 5730–5741. [13] Artem Sakhno, Ivan Sergeev, Alexey Shestov, Omar Zoloev, Elizaveta Kovtun, Gleb Gusev, Andrey Savchenko, and Maksim Makarenko. 2026. Embedding-Aware Feature Discovery: Bridging Latent Representations and Interpretable Features in Event Sequences. arXiv preprint arXiv:2603.15713 (2026). [14] Artem Sakhno, Daniil Tomilov, Yuliana Shakhvalieva, Inessa Fedorova, Daria Ruzanova, Omar Zoloev, Andrey Savchenko, and Maksim Makarenko. 2026. Fin-TRACE: Financial Transaction Retrieval and Contextual Evidence for Knowledge-Grounded Reasoning. arXiv preprint arXiv:2603.15459 (2026). [15] Alexander Shestov et al . 2025. LLM4ES: Learning User Embeddings from Event Se-quences via Large Language Models. In Proceedings of the 34th ACM International Conference on Information and Knowledge Management . 5238–5242. [16] Aleksei Shestov, Daria Denisova Anton Klenitskiy, Andrey Savchenko Amurkhan Dzagkoev, Daniil Petrovich, and Maksim Makarenko. 2025. Topologi-cal Metric for Unsupervised Embedding Quality Evaluation. In Advances in Infor-mation Retrieval . Springer, Cham, 1235–1260. doi:10.1007/978-3-032-21300-6_51 [17] Shriya Somvanshi et al . 2025. From S4 to Mamba: A Comprehensive Survey on Structured State Space Models. arXiv preprint arXiv:2503.18970 (2025). [18] Fei Sun, Jun Liu, Jian Wu, Changhua Pei, Xiao Lin, Wenwu Ou, and Peng Jiang. 2019. BERT4Rec: Sequential Recommendation with Bidirectional Encoder Rep-resentations from Transformer. In Proceedings of the 28th ACM International Conference on Information and Knowledge Management . 1441–1450. [19] Mukund Sundararajan, Ankur Taly, and Qiqi Yan. 2017. Axiomatic Attribution for Deep Networks. In Proceedings of the 34th International Conference on Machine Learning , Vol. 70. 3319–3328. [20] Yi Tay et al . 2021. Long Range Arena: A Benchmark for Efficient Transformers. In International Conference on Learning Representations .[21] Roger Waleffe, Wonmin Byeon, Duncan Riach, Brandon Norick, Vijay Korthikanti, Tri Dao, Albert Gu, et al . 2024. An Empirical Study of Mamba-Based Language Models. arXiv preprint arXiv:2406.07887 (2024). [22] Zichuan Yang and Yongzhi Wang. 2025. EVM-Fusion: An Explainable Vi-sion Mamba Architecture with Neural Algorithmic Fusion. arXiv preprint arXiv:2505.17367 (2025). [23] Daixuan Yuan et al . 2024. ReMamba: Equip Mamba with Effective Long-Sequence Modeling. arXiv preprint arXiv:2408.15496 (2024). [24] Vladislav Yugay and Alexey Zaytsev. 2025. Uniting Contrastive and Generative Learning for Event Sequences Models. arXiv preprint arXiv:2408.09995 (2025).
