@@ -1,0 +1,1027 @@
+Title: Beyond Noisy Signals: Dual-Level Denoising for Multi-modal Sequential Recommendation
+
+URL Source: https://arxiv.org/pdf/2607.18786v1
+
+Published Time: Wed, 22 Jul 2026 00:36:13 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+# Beyond Noisy Signals: Dual-Level Denoising for Multi-modal Sequential Recommendation 
+
+## Jie Luo 
+
+University of Science and Technology of China Hefei, China luojie2000@mail.ustc.edu.cn 
+
+## Qi Jin 
+
+University of Science and Technology of China Hefei, China jinqi200208@mail.ustc.edu.cn 
+
+## Xinming Zhang ∗
+
+University of Science and Technology of China Hefei, China xinming@ustc.edu.cn 
+
+Abstract 
+
+Multi-modal Sequential Recommendation (SR) incorporates rich side information (e.g., textual and visual features) to enhance dy-namic user preference modeling. However, existing frameworks inevitably suffer from a Dual-Noise Dilemma : (1) Feature-level redundancy stemming from the semantic gap between generic pre-trained representations and fine-grained recommendation intent; and (2) Sequence-level stochasticity induced by spurious interac-tions such as accidental clicks. To break this bottleneck, we propose 
+
+DDMSR , a novel Dual-level Denoising Multi-modal Sequential 
+
+Recommendation framework that systematically purifies signals from both feature-topological and sequence-frequency perspec-tives. Specifically, we first design a graph-based feature denois-ing module that leverages Laplacian smoothing on item seman-tic graphs as a structural low-pass filter, effectively suppressing high-frequency semantic noise while preserving salient features. For sequence purification, we introduce a frequency-domain se-quence denoising module, utilizing the Fast Fourier Transform and a learnable frequency filter to adaptively modulate the interaction spectrum and attenuate anomalous signals. Furthermore, a multi-modal contrastive alignment objective is incorporated to bridge the heterogeneity gap and enforce cross-modal semantic consis-tency. Extensive experiments on four public benchmark datasets demonstrate that DDMSR consistently outperforms state-of-the-art baselines, providing a highly robust and efficient solution for multi-modal sequential recommendation. The source code is available at: https://github.com/jluo00/DDMSR. 
+
+CCS Concepts 
+
+• Information systems → Recommender systems .
+
+Keywords 
+
+Sequential Recommendation, Multi-modal Learning, Multi-modal Denoising  
+
+> ∗Corresponding authors. Permission to make digital or hard copies of all or part of this work for personal or classroom use is granted without fee provided that copies are not made or distributed for profit or commercial advantage and that copies bear this notice and the full citation on the first page. Copyrights for components of this work owned by others than the author(s) must be honored. Abstracting with credit is permitted. To copy otherwise, or republish, to post on servers or to redistribute to lists, requires prior specific permission and/or a fee. Request permissions from permissions@acm.org.
+> Conference acronym ’XX, Woodstock, NY
+> ©2018 Copyright held by the owner/author(s). Publication rights licensed to ACM. ACM ISBN 978-1-4503-XXXX-X/2018/06 https://doi.org/XXXXXXX.XXXXXXX
+
+ACM Reference Format: 
+
+Jie Luo, Qi Jin, and Xinming Zhang. 2018. Beyond Noisy Signals: Dual-Level Denoising for Multi-modal Sequential Recommendation. In Proceedings of Make sure to enter the correct conference title from your rights confirmation email (Conference acronym ’XX). ACM, New York, NY, USA, 12 pages. https: //doi.org/XXXXXXX.XXXXXXX 
+
+1 INTRODUCTION 
+
+Sequential Recommendation (SR) aims to model the evolutionary trajectory of users’ historical interaction behaviors to capture their dynamic preferences and predict the next item of potential inter-est [ 25 , 35 , 36 ]. With the continuous innovation of deep learning architectures, particularly the introduction of the Transformer [ 33 ], representative models such as SASRec [ 13 ] and BERT4Rec [ 30 ] have achieved significant success in capturing long- and short-term de-pendencies within sequences via self-attention mechanisms. How-ever, the conventional SR paradigm relies heavily on item ID em-beddings, which leads to severe cold-start issues for long-tail items and renders the models vulnerable to data sparsity in real-world scenarios [ 19 , 41 ]. To break through these limitations, the Multi-modal Sequential Recommendation (Multi-modal SR) paradigm has emerged, aiming to enhance representation generalization by in-tegrating side information such as textual descriptions and visual images. For instance, UniSRec [ 10 ] utilizes a Mixture-of-Experts (MoE) network [ 28 ] to learn transferable unified textual represen-tations; MMSR [ 11 ] leverages heterogeneous graph networks for adaptive multi-modal fusion; while TedRec [ 38 ] and HM4SR [ 46 ]enrich user modeling from the perspectives of frequency-domain integration and timestamp injection, respectively. Despite the enriched item representations brought by multi-modal data, existing frameworks still encounter performance bot-tlenecks in practice. We observe that these models generally fall into a “Dual-Noise Dilemma” , which significantly restricts the upper bound of recommendation accuracy: 
+
+• Feature-level Noise : The semantic gap between pre-trained representations and recommendation intent. Existing meth-ods typically utilize dense vectors extracted from general-purpose pre-trained models (e.g., BERT [ 4], ViT [ 5]) and project them into a unified embedding space via simple linear or non-linear mappings. However, these pre-trained mod-els are fundamentally designed to capture coarse-grained, global semantics—such as the overall scene of an image or the general summary of a long text. This creates a non-negligible semantic gap between the pre-trained features and the fine-grained attributes that truly drive user preferences in recommendation scenarios (e.g., the specific silhouette arXiv:2607.18786v1 [cs.IR] 21 Jul 2026 Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Jie Luo, Qi Jin, and Xinming Zhang 1
+
+预训练模型（如  BERT 、ViT 等）提取的多模态特征往往存在特征空间对齐问题和大量冗余噪声， 
+
+难以精准映射到推荐系统的语义空间。同时，用户的交互序列中也充斥着随机点击、误操作等 
+
+噪声交互数据。     
+
+> Text: A woman in a black
+> shirt dress carries a beige
+> bucket bag .
+> Raw Multi -modal Item
+> Interested
+> item
+> Beige
+> bucket
+> bag
+> Woman
+> Black
+> shirt
+> dress
+> Other
+> Feature Extractor
+> (e.g., BERT, ViT )
+> Background
+> Beige bucket
+> bag
+> Interested
+> features
+> Redundant
+> item noise
+> Redundant
+> item noise
+> Redundant
+> environmental
+> noise
+> Fourier
+> Transform
+> Mis -clicks &
+> Interaction Noise
+> Time -domain User
+> Interaction Sequence
+> …
+> Frequency -domain of
+> Item Sequence Representation
+> Mis -clicks
+> Noise
+> Useful
+> Persistent
+> Signal
+> User
+
+(a) Pre -trained Multi -modal Feature Noise  (b) User Interaction Sequence Noise 
+
+Figure 1: Illustration of multi-level noise in multi-modal recommendation. (a) Feature-level noise: Pre-trained encoders (e.g., ViT, BERT) often capture redundant, item-irrelevant details (e.g., background) misaligned with user intent. (b) Interaction-level noise: Raw sequences contain stochastic noise (e.g., mis-clicks). We transform sequences into the frequency domain to distinguish persistent interest (low-frequency) from abrupt noise (high-frequency). 
+
+of a garment or the unique texture of a product). As illus-trated in Figure 1(a), while a user’s genuine interest may be focused on a specific “beige bucket bag,” the pre-trained encoders inevitably encode redundant background elements and irrelevant matching items into the feature space. Such feature-level noise subsequently contaminates the precision of user interest modeling. 
+
+• Sequence-level Noise : Spurious and stochastic interactions in the time domain. Prevailing models often operate under the idealized assumption that every interaction in a user’s historical sequence faithfully reflects a stable and persistent preference. Nevertheless, real-world interaction sequences are inevitably perturbed by “spurious interactions” caused by accidental clicks, system exposure bias, or fleeting, impulsive demands. As depicted in Figure 1(b), for a user whose core interest is electronics, the sporadic interactions with shoes or glasses within the sequence are likely high-frequency noise signals rather than indicators of long-term preference. Treating these noisy interactions as equivalent to authentic interests in the time domain will inevitably lead to biased estimations of the user’s true intent, thereby degrading the overall recommendation quality. To systematically address the aforementioned limitations, we propose DDMSR , a novel Dual-level Denoising Multi-modal Sequential 
+
+Recommendation framework that purifies recommendation signals from two complementary perspectives: feature-level denoising via graph topology and sequence-level denoising via frequency modu-lation. The framework consists of three key components. 
+
+Graph-based Feature Denoising. To mitigate noise and redun-dancy in pre-trained multi-modal features, we construct sparse item-item semantic graphs from raw textual and visual representa-tions, transcending the conventional isolated item paradigm. From a graph signal processing perspective, the neighborhood aggrega-tion process inherently performs Laplacian smoothing on the graph manifold, acting as a low-pass filter that suppresses high-frequency noisy deviations inconsistent with local semantic neighborhoods while amplifying shared salient signals. Moreover, we design learn-able adaptive residual connections to dynamically balance denois-ing and over-smoothing prevention, while implicitly performing feature imputation for long-tail items via semantic propagation. 
+
+Frequency-domain Sequence Denoising. To address the inherent stochasticity and noise in interaction sequences, we introduce a frequency-domain adaptive modulation layer prior to the sequence encoder. Specifically, the multi-modal item embedding sequence is projected from the time domain into the frequency domain via the Fast Fourier Transform (FFT). A learnable frequency filter is then applied to perform global spectral modulation across the full frequency range. Rather than using a fixed low-pass filter, this data-driven design enables the model to adaptively suppress anoma-lous frequency components inconsistent with genuine user prefer-ences—whether high-frequency spikes induced by accidental clicks or low-frequency drifts caused by transient interests—while se-lectively preserving and amplifying informative components with high predictive value. The modulated spectrum is then projected back to the time domain through the Inverse FFT, resulting in a robust and denoised sequence for preference modeling. 
+
+Multi-modal Contrastive Alignment. To bridge the heterogeneity gap between textual and visual feature spaces and facilitate coherent multi-modal fusion, we incorporate a contrastive learning objective that maximizes the mutual information between different modality representations of the same item, enforcing cross-modal semantic consistency. Our main contributions are summarized as follows: 
+
+• We identify and formulate the Dual-Noise Dilemma in multi-modal sequential recommendation, highlighting the critical impact of feature redundancy and spurious interactions. 
+
+• We propose a novel dual-channel denoising framework DDMSR 
+
+that integrates a graph-based spectral filter for feature re-finement and an adaptive FFT-based modulator for sequence purification. Furthermore, a contrastive alignment objective is integrated to enforce cross-modal consistency. Beyond Noisy Signals: Dual-Level Denoising for Multi-modal Sequential Recommendation Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+• Extensive experiments on four real-world datasets demon-strate that our method significantly outperforms state-of-the-art baselines, and comprehensive ablation studies validate the efficacy of our dual-denoising design. 
+
+2 RELATED WORKS 
+
+In this section, we review related work on traditional ID-based se-quential recommendation, multi-modal sequential recommendation and denoising sequential recommendation. 
+
+2.1 Traditional Sequential Recommendation 
+
+Sequential Recommendation (SR) aims to characterize the evolu-tionary patterns of user preferences from historical interaction trajectories to predict future behaviors [ 35 , 36 ]. Early paradigms primarily leveraged Markov Chains, such as FPMC [ 27 ], to capture low-order sequential transitions. However, these methods strug-gle to model the complex, long-range dependencies inherent in real-world sequences. The field has been revolutionized by deep learning architectures. RNN-based GRU4Rec [ 9 ] first introduced temporal modeling to SR, while CNN-based models like Caser [ 31 ] and NextItNet [ 40 ]utilized convolutional filters to capture local patterns. Currently, Transformer-based models have established dominance due to their superior global dependency modeling. Specifically, SASRec [ 13 ] em-ploys unidirectional self-attention for generative modeling, whereas BERT4Rec [ 30 ] adopts a bidirectional masked language modeling paradigm for richer contextual awareness. Despite their efficacy, these ID-centric methods inherently treat items as isolated symbols, neglecting the rich multi-modal content. Such semantic isolation severely limits their representation gen-eralization, leading to suboptimal performance in cold-start and sparse scenarios. 
+
+2.2 Multi-modal Sequential Recommendation 
+
+To transcend the limitations of ID-based modeling in cold-start and data-sparse scenarios, recent research has pivoted towards incor-porating multi-modal side information. Early attempts like UniS-Rec [ 10 ] utilize a Mixture-of-Experts (MoE) architecture to learn transferable item representations from text, while MMMLP [ 18 ]prioritizes computational efficiency by replacing complex atten-tion mechanisms with a pure MLP-based backbone. Subsequent studies have focused on more sophisticated fusion strategies. MISS-Rec [ 34 ] employs an interest-aware Transformer encoder-decoder with dynamic fusion to model sequence-level multi-modal inter-ests. MMSR [ 11 ] disentangles sequential preferences into modality-independent and modality-synergistic patterns, employing an intent-oriented dynamic routing mechanism for adaptive fusion. More recently, researchers have explored specialized domains and ar-chitectures: TedRec [ 38 ] enhances multi-modal modeling by per-forming sequence-level text-ID semantic fusion in the frequency domain; IISAN [ 7 ] proposes a decoupled side-adaptation network to enable deep cross-modal interaction while preserving backbone parameters; and HM4SR [ 46 ] incorporates time-aware MoE to fuse temporal dynamics into multi-modal modeling. Although leveraging multi-modal features, existing frameworks still encounter performance bottlenecks due to an overlooked dual-noise dilemma: (1) feature-level redundancy inherent in generic pre-trained encoders, and (2) sequence-level stochasticity from accidental interactions. This combined noise impedes the precise characterization of true user preferences. 
+
+2.3 Denoising Sequential Recommendation 
+
+Denoising has emerged as a fundamental challenge in SR, with existing research bifurcating into two primary trajectories: (1) Interaction-level Denoising. This line purifies behavior sequences from stochastic perturbations. Conventional methods filter noise either implicitly via frequency-domain modulation (e.g., FMLP-Rec [ 48 ], BSARec [ 29 ]) or explicitly via structural inconsistency (e.g., HSD [ 43 ], SSDRec [ 44 ]). Recently, generative and semantic paradigms have emerged: PDRec [ 22 ] and CaDiRec [ 3] leverage diffusion models for historical behavior reweighting and context-aware sequence augmentation, respectively, while IADSR [ 37 ] em-ploys LLM-based alignment to filter noise via interest consistency. 
+
+(2) Feature-level Denoising. A parallel trajectory mitigates re-dundancy in pre-trained multi-modal representations. Pioneered by DiffuRec [ 17 ]’s distribution-based uncertainty modeling, recent works like DMMD4SR [ 20 ] and MDSBR [ 16 ] explicitly repurpose diffusion processes to purify multi-modal features against domain-shift noise. Furthermore, broader multi-modal methods (e.g., DA-MRS [ 39 ], DiffMM [ 12 ]) enhance feature purity by aligning content with user feedback or generating denoised semantic graphs. Despite their progress, existing denoising paradigms suffer from two fundamental deficiencies: (1) Fragmented perspectives: Interaction-centric sequential models (e.g., FMLP-Rec [ 48 ], PDRec [ 22 ]) over-look item feature redundancy, while feature-centric approaches (e.g., MDSBR [ 16 ]) often neglect sequence-level stochasticity. No-tably, non-sequential models like DA-MRS [ 39 ] and DiffMM [ 12 ]fail to account for temporal interaction randomness, severely limit-ing their ability to capture dynamic preferences. (2) Computational inefficiency: Prevailing feature-denoising techniques rely heavily on iterative, computationally expensive generative processes (e.g., diffusion mechanisms in DMMD4SR [ 20 ]). These methods entail prohibitive overhead and fail to exploit the structural topology of items for principled filtering. In contrast, our framework provides a principled yet lightweight solution for synergistic purification. We move beyond costly generative modeling by leveraging Lapla-cian smoothing on item semantic graphs as a structural low-pass filter for features, while employing learnable frequency filters to adaptively modulate the interaction spectrum. 
+
+3 METHODOLOGY 
+
+In this section, we present the proposed DDMSR framework, as illustrated in Figure 2. 
+
+3.1 Problem Formulation 
+
+Let U and I denote the set of users and items, respectively. For each item 𝑖 ∈ I , it is associated with multi-modal information 
+
+M𝑖 = {𝑣 𝑖 , 𝑡 𝑖 }, where 𝑣 𝑖 and 𝑡 𝑖 represent the visual and textual fea-tures extracted by frozen pre-trained models, respectively. For each Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Jie Luo, Qi Jin, and Xinming Zhang Frequency -domain 
+
+> Denosie Layer
+
+# Framework 
+
+> Image Emb.
+> Matrix
+> Fusion
+> Behavior Encoder
+> (e.g., SASRec)
+> Prediction Layer
+
+𝑖 1
+
+𝑖 2
+
+𝑖 3
+
+𝑖 𝑛  
+
+> …
+> Item
+> Seq.
+> Position
+> Emb. 𝑃
+> Image
+> Encoder
+> Graph -based
+> Denoising
+> MoE
+> Adapter
+> Raw Emb. Matrix
+> Item -Item Graph
+> Gate
+> Denoise Emb. Matrix
+> Graph
+> Construction
+> LayerNorm
+> Graph Encoder
+> Layer
+
+𝑒 
+
+> Neighbor
+> Aggregation
+
+𝐴 
+
+> A woman in a
+> black shirt dress
+> carries a beige
+> bucket bag .
+> Text
+> Encoder
+> MoE
+> Adapter
+> Graph -based
+> Denoising
+> Text Emb.
+> Matrix
+
+Graph -based Denoising 
+
+> Item Emb.
+> Sequence
+> Fast Fourier
+> Transform (FFT ）
+> Inverse FFT (IFFT)
+> Gate
+> LayerNorm
+
+Frequency -domain Denoising  
+
+> Alignment
+> Frequency -domain
+> Denois ing Layer
+> Text Input
+> Image Input
+> Learnable
+> Weight 𝑊
+
+Figure 2: Overall framework of DDMSR. 
+
+user 𝑢 ∈ U , their historical interaction sequence is chronologi-cally ordered as 𝑆 𝑢 = [𝑖 1, 𝑖 2, . . . , 𝑖 𝑛 ], where 𝑖 𝑡 ∈ I denotes the 𝑡 -th interacted item and 𝑛 = |𝑆 𝑢 | is the sequence length. The goal of multi-modal sequential recommendation is to predict the next item 
+
+𝑖 𝑛 +1 that user 𝑢 is most likely to interact with, given 𝑆 𝑢 and the associated multi-modal features: 
+
+𝑖 𝑛 +1 = arg max   
+
+> 𝑖 ∈ I
+
+𝑃 (𝑖 𝑛 +1 = 𝑖 | 𝑆 𝑢 , {M 𝑖 𝑡 }𝑛 𝑡 =1). (1) 
+
+3.2 Multi-modal Feature Extraction and Denoising 
+
+3.2.1 Multi-modal Feature Extraction. To exploit the rich semantic information embedded in item multi-modal content, we employ frozen pre-trained encoders to extract raw multi-modal features. Specifically, a CLIP-ViT [ 26 ] is used for visual feature extraction, and RoBERTa [ 2] for textual feature extraction. For all items in I, the raw visual and textual feature matrices are denoted as F𝑣 ∈ R| I | × 𝑑 𝑣 
+
+and F𝑡 ∈ R| I | × 𝑑 𝑡 , respectively, where 𝑑 𝑣 and 𝑑 𝑡 are the pre-trained visual and text feature dimensions. 
+
+3.2.2 Graph-based Multi-modal Feature Denoising. Since pre-trained encoders are optimized on large-scale general-domain corpora, the extracted features inevitably contain noise irrelevant to the recommendation task. To address this, we propose a graph-based denoising module grounded in graph signal processing theory: se-mantically similar items should have coherent representations in the feature space. By performing neighbor aggregation on an item semantic graph, we conduct Laplacian smoothing, which acts as a low-pass filter—suppressing high-frequency noisy deviations incon-sistent with semantic neighbors while amplifying shared semantic signals across items. 
+
+Item Semantic Graph Construction. For each modality 𝑚 ∈{𝑣, 𝑡 }, we compute pairwise cosine similarities between raw item features to construct a similarity matrix S𝑚 , where the (𝑎, 𝑏 )-th entry is defined as: 
+
+𝑠 𝑚 𝑎,𝑏 = (e𝑚 𝑎 )⊤e𝑚 𝑏 
+
+∥e𝑚 𝑎 ∥ · ∥ e𝑚 𝑏 ∥ , (2) where e𝑚 𝑎 and e𝑚 𝑏 are the modality-𝑚 feature vectors of items 𝑎 
+
+and 𝑏 , respectively. To prevent over-smoothing caused by dense connectivity and reduce computational overhead, we retain only the top-𝐾 most similar neighbors for each item, yielding a sparse adjacency matrix A𝑚 . The adjacency matrix is then symmetrically normalized as: 
+
+ˆA𝑚 = (D𝑚 )−1/2A𝑚 (D𝑚 )−1/2, (3) where D𝑚 is the corresponding degree matrix. 
+
+Adaptive Graph-based Feature Denoising. Based on the con-structed semantic graph, we perform 𝐿 𝑔 layers of graph convolu-tional aggregation. At the 𝑙 -th layer, item features are updated via an adaptive weighted combination of self features and neighbor-aggregated features: 
+
+h(𝑙 ) = 𝑤 (𝑙 ) · h(𝑙 −1) + ( 1 − 𝑤 (𝑙 ) ) · ˆA𝑚 h(𝑙 −1) , (4) where 𝑤 (𝑙 ) = 𝜎 (𝛼 (𝑙 ) ) is a learnable adaptive weight at layer 𝑙 , 𝜎 (·) is the Sigmoid function, and h(0) = F𝑚 . This learnable weight enables the model to automatically balance the contribution of self features and aggregated neighbor features: items with high-quality features tend to retain more self information, while long-tail items with sparse signals benefit more from neighboring high-quality features. Finally, a residual connection and layer normalization are applied to obtain the denoised feature matrix: 
+
+˜F𝑚 = LayerNorm (h(𝐿 𝑔 ) + F𝑚 ). (5) Beyond Noisy Signals: Dual-Level Denoising for Multi-modal Sequential Recommendation Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+3.2.3 MoE Adapter. To effectively project the denoised multi-modal features into a unified semantic space and facilitate cross-modal alignment, we employ Mixture-of-Experts (MoE) adapters to map 
+
+˜F𝑣 and ˜F𝑡 into unified representations E𝑣 , E𝑡 ∈ R| I | × 𝑑 . Each MoE layer comprises 𝐾 expert networks, and the output for input 𝑥 is computed as a weighted sum of expert outputs: 
+
+˜𝑥 =
+
+> 𝐾
+
+∑︁ 
+
+> 𝑘 =1
+
+𝑔 𝑘 · Expert 𝑘 (𝑥 ), (6) where each expert is instantiated as a two-layer MLP with Dropout and ReLU activation [8]: Expert 𝑘 (𝑥 ) = 𝜙 (W2 ·Dropout (𝜙 (W1 ·Dropout (𝑥 ) + b1)) + b2). (7) Following UniSRec [ 10 ], we adopt a noisy gating mechanism to encourage diverse expert utilization and improve load balancing: 
+
+𝑔 = Softmax (𝑥 W𝑔 + 𝜖 ⊙ Softplus (𝑥 W𝑛𝑜𝑖𝑠𝑒 )) , 𝜖 ∼ N ( 0, 1), (8) where W𝑔 and W𝑛𝑜𝑖𝑠𝑒 are learnable routing and noise projection matrices, respectively. 
+
+3.3 Sequence Modeling with Frequency-domain Denoising 
+
+3.3.1 Multi-modal Sequence Construction. Given the denoised and MoE-adapted multi-modal feature matrices E𝑣 , E𝑡 ∈ R| I | × 𝑑 , for user interaction sequence 𝑆 𝑢 = [𝑖 1, 𝑖 2, . . . , 𝑖 𝑛 ], we retrieve the corre-sponding visual and textual feature sequences by index lookup and fuse them into a unified item embedding sequence: 
+
+H = Dropout (LayerNorm (Fusion (E𝑣 [𝑆 𝑢 ], E𝑡 [𝑆 𝑢 ]) + P)) , (9) where P ∈ R𝑛 ×𝑑 is a learnable positional embedding, and Fusion (·) 
+
+can be instantiated as element-wise addition, concatenation, or attention-based fusion. 
+
+3.3.2 Frequency-domain Sequence Denoising. User interaction se-quences inevitably contain noisy interactions ( e.g. , accidental clicks) that do not reflect genuine user preferences. Feeding such noisy sequences directly into the sequential encoder would impair user preference modeling. Inspired by prior works [ 21 , 29 , 48 ], we de-sign a frequency-domain denoising module consisting of 𝐿 𝑓 stacked filtering layers to address this, which is inserted prior to the sequen-tial encoder. The underlying intuition is that noisy interactions tend to manifest as high-frequency components in the frequency domain, while stable user preferences correspond to persistent low-frequency signals. By modulating the frequency spectrum with learnable filters, the module adaptively suppresses noise signals while preserving informative sequential patterns. Formally, given the item embedding sequence H ∈ R𝑛 ×𝑑 , each frequency-domain denoising layer proceeds as follows. First, the sequence is transformed from the time domain to the frequency domain via the Fast Fourier Transform (FFT): 
+
+H𝑓 = FFT (H), (10) where H𝑓 ∈ C𝑛 ×𝑑 is the complex spectrum tensor. A learnable complex-valued filter W ∈ C𝑛 ×𝑑 is then applied to modulate the spectrum via element-wise multiplication: 
+
+˜H𝑓 = W ⊙ H𝑓 . (11) The modulated spectrum is then transformed back to the time domain via the Inverse Fast Fourier Transform (IFFT): 
+
+˜H = IFFT ( ˜H𝑓 ). (12) To adaptively balance the contributions of the frequency-filtered features and the original features, we introduce a gating network for adaptive fusion, replacing the fixed residual connection: 
+
+𝛼 = 𝜎 
+
+
+
+MLP ([ H ∥ ˜H]) 
+
+
+
+, (13) 
+
+¯H = LayerNorm 
+
+
+
+𝛼 ⊙ ˜H + ( 1 − 𝛼 ) ⊙ H
+
+
+
+, (14) where 𝛼 ∈ ( 0, 1) is a position-wise gating weight and 𝜎 (·) denotes the Sigmoid function. This design enables the model to adaptively regulate the denoising intensity at each sequence position, effec-tively suppressing noise while retaining valuable sequential pat-terns. After 𝐿 𝑓 layers of frequency-domain denoising, the refined sequence representation is fed into a sequential encoder ( e.g. , SAS-Rec) for user preference modeling. 
+
+3.3.3 Sequential Modeling. After frequency-domain denoising, the refined sequence representation ¯H ∈ R𝑛 ×𝑑 is fed into a Transformer-based sequential encoder to capture item transition patterns and model the evolution of user preferences. We stack 𝐿 𝑡 Transformer layers, each consisting of a Multi-Head Self-Attention (MHSA) sub-layer and a point-wise Feed-Forward Network (FFN), with residual connections and layer normalization applied at each sub-layer: 
+
+S(𝑙 ) = MHSA (H(𝑙 −1) ) + H(𝑙 −1) ,
+
+H(𝑙 ) = FFN (LayerNorm (S(𝑙 ) )) + S(𝑙 ) , (15) where 1 ≤ 𝑙 ≤ 𝐿 𝑡 and H(0) = ¯H. The MHSA sub-layer captures long-range dependencies between items at different positions, while the FFN introduces non-linearity for richer representation learning. Finally, we extract the hidden state at the last valid position 𝑡 from the output of the last Transformer layer H(𝐿 𝑡 ) as the user preference representation: 
+
+s𝑢 = H(𝐿 𝑡 ) [𝑡 ]. (16) 
+
+3.4 Model Training 
+
+We adopt a multi-task learning framework that jointly optimizes the primary recommendation task and an auxiliary cross-modal contrastive learning objective. 
+
+Recommendation Loss. Given the user representation s𝑢 ∈ R1×𝑑 
+
+produced by the sequential encoder, we compute matching scores via dot product with item embeddings, scaled by a temperature parameter 𝜏 𝑟𝑒𝑐 . The primary recommendation task is optimized with a cross-entropy loss: 
+
+L𝑟𝑒𝑐 = − 1
+
+|B| ∑︁ 𝑢 ∈ B 
+
+log exp (s⊤ 
+
+> 𝑢
+
+e𝑦 𝑢 /𝜏 𝑟𝑒𝑐 )
+
+Í𝑖 ∈ I exp (s⊤ 
+
+> 𝑢
+
+e𝑖 /𝜏 𝑟𝑒𝑐 ) , (17) where B denotes the training batch, e𝑦 𝑢 ∈ R1×𝑑 is the embedding of the ground-truth next item for user 𝑢 , and I is the full item set. The item embedding is defined as e𝑖 = e𝑡 𝑖 + e𝑣 𝑖 , where e𝑡 𝑖 ∈ E𝑡 and 
+
+e𝑣 𝑖 ∈ E𝑣 .
+
+Cross-modal Contrastive Learning Loss. To bridge the hetero-geneity gap between feature spaces of different modalities, we introduce an auxiliary cross-modal contrastive learning objective. For each item 𝑖 in the batch, its textual and visual embeddings Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Jie Luo, Qi Jin, and Xinming Zhang 
+
+Table 1: Statistics of the datasets after preprocessing. 
+
+Dataset Beauty Sports Toys MicroLens # Users 22,363 35,598 19,412 98,129 # Items 12,101 18,357 11,924 17,228 # Avg. Actions / User 7.9 7.3 7.6 6.2 # Avg. Actions / Item 14.6 14.2 12.4 35.3 # Actions 176,139 260,739 148,185 607,045 Sparsity 99.93% 99.96% 99.94% 99.96% are treated as a positive pair, while embeddings of other items in the batch serve as negatives. We adopt the InfoNCE [ 32 ] loss for cross-modal semantic alignment: 
+
+L𝑐𝑙 = − 1
+
+|B| ∑︁ 𝑖 ∈ B 
+
+"
+
+log exp (e𝑡 ⊤ 
+
+> 𝑖
+
+e𝑣 𝑖 /𝜏 𝑐𝑙 )
+
+Í𝑗 ∈ B exp (e𝑡 ⊤ 
+
+> 𝑖
+
+e𝑣 𝑗 /𝜏 𝑐𝑙 ) + log exp (e𝑣 ⊤ 
+
+> 𝑖
+
+e𝑡 𝑖 /𝜏 𝑐𝑙 )
+
+Í𝑗 ∈ B exp (e𝑣 ⊤ 
+
+> 𝑖
+
+e𝑡 𝑗 /𝜏 𝑐𝑙 )
+
+#
+
+,
+
+(18) where 𝜏 𝑐𝑙 is the contrastive temperature parameter. By maximizing the mutual information between the two modality representations of the same item, this objective effectively reduces semantic mis-alignment and enhances the robustness of item representations. 
+
+Overall Objective. The final training objective is a weighted com-bination of the recommendation loss and the contrastive loss: 
+
+L = L𝑟𝑒𝑐 + 𝜆 L𝑐𝑙 , (19) where 𝜆 is a hyperparameter that controls the relative contribution of the contrastive objective. 
+
+3.5 Prediction 
+
+Given the user representation s𝑢 produced by the sequential en-coder, we compute matching scores for all candidate items via the dot product with their multi-modal representations: 
+
+ˆy𝑢 = s𝑢 (E𝑡 + E𝑣 )⊤, (20) where E𝑡 and E𝑣 denote the denoised and MoE-adapted textual and visual embedding matrices, respectively. ˆy𝑢 ∈ R| I | represents the predicted scores over all items. The items are ranked according to these scores, and the top-𝐾 items are selected for recommendation. 
+
+4 EXPERIMENT 
+
+In this section, we conduct extensive experiments to verify the effectiveness of our DDMSR. 
+
+4.1 Experimental Settings 
+
+4.1.1 Datasets. We evaluate our method on four widely used bench-marks spanning e-commerce and short-video platforms. 
+
+• Amazon 1 [ 23 ]: We select three sub-categories from this large-scale e-commerce dataset: Beauty , Sports and Outdoors ,and Toys and Games (hereafter Beauty , Sports , and Toys ). Textual features are constructed by concatenating the prod-uct title , brand , categories , and description . Product images serve as the visual modality. 
+
+> 1http://jmccauley.ucsd.edu/data/amazon/
+
+• MicroLens-100k 2 [ 24 ]: This is a large-scale multi-modal dataset collected from a popular short-video platform, con-taining interaction data from 100,000 users. We specifically utilize the video cover thumbnails (covers) as visual features. For textual information, we combine the video title and associated tags to construct the text inputs. Following Hou et al. [ 10 ], we filter out users and items with fewer than five interactions, and adopt the leave-one-out strategy to partition each sequence into training, validation, and test sets. Dataset statistics are summarized in Table 1. Textual and visual features are extracted using RoBERTa [ 2 ] and CLIP ViT-B/32 [ 26 ], respectively. 
+
+4.1.2 Evaluation Metrics. We adopt Recall@ 𝐾 and NDCG@ 𝐾 (𝐾 ∈{10 , 20 }) as evaluation metrics. Recall@ 𝐾 measures the proportion of relevant items retrieved within the top-𝐾 list, while NDCG@ 𝐾 
+
+further accounts for their ranking positions. To avoid sampling bias, we conduct full-ranking evaluation [15] over the entire item set. 
+
+4.1.3 Baseline Models. We compare our method against two cate-gories of baselines. ID-based models include SASRec [ 13 ], BERT4Rec [ 30 ], FEARec [ 6], and BSARec [ 29 ]. Multi-modal models include UniS-Rec [ 10 ], MISSRec [ 34 ], MP4SR [ 45 ], TedRec [ 38 ], HM4SR [ 46 ], and DMMD4SR [ 20 ]. To ensure a fair comparison, UniSRec, MISS-Rec and MP4SR are trained from scratch without pre-training on external datasets. More details can be found in the appendix. 
+
+4.1.4 Implementation Details. All models are implemented within the open-source RecBole framework [ 47 ] to ensure fair and re-producible evaluation. All models are optimized using the Adam optimizer [ 14 ] with a learning rate of 0.001. Hyperparameters of baseline models are tuned following the search spaces specified in their respective original papers. For our method, the number of top-
+
+𝐾 neighbors 𝐾 for item semantic graph construction are searched in {5, 10 , 15 , 20 }, and the number of frequency-domain denoising layers 𝐿 𝑓 is searched in {1, 2, 3}. The number of graph convolutional layers 𝐿 𝑔 is fixed to 2, and the fusion function Fusion (·) in Eq. (9) is element-wise addition. The contrastive loss weight 𝜆 is set to 0.1
+
+based on preliminary experiments. All other hyperparameters fol-low the settings of UniSRec [ 10 ]. All final results are averaged over five independent runs with different random seeds. All experiments are conducted on a NVIDIA GeForce RTX 4090 GPU (24 GB). 
+
+4.2 Overall Performance Comparison 
+
+Table 2 reports the overall performance of all models on four datasets, from which we draw the following observations. Compared to classical SASRec and BERT4Rec, FEARec and BSARec incorporate frequency-domain perspectives to capture periodic signals and suppress sequence noise, yielding consistent improve-ments across datasets and validating the effectiveness of frequency-domain analysis for sequential recommendation. Multi-modal mod-els generally outperform ID-based methods, demonstrating that multi-modal content features effectively alleviate data sparsity and cold-start issues. Among them, MISSRec achieves strong perfor-mance by designing an interest-aware encoder-decoder architec-ture that captures sequence-level multi-modal user interests with  
+
+> 2https://github.com/westlake-repl/MicroLens/ Beyond Noisy Signals: Dual-Level Denoising for Multi-modal Sequential Recommendation Conference acronym ’XX, June 03–05, 2018, Woodstock, NY
+
+Table 2: Performance comparison of DDMSR and baselines. Bold and underline denote the best and second-best results, respectively. Impr. denotes the improvement over the best baseline. * indicates that the improvement over the best baseline is statistically significant according to paired t-tests ( 𝑝 < 0.01). R@K and N@K represent Recall@K and NDCG@K, respectively. 
+
+Dataset Metric ID-based Multi-modal Ours Impr. 
+
+SASRec BERT4Rec FEARec BSARec UniSRec MISSRec MP4SR TedRec HM4SR DMMD4SR Beauty R@10 0.0842 0.0402 0.0855 0.0869 0.0892 0.0978 0.0745 0.0879 0.0776 0.0828 0.1056* +7.98% R@20 0.1192 0.0678 0.1206 0.1226 0.1262 0.1417 0.1067 0.1224 0.1068 0.1171 0.1564* +10.37% N@10 0.0416 0.0173 0.0422 0.0431 0.0441 0.0488 0.0400 0.0512 0.0485 0.0413 0.0535* +4.49% N@20 0.0504 0.0243 0.0509 0.0522 0.0535 0.0597 0.0479 0.0599 0.0559 0.0499 0.0663* +10.68% Sports R@10 0.0480 0.0387 0.0497 0.0485 0.0534 0.0555 0.0332 0.0519 0.0446 0.0454 0.0643* +15.86% R@20 0.0703 0.0606 0.0725 0.0716 0.0792 0.0812 0.0511 0.0752 0.0623 0.0662 0.0969* +19.33% N@10 0.0225 0.0163 0.0232 0.0228 0.0247 0.0266 0.0167 0.0288 0.0270 0.0215 0.0332* +15.28% N@20 0.0282 0.0218 0.0288 0.0286 0.0312 0.0326 0.0212 0.0348 0.0315 0.0267 0.0413* +18.68% Toys R@10 0.0912 0.0473 0.0920 0.0952 0.0954 0.1095 0.0783 0.0900 0.0889 0.0893 0.1153* +5.30% R@20 0.1240 0.0706 0.1257 0.1314 0.1328 0.1546 0.1084 0.1230 0.1179 0.1204 0.1657* +7.18% N@10 0.0445 0.0290 0.0450 0.0464 0.0452 0.0526 0.0447 0.0525 0.0552 0.0439 0.0563* +1.99% N@20 0.0527 0.0348 0.0536 0.0555 0.0546 0.0637 0.0523 0.0608 0.0629 0.0519 0.0690* +8.32% MicroLens R@10 0.0839 0.0454 0.0866 0.0912 0.0932 0.0837 0.0862 0.0940 0.0824 0.0836 0.1019* +8.40% R@20 0.1234 0.0713 0.1246 0.1342 0.1378 0.1273 0.1285 0.1358 0.1239 0.1229 0.1504* +9.14% N@10 0.0400 0.0231 0.0418 0.0444 0.0456 0.0414 0.0429 0.0512 0.0438 0.0405 0.0520* +1.56% N@20 0.0499 0.0296 0.0513 0.0552 0.0567 0.0520 0.0536 0.0618 0.0542 0.0504 0.0642* +3.88% 
+
+a dynamic fusion module, while TedRec enhances multi-modal modeling by performing sequence-level text-ID semantic fusion in the frequency domain. The two methods alternately attain the best baseline results across most datasets, jointly underscoring the importance of multi-modal representation learning and sequence-level semantic fusion. However, DMMD4SR—despite its diffusion-based denoising design—underperforms other multi-modal base-lines across all four datasets, suggesting that the complex forward-reverse diffusion process is difficult to optimize in recommendation settings and its denoising objective is not well aligned with the recommendation task. Our method DDMSR consistently achieves state-of-the-art per-formance, with improvements of up to +19.33% on Recall@20 (Sports) and +10.68% on NDCG@20 (Beauty) over the strongest baseline. This stems from three complementary designs: (1) graph-based denoising suppresses high-frequency noise in pre-trained features via Laplacian smoothing while compensating for long-tail items through semantic neighbor aggregation; (2) frequency-domain de-noising adaptively filters noisy interaction signals in user sequences, preserving stable low-frequency preference components; and (3) the cross-modal contrastive objective bridges the heterogeneity gap between modality feature spaces for coherent multi-modal fusion. 
+
+4.3 Ablation Study 
+
+To assess the contribution of each component, we design five model variants and report results in Table 3. 
+
+• w/o GFD removes the Graph-based Feature Denoising 
+
+(GFD) module, directly feeding raw pre-trained features into the MoE adapter. 
+
+Table 3: Ablation study of our DDMSR (Recall@20). 
+
+Variant Beauty Sports Toys MicroLens w/o GFD 0.1502 0.0935 0.1567 0.1425 w/o FSD 0.1524 0.0940 0.1638 0.1461 w/o CL 0.1505 0.0949 0.1610 0.1484 w/o Text 0.1488 0.0846 0.1539 0.1431 w/o Image 0.1471 0.0900 0.1576 0.1401 DDMSR 0.1564 0.0969 0.1657 0.1504 
+
+• w/o FSD removes the Frequency-domain Sequence De-noising (FSD) layers before the sequential encoder, directly feeding the fused item embeddings to the Transformer. 
+
+• w/o CL removes the cross-modal contrastive learning (CL) loss L𝑐𝑙 and optimizes only the recommendation loss L𝑟𝑒𝑐 .
+
+• w/o Text removes the textual modality, performing sequence modeling using visual features only. 
+
+• w/o Image removes the visual modality, performing se-quence modeling using textual features only. The results lead to the following observations: (1) Removing 
+
+w/o GFD causes a consistent performance drop across all datasets, confirming that the graph-based denoising module effectively sup-presses high-frequency redundant noise in pre-trained features and is critical for improving item representation quality; (2) The degradation of w/o FSD validates the importance of frequency-domain denoising in filtering noisy interactions from user behavior sequences and preserving stable low-frequency user preference signals; (3) The performance decline of w/o CL demonstrates that the cross-modal contrastive objective plays a non-trivial role in Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Jie Luo, Qi Jin, and Xinming Zhang [-o- Beauty  -c  · Sports  ..,6.  Toys  ~·  Microlens ]
+
+> 0.170~~------~------~~------~~
+
+0.165 
+
+0.160 
+
+2 0.155 
+
+@) 
+
+--RS 
+
+u
+
+cu 
+
+a::  0.10  
+
+> []
+
+------[]..,  ..,  ...  ..,  ~
+
+...  ..,  ----L.I ..,[]  __  _
+
+0.090......_ ....... 5___ ____.1~.....0  ____ 1..... 5____ 2..... 0____. 
+
+KNN 
+
+> 0.071~~------~------~~------~~
+
+0.069 
+
+0.067 
+
+2 0.065 
+
+@) 
+
+8 0.063 
+
+c
+
+z 0.04 
+
+0.041  [] ------[]..,  ...  ..,  ..,  ......  ..,  __  .-c 
+
+c---0 · 039 ~~5--------1~0------~1~5 _______ 2...._0____. 
+
+KNN 
+
+Figure 3: Effects of top-𝐾 neighbors. llayer  ...  21ayer  ...  31ayer ]
+
+0.16  0.07  
+
+> 0
+
+0.14  0 0.06  
+
+> NN
+
+@)  @) 
+
+- ~-RS  0.12  u 0.05 u
+
+cu  c
+
+a:  z
+
+0.10  0.04 
+
+Beauty Sports Toys Microlens Beauty Sports Toys Microlens 
+
+Figure 4: Effects of frequency-domain denoising layers. 
+
+bridging the heterogeneity gap between textual and visual fea-ture spaces, enhancing the semantic consistency of multi-modal representations; (4) Both w/o Text and w/o Image lead to no-table performance degradation, confirming that textual and visual modalities carry complementary information that cannot be fully captured by either modality alone. Overall, the full model consis-tently achieves the best performance among all variants, justifying the design necessity of each component. 
+
+4.4 Hyperparameter Sensitivity Analysis 
+
+We investigate the sensitivity of two key hyperparameters. 
+
+Effect of Top-𝐾 Neighbors. Figure 3 shows the impact of the num-ber of top-𝐾 neighbors ( 𝐾 ∈ { 5, 10 , 15 , 20 }) in item semantic graph construction. The optimal 𝐾 varies across datasets: Sports performs best at 𝐾 = 10 , MicroLens at 𝐾 = 20 , while Beauty and Toys achieve the best performance at 𝐾 = 5. We attribute this to differences in item scale and interaction density across datasets. For datasets with fewer items and sparse interactions (e.g., Beauty and Toys), a smaller 
+
+𝐾 better preserves the most relevant neighbors and avoids intro-ducing noise. In contrast, datasets with larger item sets or denser interactions (e.g., Sports and MicroLens) benefit from a larger 𝐾 ,which captures richer semantic relationships. Despite these dif-ferences, performance varies slightly across 𝐾 , demonstrating the robustness of the graph-based denoising module. 
+
+Effect of Frequency-domain Denoising Layers. Figure 4 illustrates the impact of the number of denoising layers ( 𝐿 𝑓 ∈ { 1, 2, 3}). The optimal 𝐿 𝑓 varies across datasets: Beauty and MicroLens achieve the best performance at 𝐿 𝑓 = 2, Toys at 𝐿 𝑓 = 1, and Sports at 𝐿 𝑓 = 3.As shown in the figure, performance generally improves when increasing 𝐿 𝑓 from 1 to 2 on most datasets, but further increasing =Q
+
+> 1.0
+> 0.8
+
+=0.6 
+
+=..Q ... ~ 
+
+> ~0.4
+
+... Q              
+
+> 0.2
+> 0.0
+> Raw
+> ••"• Text Features
+> •"'# ••._ ••"'-••Image Features
+
+. -"'  ..,,  . " - -.. , .: : ' ·.:  • ~ • f • .:...  \.  -:.  ~-,  •• .:.  • .te.•".Jt  • • • .~a  • .,  ••  ,.  ••• ,.     
+
+> J, •• ,.......
+
+:. -&-.······ · ..  , -~ ...  .• • • • ..  ' • • •t.•  • • .., .....  _                     
+
+> . . . •..... ,.. ... •.;•:.:1!-., •. ...... ,••
+> •.. It• .. c~···· •• .. ••••'•
+
+. , .. . . .  ; . . -.  ~ ,•.. .• r•  ,.~ . -,... '  •• ·•t:  • •  - .. • • t \. "'•lllle  _.!!f  . .. ..  1 ' ' ·  '··  .....  _....             
+
+> •• '• •...:: ••.....-a .a~. ·~'· •
+
+- I ..,.               
+
+> ,. .. ... J. ~-~1:; .,.~::.: -~·· ·..... ;:.: ·"' .. :·; ,'"'£.. ,
+
+....  ,~,.  . .... .~ .. .. .... .,.. . ... . ~ .. ... .... , ..,...  .. .. ....  '&._!}•c- •' '  ' '·-· ·····  . .. . #; ·~  .,. , . ....... -                       
+
+> "ri• "":;..,·\~~~ ""'l' "r•• \•• ~~~ ·111: •.• \ • ~.)J. .,...,.
+> ·t. ~;,;&, -r:J'::~.: ,· ~:. ~:.':· :-. ·~e'i ··. !( •• "l
+> ···~~
+
+.. .:~'i:··::--;~i .'.-.. ·,... Wl ... sJ~i ·' · ··  .,  • :•• •. · ., • • .....  ·~  1#.  L. A'e•  • ::..  ~.._  • I • ..  • •
+
+. l"'f"  ,..-;;·~·  '~ · .. . :'I  ...  · · " · :  , •• •
+
+. .  ... ,.  -~ ····  .: .. ,.  .. .:. ·.. •· ~·.A-:' • :"\~ • •••  •$ : ff  ••  • •_ , _  ....... ~~ ~ •• •....,  <.tP  · ·· ·::."1. 1'.1  •....,..  -.::_•  ...  ~....  l~': .. ..... 1..  : •.·  . ~,. ...  '..  •
+
+.. ,. ..,. ,~~  ••:  •: : "'  , .... ... ...  ,......  . .• • , ... . . .. . '!\.f/+1· •.  .. -:·  ···-
+
+. · '.:. ~~::  ...  ··~·  ·- ~ .. .,  ---. ~· ., ............. .. ...  .._  ···· ·. ,;:  .... ,.., .!I· · ' ·.  .. 
+
+• ' ...  ~-- . .  , .....  ·-=  .... , .•  .,  • f , •• •• 1  •••    
+
+> ••• ••., .. ~-"if"
+
+t.  . ... .. .~·.  .., . .. . .  • .~:.  "'  . . ..  ,~., ~··  ··:\-- . .,.....  ...  • • I • • • ••  .-.. • ••  ......-! ••  • • •• • ••  • J~ :.. • ...     
+
+> t. •••
+
+·' .>tt: .. .-: ., :.- ~ '· ,..  -- ,.I! ..  .-,.  •• •. ., .·  ··.7: ' .. . ..  
+
+> •
+
+••  • •             
+
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> ~0.5 .----------------------,
+> .j..;l 0.4 Text Features
+> •• Image Features
+> riJ 0.3
+
+=0.2        
+
+> ~0.1
+> 0.0~-----.-----.-----.-----.-----.-----r
+> -3 -2 -1 0123Angles
+> 1.0
+> 0.8
+> 0.6
+> 0.4
+> 0.2
+> 0.0
+> 0.5
+> 0.4
+> 0.3
+> 0.2
+> 0.1
+> 0.0
+
+w/o Graph Denoise       
+
+> ;,;.•".J ........ §..,. . ••
+> §!,... '. 't\.. ••
+
+..  .1" 
+
+.. .. ~;,.; 
+
+,·t.:.·· ... .,          
+
+> "'"~· #"\ "' "" ••&.... ••••
+> •"
+
+' .. .... .I ··~  
+
+> ~..
+
+...  ·'··  
+
+> .:...·
+> 0.0 0.2
+
+:::::------  
+
+> -3 -2
+> 0.4
+> -1 0
+
+"'· . .. . 
+
+> "'"' •1.
+
+.. ...  .c  "!" 
+
+..  ~
+
+,.  : ... Text Features Image Features 
+
+.. 
+
+"' ,.  •
+
+, ..... ~
+
+....  ,.  
+
+> .-
+
+... 
+
+.,, .
+
+.. •-..  ·t"l!         
+
+> ~·
+> 0.6 0.8 1.0
+> Text Features Image Features
+> ~
+> 123Angles
+> 1.0
+> 0.8
+> 0.6
+> 0.4
+> 0.2
+> 0.0
+> 0.0
+> 0.5
+> 0.4
+> 0.3
+> 0.2
+> 0.1 ~
+> 0.0 -3
+
+w/ Graph Denoise 
+
+.....  ·< --:  ·-~· c •• .• ,.. 
+
+·= 
+
+. .. ..  Text Features           
+
+> ., \. •Image Features
+> .·'eJ. ... ~
+> ._, "" '"- a
+
+""  ,..  "' ·'·  .. -.,fit. •<t 
+
+""' ·..  ,=-;, . ,.,  ••• 
+
+....  '" ...  :···:),. 'llil!           
+
+> '.. .·?·
+> ~1~~ ·!l1 ;\••.:. .:,. •
+
+.•   
+
+> ••C •(" 0:
+
+.. .\.;,.            
+
+> •'• _.£ L-=· ,"!.l# ). ...
+> ':':': '"": ·1~"4 .. .. .. w.·~ """
+
+... ....  ,.~ .. ...  ... ..- .. :.:  .. ••.  -·file  .
+
+.. •:' ..  .t .... !NB.!  . ,  .••  ..,  , .  ' ~·· ..,~  ·· .. . ·'                      
+
+> '
+> -' "l il T•I '\. ••••I
+> .... .;f .. •
+> ..... .. ft ..... •... ••
+> ~.: .;:
+
+. ... .. ~ - .) . . •·'·           
+
+> 0.2
+> -2
+> ·•• ••.. ,.. T•.._,~. "" ".. ,.
+
+··s -· ...  ..,  . :-- ·..  ··'  .,_,  ....  ·:. )•  •••  : ""' ~·  ' .""'IJI>.• 
+
+·=- ' • •~-..  '' .~·          
+
+> 0.4 0.6 0.8 1.0
+> Text Features Image Features -1 0123Angles
+
+Figure 5: Visualization of textual (green) and visual (blue) item feature distributions on the Beauty dataset under three settings. Top: 2D projections on the unit circle. Bottom: KDE of angular distributions. From left to right: Raw, w/o Graph Denoise, and w/ Graph Denoise. 
+
+to 3 brings limited gains or slight degradation in some cases. This suggests a trade-off between noise suppression and information preservation. Datasets with higher interaction noise (e.g., Sports) benefit from deeper filtering, while cleaner datasets (e.g., Toys) may suffer from over-filtering when too many layers are applied. 
+
+4.5 Visualization 
+
+To intuitively demonstrate the effectiveness of the proposed graph-based feature denoising module, we visualize the multi-modal item feature distributions under three settings on the Beauty dataset: (1) Raw : original features from frozen pre-trained encoders; (2) 
+
+w/o Graph Denoise : features from the full pipeline without graph-based denoising; and (3) w/ Graph Denoise : features from the complete model. For each setting, textual (green) and visual (blue) features are projected onto the unit circle, showing their 2D spatial distributions (top) and the kernel density estimation (KDE) of their angular distributions (bottom), as illustrated in Figure 5. Two key observations can be drawn. First , in the Raw setting, the angular density curves of text and image features exhibit pro-nounced misalignment accompanied by multiple sharp, irregular peaks. This indicates a significant heterogeneity gap and severe anisotropy (i.e., dimensional collapse) in the pre-trained features. In the w/o Graph Denoise setting, where cross-modal contrastive learning is active, the distributions are partially smoothed. However, residual misalignment and irregular density fluctuations persist, suggesting that contrastive alignment alone struggles to overcome the intrinsic noise embedded in the raw representations. Second ,with the integration of graph-based denoising ( w/ Graph Denoise ), the angular density curves of both modalities become markedly more uniform and tightly aligned, approaching a flat distribution across all angles. This demonstrates that our graph-based low-pass filtering effectively suppresses noisy semantic deviations at the source, yielding a highly isotropic feature space. Consequently, the synergistic combination of graph denoising and contrastive learn-ing fundamentally mitigates the cross-modal distributional gap, providing high-quality, noise-free representations for downstream sequential recommendation. Beyond Noisy Signals: Dual-Level Denoising for Multi-modal Sequential Recommendation Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+5 CONCLUSIONS 
+
+In this paper, we address two complementary noise challenges in multi-modal sequential recommendation: redundant noise in pre-trained multi-modal features and interaction noise in user behavior sequences. We propose DDMSR, a dual-denoising framework that tackles both at their respective levels. At the feature level, a sparse item semantic graph is constructed to perform Laplacian smoothing as a low-pass filter, suppressing high-frequency noise in pre-trained representations while compensating for long-tail items via semantic propagation. At the sequence level, a learnable frequency-domain denoising module applies FFT/IFFT-based spectral modulation to adaptively attenuate noisy frequency components and preserve sta-ble preference signals. A cross-modal contrastive objective further bridges the heterogeneity gap between textual and visual feature spaces for coherent multi-modal fusion. Extensive experiments on four public datasets demonstrate the effectiveness and superiority of DDMSR over state-of-the-art methods. 
+
+References 
+
+[1] David H. Bailey. 1993. Computational Frameworks for the Fast Fourier Transform (Charles Van Loan). SIAM Rev. 35, 1 (1993), 142–143. doi:10.1137/1035017 [2] Alexis Conneau, Kartikay Khandelwal, Naman Goyal, Vishrav Chaudhary, Guil-laume Wenzek, Francisco Guzmán, Edouard Grave, Myle Ott, Luke Zettle-moyer, and Veselin Stoyanov. 2020. Unsupervised Cross-lingual Representa-tion Learning at Scale. In Proceedings of the 58th Annual Meeting of the Associa-tion for Computational Linguistics, ACL 2020, Online, July 5-10, 2020 . 8440–8451. doi:10.18653/V1/2020.ACL-MAIN.747 [3] Ziqiang Cui, Haolun Wu, Bowei He, Ji Cheng, and Chen Ma. 2024. Context Matters: Enhancing Sequential Recommendation with Context-aware Diffusion-based Contrastive Learning. In Proceedings of the 33rd ACM International Con-ference on Information and Knowledge Management, CIKM 2024, Boise, ID, USA, October 21-25, 2024 . ACM, 404–414. doi:10.1145/3627673.3679655 [4] Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova. 2019. BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding. In 
+
+Proceedings of the 2019 Conference of the North American Chapter of the Associa-tion for Computational Linguistics: Human Language Technologies, NAACL-HLT 2019, Minneapolis, MN, USA, June 2-7, 2019, Volume 1 (Long and Short Papers) .Association for Computational Linguistics, 4171–4186. doi:10.18653/V1/N19-1423 [5] Alexey Dosovitskiy, Lucas Beyer, Alexander Kolesnikov, Dirk Weissenborn, Xi-aohua Zhai, Thomas Unterthiner, Mostafa Dehghani, Matthias Minderer, Georg Heigold, Sylvain Gelly, Jakob Uszkoreit, and Neil Houlsby. 2021. An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale. In 9th Interna-tional Conference on Learning Representations, ICLR 2021, Virtual Event, Austria, May 3-7, 2021 . OpenReview.net. https://openreview.net/forum?id=YicbFdNTTy [6] Xinyu Du, Huanhuan Yuan, Pengpeng Zhao, Jianfeng Qu, Fuzhen Zhuang, Guanfeng Liu, Yanchi Liu, and Victor S. Sheng. 2023. Frequency Enhanced Hybrid Attention Network for Sequential Recommendation. In Proceedings of the 46th International ACM SIGIR Conference on Research and Development in Information Retrieval, SIGIR 2023, Taipei, Taiwan, July 23-27, 2023 . 78–88. doi:10.1145/3539618.3591689 [7] Junchen Fu, Xuri Ge, Xin Xin, Alexandros Karatzoglou, Ioannis Arapakis, Jie Wang, and Joemon M. Jose. 2024. IISAN: Efficiently Adapting Multimodal Repre-sentation for Sequential Recommendation with Decoupled PEFT. In Proceedings of the 47th International ACM SIGIR Conference on Research and Development in Information Retrieval, SIGIR 2024, Washington DC, USA, July 14-18, 2024 . ACM, 687–697. doi:10.1145/3626772.3657725 [8] Xavier Glorot, Antoine Bordes, and Yoshua Bengio. 2011. Deep Sparse Rectifier Neural Networks. In Proceedings of the Fourteenth International Conference on Artificial Intelligence and Statistics, AISTATS 2011, Fort Lauderdale, USA, April 11-13, 2011 (JMLR Proceedings) . JMLR.org, 315–323. http://proceedings.mlr.press/ v15/glorot11a/glorot11a.pdf [9] Balázs Hidasi, Alexandros Karatzoglou, Linas Baltrunas, and Domonkos Tikk. 2016. Session-based Recommendations with Recurrent Neural Networks. In 4th International Conference on Learning Representations, ICLR 2016, San Juan, Puerto Rico, May 2-4, 2016, Conference Track Proceedings . http://arxiv.org/abs/1511.06939 [10] Yupeng Hou, Shanlei Mu, Wayne Xin Zhao, Yaliang Li, Bolin Ding, and Ji-Rong Wen. 2022. Towards Universal Sequence Representation Learning for Recom-mender Systems. In KDD ’22: The 28th ACM SIGKDD Conference on Knowledge Discovery and Data Mining, Washington, DC, USA, August 14 - 18, 2022 . ACM, 585–593. doi:10.1145/3534678.3539381 [11] Hengchang Hu, Wei Guo, Yong Liu, and Min-Yen Kan. 2023. Adaptive Multi-Modalities Fusion in Sequential Recommendation Systems. In Proceedings of the 32nd ACM International Conference on Information and Knowledge Management, CIKM 2023, Birmingham, United Kingdom, October 21-25, 2023 . ACM, 843–853. doi:10.1145/3583780.3614775 [12] Yangqin Jiang, Lianghao Xia, Wei Wei, Da Luo, Kangyi Lin, and Chao Huang. 2024. DiffMM: Multi-Modal Diffusion Model for Recommendation. In Proceedings of the 32nd ACM International Conference on Multimedia, MM 2024, Melbourne, VIC, Australia, 28 October 2024 - 1 November 2024 . ACM, 7591–7599. https: //doi.org/10.1145/3664647.3681498 [13] Wang-Cheng Kang and Julian J. McAuley. 2018. Self-Attentive Sequential Rec-ommendation. In IEEE International Conference on Data Mining, ICDM 2018, Singapore, November 17-20, 2018 . 197–206. doi:10.1109/ICDM.2018.00035 [14] Diederik P. Kingma and Jimmy Ba. 2015. Adam: A Method for Stochas-tic Optimization. In 3rd International Conference on Learning Representations, ICLR 2015, San Diego, CA, USA, May 7-9, 2015, Conference Track Proceedings .http://arxiv.org/abs/1412.6980 [15] Walid Krichene and Steffen Rendle. 2020. On Sampled Metrics for Item Rec-ommendation. In KDD ’20: The 26th ACM SIGKDD Conference on Knowledge Discovery and Data Mining, Virtual Event, CA, USA, August 23-27, 2020 . 1748– 1757. doi:10.1145/3394486.3403226 [16] Yutong Li and Xinyi Zhang. 2025. MDSBR: Multimodal Denoising for Session-based Recommendation. In Proceedings of the Nineteenth ACM Conference on Recommender Systems, RecSys 2025, Prague, Czech Republic, September 22-26, 2025 .ACM, 268–278. https://doi.org/10.1145/3705328.3748061 [17] Zihao Li, Aixin Sun, and Chenliang Li. 2024. DiffuRec: A Diffusion Model for Sequential Recommendation. ACM Trans. Inf. Syst. 42, 3 (2024), 66:1–66:28. https://doi.org/10.1145/3631116 [18] Jiahao Liang, Xiangyu Zhao, Muyang Li, Zijian Zhang, Wanyu Wang, Haochen Liu, and Zitao Liu. 2023. MMMLP: Multi-modal Multilayer Perceptron for Se-quential Recommendations. In Proceedings of the ACM Web Conference 2023, WWW 2023, Austin, TX, USA, 30 April 2023 - 4 May 2023 . ACM, 1109–1117. doi:10.1145/3543507.3583378 [19] Qidong Liu, Jiaxi Hu, Yutian Xiao, Xiangyu Zhao, Jingtong Gao, Wanyu Wang, Qing Li, and Jiliang Tang. 2025. Multimodal Recommender Systems: A Survey. 
+
+ACM Comput. Surv. 57, 2 (2025), 26:1–26:17. doi:10.1145/3695461 [20] Weihai Lu and Li Yin. 2025. DMMD4SR: Diffusion Model-based Multi-level Multimodal Denoising for Sequential Recommendation. In Proceedings of the 33rd ACM International Conference on Multimedia, MM 2025, Dublin, Ireland, October 27-31, 2025 . ACM, 6363–6372. https://doi.org/10.1145/3746027.3755861 [21] Jie Luo, Wenyu Zhang, Xinming Zhang, and Yuan Fang. 2026. Time-Aware Adaptive Side Information Fusion for Sequential Recommendation. In Proceedings of the Nineteenth ACM International Conference on Web Search and Data Mining, WSDM 2026, Boise, ID, USA, February 22-26, 2026 . ACM, 469–478. https://doi.org/ 10.1145/3773966.3778012 [22] Haokai Ma, Ruobing Xie, Lei Meng, Xin Chen, Xu Zhang, Leyu Lin, and Zhanhui Kang. 2024. Plug-In Diffusion Model for Sequential Recommenda-tion. In Thirty-Eighth AAAI Conference on Artificial Intelligence, AAAI 2024, Thirty-Sixth Conference on Innovative Applications of Artificial Intelligence, IAAI 2024, Fourteenth Symposium on Educational Advances in Artificial Intelligence, EAAI 2014, February 20-27, 2024, Vancouver, Canada . AAAI Press, 8886–8894. doi:10.1609/AAAI.V38I8.28736 [23] Julian J. McAuley, Christopher Targett, Qinfeng Shi, and Anton van den Hengel. 2015. Image-Based Recommendations on Styles and Substitutes. In Proceedings of the 38th International ACM SIGIR Conference on Research and Development in Information Retrieval, Santiago, Chile, August 9-13, 2015 . 43–52. doi:10.1145/ 2766462.2767755 [24] Yongxin Ni, Yu Cheng, Xiangyan Liu, Junchen Fu, Youhua Li, Xiangnan He, Yongfeng Zhang, and Fajie Yuan. 2023. A Content-Driven Micro-Video Rec-ommendation Dataset at Scale. CoRR abs/2309.15379 (2023). arXiv:2309.15379 doi:10.48550/ARXIV.2309.15379 [25] Liwei Pan, Weike Pan, Meiyan Wei, Hongzhi Yin, and Zhong Ming. 2024. A Survey on Sequential Recommendation. CoRR abs/2412.12770 (2024). arXiv:2412.12770 doi:10.48550/ARXIV.2412.12770 [26] Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya Ramesh, Gabriel Goh, Sandhini Agarwal, Girish Sastry, Amanda Askell, Pamela Mishkin, Jack Clark, Gretchen Krueger, and Ilya Sutskever. 2021. Learning Transferable Visual Models From Natural Language Supervision. In Proceedings of the 38th In-ternational Conference on Machine Learning, ICML 2021, 18-24 July 2021, Vir-tual Event (Proceedings of Machine Learning Research, Vol. 139) . 8748–8763. http://proceedings.mlr.press/v139/radford21a.html [27] Steffen Rendle, Christoph Freudenthaler, and Lars Schmidt-Thieme. 2010. Factor-izing personalized Markov chains for next-basket recommendation. In Proceedings of the 19th International Conference on World Wide Web, WWW 2010, Raleigh, North Carolina, USA, April 26-30, 2010 . 811–820. doi:10.1145/1772690.1772773 [28] Noam Shazeer, Azalia Mirhoseini, Krzysztof Maziarz, Andy Davis, Quoc V. Le, Geoffrey E. Hinton, and Jeff Dean. 2017. Outrageously Large Neural Networks: The Sparsely-Gated Mixture-of-Experts Layer. In 5th International Conference Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Jie Luo, Qi Jin, and Xinming Zhang 
+
+on Learning Representations, ICLR 2017, Toulon, France, April 24-26, 2017, Con-ference Track Proceedings . OpenReview.net. https://openreview.net/forum?id= B1ckMDqlg [29] Yehjin Shin, Jeongwhan Choi, Hyowon Wi, and Noseong Park. 2024. An Atten-tive Inductive Bias for Sequential Recommendation beyond the Self-Attention. In 
+
+Thirty-Eighth AAAI Conference on Artificial Intelligence, AAAI 2024, Thirty-Sixth Conference on Innovative Applications of Artificial Intelligence, IAAI 2024, Four-teenth Symposium on Educational Advances in Artificial Intelligence, EAAI 2014, February 20-27, 2024, Vancouver, Canada . 8984–8992. doi:10.1609/AAAI.V38I8. 28747 [30] Fei Sun, Jun Liu, Jian Wu, Changhua Pei, Xiao Lin, Wenwu Ou, and Peng Jiang. 2019. BERT4Rec: Sequential Recommendation with Bidirectional Encoder Repre-sentations from Transformer. In Proceedings of the 28th ACM International Con-ference on Information and Knowledge Management, CIKM 2019, Beijing, China, November 3-7, 2019 . 1441–1450. doi:10.1145/3357384.3357895 [31] Jiaxi Tang and Ke Wang. 2018. Personalized Top-N Sequential Recommendation via Convolutional Sequence Embedding. In Proceedings of the Eleventh ACM International Conference on Web Search and Data Mining, WSDM 2018, Marina Del Rey, CA, USA, February 5-9, 2018 . 565–573. doi:10.1145/3159652.3159656 [32] Aäron van den Oord, Yazhe Li, and Oriol Vinyals. 2018. Representation Learning with Contrastive Predictive Coding. CoRR abs/1807.03748 (2018). arXiv:1807.03748 http://arxiv.org/abs/1807.03748 [33] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Lukasz Kaiser, and Illia Polosukhin. 2017. Attention is All you Need. In Advances in Neural Information Processing Systems 30: Annual Con-ference on Neural Information Processing Systems 2017, December 4-9, 2017, Long Beach, CA, USA . 5998–6008. https://proceedings.neurips.cc/paper/2017/hash/ 3f5ee243547dee91fbd053c1c4a845aa-Abstract.html [34] Jinpeng Wang, Ziyun Zeng, Yunxiao Wang, Yuting Wang, Xingyu Lu, Tianxiang Li, Jun Yuan, Rui Zhang, Hai-Tao Zheng, and Shu-Tao Xia. 2023. MISSRec: Pre-training and Transferring Multi-modal Interest-aware Sequence Representation for Recommendation. In Proceedings of the 31st ACM International Conference on Multimedia, MM 2023, Ottawa, ON, Canada, 29 October 2023- 3 November 2023 .ACM, 6548–6557. doi:10.1145/3581783.3611967 [35] Shoujin Wang, Longbing Cao, Yan Wang, Quan Z. Sheng, Mehmet A. Orgun, and Defu Lian. 2022. A Survey on Session-based Recommender Systems. ACM Comput. Surv. 54, 7 (2022), 154:1–154:38. doi:10.1145/3465401 [36] Shoujin Wang, Liang Hu, Yan Wang, Longbing Cao, Quan Z. Sheng, and Mehmet A. Orgun. 2019. Sequential Recommender Systems: Challenges, Progress and Prospects. In Proceedings of the Twenty-Eighth International Joint Conference on Artificial Intelligence, IJCAI 2019, Macao, China, August 10-16, 2019 . 6332–6338. doi:10.24963/IJCAI.2019/883 [37] Tongzhou Wu, Yuhao Wang, Maolin Wang, Chi Zhang, and Xiangyu Zhao. 2025. Empowering Denoising Sequential Recommendation with Large Language Model Embeddings. In Proceedings of the 34th ACM International Conference on Informa-tion and Knowledge Management, CIKM 2025, Seoul, Republic of Korea, November 10-14, 2025 . ACM, 3427–3437. https://doi.org/10.1145/3746252.3761427 [38] Lanling Xu, Zhen Tian, Bingqian Li, Junjie Zhang, Daoyuan Wang, Hongyu Wang, Jinpeng Wang, Sheng Chen, and Wayne Xin Zhao. 2024. Sequence-level Semantic Representation Fusion for Recommender Systems. In Proceedings of the 33rd ACM International Conference on Information and Knowledge Management, CIKM 2024, Boise, ID, USA, October 21-25, 2024 . ACM, 5015–5022. doi:10.1145/3627673.3680037 [39] Guipeng Xv, Xinyu Li, Ruobing Xie, Chen Lin, Chong Liu, Feng Xia, Zhanhui Kang, and Leyu Lin. 2024. Improving Multi-modal Recommender Systems by Denoising and Aligning Multi-modal Content and User Feedback. In Proceedings of the 30th ACM SIGKDD Conference on Knowledge Discovery and Data Mining, KDD 2024, Barcelona, Spain, August 25-29, 2024 . ACM, 3645–3656. https://doi. org/10.1145/3637528.3671703 [40] Fajie Yuan, Alexandros Karatzoglou, Ioannis Arapakis, Joemon M. Jose, and Xiangnan He. 2019. A Simple Convolutional Generative Network for Next Item Recommendation. In Proceedings of the Twelfth ACM International Conference on Web Search and Data Mining, WSDM 2019, Melbourne, VIC, Australia, February 11-15, 2019 . 582–590. doi:10.1145/3289600.3290975 [41] Zheng Yuan, Fajie Yuan, Yu Song, Youhua Li, Junchen Fu, Fei Yang, Yunzhu Pan, and Yongxin Ni. 2023. Where to Go Next for Recommender Systems? ID-vs. Modality-based Recommender Models Revisited. In Proceedings of the 46th International ACM SIGIR Conference on Research and Development in Information Retrieval, SIGIR 2023, Taipei, Taiwan, July 23-27, 2023 . 2639–2649. doi:10.1145/ 3539618.3591932 [42] C. K. Yuen. 1978. Review of "Theory and Application of Digital Signal Processing" by Lawrence R. Rabiner and Bernard Gold. IEEE Trans. Syst. Man Cybern. 8, 2 (1978), 146. doi:10.1109/TSMC.1978.4309918 [43] Chi Zhang, Yantong Du, Xiangyu Zhao, Qilong Han, Rui Chen, and Li Li. 2022. Hierarchical Item Inconsistency Signal Learning for Sequence Denoising in Se-quential Recommendation. In Proceedings of the 31st ACM International Conference on Information & Knowledge Management, Atlanta, GA, USA, October 17-21, 2022 .ACM, 2508–2518. https://doi.org/10.1145/3511808.3557348 [44] Chi Zhang, Qilong Han, Rui Chen, Xiangyu Zhao, Peng Tang, and Hong-tao Song. 2024. SSDRec: Self-Augmented Sequence Denoising for Sequential Recommendation. In 40th IEEE International Conference on Data Engineering, ICDE 2024, Utrecht, The Netherlands, May 13-16, 2024 . IEEE, 803–815. https: //doi.org/10.1109/ICDE60146.2024.00067 [45] Lingzi Zhang, Xin Zhou, Zhiwei Zeng, and Zhiqi Shen. 2025. Multimodal Pre-training for Sequential Recommendation via Contrastive Learning. Trans. Recomm. Syst. 3, 1 (2025), 1–23. https://doi.org/10.1145/3682075 [46] Shengzhe Zhang, Liyi Chen, Dazhong Shen, Chao Wang, and Hui Xiong. 2025. Hierarchical Time-Aware Mixture of Experts for Multi-Modal Sequential Rec-ommendation. In Proceedings of the ACM on Web Conference 2025, WWW 2025, Sydney, NSW, Australia, 28 April 2025- 2 May 2025 . ACM, 3672–3682. doi:10.1145/3696410.3714676 [47] Wayne Xin Zhao, Shanlei Mu, Yupeng Hou, Zihan Lin, Yushuo Chen, Xingyu Pan, Kaiyuan Li, Yujie Lu, Hui Wang, Changxin Tian, Yingqian Min, Zhichao Feng, Xinyan Fan, Xu Chen, Pengfei Wang, Wendi Ji, Yaliang Li, Xiaoling Wang, and Ji-Rong Wen. 2021. RecBole: Towards a Unified, Comprehensive and Efficient Frame-work for Recommendation Algorithms. In CIKM ’21: The 30th ACM International Conference on Information and Knowledge Management, Virtual Event, Queensland, Australia, November 1 - 5, 2021 . 4653–4664. doi:10.1145/3459637.3482016 [48] Kun Zhou, Hui Yu, Wayne Xin Zhao, and Ji-Rong Wen. 2022. Filter-enhanced MLP is All You Need for Sequential Recommendation. In WWW ’22: The ACM Web Conference 2022, Virtual Event, Lyon, France, April 25 - 29, 2022 . 2388–2399. doi:10.1145/3485447.3512111 [49] Tian Zhou, Ziqing Ma, Xue Wang, Qingsong Wen, Liang Sun, Tao Yao, Wotao Yin, and Rong Jin. 2022. FiLM: Frequency improved Legendre Mem-ory Model for Long-term Time Series Forecasting. In Advances in Neural Information Processing Systems 35: Annual Conference on Neural Informa-tion Processing Systems 2022, NeurIPS 2022, New Orleans, LA, USA, Novem-ber 28 - December 9, 2022 . http://papers.nips.cc/paper_files/paper/2022/hash/ 524ef58c2bd075775861234266e5e020-Abstract-Conference.html [50] Tian Zhou, Ziqing Ma, Qingsong Wen, Xue Wang, Liang Sun, and Rong Jin. 2022. FEDformer: Frequency Enhanced Decomposed Transformer for Long-term Series Forecasting. In International Conference on Machine Learning, ICML 2022, 17-23 July 2022, Baltimore, Maryland, USA (Proceedings of Machine Learning Research) .PMLR, 27268–27286. https://proceedings.mlr.press/v162/zhou22g.html 
+
+A Appendix A.1 Fourier Transform 
+
+Discrete Fourier Transform. Discrete Fourier Transform (DFT) is a fundamental tool in digital signal processing [ 42 ] that converts a sequence from the time domain to the frequency domain. Given a sequence {𝑥 𝑗 } with 𝑗 ∈ { 0, 1, . . . , 𝑛 − 1}, the DFT transforms it into the frequency domain according to: 
+
+˜𝑥 𝑘 =
+
+𝑛 −1∑︁ 
+
+𝑗 =0
+
+𝑥 𝑗 exp 
+
+
+
+− 2𝜋𝑖 𝑛 𝑗𝑘 
+
+
+
+, 0 ≤ 𝑘 ≤ 𝑛 − 1, (21) where 𝑖 is the imaginary unit, and ˜𝑥 𝑘 denotes the spectrum of the sequence at frequency step 𝜔 𝑘 = 2𝜋𝑘 /𝑛 . The DFT is a one-to-one transformation, and the original sequence can be recovered from its spectrum via the Inverse DFT (IDFT): 
+
+𝑥 𝑗 = 1
+
+𝑛 
+
+𝑛 −1∑︁ 
+
+𝑘 =0
+
+˜𝑥 𝑘 exp 
+
+ 2𝜋𝑖 𝑛 𝑗𝑘 
+
+
+
+, 0 ≤ 𝑗 ≤ 𝑛 − 1. (22) 
+
+Fast Fourier Transform. The Fast Fourier Transform (FFT) is an efficient algorithm for computing the DFT, which reduces the time complexity from O( 𝑛 2) in the naive DFT to O( 𝑛 log 𝑛 ) by factorizing the DFT matrix into a product of sparse factors [ 1]. The inverse DFT can likewise be efficiently computed via the Inverse FFT (IFFT). Since FFT converts input signals into the frequency domain where periodic characteristics are more easily captured, it is widely adopted in sequential modeling to filter noise [48–50]. In this work, we apply FFT and IFFT to the multi-modal item embedding sequence H ∈ R𝑛 ×𝑑 for sequence-level denoising. Specif-ically, FFT projects the sequence from the time domain into the Beyond Noisy Signals: Dual-Level Denoising for Multi-modal Sequential Recommendation Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+Table 4: Efficiency comparison with DMMD4SR. Time/E (s) denotes the average training time per epoch, and MU (GB) indicates GPU memory usage.                                          
+
+> Datasets Model Recall@20 NDCG@20 Time/E MU Beauty DMMD4SR 0.1129 0.0466 42s 18.13G DDMSR 0.1579 0.0671 14s 9.32G Sports DMMD4SR 0.0672 0.0262 62s 18.48G DDMSR 0.0975 0.0417 26s 12.36G Toys DMMD4SR 0.1159 0.0488 36s 18.13G DDMSR 0.1660 0.0695 11s 8.56G MicroLens DMMD4SR 0.1216 0.0490 136s 18.44G DDMSR 0.1497 0.0637 53s 11.15G
+
+frequency domain, where a learnable complex-valued filter mod-ulates the spectrum to suppress noise-induced components; IFFT then reconstructs the purified sequence back to the time domain for downstream preference modeling. 
+
+A.2 Details of Baselines 
+
+We compare our method with well-known SR baselines with two categories: 
+
+ID-based Models: 
+
+• SASRec [13 ] employs a unidirectional self-attention mech-anism to capture sequential dependencies among items for next-item prediction. 
+
+• BERT4Rec [ 30 ] adopts a bidirectional Transformer with a masked item prediction task to learn richer sequential representations. 
+
+• FEARec [6 ] augments self-attention with frequency-domain components via a ramp structure to capture both low- and high-frequency sequential signals. 
+
+• BSARec [ 29 ] leverages the Fourier transform to integrate frequency information into self-attention, mitigating the oversmoothing problem in sequential recommendation. 
+
+Multi-modal Models: 
+
+• UniSRec [10 ] learns transferable universal sequence rep-resentations from item textual descriptions via a paramet-ric whitening and MoE-enhanced adaptor, enabling cross-domain recommendation. 
+
+• MISSRec [ 34 ] designs an interest-aware Transformer encoder-decoder that captures sequence-level multi-modal user inter-ests and adopts a dynamic fusion module for user-adaptive item representations. 
+
+• MP4SR [45 ] proposes a multi-modal pre-training framework that leverages contrastive learning to capture correlations among different modality sequences of users and items for enhanced sequential recommendation. 
+
+• TedRec [ 38 ] transforms textual and ID embeddings into the frequency domain via Fourier transform, achieving effective sequence-level text-ID semantic fusion through element-wise multiplication. 
+
+• HM4SR [ 46 ] proposes a hierarchical time-aware Mixture-of-Experts framework that integrates explicit temporal in-formation with multi-modal features to model dynamic user interests. 
+
+• DMMD4SR [ 20 ] introduces a diffusion model-based multi-level denoising framework that progressively mitigates do-main shift noise and interest-agnostic noise in multi-modal representations for sequential recommendation. For a fair comparison, we train UniSRec, MP4SR and MISSRec from scratch without pre-training on additional datasets. 
+
+A.3 Efficiency Analysis 
+
+In this section, we comprehensively compare the training efficiency of our proposed DDMSR against the generative diffusion-based baseline, DMMD4SR, from both theoretical complexity and empiri-cal perspectives. Let 𝐵 denote the batch size, 𝐿 the maximum sequence length, 𝑑 
+
+the hidden feature dimension, 𝑁 the item vocabulary size, and 𝑘 
+
+the number of retained neighbors in the sparse similarity graph. 
+
+Theoretical Training Complexity. The denoising module of DMMD4SR heavily relies on multiple generative diffusion networks. During the training phase, for each batch, DMMD4SR not only computes the reconstruction loss but also executes a 𝑇 -step autore-gressive reverse sampling across 𝑀 independent diffusion networks (e.g., text, image, and sequence SDNets) to obtain denoised repre-sentations for subsequent sequence encoding. Since the single-step prediction of each network is dominated by MLPs with a complex-ity of O( 𝐵 · 𝐿 · 𝑑 2), the total time complexity per training batch reaches: 
+
+ODMMD4SR = O( 𝑀 · 𝑇 · 𝐵 · 𝐿 · 𝑑 2) (23) Furthermore, storing the multi-step computational graphs and gra-dients for all modality experts incurs an extremely high memory footprint. In contrast, DDMSR introduces a highly efficient discrimina-tive spatial-frequency denoising paradigm. For the Graph Feature Denoiser, graph aggregation over the entire item vocabulary is per-formed via sparse matrix multiplication, incurring a per-forward cost of O( 𝑁 ·𝑘 ·𝑑 ). For the sequence Frequency Filter, high-frequency noise is suppressed in a single one-shot operation: across 𝐹 stacked filter layers, the Fast Fourier Transform (FFT) and its inverse con-tribute O( 𝐹 · 𝐵 · 𝑑 · 𝐿 log 𝐿 ), while the sequential gating mechanism contributes O( 𝐹 · 𝐵 · 𝐿 · 𝑑 2). The combined per-batch training com-plexity of DDMSR is therefore: 
+
+ODDMSR = O( 𝑁 · 𝑘 · 𝑑 + 𝐹 · 𝐵 · 𝐿 · 𝑑 · ( log 𝐿 + 𝑑 )) . (24) It is worth noting that although Eq. (24) contains the term O( 𝑁 ·
+
+𝑘 · 𝑑 ), this operation amounts to a single, highly optimized sparse aggregation step whose practical wall-clock overhead is negligible compared to the repeated multi-step MLP evaluations in diffusion-based denoising. The training complexity of DDMSR can therefore be effectively regarded as O( 𝐹 · 𝐵 · 𝐿 · 𝑑 · ( log 𝐿 + 𝑑 )) . Moreover, during online inference, the item-level graph aggregation can be pre-computed entirely offline, eliminating the O( 𝑁 ·𝑘 ·𝑑 ) term from the online critical path and reducing its effective inference-time cost to O( 1).
+
+Empirical Efficiency. The theoretical advantages are strongly validated by the empirical training overhead presented in Table 4. Across all evaluated datasets, DDMSR consistently achieves a 2.5 ×
+
+to 3 × speedup in training time per epoch (Time/e) compared to Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Jie Luo, Qi Jin, and Xinming Zhang [ auu; sum  - concat iiiiii attention ] 
+
+> 0.16 •• 1
+> 0.07 •• 1
+
+-- •• 1
+
+••  •• 1
+
+••  ..1 
+
+••  ..1  ••  --••  •• 1 ••  ••0 0.14  ••  •• 1 ••  0 0.06  •• ••  •• 1 ••  •• N ••  •• 1 ••  N •• @)  ••  •• 1 ••  @)  •• ••  •• 1 ••  •• - ••  •• 1 ••  " •• -ta  0.12  ••  •• 1 ••  u 0.05  •• u ••  •• 1 ••  •• cu  ••  •• 1 ••  c •• ••  •• 1 ••  •• a::  ••  •• 1 ••  z ••••  •• 1 ••  ••0.10  ••  •• 1 ••  0.04  •• ••  •• 1 ••  ••••  •• 1 ••  ••••  •• 1 ••  ••••  •• 1 ••  ••••  •• 1 ••  ••••  •• 1 ••  •• 0.08  0.03        
+
+> Beauty Sports Toys Microlens Beauty Sports Toys Microlens
+
+Figure 6: Effects of the multi-modal fusion type. 0.17  
+
+> 0.15
+> 0
+> N
+> @) 0.13
+
+## --RS  
+
+> u0.11
+
+cu 
+
+a::  0.09         
+
+> [-o-Beauty -o-Sports -o-Toys -o-Microlens J
+> 0.1
+
+A   
+
+> 0.5 1.0
+> 0.070
+> 0.062
+> 0
+> N
+> @) 0.054
+> ~
+> u0.046
+
+c
+
+z 0.038 
+
+> 0.1
+
+A 
+
+> 0.5 1.0
+
+Figure 7: Effects of the contrastive learning weight 𝜆 .
+
+DMMD4SR (e.g., reducing the training time from 42s to 14s on the Beauty dataset). Additionally, by completely circumventing the cumbersome multi-step diffusion graphs, DDMSR reduces GPU memory usage (MU) by roughly 30% to 50%. Most importantly, while substantially reducing both computational and memory costs, DDMSR still yields significant performance improvements in Re-call@20 and NDCG@20. This firmly demonstrates the superiority, scalability, and practical value of our proposed method in real-world recommender systems. 
+
+A.4 More Hyperparameter Sensitivity Analysis 
+
+Due to space limitations in the main text, we present further hy-perparameter sensitivity analyses in this section. Specifically, we investigate the impact of different multi-modal fusion strategies and the contrastive learning weight 𝜆 on the overall recommendation performance. 
+
+Impact of Multi-modal Fusion Strategies. To determine the optimal operation for integrating textual and visual features, we evaluate three commonly used fusion functions for Fusion (·) in Eq.9: element-wise addition ( add ), concatenation followed by a linear projection ( concat ), and an attention mechanism ( attention ). As illustrated in Figure 6, element-wise addition consistently out-performs the other two variants across all datasets in terms of both Recall@20 and NDCG@20. We attribute this to the fact that element-wise addition provides a symmetric and parameter-free mechanism to superimpose multi-modal signals. It effectively ag-gregates complementary semantic information without altering the original feature space dimensionality. In contrast, the concat 
+
+operation introduces extra learnable parameters that may lead to overfitting, particularly in sparse recommendation scenarios. Simi-larly, the attention mechanism can be overly complex and computa-tionally unstable for fusing already aligned modality embeddings. Consequently, we adopt element-wise addition as the default fusion strategy in our framework. 
+
+Impact of Contrastive Learning Weight 𝜆 . The hyperparameter 
+
+𝜆 controls the magnitude of the multi-modal contrastive alignment objective, which balances the auxiliary cross-modal regularization with the primary sequential recommendation task. We search for the optimal 𝜆 within the range of {0.001 , 0.01 , 0.1, 0.5, 1.0}. As de-picted in Figure 7, the performance experiences a steady improve-ment as 𝜆 increases from 0.001 , reaching a consistent peak at 𝜆 = 0.1.However, continuously increasing 𝜆 beyond 0.1 (e.g., to 0.5 or 1.0)leads to a sharp performance drop. This trend aligns with our intu-ition: a moderate contrastive weight effectively bridges the hetero-geneity gap between modalities and enforces semantic consistency. Conversely, an excessively large 𝜆 causes the model to over-focus on the alignment task, thereby dominating the gradient updates and inducing negative transfer to the main temporal preference modeling. Hence, we set 𝜆 = 0.1 for all main experiments. 7500  
+
+> &n 6000
+> QJ
+
+-c.   
+
+> E
+> ~4500
+> .... &n
+> QJ
+> :3000
+> 1500
+> -
+
+"'*"  SASRec UniSRec  +           
+
+> \. o,5' \.5, 1.0 'r1.o, 1.5 t1.5 ,zo \-2-o ,z5 tz5 ,'3o t'3o ,'3 5'
+> Item Popularity (a) Beauty
+> MISSRec +TedRec +
+> 42% 31% 20000
+
+-?ft. 
+
+-0 &n  16000 21% N QJ  
+
+> @J
+
+-- c. 
+
+- Eta                     
+
+> u~12000 10% QJ
+> a:: ....
+> 'a &n
+> ~QJ
+> >-1% 0~8000
+> J..
+> c.
+> E
+> -12% 4000
+> DMMD4SR +DDMSR
+> \. o,5' \.5 '1.0 '\.'1-o '1.5 t1.5 ,zo \zo ,z5 tz5 ,'3o t'3o ,'3 5'
+> Item Popularity (b) Microlens-lOOk
+> 30%
+> 25%
+
+-?ft. 
+
+-0 
+
+> 19% N
+> @J
+> -
+
+-ta   
+
+> u
+> 13% QJ
+> a::
+> 'a
+> QJ
+> >7% 0
+> J..
+> c.
+> E
+> 2%
+
+Figure 8: Performance improvement across different item popularity (Long-tail) groups. 
+
+A.5 Long-Tail Analysis 
+
+Pure ID-based models (e.g., SASRec) inherently suffer from rep-resentation collapse on data-sparse items. In Fig. 8, we establish the pure ID model SASRec as the baseline to evaluate relative per-formance improvements. While other multi-modal models exhibit moderate robustness on infrequent items, DDMSR decisively dom-inates. It achieves massive, unprecedented performance gains on the least frequent items (e.g., the [0, 5) and [5, 10 ) bins). This di-rectly confirms that our graph-based semantic denoising, coupled with cross-modal alignment, successfully leverages neighborhood aggregation and modality complementarity to enrich high-quality multi-modal representations for long-tail items where interactions are extremely scarce.

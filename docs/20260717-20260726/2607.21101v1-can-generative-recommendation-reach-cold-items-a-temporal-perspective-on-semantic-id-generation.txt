@@ -1,0 +1,963 @@
+Title: Can Generative Recommendation Reach Cold Items? A Temporal Perspective on Semantic-ID Generation
+
+URL Source: https://arxiv.org/pdf/2607.21101v1
+
+Published Time: Fri, 24 Jul 2026 00:43:44 GMT
+
+Number of Pages: 22
+
+Markdown Content:
+# Can Generative Recommendation Reach Cold Items? A Temporal Perspective on Semantic-ID Generation 
+
+# Jie Peng 
+
+Renmin University of China Beijing, China peng_jie@ruc.edu.cn 
+
+# Yanping Zheng 
+
+Renmin University of China Beijing, China zhengyanping@ruc.edu.cn 
+
+# Zhewei Wei ∗
+
+Renmin University of China Beijing, China zhewei@ruc.edu.cn 
+
+# Bin Tong 
+
+Alibaba Beijing, China tongbin.tb@alibaba-inc.com 
+
+# Guan Wang 
+
+Alibaba Beijing, China shangfeng.wg@taobao.com 
+
+# Bo Zheng 
+
+Alibaba Beijing, China bozheng@alibaba-inc.com 
+
+## Abstract 
+
+Semantic-ID-based generative recommendation represents items as sequences of shared semantic tokens, enabling token recombination beyond isolated item IDs. However, closed-world recombination does not necessarily imply temporal open-token cold-start induc-tion, where new items enter the item catalog with unseen atomic tokens or weakly supported SID paths. In this work, we revisit SID-based generative recommendation under an absolute-time temporal protocol that separates seen and unseen targets and diagnoses the cold item reachability at the token level. Through seen/unseen-hit analysis, coldness taxonomy, and oracle-prefix probing, we show that current SID-based models can occasionally reach future items supported by observed tokens and prefixes, but struggle with un-seen atomic tokens and unsupported SID paths. We further explain this boundary by interpreting SID generation as hierarchical seman-tic bucketing: early tokens select coarse semantic regions, while later tokens refine item-specific paths. These findings show that SID generation is compositional but not fully open-ended, and suggest future directions in more independent SID spaces, scoring-based interfaces, and dynamic textual context. 
+
+## Keywords 
+
+Generative Recommendation, Semantic ID, Cold Item Reachability, Token-level Cold-start 
+
+ACM Reference Format: 
+
+Jie Peng, Yanping Zheng, Zhewei Wei, Bin Tong, Guan Wang, and Bo Zheng. 2018. Can Generative Recommendation Reach Cold Items? A Tem-poral Perspective on Semantic-ID Generation. In Proceedings of Make sure to enter the correct conference title from your rights confirmation email (Conference acronym ’XX). ACM, New York, NY, USA, 22 pages. https: //doi.org/XXXXXXX.XXXXXXX  
+
+> ∗Corresponding Authors. Permission to make digital or hard copies of all or part of this work for personal or classroom use is granted without fee provided that copies are not made or distributed for profit or commercial advantage and that copies bear this notice and the full citation on the first page. Copyrights for components of this work owned by others than ACM must be honored. Abstracting with credit is permitted. To copy otherwise, or republish, to post on servers or to redistribute to lists, requires prior specific permission and/or a fee. Request permissions from permissions@acm.org.
+> Conference acronym ’XX, Woodstock, NY
+> ©2018 ACM. ACM ISBN 978-1-4503-XXXX-X/18/06 https://doi.org/XXXXXXX.XXXXXXX
+
+Observed Items 
+
+[ 1 , 60 , 110 ]
+
+[ 2 , 50 , 120 ]
+
+[ 1 , 50 , 100 ] [ 2 , 60 , 100 ]
+
+New Items 
+
+[ 2 , 70 , 100 ]
+
+𝑡 0 𝑡 1 𝑡 2 𝑡 3 𝑡 4
+
+all tokens seen , but new path 
+
+contains unseen token 
+
+SID Generation 
+
+Past  Future 
+
+seen  unseen 
+
+Figure 1: Temporal cold start as token-level reachability. 
+
+## 1 Introduction 
+
+Recommendation systems have traditionally represented items with randomly assigned or hashed identifiers [ 2 , 13 , 31 ]. While effective for memorizing historical user–item interactions, such ID-based representations treat items as isolated symbols and offer limited structural sharing across semantically related items. This limitation becomes more pronounced in large-scale recommendation, where catalogs are long-tailed, sparse, and continuously evolving [ 23 ]. Semantic IDs (SIDs) provide an alternative by representing each item as a sequence of discrete semantic tokens derived from content or representation spaces [ 21 , 23 , 25 ]. By sharing tokens or prefixes across related items, SIDs enable semantic-aware modeling and compactly encode large catalogs with reusable codewords. SID-based generative recommendation (GR) formulates next-item prediction as autoregressive generation of the target item’s SID, rather than scoring over items [ 21 ]. This enables closed-token recombination : a model may compose observed tokens or prefixes into SID paths that were never seen as complete item targets during training. However, such recombination is not equivalent to cold-start induction. Real systems must recommend newly introduced items with limited or no interaction history [ 14 , 22 ]. Some future items can be expressed using familiar SID tokens, while others require unsupported paths or atomic tokens never observed as training targets. This raises the central question of this paper: can SID-based GR inductively reach future cold items, or is its reachability bounded by the item–token support observed during training? 
+
+Answering this question requires rethinking evaluation first. The standard leave-one-out protocol supports closed-world sequential prediction [ 12 , 24 ], but splits each user sequence independently and may interleave train, validation, and test interactions in absolute arXiv:2607.21101v1 [cs.AI] 23 Jul 2026 Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Jie Peng, Yanping Zheng, Zhewei Wei, Bin Tong, Guan Wang, and Bo Zheng 1 Temporal Interaction Stream    
+
+> 𝑡 !𝑡 "𝑡 #
+> …
+> …
+> User Item events over time
+> 𝑢 !
+> 𝑢 "
+> …
+> …
+
+2 Absolute -Time Sliding Window      
+
+> 𝑇 $𝑇 !𝑇 "𝑇 %𝑇 &
+> Train
+> (past)
+> Val Test
+> (fut ure)
+> Sliding Windows
+> 𝒘 𝟎 :
+> 𝒘 𝟏 :
+> 𝒘 𝟐 :
+
+3 Seen/Unseen Split 
+
+> Train Catalog
+> Warm Items
+> Unseen Cold Items
+> Seen in training
+> Unseen in training
+> …
+
+4 Token -level Taxonomy           
+
+> All -token -seen
+> 260 100
+> Any -token -unseen
+> Prefix -seen
+> 370 100
+> 260 ?
+> Cold -item reachability
+> depends on token
+> support level
+
+5 Mechanism Diagnosis                   
+
+> Oracle -prefix probing
+> 𝒄 𝟏 𝒄 𝟐 ?
+> prefix oracle
+> Generator 𝑐 !𝑐 "𝑐 #
+> ???
+> Acc .gain
+> Bucket alignment
+> (TIGER vs. SASRec )
+> Coarse Mid Fine
+> Semantic bucket hierarchy :
+> Coarse Mid Fine
+> High
+> Med
+> Low
+> Alignment Trend Pearson
+> JS Div.
+
+6 Reachability -       
+
+> Oriented Variants
+> TIGER -SID
+> 𝒄 𝟏 𝒄 𝟐 𝒄 𝟑
+> Independent SID
+> TIGER -Score
+> Autoregressive
+> Decoder Scorer
+> TIGER -Edge
+> Cross Attention
+> 𝑸 𝑲 𝒆𝒅𝒈𝒆 𝑽 𝒆𝒅𝒈𝒆
+> Easy
+> Hard
+> Mid
+
+Figure 2: Overview of temporal cold-start reachability analysis. 
+
+time. Thus, a future test item for one user may already appear in another user’s training history, obscuring the difficulty of recom-mending items that emerge only after training. Manually removing items can simulate cold start, but still differs from the natural online setting where items arrive along a global timeline [21, 30]. We therefore introduce an absolute-time temporal cold-start pro-tocol based on sliding temporal windows. In each window, models are trained on past interactions and evaluated on future interactions, so cold test items correspond to items emerging after training. This protocol exposes diverse temporal regimes, yields richer cold-item and SID-token distributions, explicitly separates seen and unseen targets, and directly measures whether SID-based GR can reach beyond the item and token support available during training. Under this protocol, we re-evaluate TIGER [ 21 ], a representative SID-based generative recommender, on multiple datasets [ 16 , 18 ]. Compared with leave-one-out evaluation, TIGER suffers substan-tial degradation in Recall and NDCG, showing that closed-world strength does not directly translate into open-world reachability. To locate the source of this degradation, we diagnose cold items at the token level. Beyond the binary seen/unseen distinction, we re-fine cold-start difficulty by SID support: all-token-seen items whose SID tokens all appeared during training, any-token-unseen items containing at least one unseen atomic token, and prefix-seen items whose SID prefix was observed but whose full path may be new. We further perform oracle-prefix probing, where the correct first token or first two tokens are given to the decoder, separating coarse bucket-selection errors from fine-grained path-completion failures. As illustrated in Figure 1, our analysis reveals a structural reach-ability boundary. TIGER can occasionally generate cold-item SIDs when the required tokens and prefixes are sufficiently supported by training interactions, but struggles with unseen atomic tokens or unsupported SID paths. Successful unseen-item hits concentrate in token- and prefix-supported regimes, whereas unsupported cases are substantially harder to reach. Thus, SID-based generation is not open-ended item generation in the same sense as natural language generation; it is a constrained search over a learned discrete token-path space. Its cold-start capability is compositional, but not fully expansive under current paradigm. To explain this boundary, we reinterpret SID generation as coarse-to-fine semantic bucket classification, akin to that in SASRec [ 12 ]. By aligning TIGER’s token-generation distribution with SASRec’s bucket-aggregated scoring distribution, we find that early SID po-sitions mainly capture coarse semantic preferences, while later positions perform increasingly fine-grained path refinement. This explains both the promise and limitation of SID-based GR: semantic compression and token sharing organize items into reusable buck-ets and paths, but inductive reach remains bounded by the learned token vocabulary and path support. Finally, we study three TIGER-based diagnostic variants that in-tervene on different reachability bottlenecks. TIGER-SID modifies the SID code space with a more factorized tokenizer while keeping autoregressive generation unchanged [ 4, 8]; TIGER-Scorer keeps the TIGER encoder but replaces exact SID decoding with candi-date scoring, isolating user modeling from SID generation; and 
+
+TIGER-Edge preserves the generative SID objective while inject-ing dynamic edge context through cross attention. Together, these variants probe whether cold-item reachability can be expanded through SID design, scorer interfaces, and contextual signals. In summary, as shown in Figure 2, this work clarifies the cold-item reachability boundary of SID-based generative recommenda-tion under temporal cold start. Our contributions are as follows: 
+
+• We propose an absolute-time sliding-window protocol to fairly evaluate SID-based GR at the item and token levels. 
+
+• We use a token-level coldness taxonomy and oracle-prefix probing to diagnose cold-item reachability bottlenecks. 
+
+• We show that SID generation behaves as hierarchical bucket classification and explore three TIGER-based variants for expanding reachability. 
+
+## 2 Related Work and Positioning 2.1 From ID-based Recommendation to Semantic-ID Generation 
+
+Classical recommender systems represent each item with an in-dependent identifier, such as a one-hot ID, learned embedding, or hashed feature. This design supports a wide range of collabora-tive filtering and neural recommendation models, including matrix Can Generative Recommendation Reach Cold Items? A Temporal Perspective on Semantic-ID Generation Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Increasing deployment realism and inductive difficulty 
+
+Closed -world 
+
+transition composition 
+
+Closed -token 
+
+SID recombination 
+
+Open -token 
+
+cold -start induction                                        
+
+> •Setting :leave -one -out
+> •Target :generalizing seen item patterns
+> to predict unseen item transitions
+> •Setting :absolute -time split
+> •Target :composing seen atomic tokens
+> to generate new SID combination
+> •Setting :absolute -time split
+> •Target :generating new atomic tokens
+> to reach true cold items
+> train infer train infer
+> [2,60 ,100 ]
+> [1,60 ,110 ]
+> [2,50 ,120 ]
+> [1,50 ,100 ]
+> train infer
+> [2,70 ,100 ]
+> [1,60 ,110 ]
+> [2,50 ,120 ]
+> [1,50 ,100 ]
+
+Item -level  Transductive Token -level  Inductive Token -level     
+
+> unseen new token seen old tokens
+
+Figure 3: Regime spectrum of deployment realism and inductive difficulty. 
+
+factorization, wide-and-deep models, and Transformer-based se-quential recommenders [ 2, 12 , 13 , 24 ]. While effective in warm-start settings, ID-based representations offer limited structural sharing and therefore struggle in long-tailed or evolving catalogs with new items [ 14 , 22 ]. SIDs address this limitation by mapping each item into a sequence of discrete semantic codes, 
+
+c(𝑖 ) = (𝑐 1 (𝑖 ), 𝑐 2 (𝑖 ), . . . , 𝑐 𝐿 (𝑖 )) , (1) typically obtained from item content embeddings or learned repre-sentation spaces through vector quantization. This connects SID construction to discrete representation learning and quantization methods, including VQ-VAE, residual quantization (RQ), product quantization (PQ), and optimized product quantization (OPQ) [ 5,10 , 15 , 26 ]. Because related items may share tokens or prefixes, SIDs allow recommenders to reuse statistical strength across items. SID-based generative recommendation further casts next-item prediction as autoregressive generation of the target SID: 
+
+𝑝 (𝑖 𝑡 +1 | H 𝑢 ) ≈ 
+
+> 𝐿
+
+Ö
+
+> ℓ=1
+
+𝑝 (𝑐 ℓ (𝑖 𝑡 +1) | H 𝑢 , 𝑐 <ℓ (𝑖 𝑡 +1)) , (2) where H𝑢 denotes the historical interactions of user 𝑢 . TIGER is a representative framework in this direction [ 21 ], while broader gen-erative recommendation also connects to language-model-based frameworks such as P5 [ 6]. Recent work further shows that SID con-struction is crucial: CoST improves semantic tokenization through contrastive quantization, and LETTER learns item tokenizers with semantic and collaborative regularization [ 9, 28 , 32 ]. These studies establish SID quality as a central factor in SID-based GR. 
+
+## 2.2 Closed-World Composition in GR 
+
+A key promise of SID-based GR is token sharing and recombina-tion. Since an item is decomposed into multiple semantic tokens, the model may compose observed tokens or prefixes into new SID sequences. This differs from conventional ID-based scoring, where each item is usually ranked as an independent candidate. Recent studies therefore analyze whether GR gains arise from memoriza-tion, semantic sharing, or compositional transition patterns. A relevant line of work studies generative recommendation un-der closed-world sequential prediction. For example, recent anal-yses categorize test cases according to whether their targets can be solved by memorizing observed item transitions or composing known transition patterns [ 3]. Such work shows that apparent item-level novelty may often be explained by token-level memorization or prefix sharing in SID space, helping explain why SID-based GR can perform well under leave-one-out evaluation. Our work is complementary but focuses on a different regime. Prior analyses mainly study closed-world transition interpolation with a largely fixed item universe. We study temporal open-token cold-start induction, where new items, SID paths, and possibly atomic tokens emerge after training. Thus, we do not question the closed-world compositionality of GR; instead, we ask where it stops being sufficient under realistic temporal deployment: 
+
+When the item catalog evolves over time, which cold items can SID-based GR reach, which cold items remain outside its token-supported generation space, and why? 
+
+## 2.3 Cold-start under Temporal Deployment 
+
+Cold-start recommendation is a long-standing challenge in recom-mender systems [ 14 , 22 ]. A common solution is to incorporate side information, such as metadata, text, images, categories, or graph structure, so that new items can be represented before sufficient collaborative signals accumulate. Neural and multimodal methods further combine collaborative and content signals, for example through dropout-based training for missing collaborative informa-tion or multimedia representations for new items [ 1, 27 , 29 ]. These approaches emphasize that inductive recommendation generally requires information beyond historical item IDs. In sequential recommendation, however, cold-start evaluation is often blurred by leave-one-out protocols. Although leave-one-out preserves each user’s interaction order, it does not preserve the global chronological order of interactions. A test item for one user may already appear in other users’ training histories, leading to optimistic estimates of deployment-time cold-start ability. Recent studies show that splitting strategies substantially affect reported model rankings and that ignoring global time can introduce tem-poral leakage [ 7, 11 , 17 , 19 , 20 ]. Absolute-time temporal splits are thus more appropriate for deployment-oriented cold-start analysis. This issue is especially important for SID-based GRs. A future item may be reachable if its SID can be composed from observed tokens and prefixes. However, if it requires unseen atomic tokens or unsupported SID paths, the autoregressive decoder may have no reliable way to generate it. Thus, the relevant cold-start question is Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Jie Peng, Yanping Zheng, Zhewei Wei, Bin Tong, Guan Wang, and Bo Zheng 
+
+not only whether the target item ID has been seen, but whether its token-level support is available. 
+
+## 2.4 Positioning of This Work 
+
+We position this paper as a diagnostic study of SID-based gen-erative recommendation under temporal cold start. As shown in Figure 3, prior work mainly studies ID-based recommendation, SID-based closed-world generation, or closed-world recombination un-der leave-one-out protocols. In contrast, we focus on a deployment-oriented regime where items, SID paths, and token support evolve under absolute-time splits. Our goal is not to challenge the closed-world compositional benefit of GRs, but to characterize its reachability boundary un-der absolute-time cold-start. In this paper, we combine temporal evaluation, token-level coldness taxonomy, oracle-prefix probing, and bucket-level comparison with discriminative recommendation models, and further use controlled TIGER-based variants to exam-ine whether this boundary can be expanded through SID-space design, scoring-based interfaces, and dynamic contextual signals. 
+
+## 3 Temporal Cold-Start Evaluation 3.1 Temporal Interaction Stream 
+
+Let the recommendation data be a timestamped interaction stream 
+
+D = {( 𝑢, 𝑖, 𝑡, x𝑢𝑖 )} , where 𝑢 ∈ U is a user, 𝑖 ∈ I is an item, 𝑡 is the absolute timestamp, and x𝑢𝑖 optionally denotes side information such as textual attributes, edge content, or interaction metadata. For each user 𝑢 , the historical sequence before time 𝑡 is 
+
+H <𝑡 𝑢 = {( 𝑖 1, 𝑡 1), (𝑖 2, 𝑡 2), . . . , (𝑖 𝑚 , 𝑡 𝑚 )} , 𝑡 1 < 𝑡 2 < · · · < 𝑡 𝑚 < 𝑡 . 
+
+(3) The goal is to predict the next item 𝑖 that user 𝑢 will interact with after observing H <𝑡 𝑢 . Unlike leave-one-out evaluation, which splits each user sequence independently, we partition the entire inter-action stream by absolute time. For a temporal window 𝑤 , let 
+
+𝜏 tr  
+
+> 𝑤
+
+< 𝜏 val  
+
+> 𝑤
+
+< 𝜏 te  
+
+> 𝑤
+
+be the training, validation, and test boundaries. The three splits are defined as 
+
+D𝑤  
+
+> train
+
+= {( 𝑢, 𝑖, 𝑡, x𝑢𝑖 ) ∈ D | 𝑡 ≤ 𝜏 tr  
+
+> 𝑤
+
+}, (4) 
+
+D𝑤  
+
+> val
+
+= {( 𝑢, 𝑖, 𝑡, x𝑢𝑖 ) ∈ D | 𝜏 tr  
+
+> 𝑤
+
+< 𝑡 ≤ 𝜏 val  
+
+> 𝑤
+
+}, (5) 
+
+D𝑤  
+
+> test
+
+= {( 𝑢, 𝑖, 𝑡, x𝑢𝑖 ) ∈ D | 𝜏 val  
+
+> 𝑤
+
+< 𝑡 ≤ 𝜏 te  
+
+> 𝑤
+
+}. (6) The window is then slid forward to construct multiple temporal regimes. This design ensures that the model is always trained on past interactions and evaluated on future interactions. 
+
+## 3.2 Seen and Unseen Target Items 
+
+For each temporal window 𝑤 , the training item set is I𝑤  
+
+> train
+
+= {𝑖 |(𝑢, 𝑖, 𝑡, x𝑢𝑖 ) ∈ D 𝑤  
+
+> train
+
+}. A test target item 𝑖 is considered seen if it appeared in the training period: 𝑖 ∈ I 𝑤  
+
+> seen
+
+⇐⇒ 𝑖 ∈ I 𝑤 
+
+> train
+
+, and cold (unseen) otherwise: 𝑖 ∈ I 𝑤  
+
+> cold
+
+⇐⇒ 𝑖 ∉ I𝑤 
+
+> train
+
+. Accordingly, the test set is partitioned into 
+
+D𝑤  
+
+> test ,seen
+
+= {( 𝑢, 𝑖, 𝑡, x𝑢𝑖 ) ∈ D 𝑤  
+
+> test
+
+| 𝑖 ∈ I 𝑤  
+
+> seen
+
+}, (7) 
+
+D𝑤  
+
+> test ,cold
+
+= {( 𝑢, 𝑖, 𝑡, x𝑢𝑖 ) ∈ D 𝑤  
+
+> test
+
+| 𝑖 ∈ I 𝑤  
+
+> cold
+
+}. (8) The cold ratio of window 𝑤 is 𝜌 𝑤  
+
+> cold
+
+= | D 𝑤    
+
+> test ,cold || D 𝑤
+> test |
+
+. This quantity mea-sures how strongly each window reflects temporal item emergence. 
+
+## 3.3 SID Token Support 
+
+For SID-based GR, item-level coldness is not sufficiently infor-mative. A cold item may still be expressible through tokens that were observed during training. Let the SID of item 𝑖 be c(𝑖 ) =
+
+(𝑐 1 (𝑖 ), . . . , 𝑐 𝐿 (𝑖 )) . The set of atomic tokens observed in the training period is V𝑤  
+
+> train
+
+= {𝑐 ℓ (𝑖 ) | 𝑖 ∈ I 𝑤 
+
+> train
+
+, ℓ ∈ { 1, . . . , 𝐿 }} . A token 𝑐 ℓ (𝑖 ) is seen if 𝑐 ℓ (𝑖 ) ∈ V 𝑤  
+
+> train
+
+and unseen otherwise. We further define the set of observed SID prefixes: P𝑤 ℓ = {( 𝑐 1 (𝑖 ), . . . , 𝑐 ℓ (𝑖 )) | 𝑖 ∈ I 𝑤  
+
+> train
+
+}.A cold item can therefore be characterized not only by whether its item ID appeared in training, but also by whether its atomic tokens and prefixes appeared in training. 
+
+## 3.4 Model Architecture and Evaluation 
+
+Our primary generative model follows the standard TIGER-style architecture. An item tokenizer maps each item to a length-𝐿 SID sequence. Given a user history H𝑢 , the encoder produces a sequence representation, and the decoder autoregressively predicts the target SID: 
+
+LGR = −∑︁  
+
+> (𝑢,𝑖 ) ∈ D train
+> 𝐿
+
+∑︁ 
+
+> ℓ=1
+
+log 𝑝 𝜃 (𝑐 ℓ (𝑖 ) | H 𝑢 , 𝑐 <ℓ (𝑖 )) . (9) At inference time, beam search is used to generate candidate SID sequences. Valid generated SIDs are mapped back to item candi-dates through the codebook. We evaluate recommendation quality with Recall@ 𝐾 and NDCG@ 𝐾 on overall, seen-target, and cold-target test subsets. Besides, we use Hit@ 𝐾 to evaluate each test sequence once against its full target item set. A Hit@ 𝐾 is counted as 1 if any of the top-𝐾 predicted items matches at least one item in the corresponding target set, and 0 otherwise. We compare TIGER with SASRec [ 12 ], a representative discriminative sequential recom-mender that scores candidate items directly. This comparison allows us to distinguish the effect of SID-based autoregressive generation from conventional item-level scoring. 
+
+## 4 Token-Level Diagnosis of Cold-Start Boundary 4.1 Performance under Temporal Splits 
+
+We first revisit the next-item prediction performance of TIGER un-der a rigorous temporal cold-start protocol. Unlike the conventional leave-one-out setting, which often allows information leakage, our absolute-time split enforces a strict boundary where test targets emerge strictly after the training period. This setup introduces a significantly more challenging cold-start scenario, particularly for evaluating the model’s inductive reachability to unseen items. Ta-ble 1 details the performance of TIGER and SASRec across seven datasets. Specifically, beyond the widely used datasets in GR re-search, namely Beauty, Sports, and Toys [ 16 ], we additionally in-corporate recent Dynamic Text-attributed Graph (DyTAG) datasets (i.e., Sephora, WikiLife, WeiboDaily, and WeiboTech) [ 18 ]. These DyTAG datasets are characterized by rich node and edge texts along with explicit temporal dynamics, thereby providing high-quality data for generative recommendation [ 18 ]. Furthermore, all datasets were partitioned into five sliding temporal windows, resulting in three test windows. See Section B.1 for more dataset information. Can Generative Recommendation Reach Cold Items? A Temporal Perspective on Semantic-ID Generation Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+Table 1: Seen and unseen target performance under temporal cold-start evaluation. “Cold ratio” denotes the average proportion of test targets whose item IDs are absent from the training period. Hit@20 and Recall@20 denote the average values among all windows. Detailed results for each window and other order metrics are presented in Tables 7 to 12. Dataset Cold ratio TIGER SASRec                                                                       
+
+> Seen H@20 Seen R@20 Unseen H@20 Unseen R@20 Seen H@20 Seen R@20 Unseen H@20 Unseen R@20 Beauty 0.948 0.01334 0.00258 0.00023 0.00000 0.08367 0.01170 0.00414 0.00068
+> Sports 0.947 0.01406 0.00851 0.00020 0.00004 0.04968 0.06943 0.00416 0.00022
+> Toys 0.910 0.02340 0.01371 0.00009 0.00000 0.05232 0.05590 0.00146 0.00003
+> Sephora 0.773 0.33718 0.33749 0.00000 0.00000 0.07339 0.08744 0.05665 0.02532
+> WikiLife 0.569 0.39112 0.33868 0.00103 0.00042 0.04037 0.06678 0.01163 0.01090
+> WeiboDaily 0.253 0.75894 0.40206 0.00313 0.00092 0.27167 0.45276 0.00191 0.00003 WeiboTech 0.385 0.41039 0.06812 0.00000 0.00000 0.33391 0.09163 0.00000 0.00000
+
+Results. To expose the effect of item emergence, we separately evaluate seen and unseen target items under the temporal protocol. As shown in Table 1, unseen targets account for a substantial por-tion of the test set, with cold ratios ranging from 0.2533 on Weibo-Daily to over 0.94 on Beauty and Sports. This confirms that temporal evaluation is much more challenging than closed-world leave-one-out evaluation, where many test targets may already be covered by the training item universe. The performance gap between seen and unseen targets is substantial. On seen targets, both TIGER and SASRec retain non-trivial performance, with dataset-dependent relative strengths: SASRec performs better on the Amazon datasets, while TIGER is stronger on Sephora, WikiLife, WeiboDaily, and WeiboTech. However, both models largely collapse on unseen tar-gets. TIGER’s unseen Recall@20 is nearly zero on most datasets. SASRec shows a similar pattern, with unseen Recall@20 below 0.001 on Beauty, Sports, Toys, WeiboDaily, and WeiboTech. These results show that temporal cold start exposes a reachabil-ity bottleneck hidden by seen-item evaluation. Strong seen-target performance does not imply the ability to recommend items emerg-ing after training. For TIGER, the near-zero unseen performance suggests that SID-based generation is severely constrained outside the training item universe. This motivates a finer question: are these failures caused by item-level novelty alone, or by limitations in SID token support and autoregressive path reachability? We therefore proceed to a token-level diagnosis. 
+
+## 4.2 Token-Level Coldness Taxonomy 
+
+A cold item is not uniformly cold from the perspective of SID generation. Let c(𝑖 ) = (𝑐 1 (𝑖 ), . . . , 𝑐 𝐿 (𝑖 )) be the SID of a cold item 𝑖 .We define the following token-level coldness categories. 
+
+All-token-seen. A cold item is all-token-seen if every atomic token in its SID appeared in training: 
+
+𝑖 ∈ C 𝑤  
+
+> all -seen
+
+⇐⇒ 𝑖 ∈ I 𝑤  
+
+> cold
+
+∧ ∀ ℓ, 𝑐 ℓ (𝑖 ) ∈ V 𝑤 
+
+> train
+
+. (10) These items test whether the model can compose new SID combi-nations from seen atomic tokens. 
+
+Any-token-unseen. A cold item is any-token-unseen if at least one atomic token in its SID was absent from training: 
+
+𝑖 ∈ C 𝑤  
+
+> any -unseen
+
+⇐⇒ 𝑖 ∈ I 𝑤  
+
+> cold
+
+∧ ∃ ℓ, 𝑐 ℓ (𝑖 ) ∉ V𝑤 
+
+> train
+
+. (11) These items require the model to handle token support that is unavailable or weakly parameterized during training. 
+
+Table 2: Representative token-level coldness taxonomy for unseen target items. We report the ratio of each coldness category and TIGER’s Recall@20 and NDCG@20. Full results across all datasets are provided in Table 13. Dataset Coldness category Ratio R@20 N@20                               
+
+> Sports all-token-seen 0.405 0.00006 0.00003 any-token-unseen 0.595 0.00000 0.00000 prefix-seen-𝑐 10.723 0.00004 0.00002 prefix-seen-𝑐 1, 𝑐 20.208 0.00008 0.00004 prefix-seen-𝑐 1, 𝑐 2, 𝑐 30.002 0.01007 0.00520 WeiboDaily all-token-seen 1.000 0.00092 0.00026 any-token-unseen 0.000 ––prefix-seen-𝑐 11.000 0.00092 0.00026 prefix-seen-𝑐 1, 𝑐 20.516 0.00138 0.00039 prefix-seen-𝑐 1, 𝑐 2, 𝑐 30.010 0.01386 0.00379
+
+Prefix-seen. A cold item is prefix-seen at length ℓ if its prefix has appeared in training: 
+
+𝑖 ∈ C 𝑤   
+
+> prefix -seen (ℓ)
+
+⇐⇒ 𝑖 ∈ I 𝑤  
+
+> cold
+
+∧ ( 𝑐 1 (𝑖 ), . . . , 𝑐 ℓ (𝑖 )) ∈ P 𝑤 ℓ . (12) Prefix-seen cold items test whether the model can complete a known coarse semantic path into a new leaf item. 
+
+Results. Table 2 reports the token-level coldness taxonomy for unseen target items. The results show that temporal cold start is not a binary condition. Cold-item reachability depends on multiple levels of support: whether the item ID is unseen, whether its atomic SID tokens are observed, and whether its SID prefixes follow paths supported by training data. 
+
+Atomic token coverage is necessary but not sufficient. If SID generation were fully compositional, all-token-seen cold items should be relatively easy to reach. However, TIGER still achieves almost zero performance in this regime on several datasets. For example, in Sports, 40.5% of cold items are all-token-seen, yet Re-call@20 and NDCG@20 remain almost 0. WeiboDaily shows a similar pattern: all cold items are all-token-seen, but TIGER still performs poorly. This indicates that observing individual SID tokens during training does not guarantee that the decoder can compose them into a valid cold-item path. A possible explanation is the path-dependent nature of RQ-VAE-style SID construction: later codes encode residuals left by earlier codes, so a SID forms an ordered residual path rather than a set of independently reusable tokens. Thus, a new combination of seen tokens may still correspond to a weakly supported or unsupported path, making deeper prefix support more predictive than atomic token coverage alone. Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Jie Peng, Yanping Zheng, Zhewei Wei, Bin Tong, Guan Wang, and Bo Zheng 
+
+Table 3: Oracle-prefix probing for semantic ID generation. We report both next-item semantic ID generation accuracy and next-token semantic ID generation accuracy. “Free” denotes standard autoregressive decoding, while “Oracle-prefix” decoding forces the corresponding ground-truth prefix before generating the remaining tokens. Δ denotes the absolute improvement over free decoding. Darker red indicates larger improvement. Full results across all datasets are provided in Table 14. Dataset Group Ratio Next-item SID generation Next-token SID generation Free Oracle 𝑐 1 Oracle 𝑐 1, 𝑐 2 𝑐 1 Acc. 𝑐 2 Acc. 𝑐 3 Acc.                                                                                              
+
+> Acc. ΔAcc. ΔFree Free Oracle 𝑐 1ΔFree Oracle 𝑐 1, 𝑐 2Δ
+> Sports Seen 0.053 0.00063 0.00630 0.00567 0.02815 0.02752 0.18009 0.04449 0.07936 0.03487 0.00284 0.02910 0.02626 Unseen 0.947 0.00001 0.00006 0.00005 0.00448 0.00447 0.11983 0.00494 0.01091 0.00597 0.00138 0.00530 0.00392 WeiboDaily Seen 0.747 0.12319 0.47262 0.34943 0.75122 0.62804 0.18646 0.13814 0.49332 0.35518 0.12957 0.75163 0.62206
+> Unseen 0.253 0.00003 0.00049 0.00046 0.01493 0.01490 0.06264 0.01797 0.02774 0.00977 0.01480 0.01972 0.00492 WeiboTech Seen 0.615 0.00632 0.07472 0.06841 0.39882 0.39251 0.08608 0.01498 0.10570 0.09071 0.01139 0.39933 0.38794
+> Unseen 0.385 0.00000 0.00004 0.00004 0.01173 0.01173 0.06236 0.00881 0.01749 0.00868 0.00647 0.01666 0.01020
+
+Unseen atomic tokens form a harder barrier. For any-token-unseen cold items, performance is consistently zero across datasets. This is expected, since the decoder receives little or no supervision for generating tokens absent from the training targets. Such items therefore lie outside the reliable generation space of the current SID-based model. 
+
+Successful hits concentrate in prefix-supported regions. 
+
+The prefix-based categories show that TIGER succeeds mainly when a cold item shares sufficiently deep SID prefixes with training items. For example, in WeiboDaily, all cold items are all-token-seen, but Recall@20 increases from 0.00092 for prefix-seen-𝑐 1 to 0.01386 for prefix-seen-𝑐 1, 𝑐 2, 𝑐 3. Sports shows a similar pattern, where the prefix-seen-𝑐 1, 𝑐 2, 𝑐 3 subset achieves much higher Recall@20 than shallower prefix groups. Although these deep-prefix subsets are small, they suggest that cold-item hits are driven more by path-level support than by free recombination of atomic tokens. 
+
+SID-based cold-item reachability is narrowly bounded. Over-all, TIGER can occasionally reach cold items whose tokens and deeper prefixes are sufficiently supported by training data. How-ever, it struggles with both unseen atomic tokens and new SID paths formed from seen tokens. This supports the view that SID generation is constrained traversal over a learned token-path space, rather than open-ended semantic item generation. This pattern motivates our later variants, which aim to reduce SID path depen-dency, relax exact decoding into scoring, and enrich generation with dynamic contextual signals. 
+
+## 4.3 Oracle-Prefix Probing 
+
+The previous analysis shows which cold items are easier or harder. We next ask where the generation failure occurs. Given a target SID c(𝑖 ) = (𝑐 1 (𝑖 ), . . . , 𝑐 𝐿 (𝑖 )) , we compare free decoding with oracle-prefix decoding. In free decoding, the model generates all tokens: 
+
+ˆc = arg max 
+
+> c
+> 𝐿
+
+Ö
+
+> ℓ=1
+
+𝑝 𝜃 (𝑐 ℓ | H 𝑢 , 𝑐 <ℓ ). (13) In oracle-𝑚 decoding, the first 𝑚 target tokens are forced to be correct, and the model only generates the remaining suffix: 
+
+ˆc>𝑚 = arg max 
+
+> c>𝑚
+> 𝐿
+
+Ö
+
+> ℓ=𝑚 +1
+
+𝑝 𝜃 (𝑐 ℓ | H 𝑢 , 𝑐 ★ 
+
+> 1: 𝑚
+
+(𝑖 ), 𝑐 𝑚 +1: ℓ −1), (14) where 𝑐 ★ 
+
+> 1: 𝑚
+
+(𝑖 ) is the ground-truth prefix. 
+
+Results. Table 3 reports oracle-prefix probing from both next-item SID generation and next-token generation perspectives. Free decoding denotes standard autoregressive generation, while oracle-prefix decoding forces the first one or two ground-truth SID tokens before generating the suffix. This setup separates errors in coarse bucket selection from failures in fine-grained SID path completion. 
+
+Oracle prefixes strongly improve seen-item generation. For seen targets, forcing the correct prefix consistently improves exact SID accuracy, especially when the first two tokens are given. For example, on WeiboDaily, accuracy increases from 0.12319 under free decoding to 0.47262 with oracle-𝑐 1, and further to 0.75122 with oracle-𝑐 1, 𝑐 2. Oracle-𝑐 1, 𝑐 2 also leads to significant increases in seen-item accuracy on other datasets. This indicates that, within the training-supported item space, TIGER can often complete the remaining SID path once routed to a sufficiently specific prefix. 
+
+Item-level unseen does not imply token-level unseen. For unseen targets, first-token accuracy can still be non-trivial, reach-ing 0.29701 on Sephora, 0.27493 on WikiLife, and 0.11983 on Sports. This is because the seen/unseen split is defined at the item level: an unseen item may still share coarse SID tokens with training items. Thus, the main difficulty is not always coarse bucket prediction; the model may identify the correct semantic region but still fail to generate the exact full SID. The few slightly negative Δ values in next-token probing are also consistent with this view: oracle forc-ing changes the conditioning prefix, but the remaining suffix may still be weakly supported, so prefix correction does not guarantee monotonic improvement for every later token. 
+
+The main bottleneck is fine-grained path completion. Even with oracle-𝑐 1, 𝑐 2, unseen next-item SID accuracy remains very low: 0.00448 on Sports, 0.01493 on WeiboDaily, and 0.01173 on WeiboTech. These values are far below the corresponding seen-item results. Thus, correcting early bucket selection can recover many seen targets, but it is insufficient for item-level cold targets whose suffixes often involve weakly supported atomic tokens, unsupported SID paths, or item semantic identities absent from training. 
+
+Cold-item reachability is path-bounded. Oracle-prefix prob-ing shows that SID-based GR does not fail merely because it chooses the wrong first token. For seen items, oracle prefixes reveal strong completion ability over supported SID paths. For item-level unseen items, coarse semantic tokens may still be predictable, but exact reachability remains limited by path-level support. This further Can Generative Recommendation Reach Cold Items? A Temporal Perspective on Semantic-ID Generation Conference acronym ’XX, June 03–05, 2018, Woodstock, NY c1 c1, c2 c1, c2, c3
+
+> SID prefix level 0.0 0.2 0.4 0.6 0.8 Value
+> JS Divergence Pearson Correlation
+
+Figure 4: Distributional alignment between TIGER prefix generation and SASRec bucket-aggregated scoring on Beauty. Full numerical results are shown in Table 15. 
+
+supports our view that SID generation enables token-supported re-combination, while cold-item reachability is bounded by the learned SID path structure rather than atomic token availability alone. 
+
+## 5 From Generation to Hierarchical Semantic Bucketing 
+
+The token-level diagnosis suggests that SID-based GR does not behave like unconstrained natural language generation. Instead, its output space forms a structured semantic code tree, where each level corresponds to a semantic granularity. We therefore reinter-pret autoregressive SID decoding as hierarchical semantic bucket classification: the first token selects a coarse semantic bucket, and subsequent tokens recursively refine it into finer sub-buckets until a complete SID is reached. Let the SID of item 𝑖 be denoted as c(𝑖 ) = (𝑐 1 (𝑖 ), . . . , 𝑐 𝐿 (𝑖 )) . For TIGER, the token distribution at depth ℓ given the prefix a<ℓ =
+
+(𝑐 1, . . . , 𝑐 ℓ −1) is defined as: 
+
+𝑃 (ℓ ) 
+
+> TIGER
+
+(𝑏 | 𝑢, a<ℓ ) = 𝑝 𝜃 (𝑐 ℓ = 𝑏 | H 𝑢 , a<ℓ ), (15) where a<1 is empty for the first SID position, and 𝑏 represents a candidate sub-bucket index at depth ℓ. This distribution reflects TIGER’s belief over the next semantic sub-bucket. To compare this generative decision process with a discrimina-tive recommender, we aggregate SASRec’s item-level scores into the same SID bucket space. Let 𝜋 𝜙 (𝑖 | 𝑢 ) denote the softmax-normalized SASRec probability over the candidate item set Icand . Given a prefix 
+
+a<ℓ , we define the set of prefix-compatible items as: 
+
+I ( a<ℓ ) = {𝑖 ∈ I cand | ( 𝑐 1 (𝑖 ), . . . , 𝑐 ℓ −1 (𝑖 )) = a<ℓ } . (16) The corresponding bucket distribution for SASRec is then computed by re-normalizing the probabilities of compatible items: 
+
+𝑃 (ℓ ) 
+
+> SASRec
+
+(𝑏 | 𝑢, a<ℓ ) =
+
+Í𝑖 ∈ I ( a<ℓ ), 𝑐 ℓ (𝑖 )=𝑏 𝜋 𝜙 (𝑖 | 𝑢 )
+
+Í𝑖 ∈ I ( a<ℓ ) 𝜋 𝜙 (𝑖 | 𝑢 ) . (17) We compare 𝑃 (ℓ ) 
+
+> TIGER
+
+and 𝑃 (ℓ ) 
+
+> SASRec
+
+using Jensen–Shannon divergence and Pearson correlation. Lower JS divergence and higher correla-tion indicate stronger distributional alignment between generative token prediction and discriminative bucket scoring. 
+
+Results. As shown in Figure 4 and Table 15, the alignment ex-hibits a consistent coarse-to-fine pattern. At shallow SID positions, TIGER’s token distribution is close to SASRec’s bucket-aggregated distribution, suggesting that early tokens mainly capture coarse semantic preferences. As the hierarchy deepens, JS divergence in-creases and Pearson correlation decreases, indicating that later to-kens perform increasingly fine-grained semantic refinement. This supports the view that SID-based generation is better understood as hierarchical semantic bucketing rather than open-ended item generation. It also explains the cold-start boundary: a cold item is reachable only when its SID lies on a sufficiently supported seman-tic path. Thus, the open-world reach of SID-based GR is constrained by the learned bucket hierarchy. 
+
+## 6 Reachability-Oriented TIGER Variants 
+
+The previous sections show that the cold-start weakness of SID-based generation is not only an accuracy problem, but also a reach-ability problem. A cold item can be recommended only if its SID lies in a token-path region that the generator can express and de-code. To connect this diagnosis with concrete design routes, we study three controlled TIGER-based variants. They are not pro-posed as standalone recommender architectures; instead, they keep the TIGER backbone or objective as unchanged as possible and modify one component at a time. 
+
+## 6.1 Overview of Diagnostic Variants 
+
+Let H <𝑡 𝑢 denote the historical interactions of user 𝑢 before time 𝑡 .Standard TIGER predicts a target item 𝑖 by autoregressively gen-erating its SID c(𝑖 ) = [𝑐 1 (𝑖 ), . . . , 𝑐 𝐿 (𝑖 )] . This formulation couples recommendation success with two requirements: learning useful user preferences from interaction history, and reaching the target item through a supported autoregressive SID path. Our temporal cold-start results suggest that the latter is often the limiting factor. Even when coarse semantic preference is captured, the decoder may still fail to generate the exact SID path of an emerging item. We therefore introduce three diagnostic variants that target dif-ferent parts of this reachability bottleneck. TIGER-SID changes the SID tokenizer while keeping autoregressive generation unchanged, testing whether a less path-dependent and more factorized SID space makes cold items easier to express through seen-token re-combination. TIGER-Scorer keeps the TIGER encoder but replaces exact SID generation with candidate scoring, testing whether useful preference representations are already learned even when exact SID decoding fails. TIGER-Edge keeps the generative SID objective but augments decoding with dynamic edge or contextual informa-tion through cross attention, testing whether relational evidence can guide the generator toward better semantic regions. Together, these variants separate three possible failure sources: SID-space expressiveness, autoregressive decoding rigidity, and deficiency in dynamic context. Detailed architectures are provided in Section A. 
+
+## 6.2 Evaluation Protocol and Results 
+
+We evaluate all variants using the same absolute-time sliding-window protocol described previously. For each test window, target items are divided into seen and unseen groups based on the presence of their item IDs in the training set. Table 4 reports averaged seen/unseen Hit@20, and Table 5 further breaks down cold-item performance by our token-level coldness taxonomy. This allows us to examine not only whether a variant improves temporal cold-start performance, but also which part of the SID reachability boundary it expands. Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Jie Peng, Yanping Zheng, Zhewei Wei, Bin Tong, Guan Wang, and Bo Zheng 
+
+Table 4: Seen and unseen recommendation performance of TIGER-based diagnostic variants under temporal cold-start evalua-tion. Full results are shown in Table 16. Arrows indicate relative change compared to TIGER ( ↑,↓: >100%, ↑,↓: ≤100%). Dataset Cold ratio TIGER TIGER-SID TIGER-Scorer TIGER-Edge                                                                    
+
+> Seen H@20 Unseen H@20 Seen H@20 Unseen H@20 Seen H@20 Unseen H@20 Seen H@20 Unseen H@20 Beauty 0.948 0.01334 0.00023 0.00655 ↓0.00054 ↑0.02163 ↑0.00831 ↑0.01925 ↑0.00042 ↑
+> Sports 0.947 0.01406 0.00020 0.01582 ↑0.00109 ↑0.04120 ↑0.01392 ↑0.03886 ↑0.00075 ↑
+> WeiboDaily 0.253 0.75894 0.00313 0.77940 ↑0.00747 ↑0.32633 ↓0.00750 ↑0.81308 ↑0.01132 ↑
+> WeiboTech 0.385 0.41039 0.00000 0.49199 ↑0.01232 ↑0.16490 ↓0.02929 ↑0.47153 ↑0.01683 ↑
+
+Table 5: Token-level coldness taxonomy for unseen target items on each variant. Full results are shown in Table 17. Dataset Coldness category TIGER TIGER-SID TIGER-Scorer TIGER-Edge                                                            
+
+> Recall@5 Recall@20 Recall@5 Recall@20 Recall@5 Recall@20 Recall@5 Recall@20 Sports all-token-seen 0.00001 0.00006 0.00000 ↓0.00019 ↑0.00014 ↑0.00210 ↑0.00004 ↑0.00024 ↑
+> any-token-unseen 0.00000 0.00000 0.00000 0.00000 0.00254 ↑0.00274 ↑0.00000 0.00000 prefix-seen-𝑐 10.00001 0.00004 0.00000 ↓0.00017 ↑0.01343 ↑0.01441 ↑0.00003 ↑0.00016 ↑
+> prefix-seen-𝑐 1, 𝑐 20.00002 0.00008 0.00000 ↓0.00035 ↑0.16681 ↑0.16971 ↑0.00006 ↑0.00036 ↑
+
+Results. Table 4 shows that the three variants expand different parts of the boundary. TIGER-SID brings clear gains on Weibo-Daily and WeiboTech, showing that a more factorized SID space can make several future items easier to express, although SID re-design alone cannot thoroughly remove the decoding constraint. 
+
+TIGER-Scorer greatly improves performance on unseen items across several datasets. This indicates that while the TIGER encoder effectively captures user preferences, the autoregressive decoder inherently limits the reachability of cold items. Notably, the scoring mechanism incurs a performance trade-off on seen items, likely due to the extensive search space of the candidate set. TIGER-Edge 
+
+proves most effective on dynamic datasets characterized by rich contextual signals, demonstrating that integrating edge context can effectively guide the decoder toward more relevant semantic regions. The results in Table 5 further corroborate these findings. Di-rect generation variants mainly help in token-supported or prefix-supported regimes, while any-token-unseen cases remain chal-lenging. Conversely, TIGER-Scorer mitigates exact-decoding fail-ures by ranking candidates even in any-token-unseen scenarios. Meanwhile, TIGER-Edge shows improvements in deeper prefix-supported cases where relational context provides informative guid-ance. Overall, these variants do not entirely eliminate the cold-item reachability boundary, but reveal three complementary ways to expand it: more compositional SID codes, scoring-based prediction, and contextual enrichment. 
+
+## 7 Design Implications 
+
+Our diagnosis and TIGER-based variants suggest a reachability-oriented view of temporal cold start. The central issue is not only low accuracy on unseen items, but that future items may fall outside the model’s reachable token-path space. This boundary is mainly shaped by three factors: SID representation, prediction interface, and inference-time context. 
+
+SID-space design. TIGER-SID shows that item encoding di-rectly affects cold-item reachability. Residual-quantized SIDs are compact, but their ordered paths can make future items hard to express even when individual tokens have been observed. More fac-torized designs, such as product quantization and order-insensitive codebooks [ 4 , 8 ], may reduce path dependency and make more future items token-supported or prefix-supported. Thus, SID design should be evaluated not only by reconstruction or ranking accuracy, but also by its ability to expand future-item support. 
+
+Prediction interface. TIGER-Scorer shows that failure can also arise from exact SID decoding. An autoregressive generator must produce every target token correctly, so a single token error can prevent a useful user representation from reaching the correct item. A scorer interface relaxes this constraint by scoring candidates with learned user representations. This trades strict generation for broader reachability, making performance depend more on candidate coverage and quality. 
+
+Dynamic context. TIGER-Edge suggests that future items should not be treated as static identifiers. New items often arrive with text, metadata, temporal signals, or relational edges. Using such evidence allows SID prediction to consider more contextual information. This motivates the development of context-aware recommendation sys-tems to evaluate items whose SID paths are weakly supported or entirely unsupported. 
+
+## 7.1 A Unified View 
+
+These routes are complementary. SID-space design concerns whether future items are expressible. Generator-versus-scorer design con-cerns whether the model must generate the exact SID path or can rank candidates through a softer interface. Dynamic-context de-sign concerns whether the system can exploit evidence beyond static item tokens as the catalog evolves. Together, they define a reachability-oriented roadmap: 
+
+SID (𝑖 )
+
+| {z }
+
+> expressibility
+
++ Predictor (𝑢, 𝑖 )
+
+| {z }
+
+> generation vs. scoring
+
++ Context (𝑢, 𝑖, 𝑡 )
+
+| {z }
+
+> dynamic evidence
+
+=⇒ Reachability (𝑢, 𝑖, 𝑡 ).
+
+(18) This view clarifies the role of our variants: they are controlled probes of the factors determining whether a future cold item can be reached. The goal is therefore not only to report a cold-start accuracy drop, but to identify where the reachability boundary comes from and how future systems may expand it. Can Generative Recommendation Reach Cold Items? A Temporal Perspective on Semantic-ID Generation Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+## 8 Conclusion 
+
+This work revisits SID-based generative recommendation under temporal cold start. Using an absolute-time protocol, we show that closed-world SID recombination does not necessarily imply induc-tive reachability for newly emerging items. Token-level coldness analysis, seen/unseen-hit diagnosis, and oracle-prefix probing re-veal that current SID-based GR can reach cold items mainly when their tokens and prefixes are supported by past interactions, but struggles with unseen atomic tokens and unsupported paths. We further explain this boundary through hierarchical semantic buck-eting: early SID tokens select coarse semantic regions, while later tokens refine item-specific paths. This view clarifies that SID gen-eration provides semantic compression and compositional sharing, but remains bounded by learned token vocabularies and path sup-port. Future work should therefore explore more inductive SID spaces, scoring-based verification, and dynamic item, edge, or tex-tual context for evolving catalogs. Overall, our findings call for generative recommenders that are better aligned with evolving item sets, where new items could be represented, verified, and incorporated beyond static SID sequences. Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Jie Peng, Yanping Zheng, Zhewei Wei, Bin Tong, Guan Wang, and Bo Zheng 
+
+## References 
+
+[1] Haoyue Bai, Le Wu, Min Hou, Miaomiao Cai, Zhuangzhuang He, Yuyang Zhou, Richang Hong, and Meng Wang. 2024. Multimodality invariant learning for multimedia-based new item recommendation. In Proceedings of the 47th Inter-national ACM SIGIR Conference on Research and Development in Information Retrieval . 677–686. [2] Heng-Tze Cheng, Levent Koc, Jeremiah Harmsen, Tal Shaked, Tushar Chandra, Hrishi Aradhye, Glen Anderson, Greg Corrado, Wei Chai, Mustafa Ispir, et al .2016. Wide & deep learning for recommender systems. In Proceedings of the 1st workshop on deep learning for recommender systems . 7–10. [3] Yijie Ding, Zitian Guo, Jiacheng Li, Letian Peng, Shuai Shao, Wei Shao, Xiaoqiang Luo, Luke Simon, Jingbo Shang, Julian McAuley, et al . 2026. How Well Does Generative Recommendation Generalize? arXiv preprint arXiv:2603.19809 (2026). [4] Tiezheng Ge, Kaiming He, Qifa Ke, and Jian Sun. 2013. Optimized product quantization. IEEE transactions on pattern analysis and machine intelligence 36, 4 (2013), 744–755. [5] Tiezheng Ge, Kaiming He, Qifa Ke, and Jian Sun. 2013. Optimized product quantization for approximate nearest neighbor search. In Proceedings of the IEEE conference on computer vision and pattern recognition . 2946–2953. [6] Shijie Geng, Shuchang Liu, Zuohui Fu, Yingqiang Ge, and Yongfeng Zhang. 2022. Recommendation as language processing (rlp): A unified pretrain, personalized prompt & predict paradigm (p5). In Proceedings of the 16th ACM conference on recommender systems . 299–315. [7] Danil Gusak, Anna Volodkevich, Anton Klenitskiy, Alexey Vasilev, and Evgeny Frolov. 2025. Time to split: Exploring data splitting strategies for offline evaluation of sequential recommenders. In Proceedings of the Nineteenth ACM Conference on Recommender Systems . 874–883. [8] Yupeng Hou, Jiacheng Li, Ashley Shin, Jinsung Jeon, Abhishek Santhanam, Wei Shao, Kaveh Hassani, Ning Yao, and Julian McAuley. 2025. Generating long semantic ids in parallel for recommendation. In Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining V. 2 . 956–966. [9] Yupeng Hou, Jianmo Ni, Zhankui He, Noveen Sachdeva, Wang-Cheng Kang, Ed H Chi, Julian McAuley, and Derek Zhiyuan Cheng. 2025. Actionpiece: Contextually tokenizing action sequences for generative recommendation. arXiv preprint arXiv:2502.13581 (2025). [10] Herve Jegou, Matthijs Douze, and Cordelia Schmid. 2010. Product quantization for nearest neighbor search. IEEE transactions on pattern analysis and machine intelligence 33, 1 (2010), 117–128. [11] Yitong Ji, Aixin Sun, Jie Zhang, and Chenliang Li. 2023. A critical study on data leakage in recommender system offline evaluation. ACM Transactions on Information Systems 41, 3 (2023), 1–27. [12] Wang-Cheng Kang and Julian McAuley. 2018. Self-attentive sequential recom-mendation. In 2018 IEEE international conference on data mining (ICDM) . IEEE, 197–206. [13] Yehuda Koren, Robert Bell, and Chris Volinsky. 2009. Matrix factorization tech-niques for recommender systems. Computer 42, 8 (2009), 30–37. [14] Xuan Nhat Lam, Thuc Vu, Trong Duc Le, and Anh Duc Duong. 2008. Addressing cold-start problem in recommendation systems. In Proceedings of the 2nd inter-national conference on Ubiquitous information management and communication .208–211. [15] Doyup Lee, Chiheon Kim, Saehoon Kim, Minsu Cho, and Wook-Shin Han. 2022. Autoregressive image generation using residual quantization. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition . 11523–11532. [16] Julian McAuley, Christopher Targett, Qinfeng Shi, and Anton Van Den Hengel. 2015. Image-based recommendations on styles and substitutes. In Proceedings of the 38th international ACM SIGIR conference on research and development in information retrieval . 43–52. [17] Zaiqiao Meng, Richard McCreadie, Craig Macdonald, and Iadh Ounis. 2020. Ex-ploring data splitting strategies for the evaluation of recommendation models. In 
+
+Proceedings of the 14th acm conference on recommender systems . 681–686. [18] Jie Peng, Jiarui Ji, Runlin Lei, Zhewei Wei, Yongchao Liu, and Chuntao Hong. 2026. GDGB: A Benchmark for Generative Dynamic Text-Attributed Graph Learning. In The Fourteenth International Conference on Learning Representations .https://openreview.net/forum?id=5UFUHUC5qP [19] Jie Peng, Rui Wang, Qiang Wang, Zhewei Wei, Bin Tong, Guan Wang, and Bo Zheng. 2025. Beyond Leakage and Complexity: Towards Realistic and Efficient Information Cascade Prediction. arXiv preprint arXiv:2510.25348 (2025). [20] Jie Peng, Zhewei Wei, and Yuhang Ye. 2025. TIDFormer: Exploiting Temporal and Interactive Dynamics Makes A Great Dynamic Graph Transformer. In Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining V. 2. 2245–2256. [21] Shashank Rajput, Nikhil Mehta, Anima Singh, Raghunandan Hulikal Keshavan, Trung Vu, Lukasz Heldt, Lichan Hong, Yi Tay, Vinh Tran, Jonah Samost, et al .2023. Recommender systems with generative retrieval. Advances in Neural Information Processing Systems 36 (2023), 10299–10315. [22] Andrew I Schein, Alexandrin Popescul, Lyle H Ungar, and David M Pennock. 2002. Methods and metrics for cold-start recommendations. In Proceedings of the 25th annual international ACM SIGIR conference on Research and development in information retrieval . 253–260. [23] Anima Singh, Trung Vu, Nikhil Mehta, Raghunandan Keshavan, Maheswaran Sathiamoorthy, Yilin Zheng, Lichan Hong, Lukasz Heldt, Li Wei, Devansh Tandon, et al . 2024. Better generalization with semantic ids: A case study in ranking for recommendations. In Proceedings of the 18th ACM Conference on Recommender Systems . 1039–1044. [24] Fei Sun, Jun Liu, Jian Wu, Changhua Pei, Xiao Lin, Wenwu Ou, and Peng Jiang. 2019. BERT4Rec: Sequential recommendation with bidirectional encoder rep-resentations from transformer. In Proceedings of the 28th ACM international conference on information and knowledge management . 1441–1450. [25] Yi Tay, Vinh Tran, Mostafa Dehghani, Jianmo Ni, Dara Bahri, Harsh Mehta, Zhen Qin, Kai Hui, Zhe Zhao, Jai Gupta, et al . 2022. Transformer memory as a differentiable search index. Advances in neural information processing systems 35 (2022), 21831–21843. [26] Aaron Van Den Oord, Oriol Vinyals, et al . 2017. Neural discrete representation learning. Advances in neural information processing systems 30 (2017). [27] Maksims Volkovs, Guangwei Yu, and Tomi Poutanen. 2017. Dropoutnet: Ad-dressing cold start in recommender systems. Advances in neural information processing systems 30 (2017). [28] Wenjie Wang, Honghui Bao, Xinyu Lin, Jizhi Zhang, Yongqi Li, Fuli Feng, See-Kiong Ng, and Tat-Seng Chua. 2024. Learnable item tokenization for generative recommendation. In Proceedings of the 33rd ACM International Conference on Information and Knowledge Management . 2400–2409. [29] Jian Wei, Jianhua He, Kai Chen, Yi Zhou, and Zuoyin Tang. 2017. Collaborative filtering and deep learning based recommendation system for cold start items. 
+
+Expert systems with applications 69 (2017), 29–39. [30] Zhen Zhang, Jujia Zhao, Xinyu Ma, Xin Xin, Maarten de Rijke, and Zhaochun Ren. 2026. Cold-Starts in Generative Recommendation: A Reproducibility Study. 
+
+arXiv preprint arXiv:2603.29845 (2026). [31] Zhe Zhao, Lichan Hong, Li Wei, Jilin Chen, Aniruddh Nath, Shawn Andrews, Aditee Kumthekar, Maheswaran Sathiamoorthy, Xinyang Yi, and Ed Chi. 2019. Recommending what video to watch next: a multitask ranking system. In Pro-ceedings of the 13th ACM conference on recommender systems . 43–51. [32] Jieming Zhu, Mengqun Jin, Qijiong Liu, Zexuan Qiu, Zhenhua Dong, and Xiu Li. 2024. Cost: Contrastive quantization based semantic tokenization for generative recommendation. In Proceedings of the 18th ACM Conference on Recommender Systems . 969–974. Can Generative Recommendation Reach Cold Items? A Temporal Perspective on Semantic-ID Generation Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+## A TIGER-based Variant A.1 TIGER-SID: Enlarging the Factorized SID Space 
+
+TIGER-SID addresses the reachability bottleneck inherent in the SID representation design. In the original TIGER framework, item SIDs are typically generated via Residual Quantization (RQ). In this scheme, the code at a deeper position depends on the residual error left by preceding positions. Consequently, an item is not represented merely by a set of independent tokens, but by a strictly ordered residual path. For cold items, this path dependency imposes a significant constraint: even if every individual token has been observed during training, the specific ordered combination required to form the target path may remain difficult for the generator to decode correctly. To mitigate this, TIGER-SID replaces the residual-style SID con-struction with a factorized tokenizer based on Optimized Prod-uct Quantization (OPQ) [ 4 , 8 ]. While the model architecture and training objectives remain identical to the original TIGER (i.e., the T5-based generator autoregressively predicts the target SID from user history), the underlying code space topology is fundamen-tally altered. Instead of enforcing a dependency where each code explains a residual conditioned on previous codes, TIGER-SID em-ploys OPQ to assign SID positions more independently. The item representation z𝑖 is constructed by concatenating embeddings from 
+
+𝐿 independent subspaces: 
+
+z𝑖 = [e(1)   
+
+> 𝑐 1(𝑖 )
+
+; e(2)   
+
+> 𝑐 2(𝑖 )
+
+; . . . ; e(𝐿 )   
+
+> 𝑐 𝐿 (𝑖 )
+
+], (19) where 𝑐 𝑙 (𝑖 ) denotes the code assigned to item 𝑖 at the 𝑙 -th position, and e(𝑙 ) represents the corresponding codebook embedding. This design significantly expands the volume of theoretically valid item codes that can be synthesized by recombining tokens seen during training, as it eliminates the rigid constraints of ordered residual paths. Consequently, while the reachability of cold items still relies on the observability of constituent tokens, TIGER-SID alleviates the restrictive path dependency characteristic of RQ-VAE. Ultimately, TIGER-SID investigates whether recommendation performance can be improved simply by rendering the SID space more compositional and less prefix-dependent. 
+
+## A.2 TIGER-Scorer: Replacing Exact SID Decoding with Candidate Scoring 
+
+TIGER-Scorer targets the prediction interface to mitigate the sen-sitivity of generative recommendation. The original generator is constrained to output the exact SID sequence of the target item. This imposes a rigid constraint where a single token error can divert the prediction to an irrelevant item or an invalid path, even if the encoder has successfully captured the user’s coarse semantic pref-erences. To address this, TIGER-Scorer bypasses the autoregressive decoding process and reformulates TIGER as a candidate scoring model. Concretely, TIGER-Scorer preserves the T5 encoder from the original architecture. The encoder maps the user history H <𝑡 𝑢 into a normalized user representation u. Simultaneously, each candidate item 𝑖 ∈ C 𝑡 is mapped into the same latent space by fusing its SID embedding and its content embedding to form a unified item representation v𝑖 . The recommendation score is then computed via a temperature-scaled dot product: 
+
+𝑠 (𝑢, 𝑖 ) = u⊤v𝑖 
+
+𝜏 , ∀𝑖 ∈ C 𝑡 , (20) where 𝜏 is a temperature hyperparameter controlling the sharp-ness of the probability distribution. The model is optimized using cross-entropy loss over the candidate set and performs inference by ranking candidates according to 𝑠 (𝑢, 𝑖 ).Formally, this shifts the inference paradigm from exact SID de-coding, denoted as H <𝑡 𝑢 → ˆc → ˆ𝑖 , to direct candidate scoring: 
+
+(H <𝑡 𝑢 , C𝑡 ) → { 𝑠 (𝑢, 𝑖 )} 𝑖 ∈ C 𝑡 → ˆ𝑖 . Consequently, TIGER-Scorer effec-tively disentangles whether cold-start failures stem from inadequate user preference modeling or the rigid requirement of generating the exact SID sequence. 
+
+## A.3 TIGER-Edge: Injecting Dynamic Edge Context via Cross-Attention 
+
+TIGER-Edge targets both the input signal and the model architec-ture. In dynamic recommendation settings, cold items are often accompanied by rich contextual information, such as interaction text, edge attributes, temporal signals, relation types, or neighbor-hood evidence. The standard SID generator primarily conditions on the historical item sequence, potentially overlooking such dynamic relational signals. TIGER-Edge addresses this limitation by aug-menting the generator with an external context stream, enabling the sequence representation to attend to this additional information. Specifically, TIGER-Edge employs a GPT-style SID decoder and enriches it with an external context stream derived from historical edge or text representations. Given the raw edge/context features 
+
+Xedge  
+
+> 𝑢
+
+for user 𝑢 , the model first projects them separately into the decoder’s hidden space for keys and values: 
+
+K𝑢 = Proj 𝐾 (Xedge  
+
+> 𝑢
+
+), V𝑢 = Proj 𝑉 (Xedge  
+
+> 𝑢
+
+), (21) where Proj 𝐾 and Proj 𝑉 are two independent learnable linear pro-jections. A gated cross-attention layer then allows the sequential hidden states to attend to this external context: 
+
+A𝑢 = Attn (H𝑢 , K𝑢 , V𝑢 ), (22) where H𝑢 represents the decoder hidden states, and K𝑢 , V𝑢 serve as the key and value contexts derived from edge embeddings. The attended representation A𝑢 is subsequently used for SID decoding. Thus, TIGER-Edge preserves the original generative SID objec-tive while providing the decoder with additional dynamic relational signals. It investigates whether cold-start reachability can be im-proved by enriching the generator’s context, rather than by mod-ifying the SID tokenizer or replacing generation with candidate scoring. 
+
+## B Dataset B.1 Dataset Details 
+
+We conduct experiments on seven datasets, including three widely used Amazon review datasets and four recent Dynamic Text-attributed Graph (DyTAG) datasets. For all datasets, timestamped interactions are sorted chronologically to construct next-item prediction se-quences. Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Jie Peng, Yanping Zheng, Zhewei Wei, Bin Tong, Guan Wang, and Bo Zheng 
+
+Table 6: Dataset statistics under the absolute-time sliding-window temporal cold-start protocol. Each dataset is divided into five chronological windows 𝑊 1, . . . ,𝑊 5. We evaluate on Test Window 𝑊 3, 𝑊 4, and 𝑊 5, where each test window uses its preceding windows for training and validation. Cold ratio denotes the cold-item proportion in the corresponding test split. Dataset Split Train window Test window Train sequences Val sequences Test sequences Test targets Cold ratio Test Window 𝑊 3
+
+Beauty 1 𝑊 1 𝑊 3 12 5 56 254 0.984 Sports 1 𝑊 1 𝑊 3 3 2 37 131 1.000 Toys 1 𝑊 1 𝑊 3 101 57 324 900 0.903 Sephora 1 𝑊 1 𝑊 3 5,091 725 1,454 2,917 0.634 WikiLife 1 𝑊 1 𝑊 3 509 36 113 286 0.650 WeiboDaily 1 𝑊 1 𝑊 3 854 506 909 37,147 0.285 WeiboTech 1 𝑊 1 𝑊 3 134 63 101 14,764 0.469 
+
+Test Window 𝑊 4
+
+Beauty 2 𝑊 1:2 𝑊 4 86 56 794 2,828 0.957 Sports 2 𝑊 1:2 𝑊 4 69 37 641 2,379 0.960 Toys 2 𝑊 1:2 𝑊 4 684 324 859 3,642 0.901 Sephora 2 𝑊 1:2 𝑊 4 12,523 1,454 5,337 14,274 0.823 WikiLife 2 𝑊 1:2 𝑊 4 1,650 113 451 1,348 0.593 WeiboDaily 2 𝑊 1:2 𝑊 4 1,597 909 1,233 59,954 0.247 WeiboTech 2 𝑊 1:2 𝑊 4 216 101 212 21,740 0.409 
+
+Test Window 𝑊 5
+
+Beauty 3 𝑊 1:3 𝑊 5 1,043 794 4,434 36,100 0.904 Sports 3 𝑊 1:3 𝑊 5 904 641 6,836 40,569 0.883 Toys 3 𝑊 1:3 𝑊 5 1,538 859 3,959 31,265 0.925 Sephora 3 𝑊 1:3 𝑊 5 27,351 5,337 21,944 84,616 0.863 WikiLife 3 𝑊 1:3 𝑊 5 5,152 451 4,339 10,088 0.463 WeiboDaily 3 𝑊 1:3 𝑊 5 2,457 1,233 1,775 99,701 0.228 WeiboTech 3 𝑊 1:3 𝑊 5 438 212 405 41,099 0.277 
+
+• Beauty, Sports, and Toys. These three datasets are adopted from the Amazon review collection [ 16 ], and correspond to the Beauty, Sports and Outdoors, and Toys and Games product categories, respectively. Each dataset consists of timestamped user–product review interactions. We treat products as recommendable items and use user review his-tories to construct sequential recommendation instances. Product metadata and review information provide textual signals for semantic item representation. 
+
+• Sephora. Sephora is a DyTAG dataset from GDGB [ 18 ], built from beauty and skincare reviews on the Sephora platform. It is represented as a bipartite user–product graph, where users and products are textual nodes, and each edge corre-sponds to a timestamped rating and textual review. In our recommendation setting, Sephora products are treated as target items. 
+
+• WikiLife. WikiLife is a DyTAG dataset from GDGB [ 18 ], derived from Wikipedia life trajectories. It forms a bipartite person–location graph, where nodes correspond to persons and locations, and edges describe temporally grounded life activities of persons at specific locations. We treat locations as recommendable items and construct chronological person-to-location prediction sequences. 
+
+• WeiboDaily and WeiboTech. WeiboDaily and WeiboTech are DyTAG datasets from GDGB [ 18 ], constructed from timestamped user interactions on the Weibo social plat-form. Both datasets are non-bipartite user interaction graphs, where nodes are Weibo users and edges correspond to social interactions such as comments and reposts with associated textual content. WeiboDaily focuses more on daily-life topics, while WeiboTech is centered on technology-related topics. In our setting, destination users are treated as target items for next-item prediction. We follow the same absolute-time sliding-window protocol for all datasets. Each dataset is partitioned into five chronological windows 
+
+𝑊 1, . . . ,𝑊 5, and we evaluate on three test windows, namely 𝑊 3,
+
+𝑊 4, and 𝑊 5. For test window 𝑊 3, the model is trained on 𝑊 1 and validated on 𝑊 2; for test window 𝑊 4, the model is trained on 𝑊 1–𝑊 2
+
+and validated on 𝑊 3; for test window 𝑊 5, the model is trained on 
+
+𝑊 1–𝑊 3 and validated on 𝑊 4. This protocol preserves strict temporal order and ensures that test targets occur after the corresponding training period. Detailed statistics of the resulting splits, including the number of train/validation/test user sequences, test targets, and cold-item ratios, are reported in Table 6. The dataset processing pipeline and source code are available at https://github.com/Lucas-PJ/GRColdItemReachability. Can Generative Recommendation Reach Cold Items? A Temporal Perspective on Semantic-ID Generation Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+## C Experimental Result 
+
+• Temporal cold-start evaluation. Performance on seen and unseen targets, where “Cold ratio” denotes the average proportion of test targets whose item IDs are absent from the training period. H@K, R@K, and N@K denote Hit@K, Recall@K, and NDCG@K, respectively. Representative results are shown in Table 1. Detailed results for each window are presented in Tables 7, 9 and 11 for TIGER and Tables 8, 10 and 12 for SASRec. 
+
+• Token-level coldness taxonomy. Performance under the token-level coldness taxonomy for unseen target items, reporting the ratio of each coldness category along with TIGER’s Recall@20 and NDCG@20. Representative results are shown in Table 2, while full results across all datasets are provided in Table 13. 
+
+• Oracle-prefix probing for semantic ID generation. We report both next-item and next-token semantic ID generation accuracy. “Free” denotes standard autoregressive decoding, whereas “Oracle-prefix” forces the corresponding ground-truth prefix before gener-ating the remaining tokens. Δ indicates the absolute improvement over free decoding, with darker red signifying larger gains. Rep-resentative results are shown in Table 3, and full results across all datasets are provided in Table 14. 
+
+• Distributional alignment. The alignment between TIGER pre-fix generation and SASRec bucket-aggregated scoring on Beauty is shown in Figure 4, with full numerical results provided in Table 15. 
+
+• TIGER-based diagnostic variants. We evaluate the seen and unseen recommendation performance of three TIGER-based vari-ants under temporal cold-start settings. Representative results are shown in Table 4, while full results are provided in Table 16. 
+
+• Variant token-level coldness taxonomy. This analysis presents the token-level coldness taxonomy for unseen target items across each variant. Representative results are shown in Table 5, with full results available in Table 17. Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Jie Peng, Yanping Zheng, Zhewei Wei, Bin Tong, Guan Wang, and Bo Zheng 
+
+Table 7: Detailed @5 performance of TIGER under temporal cold-start evaluation. Dataset Cold ratio Seen Unseen 
+
+H@5 R@5 N@5 H@5 R@5 N@5 
+
+Test Window 𝑊 3
+
+Beauty 0.984 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 Sports 1.000 – – – 0.00000 0.00000 0.00000 Toys 0.903 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 Sephora 0.634 0.16915 0.19306 0.13842 0.00000 0.00000 0.00000 WikiLife 0.650 0.38298 0.35000 0.20709 0.00000 0.00000 0.00000 WeiboDaily 0.285 0.59873 0.22879 0.17338 0.00000 0.00000 0.00000 WeiboTech 0.469 0.23171 0.00243 0.00097 0.00000 0.00000 0.00000 
+
+Test Window 𝑊 4
+
+Beauty 0.957 0.02439 0.00000 0.00000 0.00000 0.00000 0.00000 Sports 0.960 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 Toys 0.901 0.02703 0.00557 0.00240 0.00000 0.00000 0.00000 Sephora 0.823 0.09255 0.14625 0.11730 0.00000 0.00000 0.00000 WikiLife 0.593 0.28244 0.18613 0.13446 0.00000 0.00000 0.00000 WeiboDaily 0.247 0.70188 0.28315 0.21476 0.00000 0.00000 0.00000 WeiboTech 0.409 0.27933 0.02312 0.01362 0.00000 0.00000 0.00000 
+
+Test Window 𝑊 5
+
+Beauty 0.904 0.00504 0.00172 0.00117 0.00000 0.00000 0.00000 Sports 0.883 0.02145 0.00651 0.00424 0.00060 0.00003 0.00003 Toys 0.925 0.01038 0.00385 0.00276 0.00000 0.00000 0.00000 Sephora 0.863 0.09608 0.19850 0.16848 0.00000 0.00000 0.00000 WikiLife 0.463 0.26678 0.20218 0.14697 0.00000 0.00000 0.00000 WeiboDaily 0.228 0.71147 0.29337 0.22213 0.00159 0.00018 0.00008 WeiboTech 0.277 0.41813 0.05636 0.03755 0.00000 0.00000 0.00000 
+
+Average 
+
+Beauty 0.948 0.00981 0.00057 0.00039 0.00000 0.00000 0.00000 Sports 0.947 0.01072 0.00326 0.00212 0.00020 0.00001 0.00001 Toys 0.910 0.01247 0.00314 0.00172 0.00000 0.00000 0.00000 Sephora 0.773 0.11926 0.17927 0.14140 0.00000 0.00000 0.00000 WikiLife 0.569 0.31073 0.24610 0.16284 0.00000 0.00000 0.00000 WeiboDaily 0.253 0.67069 0.26844 0.20342 0.00053 0.00006 0.00003 WeiboTech 0.385 0.30972 0.02730 0.01738 0.00000 0.00000 0.00000 Can Generative Recommendation Reach Cold Items? A Temporal Perspective on Semantic-ID Generation Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+Table 8: Detailed @5 performance of SASRec under temporal cold-start evaluation. Dataset Cold ratio Seen Unseen 
+
+H@5 R@5 N@5 H@5 R@5 N@5 
+
+Test Window 𝑊 3
+
+Beauty 0.984 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 Sports 1.000 – – – 0.00000 0.00000 0.00000 Toys 0.903 0.01493 0.04598 0.03188 0.00000 0.00000 0.00000 Sephora 0.634 0.04736 0.03374 0.01363 0.00000 0.00000 0.00000 WikiLife 0.650 0.00000 0.11000 0.08042 0.00000 0.00000 0.00000 WeiboDaily 0.285 0.20255 0.36725 0.30346 0.00000 0.00000 0.00000 WeiboTech 0.469 0.15854 0.04761 0.03131 0.00000 0.00000 0.00000 
+
+Test Window 𝑊 4
+
+Beauty 0.957 0.00000 0.00813 0.00513 0.00000 0.00000 0.00000 Sports 0.960 0.02410 0.01042 0.01042 0.00157 0.00044 0.00019 Toys 0.901 0.02252 0.00836 0.00403 0.00000 0.00000 0.00000 Sephora 0.823 0.04808 0.03557 0.01594 0.00126 0.00051 0.00026 WikiLife 0.593 0.01145 0.00730 0.00571 0.00000 0.00000 0.00000 WeiboDaily 0.247 0.23993 0.30098 0.24461 0.00000 0.00000 0.00000 WeiboTech 0.409 0.15642 0.03122 0.01987 0.00000 0.00000 0.00000 
+
+Test Window 𝑊 5
+
+Beauty 0.904 0.00000 0.00086 0.00041 0.00046 0.00006 0.00003 Sports 0.883 0.01125 0.00546 0.00338 0.00239 0.00006 0.00003 Toys 0.925 0.00445 0.00342 0.00211 0.00232 0.00003 0.00002 Sephora 0.863 0.01079 0.02880 0.02331 0.02556 0.00616 0.00385 WikiLife 0.463 0.00452 0.00627 0.00443 0.00000 0.00000 0.00000 WeiboDaily 0.228 0.24229 0.33069 0.27326 0.00000 0.00000 0.00000 WeiboTech 0.277 0.14912 0.03530 0.02260 0.00000 0.00000 0.00000 
+
+Average 
+
+Beauty 0.948 0.00000 0.00300 0.00185 0.00015 0.00002 0.00001 Sports 0.947 0.01767 0.00794 0.00690 0.00132 0.00016 0.00007 Toys 0.910 0.01397 0.01925 0.01268 0.00077 0.00001 0.00001 Sephora 0.773 0.03541 0.03270 0.01763 0.00894 0.00222 0.00137 WikiLife 0.569 0.00532 0.04119 0.03019 0.00000 0.00000 0.00000 WeiboDaily 0.253 0.22826 0.33298 0.27378 0.00000 0.00000 0.00000 WeiboTech 0.385 0.15469 0.03804 0.02459 0.00000 0.00000 0.00000 Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Jie Peng, Yanping Zheng, Zhewei Wei, Bin Tong, Guan Wang, and Bo Zheng 
+
+Table 9: Detailed @10 performance of TIGER under temporal cold-start evaluation. Dataset Cold ratio Seen Unseen 
+
+H@10 R@10 N@10 H@10 R@10 N@10 
+
+Test Window 𝑊 3
+
+Beauty 0.984 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 Sports 1.000 – – – 0.00000 0.00000 0.00000 Toys 0.903 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 Sephora 0.634 0.28281 0.27648 0.16501 0.00000 0.00000 0.00000 WikiLife 0.650 0.38298 0.41000 0.22805 0.00000 0.00000 0.00000 WeiboDaily 0.285 0.65860 0.28977 0.19304 0.00000 0.00000 0.00000 WeiboTech 0.469 0.25610 0.00932 0.00315 0.00000 0.00000 0.00000 
+
+Test Window 𝑊 4
+
+Beauty 0.957 0.02439 0.00000 0.00000 0.00000 0.00000 0.00000 Sports 0.960 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 Toys 0.901 0.03153 0.01393 0.00531 0.00000 0.00000 0.00000 Sephora 0.823 0.18029 0.21621 0.13985 0.00000 0.00000 0.00000 WikiLife 0.593 0.35878 0.21715 0.14444 0.00000 0.00000 0.00000 WeiboDaily 0.247 0.74306 0.35124 0.23682 0.00000 0.00041 0.00013 WeiboTech 0.409 0.36313 0.03776 0.01831 0.00000 0.00000 0.00000 
+
+Test Window 𝑊 5
+
+Beauty 0.904 0.01008 0.00459 0.00209 0.00023 0.00000 0.00000 Sports 0.883 0.02743 0.01155 0.00580 0.00060 0.00006 0.00004 Toys 0.925 0.01631 0.00685 0.00373 0.00000 0.00000 0.00000 Sephora 0.863 0.17361 0.24636 0.18382 0.00000 0.00000 0.00000 WikiLife 0.463 0.34122 0.26803 0.16834 0.00000 0.00000 0.00000 WeiboDaily 0.228 0.75832 0.36982 0.24692 0.00319 0.00044 0.00017 WeiboTech 0.277 0.50585 0.08658 0.04726 0.00000 0.00000 0.00000 
+
+Average 
+
+Beauty 0.948 0.01149 0.00153 0.00070 0.00008 0.00000 0.00000 Sports 0.947 0.01371 0.00578 0.00290 0.00020 0.00002 0.00001 Toys 0.910 0.01595 0.00692 0.00301 0.00000 0.00000 0.00000 Sephora 0.773 0.21224 0.24635 0.16289 0.00000 0.00000 0.00000 WikiLife 0.569 0.36099 0.29840 0.18028 0.00000 0.00000 0.00000 WeiboDaily 0.253 0.71999 0.33694 0.22559 0.00106 0.00028 0.00010 WeiboTech 0.385 0.37502 0.04455 0.02291 0.00000 0.00000 0.00000 Can Generative Recommendation Reach Cold Items? A Temporal Perspective on Semantic-ID Generation Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+Table 10: Detailed @10 performance of SASRec under temporal cold-start evaluation. Dataset Cold ratio Seen Unseen 
+
+H@10 R@10 N@10 H@10 R@10 N@10 
+
+Test Window 𝑊 3
+
+Beauty 0.984 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 Sports 1.000 – – – 0.00000 0.00000 0.00000 Toys 0.903 0.05970 0.06897 0.03904 0.00000 0.00000 0.00000 Sephora 0.634 0.04736 0.06654 0.02531 0.06304 0.03568 0.01144 WikiLife 0.650 0.04255 0.14000 0.09110 0.00000 0.00000 0.00000 WeiboDaily 0.285 0.22166 0.42399 0.32175 0.00000 0.00000 0.00000 WeiboTech 0.469 0.28049 0.07224 0.03926 0.00000 0.00000 0.00000 
+
+Test Window 𝑊 4
+
+Beauty 0.957 0.00000 0.02439 0.01014 0.00000 0.00000 0.00000 Sports 0.960 0.02410 0.07292 0.03017 0.00315 0.00044 0.00019 Toys 0.901 0.04505 0.03343 0.01213 0.00000 0.00000 0.00000 Sephora 0.823 0.06971 0.08182 0.03205 0.01912 0.00800 0.00259 WikiLife 0.593 0.01527 0.00912 0.00636 0.00000 0.00000 0.00000 WeiboDaily 0.247 0.25067 0.36107 0.26405 0.00207 0.00000 0.00000 WeiboTech 0.409 0.23464 0.05053 0.02614 0.00000 0.00000 0.00000 
+
+Test Window 𝑊 5
+
+Beauty 0.904 0.00050 0.00201 0.00077 0.00138 0.00018 0.00007 Sports 0.883 0.02286 0.00987 0.00483 0.00582 0.00011 0.00004 Toys 0.925 0.00741 0.00685 0.00323 0.00336 0.00010 0.00005 Sephora 0.863 0.07403 0.07217 0.03721 0.04006 0.01476 0.00638 WikiLife 0.463 0.00557 0.00996 0.00563 0.00039 0.00043 0.00014 WeiboDaily 0.228 0.26572 0.38945 0.29224 0.00159 0.00009 0.00003 WeiboTech 0.277 0.22515 0.05845 0.03002 0.00000 0.00000 0.00000 
+
+Average 
+
+Beauty 0.948 0.00017 0.00880 0.00364 0.00046 0.00006 0.00002 Sports 0.947 0.02348 0.04140 0.01750 0.00299 0.00018 0.00008 Toys 0.910 0.03739 0.03641 0.01813 0.00112 0.00003 0.00002 Sephora 0.773 0.06370 0.07351 0.03152 0.04074 0.01948 0.00681 WikiLife 0.569 0.02113 0.05303 0.03437 0.00013 0.00014 0.00005 WeiboDaily 0.253 0.24602 0.39150 0.29268 0.00122 0.00003 0.00001 WeiboTech 0.385 0.24676 0.06041 0.03181 0.00000 0.00000 0.00000 Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Jie Peng, Yanping Zheng, Zhewei Wei, Bin Tong, Guan Wang, and Bo Zheng 
+
+Table 11: Detailed @20 performance of TIGER under temporal cold-start evaluation. Dataset Cold ratio Seen Unseen 
+
+H@20 R@20 N@20 H@20 R@20 N@20 
+
+Test Window 𝑊 3
+
+Beauty 0.984 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 Sports 1.000 – – – 0.00000 0.00000 0.00000 Toys 0.903 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 Sephora 0.634 0.43031 0.37676 0.19033 0.00000 0.00000 0.00000 WikiLife 0.650 0.38298 0.41000 0.22805 0.00000 0.00000 0.00000 WeiboDaily 0.285 0.70318 0.35125 0.20866 0.00253 0.00000 0.00000 WeiboTech 0.469 0.25610 0.01378 0.00428 0.00000 0.00000 0.00000 
+
+Test Window 𝑊 4
+
+Beauty 0.957 0.02439 0.00000 0.00000 0.00000 0.00000 0.00000 Sports 0.960 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 Toys 0.901 0.04054 0.02786 0.00884 0.00000 0.00000 0.00000 Sephora 0.823 0.30288 0.31581 0.16471 0.00000 0.00000 0.00000 WikiLife 0.593 0.38168 0.28285 0.16094 0.00310 0.00125 0.00028 WeiboDaily 0.247 0.77708 0.41788 0.25367 0.00207 0.00101 0.00028 WeiboTech 0.409 0.40782 0.05434 0.02248 0.00000 0.00000 0.00000 
+
+Test Window 𝑊 5
+
+Beauty 0.904 0.01562 0.00775 0.00288 0.00069 0.00000 0.00000 Sports 0.883 0.02813 0.01702 0.00720 0.00060 0.00011 0.00005 Toys 0.925 0.02965 0.01326 0.00534 0.00026 0.00000 0.00000 Sephora 0.863 0.27835 0.31991 0.20237 0.00000 0.00000 0.00000 WikiLife 0.463 0.40870 0.32319 0.18234 0.00000 0.00000 0.00000 WeiboDaily 0.228 0.79655 0.43705 0.26397 0.00478 0.00176 0.00051 WeiboTech 0.277 0.56725 0.13624 0.05972 0.00000 0.00000 0.00000 
+
+Average 
+
+Beauty 0.948 0.01334 0.00258 0.00096 0.00023 0.00000 0.00000 Sports 0.947 0.01406 0.00851 0.00360 0.00020 0.00004 0.00002 Toys 0.910 0.02340 0.01371 0.00473 0.00009 0.00000 0.00000 Sephora 0.773 0.33718 0.33749 0.18581 0.00000 0.00000 0.00000 WikiLife 0.569 0.39112 0.33868 0.19044 0.00103 0.00042 0.00009 WeiboDaily 0.253 0.75894 0.40206 0.24210 0.00313 0.00092 0.00026 WeiboTech 0.385 0.41039 0.06812 0.02883 0.00000 0.00000 0.00000 Can Generative Recommendation Reach Cold Items? A Temporal Perspective on Semantic-ID Generation Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+Table 12: Detailed @20 performance of SASRec under temporal cold-start evaluation. Dataset Cold ratio Seen Unseen 
+
+H@20 R@20 N@20 H@20 R@20 N@20 
+
+Test Window 𝑊 3
+
+Beauty 0.984 0.25000 0.00000 0.00000 0.00000 0.00000 0.00000 Sports 1.000 – – – 0.00000 0.00000 0.00000 Toys 0.903 0.08955 0.10345 0.04738 0.00000 0.00000 0.00000 Sephora 0.634 0.06089 0.08529 0.02965 0.06304 0.03568 0.01144 WikiLife 0.650 0.06383 0.15000 0.09355 0.03448 0.03226 0.00759 WeiboDaily 0.285 0.25096 0.48114 0.33620 0.00000 0.00000 0.00000 WeiboTech 0.469 0.43902 0.10504 0.04755 0.00000 0.00000 0.00000 
+
+Test Window 𝑊 4
+
+Beauty 0.957 0.00000 0.03252 0.01206 0.00253 0.00074 0.00018 Sports 0.960 0.07229 0.12500 0.04304 0.00472 0.00044 0.00019 Toys 0.901 0.05405 0.05014 0.01638 0.00000 0.00000 0.00000 Sephora 0.823 0.08053 0.09960 0.03622 0.03571 0.01448 0.00423 WikiLife 0.593 0.04580 0.03467 0.01253 0.00000 0.00000 0.00000 WeiboDaily 0.247 0.26321 0.42386 0.27989 0.00414 0.00000 0.00000 WeiboTech 0.409 0.28492 0.07552 0.03244 0.00000 0.00000 0.00000 
+
+Test Window 𝑊 5
+
+Beauty 0.904 0.00101 0.00258 0.00092 0.00988 0.00129 0.00035 Sports 0.883 0.02707 0.01387 0.00584 0.00776 0.00022 0.00007 Toys 0.925 0.01334 0.01412 0.00503 0.00439 0.00010 0.00005 Sephora 0.863 0.07875 0.07743 0.03846 0.07120 0.02582 0.00917 WikiLife 0.463 0.01148 0.01568 0.00704 0.00039 0.00043 0.00014 WeiboDaily 0.228 0.30086 0.45330 0.30837 0.00159 0.00009 0.00003 WeiboTech 0.277 0.27778 0.09432 0.03901 0.00000 0.00000 0.00000 
+
+Average 
+
+Beauty 0.948 0.08367 0.01170 0.00433 0.00414 0.00068 0.00018 Sports 0.947 0.04968 0.06943 0.02444 0.00416 0.00022 0.00009 Toys 0.910 0.05232 0.05590 0.02293 0.00146 0.00003 0.00002 Sephora 0.773 0.07339 0.08744 0.03478 0.05665 0.02532 0.00828 WikiLife 0.569 0.04037 0.06678 0.03771 0.01163 0.01090 0.00258 WeiboDaily 0.253 0.27167 0.45276 0.30815 0.00191 0.00003 0.00001 WeiboTech 0.385 0.33391 0.09163 0.03967 0.00000 0.00000 0.00000 Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Jie Peng, Yanping Zheng, Zhewei Wei, Bin Tong, Guan Wang, and Bo Zheng 
+
+Table 13: Token-level coldness taxonomy for unseen target items. The table separates cold items according to token support and prefix support. Dataset Coldness category Ratio TIGER 
+
+Recall@5 Recall@10 Recall@20 NDCG@5 NDCG@10 NDCG@20 Beauty all-token-seen 0.521 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 any-token-unseen 0.479 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 prefix-seen-𝑐 1 0.954 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 prefix-seen-𝑐 1, 𝑐 2 0.173 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 prefix-seen-𝑐 1, 𝑐 2, 𝑐 3 0.001 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 Sports all-token-seen 0.405 0.00001 0.00003 0.00006 0.00001 0.00002 0.00003 any-token-unseen 0.595 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 prefix-seen-𝑐 1 0.723 0.00001 0.00002 0.00004 0.00001 0.00001 0.00002 prefix-seen-𝑐 1, 𝑐 2 0.208 0.00002 0.00004 0.00008 0.00002 0.00003 0.00004 prefix-seen-𝑐 1, 𝑐 2, 𝑐 3 0.002 0.00336 0.00671 0.01007 0.00336 0.00437 0.00520 Toys all-token-seen 0.713 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 any-token-unseen 0.287 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 prefix-seen-𝑐 1 1.000 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 prefix-seen-𝑐 1, 𝑐 2 0.452 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 prefix-seen-𝑐 1, 𝑐 2, 𝑐 3 0.004 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 Sephora all-token-seen 0.475 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 any-token-unseen 0.525 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 prefix-seen-𝑐 1 1.000 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 prefix-seen-𝑐 1, 𝑐 2 0.650 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 prefix-seen-𝑐 1, 𝑐 2, 𝑐 3 0.002 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 WikiLife all-token-seen 0.824 0.00000 0.00000 0.00045 0.00000 0.00000 0.00010 any-token-unseen 0.176 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 prefix-seen-𝑐 1 0.977 0.00000 0.00000 0.00042 0.00000 0.00000 0.00010 prefix-seen-𝑐 1, 𝑐 2 0.304 0.00000 0.00000 0.00175 0.00000 0.00000 0.00040 prefix-seen-𝑐 1, 𝑐 2, 𝑐 3 0.001 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 WeiboDaily all-token-seen 1.000 0.00006 0.00028 0.00092 0.00003 0.00010 0.00026 any-token-unseen 0.000 – – – – – –prefix-seen-𝑐 1 1.000 0.00006 0.00028 0.00092 0.00003 0.00010 0.00026 prefix-seen-𝑐 1, 𝑐 2 0.516 0.00009 0.00038 0.00138 0.00004 0.00014 0.00039 prefix-seen-𝑐 1, 𝑐 2, 𝑐 3 0.010 0.00080 0.00320 0.01386 0.00034 0.00114 0.00379 WeiboTech all-token-seen 0.999 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 any-token-unseen 0.001 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 prefix-seen-𝑐 1 0.999 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 prefix-seen-𝑐 1, 𝑐 2 0.591 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 prefix-seen-𝑐 1, 𝑐 2, 𝑐 3 0.008 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 Can Generative Recommendation Reach Cold Items? A Temporal Perspective on Semantic-ID Generation Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+Table 14: Oracle-prefix probing for semantic ID generation. We report both next-item semantic ID generation accuracy and next-token semantic ID generation accuracy. “Free” denotes standard autoregressive decoding, while “Oracle-prefix” decoding forces the corresponding ground-truth prefix before generating the remaining tokens. Δ denotes the absolute improvement over free decoding. Darker red indicates larger improvement. Dataset Group Ratio Next-item SID generation Next-token SID generation Free Oracle 𝑐 1 Oracle 𝑐 1, 𝑐 2 𝑐 1 Acc. 𝑐 2 Acc. 𝑐 3 Acc. 
+
+Acc. Δ Acc. Δ Free Free Oracle 𝑐 1 Δ Free Oracle 𝑐 1, 𝑐 2 Δ
+
+Beauty Seen 0.052 0.00010 0.00823 0.00813 0.02383 0.02373 0.07487 0.02465 0.03639 0.01174 0.00163 0.02421 0.02259 Unseen 0.948 0.00000 0.00000 0.00000 0.00134 0.00134 0.02181 0.00778 0.00870 0.00092 0.00126 0.00140 0.00014 Sports Seen 0.053 0.00063 0.00630 0.00567 0.02815 0.02752 0.18009 0.04449 0.07936 0.03487 0.00284 0.02910 0.02626 Unseen 0.947 0.00001 0.00006 0.00005 0.00448 0.00447 0.11983 0.00494 0.01091 0.00597 0.00138 0.00530 0.00392 Toys Seen 0.090 0.00057 0.00564 0.00506 0.09664 0.09607 0.25815 0.01563 0.04140 0.02577 0.00514 0.09814 0.09300 Unseen 0.910 0.00000 0.00000 0.00000 0.00272 0.00272 0.19895 0.00587 0.01855 0.01268 0.00391 0.00334 -0.00057 Sephora Seen 0.227 0.10155 0.15851 0.05696 0.69089 0.58933 0.38365 0.12973 0.21057 0.08084 0.11470 0.69117 0.57648 
+
+Unseen 0.773 0.00000 0.00000 0.00000 0.00063 0.00063 0.29701 0.01904 0.05075 0.03171 0.00679 0.00072 -0.00606 WikiLife Seen 0.431 0.09446 0.16480 0.07034 0.50373 0.40927 0.53002 0.12913 0.18835 0.05922 0.09624 0.50379 0.40755 
+
+Unseen 0.569 0.00000 0.00000 0.00000 0.00308 0.00308 0.27493 0.00845 0.01816 0.00971 0.00384 0.00322 -0.00062 WeiboDaily Seen 0.747 0.12319 0.47262 0.34943 0.75122 0.62804 0.18646 0.13814 0.49332 0.35518 0.12957 0.75163 0.62206 
+
+Unseen 0.253 0.00003 0.00049 0.00046 0.01493 0.01490 0.06264 0.01797 0.02774 0.00977 0.01480 0.01972 0.00492 WeiboTech Seen 0.615 0.00632 0.07472 0.06841 0.39882 0.39251 0.08608 0.01498 0.10570 0.09071 0.01139 0.39933 0.38794 
+
+Unseen 0.385 0.00000 0.00004 0.00004 0.01173 0.01173 0.06236 0.00881 0.01749 0.00868 0.00647 0.01666 0.01020 
+
+Table 15: Distributional alignment between TIGER prefix generation and SASRec bucket-aggregated scoring. Each row compares the TIGER prefix distribution 𝑃 𝑇 (·) with the SASRec bucket distribution 𝑃 𝑆 (·) at the corresponding semantic-ID prefix level. Lower JS divergence and higher Pearson correlation indicate stronger alignment. Metric SID prefix Beauty Sports Toys Sephora WikiLife WeiboDaily WeiboTech 
+
+JS divergence ↓
+
+𝑐 1 0.12821 0.29669 0.25995 0.09539 0.19576 0.20870 0.24888 
+
+𝑐 1, 𝑐 2 0.49832 0.53745 0.56818 0.33208 0.36511 0.39852 0.56114 
+
+𝑐 1, 𝑐 2, 𝑐 3 0.64622 0.63961 0.66619 0.47234 0.40976 0.46563 0.60842 Pearson ↑
+
+𝑐 1 0.58776 0.46533 0.44644 0.63721 0.58386 0.53238 0.36585 
+
+𝑐 1, 𝑐 2 0.39636 0.29548 0.18975 0.42604 0.39078 0.36548 0.11598 
+
+𝑐 1, 𝑐 2, 𝑐 3 0.19580 0.00009 0.00480 0.29056 0.28029 0.16506 0.10909 
+
+Table 16: Seen and unseen recommendation performance of TIGER-based diagnostic variants under temporal cold-start evaluation. Arrows indicate relative change compared to TIGER ( ↑,↓: >100%, ↑,↓: ≤100%). Dataset Cold ratio TIGER TIGER-SID TIGER-Scorer TIGER-Edge 
+
+Seen H@20 Unseen H@20 Seen H@20 Unseen H@20 Seen H@20 Unseen H@20 Seen H@20 Unseen H@20 Beauty 0.948 0.01334 0.00023 0.00655 ↓ 0.00054 ↑ 0.02163 ↑ 0.00831 ↑ 0.01925 ↑ 0.00042 ↑
+
+Sports 0.947 0.01406 0.00020 0.01582 ↑ 0.00109 ↑ 0.04120 ↑ 0.01392 ↑ 0.03886 ↑ 0.00075 ↑
+
+Toys 0.910 0.02340 0.00009 0.02790 ↑ 0.00000 ↓ 0.00920 ↓ 0.01187 ↑ 0.08387 ↑ 0.00000 ↓
+
+Sephora 0.773 0.33718 0.00000 0.32466 ↓ 0.00000 ↓ 0.24545 ↓ 0.00003 ↑ 0.31388 ↓ 0.00198 ↑
+
+WikiLife 0.569 0.39112 0.00103 0.38787 ↓ 0.00013 ↓ 0.28630 ↓ 0.00505 ↑ 0.43409 ↑ 0.00026 ↓
+
+WeiboDaily 0.253 0.75894 0.00313 0.77940 ↑ 0.00747 ↑ 0.32633 ↓ 0.00750 ↑ 0.81308 ↑ 0.01132 ↑
+
+WeiboTech 0.385 0.41039 0.00000 0.49199 ↑ 0.01232 ↑ 0.16490 ↓ 0.02929 ↑ 0.47153 ↑ 0.01683 ↑Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Jie Peng, Yanping Zheng, Zhewei Wei, Bin Tong, Guan Wang, and Bo Zheng 
+
+Table 17: Token-level coldness taxonomy for unseen target items on each variant. Arrows indicate relative change compared to TIGER ( ↑,↓: >100%, ↑,↓: ≤100%). Dataset Coldness category TIGER TIGER-SID TIGER-Scorer TIGER-Edge 
+
+Recall@5 Recall@20 Recall@5 Recall@20 Recall@5 Recall@20 Recall@5 Recall@20 Beauty all-token-seen 0.00000 0.00000 0.00001 ↑ 0.00001 ↑ 0.00034 ↑ 0.00253 ↑ 0.00000 0.00000 any-token-unseen 0.00000 0.00000 0.00000 0.00000 0.00027 ↑ 0.00077 ↑ 0.00000 0.00000 prefix-seen-𝑐 1 0.00000 0.00000 0.00001 ↑ 0.00001 ↑ 0.00036 ↑ 0.00197 ↑ 0.00000 0.00000 prefix-seen-𝑐 1, 𝑐 2 0.00000 0.00000 0.00002 ↑ 0.00002 ↑ 0.00228 ↑ 0.01082 ↑ 0.00000 0.00000 prefix-seen-𝑐 1, 𝑐 2, 𝑐 3 0.00000 0.00000 0.00004 ↑ 0.00004 ↑ 0.00000 0.18627 ↑ 0.00000 0.00000 Sports all-token-seen 0.00001 0.00006 0.00000 ↓ 0.00019 ↑ 0.00014 ↑ 0.00210 ↑ 0.00004 ↑ 0.00024 ↑
+
+any-token-unseen 0.00000 0.00000 0.00000 0.00000 0.00254 ↑ 0.00274 ↑ 0.00000 0.00000 prefix-seen-𝑐 1 0.00001 0.00004 0.00000 ↓ 0.00017 ↑ 0.01343 ↑ 0.01441 ↑ 0.00003 ↑ 0.00016 ↑
+
+prefix-seen-𝑐 1, 𝑐 2 0.00002 0.00008 0.00000 ↓ 0.00035 ↑ 0.16681 ↑ 0.16971 ↑ 0.00006 ↑ 0.00036 ↑
+
+prefix-seen-𝑐 1, 𝑐 2, 𝑐 3 0.00336 0.01007 0.00000 ↓ 0.00063 ↓ 0.00000 ↓ 0.00000 ↓ 0.00671 ↑ 0.02349 ↑
+
+Toys all-token-seen 0.00000 0.00000 0.00000 0.00000 0.00132 ↑ 0.00516 ↑ 0.00000 0.00000 any-token-unseen 0.00000 0.00000 0.00000 0.00000 0.00000 0.00198 ↑ 0.00000 0.00000 prefix-seen-𝑐 1 0.00000 0.00000 0.00000 0.00000 0.00062 ↑ 0.00359 ↑ 0.00000 0.00000 prefix-seen-𝑐 1, 𝑐 2 0.00000 0.00000 0.00000 0.00000 0.00170 ↑ 0.00657 ↑ 0.00000 0.00000 prefix-seen-𝑐 1, 𝑐 2, 𝑐 3 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 Sephora all-token-seen 0.00000 0.00000 0.00000 0.00000 0.00000 0.00003 ↑ 0.00006 ↑ 0.00242 ↑
+
+any-token-unseen 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 0.00005 ↑ 0.00038 ↑
+
+prefix-seen-𝑐 1 0.00000 0.00000 0.00000 0.00000 0.00000 0.00002 ↑ 0.00007 ↑ 0.00105 ↑
+
+prefix-seen-𝑐 1, 𝑐 2 0.00000 0.00000 0.00000 0.00000 0.00000 0.00002 ↑ 0.00004 ↑ 0.00167 ↑
+
+prefix-seen-𝑐 1, 𝑐 2, 𝑐 3 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 WikiLife all-token-seen 0.00000 0.00045 0.00000 0.00008 ↓ 0.00029 ↑ 0.00230 ↑ 0.00000 0.00000 any-token-unseen 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 prefix-seen-𝑐 1 0.00000 0.00042 0.00000 0.00007 ↓ 0.00029 ↑ 0.00218 ↑ 0.00000 0.00000 prefix-seen-𝑐 1, 𝑐 2 0.00000 0.00175 0.00000 0.00026 ↓ 0.00047 ↑ 0.00621 ↑ 0.00000 0.00000 prefix-seen-𝑐 1, 𝑐 2, 𝑐 3 0.00000 0.00000 0.00000 0.00086 ↑ 0.00000 0.00000 0.00000 0.00000 WeiboDaily all-token-seen 0.00006 0.00092 0.00169 ↑ 0.00433 ↑ 0.00029 ↑ 0.00069 ↓ 0.00784 ↑ 0.01604 ↑
+
+any-token-unseen – – – – – – – –prefix-seen-𝑐 1 0.00006 0.00092 0.00169 ↑ 0.00433 ↑ 0.00029 ↑ 0.00069 ↓ 0.00784 ↑ 0.01604 ↑
+
+prefix-seen-𝑐 1, 𝑐 2 0.00009 0.00138 0.00210 ↑ 0.00540 ↑ 0.00017 ↑ 0.00065 ↓ 0.01015 ↑ 0.02241 ↑
+
+prefix-seen-𝑐 1, 𝑐 2, 𝑐 3 0.00080 0.01386 0.00295 ↑ 0.00761 ↑ 0.00000 ↓ 0.00000 ↓ 0.03332 ↑ 0.09068 ↑
+
+WeiboTech all-token-seen 0.00000 0.00000 0.00021 ↑ 0.00057 ↑ 0.00040 ↑ 0.00145 ↑ 0.01058 ↑ 0.02069 ↑
+
+any-token-unseen 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 0.00000 prefix-seen-𝑐 1 0.00000 0.00000 0.00021 ↑ 0.00057 ↑ 0.00040 ↑ 0.00145 ↑ 0.01058 ↑ 0.02069 ↑
+
+prefix-seen-𝑐 1, 𝑐 2 0.00000 0.00000 0.00028 ↑ 0.00082 ↑ 0.00049 ↑ 0.00156 ↑ 0.01345 ↑ 0.02541 ↑
+
+prefix-seen-𝑐 1, 𝑐 2, 𝑐 3 0.00000 0.00000 0.00038 ↑ 0.00114 ↑ 0.00000 0.00000 0.01910 ↑ 0.02390 ↑

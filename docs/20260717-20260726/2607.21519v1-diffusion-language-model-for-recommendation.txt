@@ -1,0 +1,1844 @@
+Title: Diffusion Language Model for Recommendation
+
+URL Source: https://arxiv.org/pdf/2607.21519v1
+
+Published Time: Fri, 24 Jul 2026 01:12:49 GMT
+
+Number of Pages: 30
+
+Markdown Content:
+# Diffusion Language Model for Recommendation 
+
+## CHENGYI LIU, The Hong Kong Polytechnic University, Hong Kong SAR 
+
+## YONGQI ZHOU, Tencent Inc., Shenzhen, China 
+
+## JUNWEI PAN, Tencent Inc., Shenzhen, China 
+
+## ZHIXIANG FENG, Tencent Inc., Shenzhen, China 
+
+## CHENGGUO YIN, Tencent Inc., Shenzhen, China 
+
+## HAIJIE GU, Tencent Inc., Shenzhen, China 
+
+## JIE JIANG, Tencent Inc., Shenzhen, China 
+
+## YINGHAO LIU, The Hong Kong Polytechnic University, Hong Kong SAR 
+
+## YUJUAN DING, The Hong Kong Polytechnic University, Hong Kong SAR 
+
+## QING LI*, The Hong Kong Polytechnic University, Hong Kong SAR 
+
+## WENQI FAN ∗, The Hong Kong Polytechnic University, Hong Kong SAR 
+
+Large language model (LLM)-empowered recommender systems have emerged as a promising paradigm for generative recommendation, leveraging their strong semantic reasoning and generative capacity to model complex, diverse user preferences. However, most existing approaches rely on an autoregressive paradigm that is suboptimal for recommendation. The next-token objective emphasizes sequential order rather than the structural inter-item dependencies underlying user preferences. In addition, prefix-constrained generation restricts bidirectional context and commits to left-to-right decoding, causing early errors to accumulate without correction. Inspired by the success of diffusion language models, we propose DLMRec , a discrete diffusion language model tailored for recommendation that offers a compelling alternative to autoregressive generation. Specifically, DLMRec introduces three key components to bridge diffusion language modeling with recommendation. First, a collaborative-aware stochastic tokenizer encodes multi-hop collaborative signals into expressive discrete tokens compatible with diffusion modeling. Second, a curriculum-driven training strategy aligns the denoising process with preference recovery through progressive item- and token-level learning. Third, a stability-aware voting mechanism aggregates iterative predictions to improve generation consistency and robustness. Extensive experiments confirm the effectiveness of DLMRec and demonstrate discrete diffusion language modeling as a compelling alternative to autoregressive generation for recommendation. Our codes are available at https://github.com/ChengyiLIU-cs/DLMRec CCS Concepts: • Information systems → Collaborative filtering ; Users and interactive retrieval .
+
+> ∗
+
+Corresponding author: Wenqi Fan and Qing Li, Department of Computing, The Hong Kong Polytechnic University Authors’ Contact Information: Chengyi Liu, The Hong Kong Polytechnic University, Hong Kong SAR, chengyi.liu@connect.polyu.hk; Yongqi Zhou, Tencent Inc., Shenzhen, China, kolinzhou@tencent.com; Junwei Pan, Tencent Inc., Shenzhen, China, jonaspan@tencent.com; Zhixiang Feng, Tencent Inc., Shenzhen, China, lionelfeng@tencent.com; Chengguo Yin, Tencent Inc., Shenzhen, China, turingyin@tencent.com; Haijie Gu, Tencent Inc., Shenzhen, China, jerrickgu@tencent.com; Jie Jiang, Tencent Inc., Shenzhen, China, zeus@tencent.com; Yinghao Liu, The Hong Kong Polytechnic University, Hong Kong SAR, liuyinghao@shu.edu.cn; Yujuan Ding, The Hong Kong Polytechnic University, Hong Kong SAR, dingyujuan385@gmail.com; Qing Li*, The Hong Kong Polytechnic University, Hong Kong SAR, qing-prof.li@polyu.edu.hk; Wenqi Fan, The Hong Kong Polytechnic University, Hong Kong SAR, wenqifan03@gmail.com. Permission to make digital or hard copies of all or part of this work for personal or classroom use is granted without fee provided that copies are not made or distributed for profit or commercial advantage and that copies bear this notice and the full citation on the first page. Copyrights for components of this work owned by others than the author(s) must be honored. Abstracting with credit is permitted. To copy otherwise, or republish, to post on servers or to redistribute to lists, requires prior specific permission and/or a fee. Request permissions from permissions@acm.org. 
+
+© 2026 Copyright held by the owner/author(s). Publication rights licensed to ACM. Manuscript submitted to ACM Manuscript submitted to ACM 1arXiv:2607.21519v1 [cs.IR] 23 Jul 2026 2 Liu et al. 
+
+> Additional Key Words and Phrases: Diffusion Language Models, Discrete Diffusion Model, Recommender Systems
+> ACM Reference Format:
+> Chengyi Liu, Yongqi Zhou, Junwei Pan, Zhixiang Feng, Chengguo Yin, Haijie Gu, Jie Jiang, Yinghao Liu, Yujuan Ding, Qing Li*, and Wenqi Fan. 2026. Diffusion Language Model for Recommendation. 1, 1 (July 2026), 30 pages. https://doi.org/10.1145/nnnnnnn. nnnnnnn
+
+1 Introduction 
+
+Recommender Systems (RS) have become essential in the era of information explosion, alleviating information overload by delivering personalized content across domains ranging from e-commerce to social networking [ 5 , 10 ]. Collaborative Filtering (CF) has served as a fundamental paradigm in recommender systems, modeling user preferences from historical user-item interactions [ 11 ]. Within the traditional discriminative framework, Graph Neural Network (GNN)-based CF approaches have achieved notable success by learning refined representations of users and items to capture high-order collaborative signals from interaction graphs [ 9 , 16 ]. More recently, generative recommendation has emerged as a promising direction that models the underlying distribution of user behaviors to directly generate preferred items, offering a more flexible paradigm for capturing complex and evolving user preferences [ 37 , 73 , 82 ]. Following this direction, recommenders empowered by large language models (LLMs) have shown particular promise, leveraging their strong generalization ability and generative capacity for user preference modeling [45, 68, 83]. Benefiting from the scaling of model parameters and training corpora, LLMs exhibit strong capabilities in semantic understanding and reasoning over complex information [ 1, 8, 45 , 59 ]. These properties make them particularly suitable for recommendation, where user preferences are often dynamic, context-dependent, and closely tied to rich textual metadata such as profiles, descriptions, and reviews [ 24 , 61 , 62 ]. By leveraging such semantic signals, LLM-based recommender systems move beyond conventional interaction-based matching toward a more expressive paradigm for preference modeling, enabling more accurate, explainable, and context-aware recommendations. Despite their strong empirical performance, most existing LLM-based generative recommendation methods rely on an autoregressive modeling paradigm, which may be suboptimal for recommendation [ 54 , 86 ]. The limitation mainly stems from the next-token prediction objective, originally designed for language generation, where tokens exhibit strong left-to-right sequential and compositional dependencies [ 81 ], as illustrated in Fig. 1. In recommendation, however, user preferences are primarily determined by complex relationships among interacted items rather than by their observed ordering. The interaction sequence mainly serves as a behavioral trace, while the observed order is often noisy and influenced by incidental factors [ 72 ]. Consequently, the key challenge lies in modeling inter-item dependencies and structural preference patterns instead of strictly following the interaction order [ 36 , 70 ]. Beyond the objective mismatch, next-token prediction conditions each generation step only on the observed prefix, restricting access to potentially informative future interactions [ 25 , 41 ]. This prefix-constrained modeling paradigm naturally favors local sequential dependencies, while limiting the model’s ability to capture global inter-item relationships and structural preference patterns [ 53 , 78 ]. Furthermore, autoregressive generation commits to each prediction once it is produced, preventing subsequent corrections and causing early prediction errors to propagate throughout the decoding process [30, 54]. Recent advances in diffusion language models (DLMs) provide a promising alternative for LLM-based generative recommendation [ 44 , 55 , 74 ]. Instead of relying on an autoregressive next-token generation, discrete diffusion language models learn data distributions by progressively masking tokens into an absorbing state and then iteratively recov-ering them through denoising, yielding a generation process based on bidirectional modeling and whole-sequence refinement [ 2]. Representative studies such as LLaDA suggest that DLMs can achieve capabilities comparable to 
+
+> Manuscript submitted to ACM
+
+Diffusion Language Model for Recommendation 3Please  recommend  action  movies  for  me      
+
+> Please recommend me movies for action
+
+Sequential Modeling 
+
+> Strong Sequential and Compositional Constraints
+> Semantic Shift
+
+Bidirectional Modeling 
+
+> Complex Item Dependencies and Structural Info
+> Consistent Preference
+
+(a)  Sequential Structure in Language  (b)  Combinatorial Structure  Recommendation   
+
+> <i1_018> <i2_196>
+> <i1_018>
+> <i2_196>
+> <i1_018> <i3_121>
+> <i1_018>
+> <i2_196>
+> Autoregressive Model
+
+Next-token Modeling                 
+
+> Error  Accumulation
+> Example Prompt: User
+> watched Oppenheimer ，
+> Doctor Strange .Please
+> recommend the next movie:
+> Mask Mask Mask Mask
+> Discrete Diffusion Model
+> <i1_011> <i2_272> <i3_121>
+> <i1_018> <i2_272> <i3_121>
+> <i1_011> <i2_272> <i3_183>
+> Iterative  Refinement
+
+Bidirectional Understanding 
+
+> Re-mask Strategy
+
+(c) Recommender with Autoregressive Backbone  (d) Recommender with Discrete Diffusion Backbone     
+
+> Verb Object Adjunct Science Fiction War
+
+Structural Difference between Language and Recommendation 
+
+Generative Paradigms for Recommendation   
+
+> Prompt Tokens Target Item Tokens Mask Tokens
+
+Order-sensitive  Semantics  Order-in sensitive  Preference 
+
+Fig. 1. Comparison of structural properties in language and recommendation, and generative paradigms for recommendation. Language follows strong left-to-right sequential dependencies, while recommendations exhibit combinatorial inter-item relationships and order-insensitive preferences. This structural gap suggests the potential of diffusion-based generation for recommendation, as its bidirectional modeling and iterative refinement better capture diverse global user preferences. 
+
+autoregressive LLMs of similar scale, while also showing promise in learning effectively from limited data, which is particularly appealing for recommendation scenarios with sparse historical interactions [ 12 , 42 , 43 , 47 , 65 ]. More importantly, the diffusion objective is naturally aligned with recommendation, which fundamentally requires recovering latent preference structure from sparse, incomplete, and noisy observations rather than merely predicting the next item [ 38 , 64 ]. Such a formulation further provides a flexible framework for modeling diverse interest patterns and exploiting global contextual information more effectively. To validate this intuition in recommendation scenarios, we conduct a preliminary comparative study on the MovieLens-1M dataset. As shown in Fig. 2, the results are consistent with prior observations in the literature, indicating that discrete diffusion models exhibit stronger potential than autoregressive baselines, with more stable training dynamics and improved performance in terms of Recall and NDCG. However, directly adapting discrete diffusion language models to recommendation remains challenging. First, the discrete representations of user-item interactions are required to be both compatible with diffusion language modeling and expressive enough to capture collaborative semantics. Existing sequential token decomposition schemes, such as RQ-style decomposition [ 7, 52 ], introduce inherent sequential dependencies that are misaligned with the parallel denoising nature of diffusion models. On the other hand, whole-item representations are often overly coarse, making it difficult 
+
+Manuscript submitted to ACM 4 Liu et al. 0 200 400 600 800 1000 
+
+> Epoch
+> 0.050
+> 0.075
+> 0.100
+> 0.125
+> 0.150
+> 0.175
+> Recall@30
+> Auto-regressive
+> Discrete Diffusion k=5
+> k=10
+> k=20
+> k=30
+> k
+> 0.04
+> 0.06
+> 0.08
+> 0.10
+> 0.12
+> 0.14
+> 0.16
+> Recall
+> Auto-regressive
+> Discrete Diffusion k=5
+> k=10
+> k=20
+> k=30
+> k
+> 0.06
+> 0.08
+> 0.10
+> 0.12
+> NDCG
+> Auto-regressive
+> Discrete Diffusion
+
+Fig. 2. Preliminary results on MovieLens-1M comparing autoregressive and discrete diffusion recommendation models. Both models use the same pretrained LightGCN encoder to represent interaction sequences and predict the next item, with identical parameter scales for fair comparison. The key difference lies in the generative paradigm: the autoregressive model performs unidirectional next-item prediction with causal masking, while the diffusion model adopts a bidirectional denoising process based on an absorbing-state diffusion mechanism [ 2]. Results demonstrate that the diffusion model achieves more stable training dynamics and outperforms the autoregressive baseline in terms of Recall and NDCG, highlighting the potential of diffusion-based generative recommendation. 
+
+to preserve fine-grained collaborative signals while maintaining unique and conflict-free token assignments [ 50 , 58 ]. Second, the standard random masking strategy falls short of meeting the task-specific requisites of recommendation, as it overlooks the fundamental divergence in optimization between language generation and preference modeling. While diffusion language models are designed to optimize linguistic coherence, recommendations aim to learn latent user preferences from complex high-order item interactions. In addition, recommendation requires grounding newly introduced user and item tokens into a shared collaborative semantic space, a process that is disrupted by indiscriminate corruption. As a result, treating all tokens uniformly weakens collaborative signals and undermines the global coherence required for effective preference modeling. Third, standard remasking-based diffusion decoding repeatedly discards intermediate predictions during iterative refinement, leading to suboptimal utilization of previously inferred signals and potentially weakening global coherence in recommendation generation [48, 75, 84]. To overcome the aforementioned challenges, we propose a novel Diffusion Language M odel Rec ommendation framework, DLMRec, to address the above challenges. Specifically, DLMRec proposes a collaborative-aware stochastic tokenizer (CAST) that transforms multi-hop collaborative signals from the user-item graph into discrete token represen-tations. Within this module, collaborative semantics from different propagation depths are explicitly disentangled into hop-wise semantic tokens, while a topology-stochastic assignment mechanism is introduced to handle the inherent ambiguity of graph-based discretization and ensure compatibility with the diffusion process. To bridge the gap between language modeling objectives and recommendation-specific semantics, we propose a curriculum-driven training strategy that progressively aligns user preference learning at both item and token levels. To further enhance this alignment, we incorporate negative samples into the training objective, encouraging the model to distinguish positive interactions from plausible distractors, thereby improving its discriminative ability in capturing fine-grained collaborative patterns. Finally, we introduce a stability-aware voting mechanism for final prediction, which leverages the full refinement trajectory to produce the final output. By aggregating predictive evidence across all iterative steps, this mechanism selectively preserves confident predictions while resolving instability in uncertain positions, resulting in more consistent and robust recommendations. This paper makes the following main contributions: 
+
+> Manuscript submitted to ACM
+
+Diffusion Language Model for Recommendation 5
+
+• We propose DLMRec, a novel discrete diffusion language model tailored for recommendation. Unlike autoregres-sive paradigms that generate items sequentially in a left-to-right manner, DLMRec leverages bidirectional context modeling and iterative refinement to progressively improve predictions toward global coherence, establishing a diffusion-based paradigm for LLM-driven recommendation. 
+
+• We introduce three key designs to adapt DLMs to recommendation: a collaborative-aware stochastic tokenizer, a curriculum-driven training strategy, and a voting-based iterative refinement mechanism. The stochastic tokenizer constructs discrete interaction representations that preserve multi-hop collaborative semantics while ensuring diffusion compatibility; the curriculum training strategy progressively aligns the denoising process with preference recovery; and the voting-based refinement mechanism stabilizes generation by aggregating predictions across iterative steps, thereby enhancing the coherence of final recommendations. 
+
+• We conduct extensive experiments to evaluate DLMRec. The results validate its effectiveness and underscore the promise of discrete diffusion language modeling as a compelling alternative to autoregressive generation for recommendation. 
+
+2 Preliminary 
+
+In this section, we introduce the key notations and definitions used throughout this paper, followed by a brief overview of vector quantization (VQ) techniques and discrete diffusion algorithms. 
+
+2.1 Notations and Definitions 
+
+The primary objective of recommender systems is to infer user preferences by analyzing historical behavioral data, including clicks, browsing activities, and transaction histories. We define U = 𝑢 1, . . . , 𝑢 𝑀 as the user set containing 
+
+𝑀 users, and V = 𝑣 1, . . . , 𝑣 𝑁 as the item set comprising 𝑁 items. The interaction history for any given user 𝑢 𝑚 ∈ U 
+
+is formulated as a sequence R𝑢 𝑚 = [v1, v2, . . . , v𝑙 ], where 𝑙 represents the predetermined length of the interaction sequence. To model collaborative filtering signals effectively, both users and items are projected into compact latent representations. More precisely, the user embedding matrix is denoted as P = [p1, . . . , p𝑀 ]𝑇 ∈ R𝑀 ×𝑑 , and the item embedding matrix is expressed as Q = [q1, . . . , q𝑁 ]𝑇 ∈ R𝑁 ×𝑑 , where 𝑑 specifies the dimensionality of the latent space. In the context of LLM-based recommender systems, recommendation tasks are reformulated within a language-centric framework. User interaction histories are converted into textual prompts that are subsequently fed into large language models for processing. More formally, each user 𝑢 𝑚 and item 𝑣 𝑛 is associated with corresponding textual prompts P𝑢 𝑚 and P𝑣 𝑛 , respectively. Building upon this notation, the input to an LLM-based recommender and its corresponding output can be expressed as: 
+
+Y𝑖 = DLM (P(P 𝑢 𝑚 , P𝑣 𝑛 | 𝑣 𝑛 ∈ R𝑢 𝑚 )) , (1) where P(·) denotes the prompt assembly function that constructs a unified textual sequence containing user tokens and historical item tokens. The output Y𝑖 generated by the DLM can take various forms, such as item identifiers, special tokens, or dense embeddings, depending on the underlying model architecture and task formulation. 
+
+2.2 User and Item Tokenization 
+
+Large language model-based recommender systems typically rely on discrete representations of users and items to align with the linguistic structure of natural language. While the straightforward ID-based paradigm assigns unique identifiers to each user and item, it is limited in both semantic expressiveness and scalability, as vocabulary size grows linearly 
+
+> Manuscript submitted to ACM
+
+6 Liu et al. with the number of items. Moving beyond simple indexing, vector quantization has emerged as the predominant tokenization strategy in LLM-based recommender systems [ 23 ]. This approach projects multifaceted user or item attributes into a finite set of discrete semantic tokens. Specifically, collaborative signals from user-item interaction graphs (via GNN-based encoders) or semantic information from textual descriptions (via pre-trained language encoders) are transformed into compact discrete representations. A vector-quantized tokenizer is typically achieved with an encoder-decoder architecture, formalized as follows: 
+
+𝒛 = 𝑓 enc (e), (2) 
+
+𝑠 = arg min  
+
+> 𝑘
+
+∥𝒛 − c𝑠 ∥22 , (3) 
+
+ˆe = 𝑓 dec (c𝑠 ), (4) where e denotes the feature representation of a user or item, c𝑠 represents the 𝑠 -th codeword selected from the codebook 
+
+C ∈ R𝐿 ×𝑑 𝑐 , and ˆe denotes the reconstructed representation decoded from the quantized codeword. Under this scheme, a user 𝑢 𝑚 or an item 𝑣 𝑛 is tokenized by the index 𝑠 of its nearest codeword and by the corresponding codeword embedding 
+
+c𝑠 . This yields discrete representations that preserve semantic information while avoiding linear vocabulary growth. 
+
+2.3 Discrete Diffusion Language Model 
+
+Recent advances in discrete diffusion models have shown promise for text generation, with LLaDA being a notable example. Unlike continuous diffusion models that corrupt data with Gaussian noise, discrete diffusion approaches apply state transformations, typically token masking, to progressively degrade text sequences until they reach a stationary distribution, known as the absorbing state. Formally, for an arbitrary token x in the text sequence, the forward diffusion process at timestep 𝑡 can be described as a Markov transition: 
+
+𝑞 (x𝑡 | x𝑡 −1) = Cat (x𝑡 ; p = x𝑡 −1Q𝑡 ) , (5) where Cat (·) denotes a categorical distribution, and Q𝑡 ∈ R𝑉 ×𝑉 represents the transition matrix applied element-wise across sequence positions, with 𝑉 being the vocabulary size. The transition matrix Q𝑡 is specifically designed to model the masking operation. Each entry [Q𝑡 ]𝑖,𝑗 at diffusion step 𝑡 is defined as: 
+
+[Q𝑡 ]𝑖,𝑗 =
+
+
+
+1, if 𝑖 = 𝑗 = [M],𝛽 𝑡 , if 𝑗 = [M], 𝑖 ≠ [M],
+
+1 − 𝛽 𝑡 , if 𝑖 = 𝑗 ≠ [M].
+
+(6) where [M] denotes the mask token index and 𝛽 𝑡 ∈ [ 0, 1] controls the masking rate at step 𝑡 . By applying the transition from the initial state x0, the marginal distribution of a token at timestep 𝑡 can be derived as: 
+
+𝑞 (𝑥 𝑖 𝑡 | 𝑥 𝑖 
+
+> 0
+
+) =
+
+
+
+¯𝛼 𝑡 , if 𝑥 𝑖 𝑡 = 𝑥 𝑖 
+
+> 0
+
+,
+
+1 − ¯𝛼 𝑡 , if 𝑥 𝑖 𝑡 = [M],
+
+(7) where ¯𝛼 𝑡 = Î𝑡 𝑖 =1 (1 − 𝛽 𝑖 ) represents the cumulative probability that the token remains unmasked up to step 𝑡 . The central architecture of discrete diffusion comprises a parametric prediction model 𝑝 𝜃 (· | x𝑡 ) that performs parallel inference over all masked tokens given the noised input x𝑡 . The model parameters 𝜃 are learned by minimizing a 
+
+> Manuscript submitted to ACM
+
+Diffusion Language Model for Recommendation 7Top-N Stochastic Assignment 
+
+Collaborative Graph 
+
+> GNN Encoder
+
+... 
+
+> 1 hop
+> 2 hop
+> 3 hop
+
+... 
+
+...   
+
+> Similarity
+> Select Prob
+> Similarity
+> Select Prob
+> Similarity
+> Select Prob
+> z1z2zk
+> Hop-wise Stochastic Quantization
+> CAST Decoder Reconstraction
+
+Tokens  1 2 ...  K
+
+Collaborative-aware Stochastic Tokenizer 
+
+> Quantization
+
+... 
+
+> K-hop Emb 1-hop Emb Base Emb
+
+Curriculum-driven Semantic Alignment for Recommendations 
+
+User  <user_7>  interacted with  <item_368 > Schindler's List,  <item_119 >
+
+Star Wars  <item_21> ... . Target < item_272 >
+
+... ...  ...  ... ...     
+
+> user tokens item tokens textual
+> description target item
+> User Tokenizer Item Tokenizer LLM Tokenizer
+
+Item-level Masking for Token-Semantic Alignment 
+
+Diffusion Large Language Models 
+
+Token-level Masking for  Preference-Aware Denoising 
+
+LoRA 
+
+... ...  ...  ... ... Mask  Mask  Mask 
+
+... ...  ...  ... ... 
+
+... ...  ...  ... ... 
+
+Diffusion Large Language Models  LoRA 
+
+... ...  ...  ... ... 
+
+...   
+
+> Codebook
+> token logits
+> CAST Decoder
+> soft
+> quantization
+> ground-truth item
+> Close
+> hard negative item
+> Distant
+> Non-interacted
+> Items
+> top-5 items most
+> similar to target item
+> Mask Mask Mask
+> target item
+
+...  
+
+> user token
+
+...  
+
+> mask token
+
+...  
+
+> target item
+
+...  
+
+> user token
+
+...  
+
+> mask token
+
+... 
+
+...  
+
+> Intermediate
+> state
+> target item
+
+...  
+
+> user token
+
+...  
+
+> mask token
+
+... 
+
+... 
+
+> Intermediate
+> state
+
+Voting-based Iterative Refinement         
+
+> User <user_7> interacted
+> with <item_368 >Schindler's List ,<item_119 >
+> Star Wars <item_21> ... . Target
+> Mask Mask
+
+... 
+
+Diffusion Large Language Models 
+
+...  ...  ...  
+
+> Target Item
+
+...  
+
+> User Token
+
+...  
+
+> Mask Token
+
+... 
+
+... 
+
+> Intermediate
+> State
+
+Prediction-guided Refinement 
+
+> CAST Decoder
+> Top-K
+> Recommendation
+> Stability-aware Voting
+> Voting
+
+Fig. 3. The proposed DLMRec framework contains three main modules: collaborative-aware stochastic tokenizer, curriculum-driven training strategy, and stability-aware voting mechanism. 
+
+cross-entropy objective that is evaluated exclusively on masked token positions: 
+
+L( 𝜃 ) ≜ −E𝑡,𝑥 0,𝑥 𝑡 
+
+"
+
+1
+
+𝑡 
+
+𝐿 ∑︁ 
+
+𝑖 =1
+
+1[𝑥 𝑖 𝑡 = [M]] log 𝑝 𝜃 (𝑥 𝑖 
+
+0 | 𝑥 𝑡 )
+
+#
+
+, (8) where x0 denotes a training sample from the data distribution, 𝑡 is a timestep uniformly sampled from 0 to 𝑇 , where 𝑇 
+
+is the maximum diffusion steps, and x𝑡 is the noised sequence obtained via the forward diffusion process defined in Eq. 7. The sequence length is denoted by 𝐿 , and the indicator function 1[·] ensures that the loss is computed only over positions where tokens have been masked. During the inference phase, various remasking strategies are applied to iteratively refine the generation quality. 
+
+3 The Proposed Method 
+
+In this section, we present an overview of the proposed framework, followed by a detailed description of its key components. 
+
+3.1 An Overview of the Proposed Framework 
+
+We propose a discrete diffusion language modeling framework for recommendation, as illustrated in Fig. 3. Initially, DLMRec encodes each user and their historical item interactions into discrete token representations that preserve collaborative semantics while ensuring compatibility with the diffusion process. A hybrid prompt is then constructed by augmenting these user and item tokens with textual information to enrich preference modeling. Next, we design a curriculum-driven training strategy that aligns diffusion-based denoising with preference learning. The model is trained to recover progressively masked item tokens under varying corruption levels, capturing both item-level semantics and high-order collaborative dependencies, while negative samples are incorporated to sharpen discriminative capability. 
+
+Manuscript submitted to ACM 8 Liu et al. Finally, during inference, DLMRec performs iterative refinement over the target item tokens. A stability-aware decoding mechanism distinguishes confident predictions from uncertain ones: stable tokens are committed early, while unstable tokens are refined across multiple diffusion steps. A voting-based aggregation strategy then synthesizes the full refinement trajectory to produce the final recommendation. 
+
+3.2 Collaborative-Aware Stochastic Tokenizer 
+
+To bridge collaborative recommendation and diffusion language modeling, it is necessary to construct discrete rep-resentations that are compatible with the diffusion process while retaining recommendation-specific semantics. The ideal representation should preserve collaborative similarity structures and assign each user and item unique, non-conflicting discrete codes. However, existing tokenization approaches present two key challenges. First, hierarchical tokenization methods (e.g., RQ-style) impose sequential dependencies that conflict with the bidirectional denoising of DLMs [ 52 , 54 , 63 ]. Second, text-derived representations often fail to capture collaborative semantics, as pre-trained encoders are optimized for linguistic modeling rather than recommendation objectives [ 35 , 83 ]. To address these issues, we propose a collaborative-aware stochastic tokenizer (CAST), which learns discrete representations from collaborative signals in the user–item interaction graph. Specifically, CAST first extracts multi-hop collaborative embeddings to encode high-order interaction structure, and then performs stochastic quantization to map them into a discrete token space. In this way, the tokenized representations serve as discrete semantic units for subsequent preference modeling. As the tokenization procedures for users and items are symmetric, we detail the user-side formulation below, and the item-side construction follows an analogous logic. 
+
+3.2.1 Collaborative Semantic Representation. In collaborative recommendation, user and item representations are shaped not only by individual attributes but, more importantly, by the multi-hop relational structure of the interac-tion graph, making graph neural networks (GNNs) a natural backbone for modeling collaborative signals [ 16 , 66 ]. Representations at different propagation depths encode distinct levels of preference information, ranging from direct interactions to higher-order collaborative dependencies. Accordingly, our tokenizer encodes these multi-hop signals into discrete tokens, where each token corresponds to a specific propagation depth to preserve structured collaborative information. Since these tokens are constructed independently from multi-hop representations, they do not impose explicit inter-token dependencies and are naturally compatible with the bidirectional denoising process of DLMs. To instantiate this architecture, we maintain a set of codebook families for users, C = {C1, C2, . . . , C𝐾 }, where each C𝑘 denotes the 𝑘 -th sub-codebook containing 𝐿 learnable codewords of dimension 𝑑 𝑐 . Different codebooks are responsible for discretizing collaborative semantics from different propagation depths, enabling each token position to capture a distinct level of preference abstraction. To obtain such hop-wise collaborative semantics, we adopt LightGCN [ 16 ] as the backbone encoder over the historical interaction graph. At the 𝑙 -th propagation layer, LightGCN updates representations of user through neighborhood aggregation: 
+
+e𝑢, (𝑙 ) 
+
+> 𝑚
+
+=∑︁   
+
+> 𝑣 𝑛 ∈ N ( 𝑢 𝑚 )
+
+1√︁ 
+
+|N ( 𝑢 𝑚 )| |N ( 𝑣 𝑛 )| e𝑣, (𝑙 −1) 
+
+> 𝑣 𝑛
+
+, with e𝑢, (0) 
+
+> 𝑚
+
+= p𝑚 , (9) where N ( 𝑢 𝑚 ) and N ( 𝑣 𝑛 ) denote the neighbor sets of user 𝑢 𝑚 and item 𝑣 𝑛 , respectively. Through iterative propagation, 
+
+e(𝑙 ) captures collaborative signals from the 𝑙 -hop neighborhood, with shallow layers focusing on direct interaction patterns and deeper layers encoding higher-order collaborative relations. While we use LightGCN as the backbone, our tokenization mechanism generalizes to any GNN-based collaborative encoder producing multi-hop representations. 
+
+> Manuscript submitted to ACM
+
+Diffusion Language Model for Recommendation 9Instead of aggregating all layers into a single representation, we explicitly preserve the hop-wise user embeddings 
+
+H𝑢 𝑚 = {e𝑢, (0) 
+
+> 𝑚
+
+, e𝑢, (1) 
+
+> 𝑚
+
+, . . . , e𝑢, (𝐾 −1) 
+
+> 𝑚
+
+}, (10) where each e𝑢, (𝑘 −1) 
+
+> 𝑚
+
+is associated with the 𝑘 -th token position, yielding a token sequence that captures multi-granularity collaborative semantics without imposing sequential dependencies. 
+
+3.2.2 Hop-wise Stochastic Quantization. Given the hop-wise collaborative representations, we next discretize them into semantic tokens. While deterministic nearest-code assignment provides a simple quantization strategy, it may be overly restrictive for collaborative recommendation. Because user preferences are inherently diverse and stochastic, graph-based representations often encode multiple collaborative signals and cannot always be faithfully associated with a single codeword [ 70 , 76 ]. Consequently, hard assignment imposes sharp semantic boundaries and discards valuable collaborative uncertainty [ 80 ]. Motivated by these observations, we propose a stochastic quantization scheme that samples codewords from a similarity-aware assignment distribution, thereby preserving uncertainty-aware semantic structure. Specifically, we first compute the cosine similarity between each hop-wise user representation e(𝑘 −1) 
+
+> 𝑚
+
+and the codewords c(𝑘 ) 
+
+> 𝑗
+
+in the corresponding sub-codebook C(𝑘 ) :
+
+𝑠 (𝑘 ) 
+
+> 𝑚,𝑗
+
+= ⟨e(𝑘 −1) 
+
+> 𝑚
+
+, c(𝑘 ) 
+
+> 𝑗
+
+⟩∥e(𝑘 −1) 
+
+> 𝑚
+
+∥ ∥ c(𝑘 ) 
+
+> 𝑗
+
+∥ , 𝑗 = 1, . . . , 𝐿. (11) A direct softmax over all codewords may assign non-negligible probability mass to many low-similarity candidates, thereby introducing noisy token assignments. To alleviate this issue, we restrict the assignment space to the top-S
+
+most similar codewords and normalize the assignment probabilities only within this subset. The stochastic transition probability for e(𝑘 −1) 
+
+> 𝑚
+
+to the 𝑗 -th codeword is defined as 
+
+𝑃 (𝑤 𝑘 𝑚 = 𝑗 ) =
+
+
+
+exp 
+
+
+
+𝑠 (𝑘 ) 
+
+> 𝑚,𝑗
+
+/𝜏 𝑘 
+
+Í     
+
+> 𝑟 ∈Top S ( e(𝑘 −1)
+> 𝑚 ,C(𝑘 ))
+
+exp 
+
+
+
+𝑠 (𝑘 ) 
+
+> 𝑚,𝑟
+
+/𝜏 𝑘 
+
+ , if 𝑗 ∈ Top S( e(𝑘 −1) 
+
+> 𝑚
+
+, C(𝑘 ) ),
+
+0, otherwise ,𝜏 𝑘 = 𝜏 min + ( 𝜏 max − 𝜏 min )
+
+ 𝑘 𝐾 
+
+𝛼 
+
+,
+
+(12) where 𝜏 𝑘 is a hop-aware temperature that increases monotonically with the hop index to control the sharpness of the assignment distribution, 𝜏 max and 𝜏 min are its lower and upper bounds, and 𝛼 controls the growth rate. Intuitively, lower-order hops adopt smaller temperatures for sharper assignments to capture direct and stable preference signals, while higher-order hops use larger temperatures to enable softer, more stochastic assignments for abstract and uncertain collaborative semantics. In this way, the degree of quantization stochasticity is aligned with the semantic uncertainty across different propagation depths. 
+
+3.2.3 Semantic Reconstruction Decoder. Following stochastic quantization, the user 𝑢 𝑚 is assigned with the discrete tokens W𝑢 𝑚 = {𝑤 1
+
+> 𝑚
+
+, 𝑤 2
+
+> 𝑚
+
+, . . . , 𝑤 𝐾 𝑚 }, together with their corresponding token embeddings [c1
+
+> 𝑤 1
+> 𝑚
+
+, c2
+
+> 𝑤 2
+> 𝑚
+
+. . . , c𝐾 𝑤 𝐾 𝑚 
+
+]. To enable reconstruction, we concatenate these token embeddings and apply a decoder: 
+
+ˆe𝑚 = 𝑓 𝑑𝑒𝑐 ([ c1
+
+> 𝑤 1
+> 𝑚
+
+, c2
+
+> 𝑤 2
+> 𝑚
+
+, . . . , c𝐾 𝑤 𝐾 𝑚 
+
+]) , (13) 
+
+> Manuscript submitted to ACM
+
+10 Liu et al. 
+
+Algorithm 1 Collaborative-aware Stochastic Tokenizer 
+
+Require: User-item graph G, pretrained graph encoder 𝑓 enc , user/item codebook families C𝑢 , C𝑖 , candidate size S,temperature bounds 𝜏 min and 𝜏 max , growth factor 𝛼 , decoder 𝑓 dec , target user/item (𝑢 𝑚 or 𝑣 𝑛 )
+
+Ensure: Discrete token sequence w = [𝑤 1, . . . , 𝑤 𝐾 ] and reconstructed embedding ˆe 
+
+> 1:
+
+Obtain hop-wise collaborative representations of user 𝑢 𝑚 or item 𝑣 𝑛 from the pretrained graph encoder 𝑓 enc , written as H = {e(0) , e(1) , . . . , e(𝐾 −1) }. 
+
+> 2:
+
+for 𝑘 = 1 to 𝐾 do  
+
+> 3:
+
+Compute cosine similarities between e(𝑘 −1) and each codeword in the corresponding codebook via Eq. (11)  
+
+> 4:
+
+Obtain the top-S most similar codewords:  
+
+> 5:
+
+Compute the stochastic assignment distribution over Eq. (12)  
+
+> 6:
+
+Sample the token index 𝑤 𝑘 ∼ 𝑃 (𝑤 𝑘 ) 
+
+> 7:
+
+Retrieve the corresponding token embedding c(𝑘 ) 
+
+> 𝑤 𝑘
+> 8:
+
+end for  
+
+> 9:
+
+Form the discrete token sequence: 
+
+W = [𝑤 1, 𝑤 2, . . . , 𝑤 𝐾 ] 
+
+> 10:
+
+Concatenate token embeddings: 
+
+¯c = [c(1) 
+
+> 𝑤 1
+
+, c(2) 
+
+> 𝑤 2
+
+, . . . , c(𝐾 ) 
+
+> 𝑤 𝐾
+
+] 
+
+> 11:
+
+Reconstruct the original embedding through the decoder: 
+
+ˆe = 𝑓 dec (¯c) 
+
+> 12:
+
+return w, ˆe
+
+where ˆe𝑚 denotes the reconstructed embedding of user 𝑢 𝑚 . The same quantization and reconstruction procedure is applied to items in an analogous manner as demonstrated in Algorithm 1. 
+
+3.2.4 Training Objective. The tokenizer and decoder are jointly trained to preserve collaborative semantics while learning stable discrete tokens. We employ a reconstruction loss to ensure the decoder 𝑓 dec faithfully recovers the original user representation p𝑚 :
+
+Lrec = |p𝑚 − ˆe𝑚 |2. (14) However, reconstruction alone is insufficient to guarantee stable quantization. We therefore leverage a codebook loss and a commitment loss to regulate the alignment between collaborative representations and their assigned codewords: 
+
+Lcb = ∥sg [e(𝑘 −1) 
+
+> 𝑚
+
+] − c𝑘 𝑤 𝑘 𝑚 
+
+∥2,
+
+Lcommit = ∥e(𝑘 −1) 
+
+> 𝑚
+
+− sg [c𝑘 𝑤 𝑘 𝑚 
+
+] ∥ 2,
+
+(15) where sg [·] denotes the stop-gradient operator. In particular, Lcb updates the codebook embeddings toward the collaborative representations, while Lcommit encourages the representations to stay close to their assigned codewords. While the reconstruction loss enforces pointwise consistency, it does not explicitly promote discriminative alignment in the embedding space. Since the downstream recommendation task is inherently retrieval-oriented, we introduce a contrastive loss to align each reconstructed representation with its original embedding while separating it from other users in the batch. Formally, for a mini-batch of size 𝐵 , the contrastive loss is defined as 
+
+Lcl = − 1
+
+𝐵 
+
+> 𝐵
+
+∑︁ 
+
+> 𝑚 =1
+
+log exp (sim (ˆe𝑚 , p𝑚 )/ 𝜏 )
+
+Í𝐵 𝑛 =1,𝑛 ≠𝑚 exp (sim (ˆe𝑚 , p𝑛 )/ 𝜏 ) , (16) 
+
+> Manuscript submitted to ACM
+
+Diffusion Language Model for Recommendation 11 where ˆe𝑚 is the reconstructed embedding, p𝑚 is the corresponding original embedding, and the remaining p𝑛 in the batch serve as negative samples. The final training objective is defined as 
+
+L = Lrec + L cb + 𝜆 𝑐𝑚 Lcommit + 𝜆 𝑐𝑙 Lcl , (17) where 𝜆 𝑐𝑚 and 𝜆 𝑐𝑙 are balancing coefficients. For clarity, the above formulation is presented for user representations. The item-side training procedure follows the same formulation analogously. 
+
+3.3 Curriculum-driven Semantic Alignment for Recommendations 
+
+After obtaining discretized user and item tokens, a key challenge is how to integrate these out-of-vocabulary rec-ommendation tokens into the semantic space of the diffusion language model. Since DLMs are primarily trained on natural language corpora, adapting them to understand recommendation-derived tokens poses a significant chal-lenge. To address this, we propose a curriculum-driven semantic alignment strategy that progressively adapts the DLM from semantic grounding to task-specific recommendation modeling. First, we conduct item-level alignment to ground item tokens in the semantic space of the model and establish stable item representations. Then, we perform recommendation-oriented adaptation at the token level, enabling the model to capture user preference patterns and generate recommendation-tailored outputs. Through this progressive curriculum, the DLM achieves unified alignment of item semantics and recommendation objectives. 
+
+3.3.1 Hybrid Recommendation Prompt Construction. To adapt diffusion language models to recommendation, we construct a hybrid prompt that unifies collaborative signals with semantic item descriptions. The quantization module abstracts user-item interaction patterns and graph-topological structures into discrete collaborative tokens, while textual descriptions offer complementary semantic signals. By integrating these two modalities, the prompt provides the model with a holistic view that jointly captures collaborative preferences and semantic understanding during generation. Prompt Example 
+
+User  <user_0_122><user_1_107><user_2_107>  interacted with 
+
+<item_0_81><item_1_108><item_2_44>  Wizard of Oz, 
+
+<item_0_72><item_1_80><item_2_61>  Star Wars: Episode IV - A New Hope, 
+
+<item_0_72><item_1_60><item_2_49>  Star Wars: Episode I - The Phantom Menace. 
+
+Target  <item_0_94><item_1_14><item_2_81>            
+
+> Fig. 4. Illustration of a hybrid recommendation prompt with a real example from the MovieLens-1M dataset. In the quantization process, the number of codebooks is set to 𝐾 =3, and each codebook contains 𝐿 =128 codewords. Each item is represented by multiple discrete tokens together with its textual title. For example, <item_ 0_72 >denotes that the corresponding item token is selected as the 72nd codeword from the first codebook.
+
+For each user, the prompt comprises a tokenized user identifier, a sequence of historical interactions, and a target item. Historical items are each represented as a collaborative token paired with its textual description, enabling the model to ground collaborative patterns in semantic context. The target item is represented only by its collaborative token sequence and serves as the prediction target. Fig. 4 presents a representative example of the hybrid prompt, where textual descriptions are instantiated as movie titles. 
+
+> Manuscript submitted to ACM
+
+12 Liu et al. 
+
+3.3.2 Item-level Masking for Token-Semantic Alignment. The core of Stage 1 lies in an item-level masking strategy tailored to the hybrid recommendation prompt. Instead of masking tokens independently, we preserve the structural integrity of item-related information during corruption. Specifically, for each historical item 𝑣 𝑛 , we consider two item-specific blocks in the prompt: the discrete item-token block W𝑣 𝑛 (from CAST), and the textual description block 
+
+P𝑣 𝑛 (from the semantic description). These two blocks are masked at the item level with distinct probabilities. The target item tokens are fully masked, requiring the model to infer the complete item identity from the remaining context. In contrast, the natural-language template tokens remain always visible. This design encourages the model to recover item semantics from partially observed contexts rather than relying on local token co-occurrence alone, thereby establishing the correspondence between collaborative tokens and their textual descriptions. For stage 1, we design an easy-to-hard item-level masking strategy that progressively increases corruption difficulty as training proceeds. In early epochs, the model predominantly encounters lightly perturbed item contexts, facilitating stable learning of token-text correspondences. As training advances, the probability of heavily masked contexts gradually increases, exposing the model to progressively harder denoising challenges. This curriculum design promotes steady alignment of item-level semantics while preventing instability caused by aggressive corruption in the initial phase. Specifically, for each item-level masking unit, the masking probability is defined as: 
+
+1 − ¯𝛼 𝑡 = 𝑡 𝑇 + 𝜆 sin 
+
+ 𝑡𝜋 𝑇 
+
+  𝑛 
+
+N − 12
+
+
+
+, (18) where 𝑛 denotes the current training epoch in Stage 1, N is the total number of Stage 1 epochs, 𝑡 is the sampled diffusion timestep, 𝑇 is the maximum diffusion timestep, and 𝜆 controls the curriculum strength. The resulting value is clipped to 
+
+[0, 1] to determine whether each historical item block is masked. To facilitate training, we assign separate curriculum coefficients 𝜆 to the item-token block and the textual description block, reflecting their different roles in semantic grounding. Crucially, jointly masking these two blocks prevents the model from learning a trivial mapping from item names to codebook tokens [ 49 , 83 ]. Instead, it must infer item semantics from incomplete collaborative and textual contexts, establishing a robust alignment between discrete tokens and their underlying meanings in the semantic space. Formally, Stage 1 adopts the standard masked reconstruction objective of diffusion language models, denoted as L𝑑𝑖 𝑓 𝑓 
+
+in Eq. 8. 
+
+3.3.3 Token-level Masking for Preference-Aware Denoising. Stage 2 shifts from item-level semantic alignment to recommendation-oriented preference prediction through token-level masking. Moving to finer-grained token-level denoising encourages the model to capture dependencies both within item tuples and across interaction sequences. To further enhance discriminative capability, we introduce an embedding-space preference loss that pulls predicted representations toward ground-truth targets while pushing them away from hard negatives. Together with the token reconstruction objective, this auxiliary loss strengthens both token-level prediction and recommendation-specific discrimination. Each token in both target and historical items is independently corrupted under a linear masking schedule. Specifically, given a sampled diffusion step 𝑡 ∼ Uniform (0,𝑇 ), the forward corruption process is: 
+
+𝑞 (𝑥 𝑖 𝑡 | 𝑥 𝑖 
+
+> 0
+
+) =
+
+
+
+1 − 𝑡 𝑇 , if 𝑥 𝑖 𝑡 = 𝑥 𝑖 
+
+> 0
+
+,𝑡, if 𝑥 𝑖 𝑡 = [M],
+
+(19) 
+
+> Manuscript submitted to ACM
+
+Diffusion Language Model for Recommendation 13 
+
+Algorithm 2 Curriculum-driven Semantic Alignment for Recommendations 
+
+Require: Training set D, pretrained diffusion language model DLM , frozen CAST tokenizers, Stage 1 epochs N , Stage 2 epochs M, training cycles C, diffusion steps 𝑇 
+
+Ensure: Fine-tuned diffusion language model DLM for recommedation  
+
+> 1:
+
+Build the hybrid prompt dataset eD from D, and record the positions of item-token blocks, textual description blocks, and target tokens for subsequent Stage 1 and Stage 2 masking  
+
+> 2:
+
+for 𝑐 = 1 to 𝐶 do  
+
+> 3:
+
+for 𝑛 = 1 to N do  
+
+> 4:
+
+for each batch B ⊂ eD do  
+
+> 5:
+
+Sample 𝑡 ∼ Uniform (0,𝑇 ) 
+
+> 6:
+
+Apply item-level curriculum masking to obtain masked prompts via Eq. 7 and Eq. 18  
+
+> 7:
+
+Compute Ldiff via Eq. 8 and update DLM  
+
+> 8:
+
+end for  
+
+> 9:
+
+end for  
+
+> 10:
+
+for 𝑚 = 1 to M do  
+
+> 11:
+
+for each batch B ⊂ eD do  
+
+> 12:
+
+Sample 𝑡 ∼ Uniform (0,𝑇 ) and set 𝑝 mask = 𝑡 /𝑇  
+
+> 13:
+
+Apply token-level masking to obtain corrupted prompts via Eq. 19  
+
+> 14:
+
+Compute Ldiff via Eq. 8  
+
+> 15:
+
+Obtain the soft target representation ˆz from target-position logits via soft quantization in Eq. 20 and Eq. 21  
+
+> 16:
+
+Construct ⟨ˆz, zpos , zneg ⟩ and compute Lpref via Eq. 22  
+
+> 17:
+
+Compute LS2 via Eq. 23 and update DLM  
+
+> 18:
+
+end for  
+
+> 19:
+
+end for  
+
+> 20:
+
+Evaluate the model on the validation set  
+
+> 21:
+
+if early stopping criterion is satisfied then  
+
+> 22:
+
+return DLM  
+
+> 23:
+
+end if  
+
+> 24:
+
+end for  
+
+> 25: 26:
+
+return DLM 
+
+where each token remains unchanged with probability 1 − 𝑡 𝑇 or is replaced by the mask token [M] with probability 𝑡 𝑇 .Textual descriptions, user tokens, and template text remain unmasked. To ensure meaningful prediction, we enforce that at least one target token is masked at each step. For masked positions, we retain the standard reconstruction objective L𝑑𝑖 𝑓 𝑓 . However, recommendation requires more than token-level recovery, it demands that the model identify the true target item among competing alternatives. To this end, we introduce a preference-aware loss that contrasts the target item against hard negatives in the embedding space. Since target prediction is defined over discrete codewords, hard selection blocks gradient flow and prevents the preference loss from backpropagating to the target-position logits. To address this, we adopt differentiable soft quantization to map the logits to a continuous item representation. For each of the 𝐾 token positions, we extract the position-specific logits ℓ (𝑘 ) and apply softmax to obtain a probability distribution p(𝑘 ) = softmax (ℓ (𝑘 ) ) over the corresponding sub-codebook. The expected codeword embedding is then computed as: 
+
+˜c(𝑘 ) =
+
+> 𝐿
+
+∑︁ 
+
+> 𝑗 =1
+
+𝑝 (𝑘 ) 
+
+> 𝑗
+
+c(𝑘 ) 
+
+> 𝑗
+
+, (20) 
+
+> Manuscript submitted to ACM
+
+14 Liu et al. where 𝑝 (𝑘 ) 
+
+> 𝑗
+
+denotes the 𝑗 -th component of p(𝑘 ) , representing the probability of selecting the 𝑗 -th codeword in the 𝑘 -th sub-codebook. The 𝐾 expected embeddings are then concatenated and passed through the decoder to reconstruct the expected item representation: 
+
+ˆz = 𝑓 dec 
+
+
+
+[˜c(1) , ˜c(2) . . . ˜c(𝐾 ) ]
+
+
+
+. (21) This differentiable decoding process allows the preference loss to back-propagate to the target-position logits while remaining compatible with discrete codeword prediction. To provide recommendation-oriented supervision„ we con-struct preference triplets ⟨ˆz, zpos , zneg ⟩ in the embedding space. The positive anchor zpos is the ground-truth embedding of the target item. For the negative sample, we perform hard negative mining based on cosine similarity: we compute the similarity between ˆz and all items in the embedding bank Q, exclude the target item and historical interacted items, and randomly sample one from the top-5 most similar most similar remaining candidates as as zneg . The preference loss is defined as a pairwise ranking objective: 
+
+Lpref = − log 𝜎 (cos (ˆz, zpos ) − cos (ˆz, zneg )) , (22) where cos (· , ·) denotes cosine similarity, and 𝜎 (·) is the sigmoid function. This objective encourages the decoded representation to stay closer to the true target item than to hard negatives, thereby improving the model’s discriminative ability for recommendation. The overall Stage-2 objective combines the diffusion reconstruction loss with the proposed preference-aware loss: 
+
+LS2 = Ldiff + 𝑤 pref Lpref , (23) where 𝑤 pref controls the contribution of the preference-aware term. The overall training framework alternates between Stage 1 and Stage 2 over multiple cycles, where Stage 1 runs for N epochs with progressive item-level masking and Stage 2 runs for M epochs with preference-aware token-level denoising; detailed procedures are summarized in Algorithm 2. 
+
+3.4 Voting-based Iterative Refinement for Recommendation 
+
+Standard discrete diffusion sampling typically relies on re-masking and regenerating from scratch, which may discard informative intermediate preference signals and destabilize recommendation outputs. To address this, we propose a voting-based iterative refinement strategy tailored to discrete item tokens. By aggregating token-level probability mass across refinement steps, the model selects candidates that remain consistently supported throughout generation. This mechanism preserves useful intermediate information and enables smoother transitions from noisy states to high-fidelity tokens, improving both stability and reliability of inference. 
+
+3.4.1 Prediction-guided Iterative Refinement. To enable gradual refinement of recommendation outputs, we introduce a prediction-guided iterative refinement strategy, building upon recent advances in diffusion decoding [ 48 , 84 ]. In contrast to conventional approaches that reset target tokens to masked states at each denoising step, DLMRec preserves information from prior predictions within the continuous embedding space. Concretely, the predicted target tokens are projected back to their corresponding codeword embeddings (i.e., the learnable input representation within the DLM), which are then aggregated with mask embeddings and user-conditioned collaborative representations to construct the input for the subsequent refinement step. This iterative design facilitates the accumulation of recommendation-relevant evidence throughout the generation trajectory, resulting in more accurate and preference-aligned predictions. At each refinement step, the logits at target positions are projected into the DLM input embedding space for continuous refinement. We consider two modes: hard and soft. The hard mode uses the input embedding of the 
+
+> Manuscript submitted to ACM
+
+Diffusion Language Model for Recommendation 15 argmax token, while the soft mode computes a probability-weighted average over the target-position token distribution. Formally, for the 𝑘 -th target position with logit vector ℓ (𝑘 ),𝑖 ∈ R𝐿 at refinement step 𝑖 , let 
+
+ˆe(𝑘 ),𝑖 =
+
+
+
+e(𝑘 ) 
+
+> 𝑗 ∗
+
+, 𝑗 ∗ = arg max  
+
+> 𝑗 =1,...,𝐿
+
+ℓ (𝑘 ),𝑖 𝑗 , (hard) ,
+
+> 𝐿
+
+Í
+
+> 𝑙 =1
+
+p(𝑘 ),𝑖 𝑙 e(𝑘 ) 
+
+> 𝑙
+
+, p(𝑘 ),𝑖 𝑙 = softmax (ℓ (𝑘 ),𝑖 )𝑙 , (soft) ,
+
+(24) where e(𝑘 ) 
+
+> 𝑙
+
+denotes the input embedding of the 𝑙 -th candidate token in the DLM embedding layer for the 𝑘 -th target position. To guide subsequent denoising, we first construct a user-conditioned prior embedding for each target hop: 
+
+b(𝑘 ) = emask + 𝜆 e(𝑘 ) 
+
+> 𝑢
+
+, (25) where emask denotes the DLM input embedding of the mask token and e(𝑘 ) 
+
+> 𝑢
+
+is the DLM input embedding of the user’s 
+
+𝑘 -th token. The mask embedding serves as a neutral placeholder consistent with the DLM decoding process, while the user embedding injects collaborative preference information. Their combination therefore provides a user-conditioned prior for refining uncertain target positions. The estimated embedding at target hop 𝑘 , ˆe(𝑘 ),𝑖 , is then interpolated with this prior to form the input of the next refinement step: 
+
+h(𝑘 ),𝑖 +1 = (1 − 𝛼 (𝑘 ),𝑖 ) ˆe(𝑘 ),𝑖 + 𝛼 (𝑘 ),𝑖 b(𝑘 ) ,𝛼 (𝑘 ),𝑖 = 𝜎 
+
+
+
+𝜏 − 𝑐 (𝑘 ),𝑖 
+
+, (26) where 𝛼 (𝑘 ),𝑖 is the confidence-guided mixing coefficient, 𝑐 (𝑘 ),𝑖 denotes the maximum softmax probability over the codebook logits at hop 𝑘 during refinement step 𝑖 , and 𝜏 is a confidence threshold. Thus, confident predictions are preserved through their estimated embeddings, while uncertain positions are pulled toward the user-conditioned prior. The resulting embedding h(𝑘 ),𝑖 +1 is then fed into the DLM for the next refinement iteration. To ensure training–inference consistency, we also replace the masked target item tokens in Stage 2 with the same user-conditioned prior embedding in Eq. 8, rather than using the plain mask token alone. This allows the model to adapt to the user-guided refinement pattern. 
+
+3.4.2 Stability-aware Voting for Recommendation. Although refinement preserves intermediate information, it does not ensure uniform convergence across all target positions. In practice, some positions stabilize early with consistent predictions, while others remain uncertain and oscillate across consecutive iterations. Treating all positions uniformly risks overwriting reliable predictions and amplifying drift. To address this, we introduce a stability-aware voting strategy that adaptively handles positions based on their convergence behavior. Stable positions are committed early to their argmax tokens once convergence is detected, while unstable ones continue soft refinement under user-conditioned guidance. At the end of inference, voting aggregates evidence from the refinement trajectory to produce robust final recommendations by leveraging consensus across steps. Specifically, after each refinement step, we compare the current prediction at hop 𝑘 with that from the previous step, and define its stability as: 
+
+stable (𝑖 ) 
+
+> 𝑘
+
+= 1arg max p(𝑘 ),𝑖 = arg max p(𝑘 ),𝑖 −1 ∧ max p(𝑘 ),𝑖 > 𝛾  , (27) where p(𝑘 ),𝑖 denotes the token distribution at hop 𝑘 in refinement step 𝑖 , and 𝛾 is a confidence threshold. A target position is regarded as stable if its predicted token remains unchanged and the corresponding confidence exceeds 𝛾 ;otherwise, it is treated as unstable. For stable positions, the predicted token is mapped to its DLM input embedding 
+
+> Manuscript submitted to ACM
+
+16 Liu et al. 
+
+Algorithm 3 Voting-based Iterative Refinement for Recommendation 
+
+Require: Input embeddings x𝑆 with target item positions masked, diffusion language model DLM , CAST decoder 𝑓 dec ,item representations Q, refinement steps 𝑆 , user guidance weight 𝜆 , confidence threshold 𝛾 , mixing threshold 𝜏 
+
+Ensure: Top-𝑁 recommendation list  
+
+> 1:
+
+Perform an initial forward pass on x𝑆 to obtain target-position logits {ℓ (𝑘 ),0 }𝐾 𝑘 =1 
+
+> 2:
+
+Extract initial target distributions {p𝑘, (0) }𝐾 𝑘 =1, argmax indices, confidence scores, and log-probabilities  
+
+> 3:
+
+if 𝑆 = 1 then  
+
+> 4:
+
+Set the final CAST token at hop 𝑘 as 𝑧 ∗ 
+
+> 𝑘
+
+= arg max p𝑘, (0) for all 𝑘  
+
+> 5:
+
+else  
+
+> 6:
+
+for 𝑖 = 1 to 𝑆 − 1 do  
+
+> 7:
+
+for 𝑘 = 1 to 𝐾 do  
+
+> 8:
+
+Compute confidence score 𝑐 (𝑘 ),𝑖 = max p(𝑘 ),𝑖  
+
+> 9:
+
+if arg max p(𝑘 ),𝑖 = arg max p(𝑘 ),𝑖 −1 and 𝑐 (𝑘 ),𝑖 > 𝛾 then  
+
+> 10:
+
+Mark hop 𝑘 as stable and replace its representation with the corresponding DLM input embedding of the argmax token  
+
+> 11:
+
+else  
+
+> 12:
+
+Mark hop 𝑘 as unstable and construct next-step representation by combining prediction embedding (Eq. 24) and user-conditioned base embedding (Eq. 25) via Eq. 26  
+
+> 13:
+
+end if  
+
+> 14:
+
+end for  
+
+> 15:
+
+Update the target-region embeddings with the refined representations and feed them into DLM via 
+
+inputs_embeds  
+
+> 16:
+
+Obtain new target logits {ℓ (𝑘 ),𝑖 +1 }𝐾 𝑘 =1 and update {p(𝑘 ),𝑖 +1 }𝐾 𝑘 =1, log-probabilities, and prediction embeddings  
+
+> 17:
+
+end for  
+
+> 18:
+
+for 𝑘 = 1 to 𝐾 do  
+
+> 19:
+
+if hop 𝑘 is stable at the final step then  
+
+> 20:
+
+Set 𝑧 ∗ 
+
+> 𝑘
+
+= arg max p(𝑆 −1) 
+
+> 𝑘
+> 21:
+
+else  
+
+> 22:
+
+Perform voting over all refinement steps: 𝑧 ∗ 
+
+> 𝑘
+
+= arg max Í𝑆 −1 
+
+> 𝑖 =0
+
+log p(𝑖 ) 
+
+> 𝑘
+> 23:
+
+end if  
+
+> 24:
+
+end for  
+
+> 25:
+
+end if  
+
+> 26:
+
+Form the finalized CAST token sequence z∗ = [𝑧 ∗
+
+> 1
+
+, . . . , 𝑧 ∗ 
+
+> 𝐾
+
+] 
+
+> 27:
+
+Decode z∗ into the target item representation ˆz = 𝑓 dec (z∗) 
+
+> 28:
+
+Retrieve the top-𝑁 most similar items from the item bank Q using ˆz 
+
+> 29:
+
+return Top-𝑁 recommendation list and directly used as a hard replacement in the next refinement step. For unstable positions, we continue to apply the prediction-guided interpolation update described in Eq. 26. At the final step, stable positions are directly decoded using their argmax tokens. For unstable positions, we apply voting to aggregate evidence across refinement steps: log-probabilities from the current and previous steps are summed, and the token with the highest cumulative score is selected. This favors the most consistently supported candidate across the trajectory, improving prediction stability. The finalized token sequence is then decoded into a continuous representation for nearest-neighbor retrieval over the item bank to produce the top-K recommendation list as demonstrated in Algorithm 3. 
+
+> Manuscript submitted to ACM
+
+Diffusion Language Model for Recommendation 17 
+
+3.5 Complexity Analysis of DLMRec 
+
+In this section, we analyzes the time complexity of the proposed DLMRec framework. 
+
+3.5.1 Complexity of Training. Our model is trained using a masked diffusion objective with bidirectional attention over the full sequence. Let 𝐿 𝑠 denote the sequence length, 𝐻 the number of Transformer layers, and 𝑑 the hidden dimension. For each training sample, the computational cost is dominated by the Transformer forward computation, which incurs a complexity of O( 𝐻 · 𝐿 2 
+
+> 𝑠
+
+· 𝑑 ). In addition, our curriculum-based masking strategy gradually transitions from item-level to token-level masking. At each training step, the masking operation introduces a linear overhead of O( 𝐿 𝑠 ) for constructing corrupted inputs. Therefore, the overall training complexity per sample is O( 𝐻 · 𝐿 2 
+
+> 𝑠
+
+· 𝑑 + 𝐿 𝑠 ) ≈ O( 𝐻 · 𝐿 2 
+
+> 𝑠
+
+· 𝑑 ), where the masking cost is negligible compared to the Transformer computation. Compared to autoregressive training, which optimizes a factorized likelihood and relies on causal masking, our method removes the autoregressive constraint and enables full parallel computation over all positions. As a result, both approaches have comparable asymptotic training complexity in terms of FLOPs, while our method benefits from bidirectional context modeling without incurring additional computational cost. 
+
+3.5.2 Complexity of Inference. At inference time, DLMRec performs 𝑆 iterative refinement steps over the full input sequence. In each step, a forward pass with bidirectional attention is executed, incurring a complexity of O( 𝑆 · 𝐻 · 𝐿 2 
+
+> 𝑠
+
+· 𝑑 )
+
+for the Transformer computation. Unlike standard decoding strategies that regenerate all positions at each step, our stability-aware mechanism operates selectively: stable token positions are committed early and fixed without further refinement, while only unstable positions ( 𝐾 targets, where 𝐾 ≪ 𝐿 𝑠 ) undergo continued updates via embedding interpolation and confidence-based gating. The overhead from stability checking, embedding updates, and adaptive interpolation restricted to the target region is O( 𝑆 · 𝐾 · 𝑑 ), which is negligible compared to the Transformer forward pass. The voting mechanism aggregates log-probabilities across refinement steps exclusively for unstable positions, introducing an additional cost of O( 𝐾 · 𝑆 ), which is also negligible since both 𝐾 and 𝑆 are small constants. The overall inference complexity is dominated by Transformer forward computation: O( 𝑆 · 𝐻 · 𝐿 2 
+
+> 𝑠
+
+· 𝑑 ).
+
+4 Experiment 
+
+In this section, we present comprehensive experiments to evaluate the proposed DLMRec framework. 
+
+4.1 Experiment Settings 
+
+4.1.1 Datasets. We conduct experiments on three benchmark datasets, including LastFM 1, MovieLens-1M 2, and Amazon-Beauty 3, to evaluate the effectiveness of our proposed DLMRec framework across different recommendation scenarios. LastFM, obtained from the HetRec 2011 repository, records user listening histories of music artists. MovieLens-1M consists of movie ratings provided by MovieLens users. Amazon-Beauty, sourced from the Amazon Review Data repository, contains user reviews and ratings for beauty products. Following common practice, we filter out users and items with fewer than three interactions. As textual side information, we use item titles for MovieLens-1M and Amazon-Beauty, and artist names for LastFM. User and item IDs are retained as collaborative identifiers across all datasets. We adopt the Split-by-Timepoint protocol [ 26 ], sorting interactions chronologically and using those before a cutoff timestamp for training and the remaining ones for testing. Table 1 summarizes the resulting dataset statistics. 
+
+> 1LastFM: https://grouplens.org/datasets/hetrec-2011/
+> 2MovieLens-1M: https://grouplens.org/datasets/movielens/1m/
+> 3Amazon-Beauty: https://nijianmo.github.io/amazon/ Manuscript submitted to ACM
+
+18 Liu et al. 
+
+> Table 1. Statistics of the datasets
+
+Dataset LastFM MovieLens-1M Amazon-Beauty 
+
+#Users 1,865 6,035 18,028 #Items 3,517 3,201 10,266 #Interactions 74,154 574,684 138,527 Interaction Density 1.1305% 2.9748% 0.0748% 
+
+4.1.2 Evaluation Metrics. We evaluate top-K recommendation performance using Recall@ K and Normalized Dis-counted Cumulative Gain (NDCG@ K) with K ∈ { 10 , 20 } under the full-ranking setting. All reported results are averaged over five independent runs. 
+
+4.1.3 Baselines. We compare the proposed DLMRec with a broad range of competitive baselines categorized into four groups: GNN-based collaborative filtering (LightGCN [ 16 ], SGL [ 67 ], LTGNN [ 77 ]), sequential recommendation (SASRec [ 28 ], BERT4Rec [ 56 ]), diffusion-based generative recommendation (DiffRec [ 64 ], CDRec [ 38 ], LLaDaRec [ 54 ]), and LLM-empowered recommenders (TIGER [ 52 ], LLaRa [ 35 ], CoLLM [ 79 ], TokenRec [ 50 ]). We briefly describe each baseline below. 
+
+• LightGCN [16]: LightGCN refines graph convolutional networks by eliminating feature transformation and nonlin-earities, relying solely on the neighborhood aggregation process for collaborative filtering. 
+
+• SGL [ 67 ]: SGL generates multiple views of the interaction graph and employs contrastive learning to enforce consistency across them, thereby enhancing the supervisory signal. 
+
+• LTGNN [ 77 ]: LTGNN achieves linear-time GNN-based recommendation via implicit graph modeling and variance-reduced sampling. 
+
+• SASRec [ 28 ]: SASRec applies self-attention to sequential recommendation, adaptively weighting previous items to predict the next item. 
+
+• BERT4Rec [ 56 ]: BERT4Rec employs deep bidirectional self-attention to sequential recommendation, enabling each item to fuse both left and right context. 
+
+• DiffRec [ 64 ]: DiffRec employs a diffusion-based denoising approach that perturbs interaction vectors and learns to reconstruct them for recommendation. 
+
+• CDRec [ 38 ]: CDRec introduces discrete-space diffusion to recommendation via popularity-aware masking in continu-ous time, enabling efficient single-step generation with consistency parameterization. 
+
+• LLaDaRec [ 54 ]: LLaDA-Rec adapts discrete diffusion to generative recommendation with parallel semantic IDs and adaptive beam search. 
+
+• TIGER [ 52 ]: TIGER compresses textual information into compact semantic IDs via residual vector quantization, and trains a Transformer to model semantic ID sequences for sequential recommendation. 
+
+• LLaRa [ 35 ]: LLaRa leverages a projection module to bridge item embeddings and textual item descriptions, and further applies curriculum learning during fine-tuning. 
+
+• CoLLM [ 79 ]: CoLLM adopts GNNs to encode users and items into continuous embeddings, which are then fed into LLMs for recommendation. 
+
+• TokenRec [ 50 ]: TokenRec introduces a quantized tokenizer that discretizes users and items with their collaborative semantics into tokens compatible with LLMs. 
+
+> Manuscript submitted to ACM
+
+Diffusion Language Model for Recommendation 19 
+
+> Table 2. Summarization of the overall performance comparison across three recommendation datasets. The best performance is highlighted in bold, and the second best is underlined. %Improve denotes the relative improvement of DLMRec over the strongest baseline.
+
+Dataset LastFM MovieLens-1M Amazon-Beauty Method R@20 R@10 N@20 N@10 R@20 R@10 N@20 N@10 R@20 R@10 N@20 N@10 
+
+GNN-based Collaborative Filtering 
+
+LightGCN 0.0595 0.0311 0.0425 0.0297 0.1088 0.0620 0.1062 0.0984 0.0730 0.0459 0.0349 0.0268 SGL 0.0612 0.0347 0.0431 0.0329 0.1133 0.0627 0.1113 0.0946 0.0741 0.0465 0.0353 0.0272 LTGNN 0.0631 0.0363 0.0452 0.0345 0.1173 0.0633 0.1144 0.0992 0.0768 0.0474 0.0375 0.0283 
+
+Sequential Recommendation 
+
+SASRec 0.0587 0.0308 0.0425 0.0292 0.1021 0.0587 0.1001 0.882 0.0724 0.0457 0.0457 0.0328 BERT4Rec 0.0571 0.0303 0.0416 0.0285 0.1023 0.0598 0.1007 0.0899 0.0736 0.0499 0.0383 0.0311 
+
+Diffusion-based Generative Recommendation 
+
+DiffRec 0.0606 0.0293 0.0429 0.0273 0.1171 0.0641 0.1080 0.0997 0.0702 0.0497 0.0373 0.0310 CDRec 0.0693 0.0431 0.0561 0.0420 0.1276 0.0742 0.1168 0.1014 0.0767 0.0506 0.0376 0.0298 LLaDaRec 0.0747 0.0524 0.0704 0.0542 0.1196 0.0771 0.1179 0.1033 0.0754 0.0523 0.0409 0.0339 
+
+LLM- empowered Recommenders 
+
+TIGER 0.0718 0.470 0.0639 0.0504 0.1052 0.0751 0.1096 0.1025 0.0746 0.0519 0.0381 0.0318 LLaRa 0.0858 0.0535 0.0708 0.0538 0.1252 0.0783 0.1187 0.1078 0.0828 0.0535 0.0383 0.0306 CoLLM 0.0845 0.0458 0.0713 0.0499 0.1229 0.0735 0.1061 0.1012 0.0815 0.0532 0.0411 0.0326 TokenRec 0.0836 0.0469 0.0682 0.0479 0.1216 0.0685 0.1144 0.1021 0.0811 0.0517 0.0375 0.0294 DLMRec 0.0903 0.0575 0.0746 0.0574 0.1364 0.0828 0.1251 0.1113 0.0885 0.0579 0.0442 0.0354 
+
+%Improve 5.24% 7.48% 4.63% 5.90% 6.90% 5.75% 5.39% 3.25% 6.88% 8.22% 7.54% 4.42% 
+
+4.1.4 Hyper-parameter Setting. The DLRMRec framework is built on PyTorch and the Hugging Face platform, with LLaDA-8B-Base 4 [ 44 ] serving as the diffusion language model backbone. We apply a linear warmup-decay learning rate schedule ( get_linear_schedule_with_warmup ) and employ LoRA [ 21 ] for parameter-efficient fine-tuning. The codebook size 𝐾 is tuned from {1, 2, 3, 4}, and the number of codewords 𝐿 is selected from {64 , 128 , 256 , 512 }. The top-S
+
+candidates for stochastic assignment are set in {2, 3}. The lower and upper temperature bounds 𝜏 min and 𝜏 max are chosen from {0.05 , 0.5} and {0.1, 1.0}, respectively, and the growth rate 𝛼 is set to 1.1 in Eq. 12 for all experiments. During sampling, the number of refinement iterations is selected from {1, 2, 3, 4, 5, 10 } while the confidence threshold 𝜏 is tuned from {0.1, 0.3, 0.5}. To ensure a fair comparison, we employ Llama-3-8B-Base as the backbone autoregressive LLM across all baselines. For LLM-based approaches, we adopt the same prompting templates and fine-tuning configurations as reported in their respective papers, and carefully calibrate hyperparameters to account for differences in model scale. 
+
+4.2 Overall Performance 
+
+We conduct a thorough evaluation of the proposed DLMRec framework in comparison with various state-of-the-art baselines. Table 2 presents the Recall and NDCG performance across three benchmark datasets, LastFM, MovieLens-1M, and Amazon-Beauty. The main findings are as follows: 
+
+• The proposed DLMRec demonstrates superior effectiveness, consistently outperforming all representative baselines across datasets. Compared with the strongest LLM-based recommender system (LLaRA), DLMRec achieves average improvements of 6.75% and 5.19% in Recall and NDCG, respectively. When compared with the discrete diffusion baseline, the gains further increase to 11 .83% and 6.37% . These improvements validate the effectiveness of DLMRec in 
+
+> 4https://huggingface.co/GSAI-ML/LLaDA-8B-Base Manuscript submitted to ACM
+
+20 Liu et al. Recall@20 NDCG@20  
+
+> 0.06
+> 0.07
+> 0.08
+> 0.09 DLMRec
+> w/o CAST
+> w/o token-level
+> w/o item-level
+> w/o pref
+
+(a) LastFM Recall@20 NDCG@20   
+
+> 0.110
+> 0.115
+> 0.120
+> 0.125
+> 0.130
+> 0.135
+> 0.140 DLMRec
+> w/o CAST
+> w/o token-level
+> w/o item-level
+> w/o pref
+
+(b) MovieLens-1M Recall@20 NDCG@20   
+
+> 0.04
+> 0.05
+> 0.06
+> 0.07
+> 0.08
+> 0.09 DLMRec
+> w/o CAST
+> w/o token-level
+> w/o item-level
+> w/o pref
+
+(c) Amazon-Beauty Recall@10 NDCG@10  
+
+> 0.045
+> 0.050
+> 0.055
+> 0.060
+> 0.065
+> 0.070 DLMRec
+> w/o CAST
+> w/o token-level
+> w/o item-level
+> w/o pref
+
+(d) LastFM Recall@10 NDCG@10   
+
+> 0.06
+> 0.07
+> 0.08
+> 0.09
+> 0.10
+> 0.11
+> 0.12 DLMRec
+> w/o CAST
+> w/o token-level
+> w/o item-level
+> w/o pref
+
+(e) MovieLens-1M Recall@10 NDCG@10   
+
+> 0.030
+> 0.035
+> 0.040
+> 0.045
+> 0.050
+> 0.055
+> 0.060 DLMRec
+> w/o CAST
+> w/o token-level
+> w/o item-level
+> w/o pref
+
+(f) Amazon-Beauty Fig. 5. Ablation study of DLMRec and its variants on three datasets 
+
+bridging collaborative semantics and language modeling, as well as the benefits of iterative diffusion-based generation for recommendation. 
+
+• Overall, LLM-based recommenders outperform both traditional collaborative filtering and diffusion-based methods across datasets, highlighting the advantage of leveraging rich semantic information and pre-trained language models for preference modeling. By incorporating textual item descriptions and user interaction context, these methods jointly model semantic and behavioral signals, enabling a more comprehensive understanding of user preferences 
+
+• Diffusion-based methods consistently outperform traditional discriminative deep learning models across all datasets, highlighting the effectiveness of generative modeling for recommendation. More importantly, diffusion-based ap-proaches are also competitive with strong LLM-based recommenders. This indicates that iterative denoising provides a powerful and flexible generative paradigm for modeling complex user–item interaction patterns, underscoring the potential of diffusion models for recommendation tasks. 
+
+• GNN-based methods typically outperform the sequential baselines across all three datasets, demonstrating their effectiveness in capturing both direct and higher-order collaborative signals in the user-item interaction graph. This motivates the use of a GNN encoder to construct user and item representations prior to tokenization, ensuring that discrete tokens are grounded in collaborative semantics derived from the interaction graph structure. 
+
+4.3 Ablation Study 
+
+To systematically assess the impact of each key component, we construct four variants of DLMRec by ablating specific modules. 
+
+• w/o CAST : This variant ablates the collaborative-aware stochastic tokenizer and adopts standard VQ-VAE [ 60 ] for quantization. 
+
+Manuscript submitted to ACM Diffusion Language Model for Recommendation 21 
+
+• w/o token-level : This variant disables token-level masking in the preference-aware denoising stage, relying on item-level masking for training. 
+
+• w/o item-level : w/o item-level : Removes item-level masking from the token-semantic alignment stage and adopts random token masking during training. 
+
+• w/o pref : This variant eliminates the preference loss in Eq. 22 and models user preferences solely using the standard masked reconstruction objective. The ablation study results are presented in Fig. 5. CAST consistently outperforms the w/o CAST variant across all three datasets, validating the effectiveness of stochastic token assignment in preserving collaborative semantics and uncertainty for more expressive discrete representations. Removing either token-level or item-level masking leads to noticeable performance degradation, with the most severe drop observed when item-level masking is ablated. This highlights the necessity of item-level masking for coarse-to-fine preference alignment, validating the curriculum learning strategy. It also confirms its role or token-level masking in semantic-level guidance for preference-aware denoising. The preference loss consistently improves performance, confirming its effectiveness in providing ranking-oriented supervision by contrasting predictions against ground-truth targets and hard negatives to enhance recommendation discriminability. 
+
+4.4 Parameter Sensitivity Study 
+
+In this section, we evaluate the impact of the key parameters in DLMRec. 
+
+4.4.1 Effect of Codebook Settings. We conduct a sensitivity study on the codebook configuration, examining the impact of the number of sub-codebooks 𝐾 and the number of tokens in each sub-codebook 𝐿 , to examine their impact on recommendation performance. For fair comparison and simplicity, the top-S candidates for stochastic assignment are empirically set to 2. The sensitivity results are presented in Fig. 6, with the optimal settings highlighted by black boxes. The best performance is consistently achieved at 𝐾 = 3 across all three datasets, indicating that three sub-codebooks strike an effective balance between expressiveness and stability: smaller 𝐾 may underfit diverse collaborative semantics, while larger 𝐾 = 3 may over-fragment tokenization and undermine semantic coherence. As for the number of codewords in each sub-codebook, the optimal 𝐿 varies across datasets, appearing to correlate with dataset scale and complexity. Larger datasets (e.g., Amazon-Beauty) benefit from a larger codebook size to encode richer interaction patterns, while sparser datasets (LastFM and MovieLens-1M) prefer a more moderate codebook size, where overly large codebooks as overly large codebooks may introduce redundancy and destabilize token assignment. Finally, we note that increasing the codebook size alone results in limited performance gains, indicating that naive expansion of the discrete token space is insufficient. This highlights the importance of designing a tokenization approach that jointly models user and item tokens in a manner tailored to the diffusion-based training paradigm. 
+
+4.4.2 Effect of Diffusion Sampling Steps. We further study the effect of the number of sampling steps during inference, with the results shown in Fig. 7. Across all three datasets and for both Recall and NDCG, DLMRec reaches its optimal performance at 2 sampling steps on LastFM, and at 3 sampling steps on MovieLens-1M and Amazon-Beauty. This indicates that only a few refinement iterations are needed to effectively enhance prediction quality by leveraging bidirectional denoising and iterative correction. However, increasing the number of sampling steps further does not continue to improve performance. Instead, excessive refinement may introduce redundant updates and perturb already stable predictions, leading to slight performance degradation. This trend is consistent with our motivation for the 
+
+> Manuscript submitted to ACM
+
+22 Liu et al. 1 2 3 4
+
+> K
+> 512 256 128 64
+> L
+> 0.078
+> 0.080
+> 0.082
+> 0.084
+> 0.086
+> 0.088
+> 0.090
+
+(a) LastFM-Recall@20 1 2 3 4 
+
+> K
+> 512 256 128 64
+> L
+> 0.046
+> 0.048
+> 0.050
+> 0.052
+> 0.054
+> 0.056
+> 0.058
+
+(b) LastFM-Recall@10 1 2 3 4 
+
+> K
+> 512 256 128 64
+> L
+> 0.062
+> 0.064
+> 0.066
+> 0.068
+> 0.070
+> 0.072
+> 0.074
+
+(c) LastFM-NDCG@20 1 2 3 4 
+
+> K
+> 512 256 128 64
+> L
+> 0.044
+> 0.046
+> 0.048
+> 0.050
+> 0.052
+> 0.054
+> 0.056
+
+(d) LastFM-NDCG@10 1 2 3 4
+
+> K
+> 512 256 128 64
+> L
+> 0.122
+> 0.124
+> 0.126
+> 0.128
+> 0.130
+> 0.132
+> 0.134
+> 0.136
+
+(e) MovieLens-1M-Recall@20 1 2 3 4 
+
+> K
+> 512 256 128 64
+> L
+> 0.072
+> 0.074
+> 0.076
+> 0.078
+> 0.080
+> 0.082
+
+(f) MovieLens-1M-Recall@10 1 2 3 4 
+
+> K
+> 512 256 128 64
+> L
+> 0.110
+> 0.112
+> 0.114
+> 0.116
+> 0.118
+> 0.120
+> 0.122
+> 0.124
+
+(g) MovieLens-1M-NDCG@20 1 2 3 4 
+
+> K
+> 512 256 128 64
+> L
+> 0.098
+> 0.100
+> 0.102
+> 0.104
+> 0.106
+> 0.108
+> 0.110
+
+(h) MovieLens-1M-NDCG@10 1 2 3 4
+
+> K
+> 512 256 128 64
+> L
+> 0.084
+> 0.085
+> 0.086
+> 0.087
+> 0.088
+
+(i) Amazon-Beauty-Recall@20 1 2 3 4 
+
+> K
+> 512 256 128 64
+> L
+> 0.054
+> 0.055
+> 0.056
+> 0.057
+> 0.058
+
+(j) Amazon-Beauty-Recall@10 1 2 3 4 
+
+> K
+> 512 256 128 64
+> L
+> 0.0410
+> 0.0415
+> 0.0420
+> 0.0425
+> 0.0430
+> 0.0435
+> 0.0440
+
+(k) Amazon-Beauty-NDCG@20 1 2 3 4 
+
+> K
+> 512 256 128 64
+> L
+> 0.0325
+> 0.0330
+> 0.0335
+> 0.0340
+> 0.0345
+> 0.0350
+
+(l) Amazon-Beauty-NDCG@10 Fig. 6. The effect of the number of sub-codebooks 𝐾 and the number of tokens in each sub-codebook 𝐿 
+
+stability-aware refinement and voting mechanism, which is designed to preserve reliable intermediate predictions while reducing unnecessary perturbations during iterative generation. 
+
+4.5 Model Investigation 
+
+This section presents a comprehensive evaluation of DLMRec, including analyses of inference efficiency and qualitative case studies of CAST. 
+
+4.5.1 Inference Time Analysis. We analyze the inference efficiency of DLMRec on the MovieLens-1M dataset. Specifically, we measure the average time required to generate top-20 recommendations under different settings of item tokenization granularity and sampling steps. For tokenization granularity, the number of item tokens per item is varied in 2, 3, 4,while for sampling efficiency, the number of diffusion refinement steps is set to 1, 2, 3, 4, 5, 10 . This design allows us to systematically examine how token-level representation complexity and iterative sampling depth affect the overall generation efficiency of the proposed diffusion-based recommendation framework. The results are shown in Fig. 8. LLaRA and CoLLM are faster than DLMRec and TokenRec, which may be attributed to their use of continuous token representations rather than discrete token generation. Compared with TokenRec under the same three-token setting, DLMRec achieves lower inference time when using a small number of sampling steps (e.g., 1–3 steps). This result 
+
+Manuscript submitted to ACM Diffusion Language Model for Recommendation 23 1 2 3 4 5 10 
+
+Sampling Steps 
+
+> 0.082
+> 0.084
+> 0.086
+> 0.088
+> 0.090
+> 0.092
+> Recall@20
+> 0.070
+> 0.072
+> 0.074
+> 0.076
+> 0.078
+> 0.080
+> NDCG@20
+> Recall
+> NDCG
+
+(a) LastFM 1 2 3 4 5 10 
+
+Sampling Steps  
+
+> 0.1250
+> 0.1275
+> 0.1300
+> 0.1325
+> 0.1350
+> 0.1375
+> Recall@20
+> 0.120
+> 0.125
+> 0.130
+> 0.135
+> NDCG@20
+> Recall
+> NDCG
+
+(b) MovieLens-1M 1 2 3 4 5 10 
+
+Sampling Steps  
+
+> 0.080
+> 0.082
+> 0.084
+> 0.086
+> 0.088
+> 0.090
+> Recall@20
+> 0.040
+> 0.042
+> 0.044
+> 0.046
+> 0.048
+> 0.050
+> NDCG@20
+> Recall
+> NDCG
+
+(c) Amazon-Beauty 1 2 3 4 5 10 
+
+Sampling Steps 
+
+> 0.050
+> 0.052
+> 0.054
+> 0.056
+> 0.058
+> 0.060
+> Recall@10
+> 0.052
+> 0.054
+> 0.056
+> 0.058
+> 0.060
+> 0.062
+> NDCG@10
+> Recall
+> NDCG
+
+(d) LastFM 1 2 3 4 5 10 
+
+Sampling Steps  
+
+> 0.0700
+> 0.0725
+> 0.0750
+> 0.0775
+> 0.0800
+> 0.0825
+> 0.0850
+> Recall@10
+> 0.105
+> 0.110
+> 0.115
+> 0.120
+> 0.125
+> NDCG@10
+> Recall
+> NDCG
+
+(e) MovieLens-1M 1 2 3 4 5 10 
+
+Sampling Steps  
+
+> 0.050
+> 0.052
+> 0.054
+> 0.056
+> 0.058
+> 0.060
+> Recall@10
+> 0.030
+> 0.032
+> 0.034
+> 0.036
+> 0.038
+> 0.040
+> NDCG@10
+> Recall
+> NDCG
+
+(f) Amazon-Beauty Fig. 7. Effect of diffusion sampling steps 𝑆 on three datasets 1 2 3 4 5 10 
+
+Sampling Steps 
+
+0
+
+100 
+
+200 
+
+300 
+
+400 
+
+500 
+
+> Time(milliseconds)
+> 50.99
+> 102.75
+> 154.27
+> 204.91
+> 256.21
+> 502.9
+
+K = 2 
+
+K = 3 
+
+K = 4 
+
+Fig. 8. Inference time analysis of DLMRec on MovieLens-1M under different numbers of sampling steps and item token lengths. For clarity, the exact sampling times are annotated for the case of 𝐾 = 3, which corresponds to the best-performing token setting. 
+
+suggests that diffusion-based generation can provide a more efficient alternative to autoregressive decoding under the same token setting, especially when high-quality recommendations can be obtained within a limited number of refinement steps. We further compare the inference efficiency of DLMRec with other LLM-based recommender systems, including LLaRA, CoLLM, and TokenRec. For a fair comparison, all methods are implemented with comparable 8B-scale backbones. 
+
+Manuscript submitted to ACM 24 Liu et al. In addition, for TokenRec, we adopt the three-token variant to match the tokenization setting used in DLMRec. The results are reported in Table 3. LLaRA and CoLLM exhibit lower inference latency than DLMRec and TokenRec, which may be attributed to their use of continuous token representations rather than discrete token generation. In contrast, under the same three-token setting, DLMRec achieves lower inference time than the autoregressive TokenRec when only a small number of sampling steps is used (e.g., 1–3 steps). This suggests that diffusion-based generation can provide a more efficient alternative to autoregressive decoding under the same token setting, especially when high-quality recommendations can be obtained within a limited number of refinement steps. 0 100 200 300 400 
+
+> Frequency
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> 120
+> Token ID
+> Unique tokens: 128
+> Max token ID: 127
+> Most common token: 61 (count: 451)
+> (n_times=5, Total occurrences: 16005)
+
+(a) Token Distribution at Hop 0 for Items 0 50 100 150 200 250 300 350 400  
+
+> Frequency
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> 120
+> Token ID
+> Unique tokens: 128
+> Max token ID: 127
+> Most common token: 100 (count: 384)
+> (n_times=5, Total occurrences: 16005)
+
+(b) Token Distribution at Hop 1 for Items 0 50 100 150 200 250 300 350 400  
+
+> Frequency
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> 120
+> Token ID
+> Unique tokens: 128
+> Max token ID: 127
+> Most common token: 35 (count: 402)
+> (n_times=5, Total occurrences: 16005)
+
+(c) Token Distribution at Hop 2 for Items 
+
+4.5.2 CAST Case Study. To provide an intuitive understanding of the proposed tokenizer, we present a real prompt example from the MovieLens-1M dataset in Fig. 4. The example corresponds to user 5159, whose interaction history includes Star Wars: Episode IV - A New Hope and Star Wars: Episode I - The Phantom Menace . As movies from the same series, these two items are expected to share similar collaborative semantics. Consistent with this intuition, their first-stage token is identical, i.e., <item_0_72> , while the subsequent tokens differ, enabling the model to distinguish between the two movies. To further examine the behavior of CAST at the corpus level, we visualize the token distributions of item representations at the three hops on the MovieLens-1M dataset. For each item, stochastic token assignment is repeated 
+
+Table 3. Comparison of the average inference time per user (in milliseconds) for Top-20 recommendations. 
+
+Method Inference Time 
+
+LLaRa 45.86 CoLLM 97.81 TokenRec 161.80 DLMRec 1-step 50.99 DLMRec 2-step 102.75 DLMRec 3-step 154.27 DLMRec 4-step 204.91 
+
+Manuscript submitted to ACM Diffusion Language Model for Recommendation 25 
+
+5 times, and the resulting token frequencies are aggregated to characterize the overall usage pattern of the codebook. Several observations can be drawn from the three distributions. First, all hops exhibit broad codebook utilization, indicating that CAST does not collapse to a few dominant codewords and preserves sufficient diversity in the discrete representation space. Second, the distributions are clearly non-uniform, suggesting that stochastic assignment is not random noise but reflects stable preferences over certain codewords induced by collaborative structure. More importantly, the three hops show distinct distributional patterns, implying that they encode different levels of collaborative semantics. Overall, these qualitative results suggest that CAST learns diffusion-compatible discrete representations grounded in collaborative signals, preserving semantic similarity across related items while maintaining token-level discriminability. 
+
+5 Related Work 
+
+This section reviews three lines of related work closely connected to our study: diffusion language models, diffusion-based recommender models, and LLM-based recommender systems. 
+
+5.1 Diffusion Language Models 
+
+Recently, diffusion language models have emerged as a promising alternative to autoregressive language modeling. Instead of generating tokens strictly in a left-to-right manner, they model language through iterative denoising, demonstrating advantages in bidirectional context modeling, global coherence, and flexible generation [17, 31, 34]. 
+
+5.1.1 Continuous-state Diffusion Language Models. Driven by the success of continuous diffusion models in image synthesis, early diffusion language models typically projected discrete tokens into continuous embeddings and performed diffusion in latent continuous space. Among the pioneering works in this line, Diffusion-LM [ 33 ] aims to generate word embeddings from Gaussian noise and converts them back to discrete tokens through a rounding function. Building on this embedding-based paradigm, DiffuSeq [ 14 ] further extends the continuous diffusion to conditional sequence generation under a classifier-free latent-space framework. In a different direction, SSD-LM [ 15 ] performs diffusion over vocabulary-level simplex representations rather than learned latent embeddings, enabling semi-autoregressive, block-wise generation. More recently, RDLM [ 27 ] revisits continuous-state diffusion language modeling from a geometric perspective. By modeling continuous flow on the statistical manifold, it substantially improves continuous diffusion modeling for language and further narrows the gap to autoregressive models. 
+
+5.1.2 Discrete-state Diffusion Language Models. There has been growing interest in discrete diffusion models for their capacity to learn complex data distributions in discrete spaces [ 71 ]. D3PM [ 2] introduced the first discrete-state diffusion framework for categorical variables. Replacing Gaussian noise with discrete transition operators, it defines several stationary corruption processes, including uniform diffusion, where transitions to all states are equally likely, and absorbing state diffusion, where tokens are progressively replaced by a special mask token. Based on the absorbing state, DiffusionBERT [ 18 ] intoduces a spindle noise schedule to leverage the domain knwoledge, enhancing both generation quality and training efficiency. Campbell et al . [4] were the first to cast discrete-state diffusion in continuous time through stochastic differential equations (SDEs), thereby improving the flexibility of the sampling process. However, the reverse process remains discretely parameterized, which limits its empirical performance. Sun et al . [57] subsequently proposed ratio matching to learn marginal probabilities via maximum-likelihood training. Building on this line, later methods such as SEDD [40] developed alternative score-based formulations for discrete diffusion modeling. 
+
+> Manuscript submitted to ACM
+
+26 Liu et al. More recently, diffusion language models have begun to scale toward the large language model regime. LLaDA [ 44 ]extends masked diffusion language modeling to 8B parameters under the standard pre-training and supervised fine-tuning pipeline, demonstrating competitive performance in scalability, in-context learning, and instruction following. Building upon this direction, Seed Diffusion [ 55 ] further highlights the efficiency advantage of diffusion-based generation through block-level parallel sampling. Subsequently, Dream [ 74 ] improves diffusion-based LLMs via autoregressive-model initialization and context-adaptive token-level noise rescheduling. Moreover, Mercury [ 29 ] focuses on commercial-scale diffusion LLMs with ultra-fast inference, demonstrating their potential for latency-sensitive real-world applications. These advances position diffusion language models as a competitive large-scale paradigm. Their bidirectional and iterative refinement properties present a promising avenue for recommendation research. 
+
+5.2 Diffusion Recommender Models 
+
+Diffusion models, as a powerful generative paradigm, have recently achieved remarkable success in recommendation, substantially advancing a variety of recommendation tasks through their effective generation capabilities [69, 85]. 
+
+5.2.1 Continuous-state Diffusion Recommender Models. DiffRec [ 64 ] represents one of the earliest attempts to in-corporate diffusion modeling into recommendation systems, where Denoising Diffusion Probabilistic Model [ 19 ] is applied to binary interaction vectors for user-item preference modeling. Building upon this foundation, GiffCF [ 85 ]introduces graph-based diffusion mechanisms to model higher-order collaborative relations, while BSPM [ 6 ] formulates recommendation over the adjacency matrix within a continuous-time diffusion framework. From a different perspective, DreamRec [ 73 ] casts sequential recommendation in a learn-to-generate paradigm by applying diffusion to target item representations conditioned on users’ historical interactions. Furthermore, PreferDiff [ 39 ] incorporates negative samples into diffusion-based sequential recommendation, establishing a closer connection between diffusion modeling and preference-oriented learning objectives. 
+
+5.2.2 Discrete-state Diffusion Recommender Models. DCDR [ 36 ] pioneers the use of discrete-state diffusion in rec-ommendation for reranking tasks. It perturbs item positions within interaction sequences, enabling diffusion-based learning directly over discrete collaborative signals. Beyond reranking, DDSR [ 70 ] extends discrete-state diffusion to sequential recommendation by introducing semantic IDs to capture the uncertainty and fuzziness of user interests. More recently, PreferGrow [ 22 ] advances this line by modeling preference ratios between item pairs, where user preferences are faded through item replacement and reconstructed by iteratively growing preference signals from the estimated ratios. CDRec [ 38 ] further explores a continuous-time discrete-space diffusion framework for recommendation, lever-aging absorbing-state diffusion and domain-aware noise scheduling to improve both recommendation accuracy and sampling efficiency. LLaDA-Rec [ 54 ] applies discrete diffusion to parallel semantic ID generation, introducing a parallel tokenization scheme and two masking strategies to capture both inter-item sequential dependencies and intra-item semantic relationships. Despite these advances, most existing methods focus on recommendation-specific diffusion modeling, while the potential of large language models for richer semantic understanding and generation remains underexplored. 
+
+5.3 LLM-based Recommender Systems 
+
+Recently, large language models (LLMs) have been widely adopted to enhance recommender systems due to their strong capabilities in semantic understanding, reasoning, and generative modeling. However, effectively applying 
+
+> Manuscript submitted to ACM
+
+Diffusion Language Model for Recommendation 27 LLMs to recommendation remains challenging because of the intrinsic gap between natural language modeling and recommendation-oriented preference modeling [20, 46]. 
+
+5.3.1 Text-based Alignment for LLM-based Recommendation. Early LLM-based recommendation methods mainly rely on text-based alignment, which reformulates user-item interactions into natural language sequences through prompts and instruction tuning. For example, TALLRec [ 3] converts user histories and item metadata into instruction-following data, enabling LLMs to infer user preferences from textual contexts. Moreover, P5 [ 13 ] extends this paradigm by unifying multiple recommendation tasks within a text-to-text framework, where interactions, metadata, and recommendation signals are transformed into natural language sequences processed through personalized prompts and whole-word embeddings for tokenized user and item IDs. 
+
+5.3.2 Representation-based Alignment with Collaborative Signals. Representation-based methods leverage continuous encodings of collaborative information to facilitate the integration of language modeling and preference learning. For instance, LLaRA [ 35 ] combines textual item metadata with item representations learned from traditional sequential recommenders, and projects these embeddings into the LLM input space through a trainable projector. Building upon this idea, CoLLM [ 79 ] further incorporates user and item collaborative representations as an additional modality, enabling LLM-based recommendation to jointly exploit textual semantics and collaborative signals. Moving beyond directly injecting user and item representations, ContRec [ 51 ] constructs continuous tokens from collaborative information and introduces a diffusion module for implicit user preference modeling. From a different perspective, E4SRec [ 32 ] revisits LLM-based recommendation under an ID-only paradigm. Instead of relying on textual semantics, it injects pretrained item ID embeddings into LLMs to enable efficient and controllable sequential recommendation. 
+
+5.3.3 Token-based Alignment for LLM-based Recommendation. Token-based methods represent users and items as discrete tokens to enable LLM-based recommendations. CLLM4Rec [ 86 ] directly extends the LLM vocabulary with user and item ID tokens, learning their collaborative semantics through soft and hard prompting. LC-Rec [ 83 ] further learns semantic item indices via vector quantization and alignment tuning, enabling direct generation from the full item vocabulary. Moreover, TokenRec [ 50 ] incorporates high-order collaborative knowledge through masked vector quantization, strengthening the integration of graph-based signals with discrete representations. 
+
+6 Conclusion 
+
+In this paper, we propose DLMRec, a diffusion language modeling framework tailored for recommendation. Departing from the dominant autoregressive paradigm, DLMRec reformulates recommendation as a discrete denoising process, enabling bidirectional context modeling and iterative whole-sequence refinement for next-item prediction. To adapt diffusion language modeling to recommendation, we develop a collaborative-aware stochastic tokenizer that converts multi-hop collaborative signals into diffusion-compatible discrete tokens, a curriculum-driven training strategy that progressively aligns denoising with preference learning at both the item and token levels, and a stability-aware voting mechanism that aggregates evidence across refinement steps for more consistent final prediction. Extensive experiments on three real-world datasets demonstrate that DLMRec consistently outperforms strong baselines, validating the effectiveness of diffusion-based recommendation modeling. These results suggest that diffusion language models provide a promising new paradigm for recommender systems beyond autoregressive generation. 
+
+> Manuscript submitted to ACM
+
+28 Liu et al. 
+
+References 
+
+[1] Josh Achiam, Steven Adler, Sandhini Agarwal, Lama Ahmad, Ilge Akkaya, Florencia Leoni Aleman, Diogo Almeida, Janko Altenschmidt, Sam Altman, Shyamal Anadkat, et al. 2023. Gpt-4 technical report. arXiv preprint arXiv:2303.08774 (2023). [2] Jacob Austin, Daniel D Johnson, Jonathan Ho, Daniel Tarlow, and Rianne Van Den Berg. 2021. Structured denoising diffusion models in discrete state-spaces. Proc. Adv. Neural Inf. Process. Syst. 34 (2021), 17981–17993. [3] Keqin Bao, Jizhi Zhang, Yang Zhang, Wenjie Wang, Fuli Feng, and Xiangnan He. 2023. Tallrec: An effective and efficient tuning framework to align large language model with recommendation. In Proc. 17th ACM Conf. Recomm. Syst. 1007–1014. [4] Andrew Campbell, Joe Benton, Valentin De Bortoli, Thomas Rainforth, George Deligiannidis, and Arnaud Doucet. 2022. A continuous time framework for discrete denoising models. Proc. Adv. Neural Inf. Process. Syst. 35 (2022), 28266–28279. [5] Xiao Chen et al. 2023. Fairly adaptive negative sampling for recommendations. In Proc. World Wide Web Conf. 3723–3733. [6] Jeongwhan Choi, Seoyoung Hong, Noseong Park, and Sung-Bae Cho. 2023. Blurring-sharpening process models for collaborative filtering. In Proc. 46th Int. ACM SIGIR Conf. Res. Develop. Inf. Retrieval . 1096–1106. [7] Jiaxin Deng, Shiyao Wang, Kuo Cai, Lejian Ren, Qigen Hu, Weifeng Ding, Qiang Luo, and Guorui Zhou. 2025. Onerec: Unifying retrieve and rank with generative recommender and iterative preference alignment. arXiv preprint arXiv:2502.18965 (2025). [8] Wenqi Fan, Yujuan Ding, Liangbo Ning, Shijie Wang, Hengyun Li, Dawei Yin, Tat-Seng Chua, and Qing Li. 2024. A survey on rag meeting llms: Towards retrieval-augmented large language models. In Proc. ACM SIGKDD Int. Conf. Knowl. Discov. Data Min. 6491–6501. [9] Wenqi Fan, Xiaorui Liu, Wei Jin, Xiangyu Zhao, Jiliang Tang, and Qing Li. 2022. Graph trend filtering networks for recommendation. In Proc. 45th Int. ACM SIGIR Conf. Res. Develop. Inf. Retrieval . 112–121. [10] Wenqi Fan, Yao Ma, Qing Li, Yuan He, Eric Zhao, Jiliang Tang, and Dawei Yin. 2019. Graph neural networks for social recommendation. In Proc. World Wide Web Conf. 417–426. [11] Wenqi Fan, Yao Ma, Qing Li, Jianping Wang, Guoyong Cai, Jiliang Tang, and Dawei Yin. 2020. A graph neural network framework for social recommendations. IEEE Trans. Knowl. Data Eng. 34, 5 (2020), 2033–2047. [12] Mengyao Gao, Chongming Gao, Haoyan Liu, Qingpeng Cai, Peng Jiang, Jiajia Chen, Shuai Yuan, and Xiangnan He. 2025. MindRec: A Diffusion-driven Coarse-to-Fine Paradigm for Generative Recommendation. arXiv preprint arXiv:2511.12597 (2025). [13] Shijie Geng, Shuchang Liu, Zuohui Fu, Yingqiang Ge, and Yongfeng Zhang. 2022. Recommendation as language processing (rlp): A unified pretrain, personalized prompt & predict paradigm (p5). In Proc. 16th 12th ACM Conf. Recomm. Syst. 299–315. [14] Shansan Gong, Mukai Li, Jiangtao Feng, Zhiyong Wu, and LingPeng Kong. 2022. Diffuseq: Sequence to sequence text generation with diffusion models. arXiv preprint arXiv:2210.08933 (2022). [15] Xiaochuang Han, Sachin Kumar, and Yulia Tsvetkov. 2023. Ssd-lm: Semi-autoregressive simplex-based diffusion language model for text generation and modular control. In Proc. Annu. Meet. Assoc. Comput. Linguist. 11575–11596. [16] Xiangnan He, Kuan Deng, Xiang Wang, Yan Li, Yongdong Zhang, and Meng Wang. 2020. Lightgcn: Simplifying and powering graph convolution network for recommendation. In Proc. 43rd Int. ACM SIGIR Conf. Res. Develop. Inf. Retrieval . 639–648. [17] Xin He, Wenqi Fan, Yili Wang, Chengyi Liu, Rui Miao, Xin Juan, and Xin Wang. 2026. Graph defense diffusion model. In Proc. ACM SIGKDD Int. Conf. Knowl. Discov. Data Min. 416–427. [18] Zhengfu He, Tianxiang Sun, Qiong Tang, Kuanning Wang, Xuan-Jing Huang, and Xipeng Qiu. 2023. Diffusionbert: Improving generative masked language models with diffusion models. In Proc. Annu. Meet. Assoc. Comput. Linguist. 4521–4534. [19] Jonathan Ho, Ajay Jain, and Pieter Abbeel. 2020. Denoising diffusion probabilistic models. Proc. Adv. Neural Inf. Process. Syst. 33 (2020), 6840–6851. [20] Yupeng Hou, An Zhang, Leheng Sheng, Jiancan Wu, Xiang Wang, Tat-Seng Chua, and Julian McAuley. 2025. Towards Large Generative Recommen-dation: A Tokenization Perspective. In Proc. 34th ACM Int. Conf. Inf. Knowl. Manag. 6821–6824. [21] Edward J Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Liang Wang, Weizhu Chen, et al . 2022. Lora: Low-rank adaptation of large language models.. In Proc. 10th Int. Conf. Learn. Represent. , Vol. 1. 12513–12525. [22] Guoqing Hu, An Zhang, Shuchang Liu, Wenyu Mao, Jiancan Wu, Xun Yang, Xiang Li, Lantao Hu, Han Li, et al . 2026. Fading to Grow: Growing Preference Ratios via Preference Fading Discrete Diffusion for Recommendation. Proc. Adv. Neural Inf. Process. Syst. 38 (2026), 135766–135804. [23] Wenyue Hua, Shuyuan Xu, Yingqiang Ge, and Yongfeng Zhang. 2023. How to index item ids for recommendation foundation models. In Proceedings of the Annual International ACM SIGIR Conference on Research and Development in Information Retrieval in the Asia Pacific Region . 195–204. [24] Jiani Huang, Shijie Wang, Liangbo Ning, Wenqi Fan, Shuaiqiang Wang, Dawei Yin, and Qing Li. 2026. Towards next-generation recommender systems: A benchmark for personalized recommendation assistant with llms. In Proc. 19th ACM Int. Conf. Web Search Data Mining . 217–226. [25] Daniel Mingyi Israel, Aditya Grover, and Guy Van den Broeck. 2026. Enabling autoregressive models to fill in masked tokens. In Findings of the Association for Computational Linguistics: EACL 2026 . 4954–4965. [26] Yitong Ji, Aixin Sun, Jie Zhang, and Chenliang Li. 2023. A critical study on data leakage in recommender system offline evaluation. ACM Trans. Inf. Syst. 41, 3 (2023), 1–27. [27] Jaehyeong Jo and Sung Ju Hwang. 2026. Continuous diffusion model for language modeling. Proc. Adv. Neural Inf. Process. Syst. 38 (2026), 97394–97430. [28] Wang-Cheng Kang and Julian McAuley. 2018. Self-attentive sequential recommendation. In 2018 IEEE international conference on data mining (ICDM) . IEEE, 197–206. Manuscript submitted to ACM Diffusion Language Model for Recommendation 29 
+
+[29] Inception Labs, Samar Khanna, Siddhant Kharbanda, Shufan Li, Harshit Varma, Eric Wang, Sawyer Birnbaum, Ziyang Luo, Yanis Miraoui, Akash Palrecha, et al. 2025. Mercury: Ultra-Fast Language Models Based on Diffusion. arXiv preprint arXiv:2506.17298 (2025). [30] Gen Li and Changxiao Cai. 2025. Breaking AR’s Sampling Bottleneck: Provable Acceleration via Diffusion Language Models. In Proc. Adv. Neural Inf. Process. Syst. 
+
+[31] Tianyi Li, Mingda Chen, Bowei Guo, and Zhiqiang Shen. 2025. A survey on diffusion language models. arXiv preprint arXiv:2508.10875 (2025). [32] Xinhang Li, Chong Chen, Xiangyu Zhao, Yong Zhang, and Chunxiao Xing. 2023. E4srec: An elegant effective efficient extensible solution of large language models for sequential recommendation. arXiv preprint arXiv:2312.02443 (2023). [33] Xiang Li, John Thickstun, Ishaan Gulrajani, Percy S Liang, and Tatsunori B Hashimoto. 2022. Diffusion-lm improves controllable text generation. 
+
+Proc. Adv. Neural Inf. Process. Syst. 35 (2022), 4328–4343. [34] Yifan Li, Kun Zhou, Wayne Xin Zhao, and Ji-Rong Wen. 2023. Diffusion models for non-autoregressive text generation: A survey. arXiv preprint arXiv:2303.06574 (2023). [35] Jiayi Liao, Sihang Li, Zhengyi Yang, Jiancan Wu, Yancheng Yuan, Xiang Wang, and Xiangnan He. 2024. Llara: Large language-recommendation assistant. In Proc. 47th Int. ACM SIGIR Conf. Res. Develop. Inf. Retrieval . 1785–1795. [36] Xiao Lin, Xiaokai Chen, Chenyang Wang, Hantao Shu, Linfeng Song, Biao Li, and Peng Jiang. 2024. Discrete conditional diffusion for reranking in recommendation. In Companion proceedings of the ACM web conference 2024 . 161–169. [37] Chengyi Liu et al. 2025. Score-based generative diffusion models for social recommendations. IEEE Trans. Knowl. Data Eng. (2025). [38] Chengyi Liu, Xiao Chen, Shijie Wang, Wenqi Fan, and Qing Li. 2026. Continuous-time Discrete-space Diffusion Model for Recommendation. In Proc. 19th ACM Int. Conf. Web Search Data Mining . 406–415. [39] Shuo Liu, An Zhang, Guoqing Hu, Hong Qian, and Tat-Seng Chua. 2025. Preference Diffusion for Recommendation. In Proc. 13th Int. Conf. Learn. Represent. 11043–11081. [40] Aaron Lou, Chenlin Meng, and Stefano Ermon. 2024. Discrete Diffusion Modeling by Estimating the Ratios of the Data Distribution. In Proc. Int. Conf. Mach. Learn. 
+
+[41] Lingyu Mu, Hao Deng, Haibo Xing, Jinxin Hu, Yu Zhang, Xiaoyi Zeng, and Jing Zhang. 2026. Masked Diffusion Generative Recommendation. arXiv preprint arXiv:2601.19501 (2026). [42] Jinjie Ni, Qian Liu, Longxu Dou, Chao Du, Zili Wang, Hang Yan, Tianyu Pang, and Michael Qizhe Shieh. 2025. Diffusion language models are super data learners. arXiv preprint arXiv:2511.03276 (2025). [43] Shen Nie, Fengqi Zhu, Chao Du, Tianyu Pang, Qian Liu, Guangtao Zeng, Min Lin, and Chongxuan Li. 2025. Scaling up Masked Diffusion Models on Text. In Proc. 13th Int. Conf. Learn. Represent. 92913–92936. [44] Shen Nie, Fengqi Zhu, Zebin You, Xiaolu Zhang, Jingyang Ou, Jun Hu, JUN ZHOU, Yankai Lin, Ji-Rong Wen, and Chongxuan Li. 2025. Large Language Diffusion Models. In Proc. Adv. Neural Inf. Process. Syst. 
+
+[45] Liangbo Ning, Wenqi Fan, and Qing Li. 2026. Retrieval-augmented purifier for robust LLM-empowered recommendation. ACM Trans. Inf. Syst. 44, 4 (2026), 1–42. [46] Liang-Bo Ning, Yuchen Zhu, Heqing Huang, Xin Wang, Yi Chang, Qing Li, and Wenqi Fan. 2026. When Efficiency Becomes a Vulnerability: Computational Cost Attacks on WebAgents. In Proc. Annu. Meet. Assoc. Comput. Linguist. 38315–38335. [47] Mihir Prabhudesai, Mengning Wu, Amir Zadeh, Katerina Fragkiadaki, and Deepak Pathak. 2025. Diffusion Beats Autoregressive in Data-Constrained Settings. In Proc. Adv. Neural Inf. Process. Syst. 
+
+[48] Patrick Pynadath, Jiaxin Shi, and Ruqi Zhang. 2025. Candi: Hybrid discrete-continuous diffusion models. arXiv preprint arXiv:2510.22510 (2025). [49] Hang Qi et al . 2025. A comparative trade-off analysis on accuracy and efficiency for federated learning in demand forecasting. Applied Soft Computing 182 (2025), 113561. [50] Haohao Qu, Wenqi Fan, Zihuai Zhao, and Qing Li. 2025. TokenRec: Learning to Tokenize ID for LLM-Based Generative Recommendations. IEEE Trans. Knowl. Data Eng. 37, 10 (2025), 6216–6231. doi:10.1109/TKDE.2025.3599265 [51] Haohao Qu, Shanru Lin, Yujuan Ding, Yiqi Wang, and Wenqi Fan. 2026. Diffusion Generative Recommendation with Continuous Tokens. In Proc. World Wide Web Conf. (United Arab Emirates) (WWW ’26) . Association for Computing Machinery, New York, NY, USA, 7259–7270. [52] Shashank Rajput, Nikhil Mehta, Anima Singh, Raghunandan Hulikal Keshavan, Trung Vu, Lukasz Heldt, Lichan Hong, Yi Tay, Vinh Tran, Jonah Samost, et al. 2023. Recommender systems with generative retrieval. Proc. Adv. Neural Inf. Process. Syst. 36 (2023), 10299–10315. [53] Subham S Sahoo, Marianne Arriola, Yair Schiff, Aaron Gokaslan, Edgar Marroquin, Justin T Chiu, Alexander Rush, and Volodymyr Kuleshov. 2024. Simple and effective masked diffusion language models. Proc. Adv. Neural Inf. Process. Syst. 37 (2024), 130136–130184. [54] Teng Shi, Chenglei Shen, Weijie Yu, Shen Nie, Chongxuan Li, Xiao Zhang, Ming He, Yan Han, and Jun Xu. 2025. LLaDA-Rec: Discrete Diffusion for Parallel Semantic ID Generation in Generative Recommendation. arXiv preprint arXiv:2511.06254 (2025). [55] Yuxuan Song, Zheng Zhang, Cheng Luo, Pengyang Gao, Fan Xia, Hao Luo, Zheng Li, Yuehang Yang, Hongli Yu, Xingwei Qu, et al . 2025. Seed diffusion: A large-scale diffusion language model with high-speed inference. arXiv preprint arXiv:2508.02193 (2025). [56] Fei Sun, Jun Liu, Jian Wu, Changhua Pei, Xiao Lin, Wenwu Ou, and Peng Jiang. 2019. BERT4Rec: Sequential recommendation with bidirectional encoder representations from transformer. In Proc. 28th ACM Int. Conf. Inf. Knowl. Manag. 1441–1450. [57] Haoran Sun, Lijun Yu, Bo Dai, Dale Schuurmans, and Hanjun Dai. 2023. Score-based Continuous-time Discrete Diffusion Models. In Proc. 11th Int. Conf. Learn. Represent. 30767–30782. [58] Sho Takase and Sosuke Kobayashi. 2020. All word embeddings from one embedding. Proc. Adv. Neural Inf. Process. Syst. 33 (2020), 3775–3785. Manuscript submitted to ACM 30 Liu et al. 
+
+[59] Hugo Touvron, Thibaut Lavril, Gautier Izacard, Xavier Martinet, Marie-Anne Lachaux, Timothée Lacroix, Baptiste Rozière, Naman Goyal, Eric Hambro, Faisal Azhar, et al. 2023. Llama: Open and efficient foundation language models. arXiv preprint arXiv:2302.13971 (2023). [60] Aaron Van Den Oord, Oriol Vinyals, et al. 2017. Neural discrete representation learning. Proc. Adv. Neural Inf. Process. Syst. 30 (2017). [61] Shijie Wang, Wenqi Fan, Yue Feng, Lin Shanru, Xinyu Ma, Shuaiqiang Wang, and Dawei Yin. 2025. Knowledge graph retrieval-augmented generation for llm-based recommendation. In Proc. Annu. Meet. Assoc. Comput. Linguist. 27152–27168. [62] Shijie Wang, Chengyi Liu, Yujuan Ding, Shanru Lin, See-Kiong Ng, Xu Xin, and Wenqi Fan. 2026. Mixture-of-Experts Knowledge Graph Retrieval-Augmented Generation for Multi-Agent LLM-based Recommendation. arXiv preprint arXiv:2605.28175 (2026). [63] Wenjie Wang, Honghui Bao, Xinyu Lin, Jizhi Zhang, Yongqi Li, Fuli Feng, See-Kiong Ng, and Tat-Seng Chua. 2024. Learnable item tokenization for generative recommendation. In Proc. 33rd ACM Int. Conf. Inf. Knowl. Manag. 2400–2409. [64] Wenjie Wang, Yiyan Xu, Fuli Feng, Xinyu Lin, Xiangnan He, and Tat-Seng Chua. 2023. Diffusion recommender model. In Proc. 46th Int. ACM SIGIR Conf. Res. Develop. Inf. Retrieval . 832–841. [65] Xu Wang et al. 2025. Diffusion llms can do faster-than-ar inference via discrete diffusion forcing. arXiv preprint arXiv:2508.09192 (2025). [66] Xiang Wang, Xiangnan He, Meng Wang, Fuli Feng, and Tat-Seng Chua. 2019. Neural graph collaborative filtering. In Proc. 46th Int. ACM SIGIR Conf. Res. Develop. Inf. Retrieval . 165–174. [67] Jiancan Wu, Xiang Wang, Fuli Feng, Xiangnan He, Liang Chen, Jianxun Lian, and Xing Xie. 2021. Self-supervised graph learning for recommendation. In Proc. 44th Int. ACM SIGIR Conf. Res. Develop. Inf. Retrieval . 726–735. [68] Likang Wu, Zhi Zheng, Zhaopeng Qiu, Hao Wang, Hongchao Gu, Tingjia Shen, Chuan Qin, Chen Zhu, Hengshu Zhu, Qi Liu, et al . 2024. A survey on large language models for recommendation. In Proc. World Wide Web Conf. , Vol. 27. Springer, 60. [69] Yao Wu, Chengyi Liu, Wenqi Fan, and Rui Zhang. 2026. Beyond Static Diffusion: Explicitly Modeling Temporal Patterns in Sequential Recommendation. In Proc. 49th Int. ACM SIGIR Conf. Res. Develop. Inf. Retrieval . 1983–1993. [70] Wenjia Xie, Hao Wang, Luankang Zhang, Rui Zhou, Defu Lian, and Enhong Chen. 2024. Breaking determinism: Fuzzy modeling of sequential recommendation using discrete state space diffusion model. Proc. Adv. Neural Inf. Process. Syst. 37 (2024), 22720–22744. [71] Zhe Xu, Ruizhong Qiu, Yuzhong Chen, Huiyuan Chen, Xiran Fan, Menghai Pan, Zhichen Zeng, Mahashweta Das, and Hanghang Tong. 2024. Discrete-state continuous-time diffusion for graph generation. Proc. Adv. Neural Inf. Process. Syst. 37 (2024), 79704–79740. [72] Yuhao Yang, Chao Huang, Lianghao Xia, Chunzhen Huang, Da Luo, and Kangyi Lin. 2023. Debiased contrastive learning for sequential recommen-dation. In Proc. World Wide Web Conf. 1063–1073. [73] Zhengyi Yang, Jiancan Wu, Zhicai Wang, Xiang Wang, Yancheng Yuan, and Xiangnan He. 2023. Generate what you prefer: Reshaping sequential recommendation via guided diffusion. Proc. Adv. Neural Inf. Process. Syst. 36 (2023), 24247–24261. [74] Jiacheng Ye et al. 2025. Dream 7b: Diffusion large language models. arXiv preprint arXiv:2508.15487 (2025). [75] Yushi Ye, Feng Hong, Huangjie Zheng, Xu Chen, Zhiyong Chen, Yanfeng Wang, and Jiangchao Yao. 2026. Rejection Mixing: Fast Semantic Propagation of Mask Tokens for Efficient DLLM Inference. In ICLR Workshop on DeLTa .[76] Haonan Yuan, Qingyun Sun, Junhua Shi, Xingcheng Fu, Bryan Hooi, Jianxin Li, and Philip S Yu. 2026. GRAVER: Generative graph vocabularies for robust graph foundation models fine-tuning. Proc. Adv. Neural Inf. Process. Syst. 38 (2026), 16639–16684. [77] Jiahao Zhang, Rui Xue, Wenqi Fan, Xin Xu, Qing Li, Jian Pei, and Xiaorui Liu. 2024. Linear-time graph neural networks for scalable recommendations. In Proc. World Wide Web Conf. 3533–3544. [78] Siyue Zhang, Yilun Zhao, Liyuan Geng, Arman Cohan, Luu Anh Tuan, and Chen Zhao. 2025. Diffusion vs. autoregressive language models: A text embedding perspective. In Conf. Empir. Methods Nat. Lang. Process. 4273–4303. [79] Yang Zhang, Fuli Feng, Jizhi Zhang, Keqin Bao, Qifan Wang, and Xiangnan He. 2025. Collm: Integrating collaborative embeddings into large language models for recommendation. IEEE Trans. Knowl. Data Eng. (2025). [80] Wenhao Zhao, Qiran Zou, Zhouhan Lin, and Dianbo Liu. 2026. Mitigating Premature Discretization with Progressive Quantization for Robust Vector Tokenization. arXiv preprint arXiv:2603.22304 (2026). [81] Yuanbo Zhao, Ruochen Liu, Senzhang Wang, Jun Yin, Yuxin Dong, Huan Gong, Hao Chen, Shirui Pan, and Chengqi Zhang. 2026. SimGR: Escaping the Pitfalls of Generative Decoding in LLM-based Recommendation. arXiv preprint arXiv:2602.07847 (2026). [82] Zihuai Zhao, Wenqi Fan, Jiatong Li, Yunqing Liu, Xiaowei Mei, Yiqi Wang, Zhen Wen, Fei Wang, Xiangyu Zhao, Jiliang Tang, et al . 2024. Recommender systems in the era of large language models (llms). IEEE Trans. Knowl. Data Eng. 36, 11 (2024), 6889–6907. [83] Bowen Zheng, Yupeng Hou, Hongyu Lu, Yu Chen, Wayne Xin Zhao, Ming Chen, and Ji-Rong Wen. 2024. Adapting large language models by integrating collaborative semantics for recommendation. In Proc. Int. Conf. Data Eng. IEEE, 1435–1448. [84] Huangjie Zheng, Shansan Gong, Ruixiang Zhang, Tianrong Chen, Jiatao Gu, Mingyuan Zhou, Navdeep Jaitly, and Yizhe Zhang. 2025. Continuously augmented discrete diffusion model for categorical generative modeling. arXiv preprint arXiv:2510.01329 (2025). [85] Yunqin Zhu, Chao Wang, Qi Zhang, and Hui Xiong. 2024. Graph signal diffusion model for collaborative filtering. In Proc. 47th Int. ACM SIGIR Conf. Res. Develop. Inf. Retrieval . 1380–1390. [86] Yaochen Zhu, Liang Wu, Qi Guo, Liangjie Hong, and Jundong Li. 2024. Collaborative large language model for recommender systems. In Proc. World Wide Web Conf. 3162–3172. 
+
+Received 20 February 2007; revised 12 March 2009; accepted 5 June 2009 
+
+Manuscript submitted to ACM

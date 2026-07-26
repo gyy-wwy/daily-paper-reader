@@ -1,0 +1,848 @@
+Title: HyCoRec: Hypergraph-Enhanced Multi-Preference Learning for Alleviating Matthew Effect in Conversational Recommendation
+
+URL Source: https://arxiv.org/pdf/2607.17461v1
+
+Published Time: Tue, 21 Jul 2026 01:37:23 GMT
+
+Number of Pages: 13
+
+Markdown Content:
+# HyCoRec: Hypergraph-Enhanced Multi-Preference Learning for Alleviating Matthew Effect in Conversational Recommendation 
+
+Yongsen Zheng 1, Ruilin Xu 1, Ziliang Chen 2,5 , Guohua Wang 3*,Mingjie Qian 1, Jinghui Qin 4, Liang Lin 1,2 *
+
+> 1
+
+Sun Yat-sen University, 2Peng Cheng Laboratory, 3South China Agricultural University 
+
+> 4
+
+Guangdong University of Technology, 5Jinan University {z.yongsensmile, wangguohuagmial, scape1989}@gmail.com {xurlin5, qianmj7}@mail2.sysu.edu.cn, c.ziliang@yahoo.com, linliang@ieee.org 
+
+Abstract 
+
+The Matthew effect is a notorious issue in Rec-ommender Systems (RSs), i.e. , the rich get richer and the poor get poorer, wherein pop-ular items are overexposed while less popu-lar ones are regularly ignored. Most methods examine Matthew effect in static or nearly-static recommendation scenarios. However, the Matthew effect will be increasingly am-plified when the user interacts with the sys-tem over time. To address these issues, we propose a novel paradigm, Hypergraph-Enhanced Multi-Preference Learning for Alle-viating Matthew Effect in Conversational Rec-ommendation (HyCoRec), which aims to al-leviate the Matthew effect in conversational recommendation. Concretely, HyCoRec de-votes to alleviate the Matthew effect by learn-ing multi-aspect preferences, i.e. , item-, entity-, word-, review-, and knowledge-aspect pref-erences, to effectively generate responses in the conversational task and accurately predict items in the recommendation task when the user chats with the system over time. Exten-sive experiments conducted on two benchmarks validate that HyCoRec achieves new state-of-the-art performance and the superior of allevi-ating Matthew effect. Our code is available at https://github.com/zysensmile/HyCoRec. 
+
+1 Introduction 
+
+Conversational Recommender Systems (CRSs) en-gage in iterative conversations with users to provide personalized recommendations (Qin et al., 2023; Li et al., 2023; Mishra et al., 2023), which have been widely adopted in various domains such as mu-sic recommendation (Epure and Hennequin, 2023) and online e-commerce (Liu et al., 2023). Nev-ertheless, CRSs often face the prominent issue of Matthew effect (Liu and Huang, 2021), which can be described as “the rich get richer and the poor get 
+
+> *Corresponding author.
+
+poorer”. This phenomenon indicates that popular items/categories from past data receive more vis-ibility in subsequent recommendations while less popular ones tend to be overlooked or ignored. Recently, many research efforts have focused on examining the Matthew effect in static or relatively-static offline recommendation scenarios (Liu and Huang, 2021; Anderson et al., 2020; Hansen et al., 2021). These offline studies strive to explore the potential causes behind the manifestation of the Matthew effect, and two key causes have been iden-tified. One cause (Anderson et al., 2020; Hansen et al., 2021; Liang et al., 2021; Zheng et al., 2021b) is that individuals with narrower and less diverse preferences exhibit a higher vulnerability to be-ing trapped within the confines of the Matthew effect. Another cause (Zheng et al., 2021c) is that the severe popularity bias where popular items consistently receive amplified exposure while less popular ones are underexposed. Although these methods have undoubtedly contributed valuable in-sights into the phenomenon of the Matthew effect, they directly overlook the adverse impact stem-ming from the dynamic user-system feedback loop. More recently, Gao et al. (Gao et al., 2023) ex-plore the Matthew effect in dynamic user-system interactions, but it lacks real-time user engagement through natural language conversations. Despite their effectiveness, most methods still suffer from two major limitations. 1) Interactive Schema . Many methods aim to mitigate Matthew effect in the static recommendation settings without considering the user-system feedback loop (Zhang et al., 2021). In reality, the Matthew effect will progressively amplify as users dynamically inter-act with the system over time. Worse still, such amplification will inevitably lead to a series of no-torious issues such as filter bubbles (Steck, 2018) and echo chamber (Ge et al., 2020). Thus, it is crucial to consider the dynamic user-system inter-actions to alleviate Matthew effect. 2) Preference arXiv:2607.17461v1 [cs.IR] 20 Jul 2026 Learning . Prior studies (Anderson et al., 2020; Hansen et al., 2021; Liang et al., 2021; Zheng et al., 2021b) show that the key to mitigating Matthew ef-fect is to learn diverse user preferences. Thus, many methods leverage multiplex external Knowledge Graphs (KGs) to model multi-aspect preferences. But traditional KG edges are limited to linking only two vertices ( i.e. , factors), restricting preference learning to pairwise interactions. Instead, user rela-tions exhibit intricate complexity, such as a user’s preference for a garment involves multiple factors like color, brand, style, and texture simultaneously. Hence, extending the number of vertices for learn-ing diverse preferences is rather important. To address these issues, we propose a novel paradigm, Hy pergraph-Enhanced Multi-Preference Learning for Alleviating Matthew Effect in 
+
+Co nversational Rec ommendation (HyCoRec ), which consists of Hypergraph-Enhanced Multi-Preference Learning and Hypergraph-aware CRS. The former aims to model multi-aspect preferences, specifically targeting item-aspect, entity-aspect, word-aspect, review-aspect, and knowledge-aspect preferences. It addresses the Matthew effect in CRS by utilizing item-based hypergraph, entity-based hypergraph, word-based hypergraph, item reviews, and knowledge graphs to learn and derive these preferences. The latter focuses on leverag-ing these multi-aspect preferences as users interact with the system. Concretely, multi-aspect prefer-ences are adopting to accurately predict the next utterances in the conversational task, and effec-tively make diverse item predictions in the recom-mendation task. By incorporating and utilizing these multi-aspect preferences, the system aims to provide precise and diverse recommendations that cater to the individual user’s preferences and needs for alleviating the Matthew effect as they continue to engage with the system. Empirically, extensive experimental results on two benchmarks show that HyCoRec outperforms all the compared baselines, and the superior of mitigating Matthew effect. Overall, our main contributions are included: • To the best of our knowledge, this is the first work to model multi-aspect user preferences, i.e. , item-, entity-, word-, review-, knowledge-aspect prefer-ence, to alleviate Matthew effect in the CRS. • We proposed a novel end-to-end framework, Hy-CoRec, which adopts the multi-aspect prefer-ences to effectively generate responses in the con-versational task and accurately predict itms in the recommendation task. • Quantitative and qualitative experimental results on two CRS-based datasets exhibit superior per-formance of HyCoRec and the effectiveness of mitigating Matthew effect in the CRS. 
+
+2 Related Work 
+
+2.1 Conversational Recommender System 
+
+Unlike traditional recomemnder system (Zheng et al., 2021a; Jin et al., 2023; Zheng et al., 2024d,b, 2026a), Conversational Recommender System (Qian et al., 2023; Zheng et al., 2024e,c,a,f, 2025b,a, 2026b) aims to capture user preferences through dialogues and provide high-quality rec-ommendations. Previous research on CRS can be broadly categorized into two main types: attribute-based CRS (Deng et al., 2021a; Lei et al., 2020a,b; Ren et al., 2021; Xu et al., 2021) and generation-based CRS (Chen et al., 2019; Deng et al., 2023; Li et al., 2022; Zhou et al., 2020a, 2022; Shang et al., 2023). Attribute-based CRS involves capturing user preferences by asking questions about item at-tributes and generating responses using pre-defined templates (Lei et al., 2020a). But this strategy of-ten neglects the importance of generating responses that resemble natural human language, which can negatively impact the user experience. On the other hand, generation-based CRS tackles this issue by utilizing the Seq2Seq architecture (Vaswani et al., 2017a) to integrate both conversation and recom-mendation tasks to produce fluent and coherent human-like responses. Despite their effectiveness, they fail to model users’ diverse preferences since the user-item interactions data is rather sparse and limited. In contrast, our work aims to model multi-aspect preferences for exploring user diverse intri-cate relation patterns. 
+
+2.2 Matthew Effect in Recommendation 
+
+Matthew effect is a notorious issue in RSs. Re-cently, Liu et al. (Liu and Huang, 2021) have sub-stantiated the occurrence of the Matthew effect in YouTube’s recommendation system. Besides, Wang et al. (Wang et al., 2019) undertook a rigor-ous quantitative analysis, offering valuable insights into the quantitative characteristics of the Matthew effect in recommender systems based on collabo-rative filtering. To alleviate Matthew effect, one common method is to consider recommendation diversity strongly advocated by researchers (Ander-son et al., 2020; Hansen et al., 2021; Liang et al., 2021; Zheng et al., 2021b), and another critical per-spective is by removing popularity bias, a factor that has been identified as a catalyst for its ampli-fication (Zheng et al., 2021c). But these methods predominantly focus on investigating the Matthew effect in the static recommendation settings without considering the user-system feedback loop. Instead, our HyCoRec aims to alleviate Matthew effect con-sidering dynamic user-system feedback loop. 
+
+3 HyCoRec 
+
+Matthew effect is a notorious issue in the CRS, and it inevitably becomes intensified over time due to the existence of the dynamic user-system feed-back loop. To tackle these challenges, we propose a novel paradigm, HyCoRec, which consists of Hypergraph-Enhanced Multi-Preference Learning and Hypergraph-Aware CRS. The overall pipeline of our HyCoRec is depicted in Fig.1. 
+
+3.1 Preliminaries 3.1.1 Conversational Recommendation 
+
+Conversational recommendation is a personalized approach where the system engages in continuous dialogues with users to gain a deeper understand-ing of their preferences and deliver customized suggestions. This interactive method enables the system to collect additional insights into the user’s preferences, context, and requirements, resulting in more precise and relevant recommendations. CRSs are widely applied across diverse domains like e-commerce, music streaming, movie recommenda-tions, and others, aiming to enrich user experience and satisfaction. 
+
+3.1.2 Hypergraph 
+
+Hypergraphs demonstrate intricate configurations, capturing intricate relationships among numer-ous elements through hyperlinks. In our re-search, we depict user inclinations by construct-ing multi-grained hypergraphs, encompassing the item-based hypergraph G(t)item , entity-based hyper-graph G(t)entity , and the word-based hypergraph 
+
+G(t)word . Each hypergraph can be delineated as 
+
+G(t)item = ( I(t) 
+
+> ∗
+
+, H(t) 
+
+> ∗
+
+, N(t) 
+
+> ∗
+
+), comprising: (1) a node collection I(t) 
+
+> ∗
+
+; (2) a hyperege ensemble H(t) 
+
+> ∗
+
+; (3) a 
+
+|I (t) 
+
+> ∗
+
+| × |H (t) 
+
+> ∗
+
+| adjacent matrix N(t) 
+
+> ∗
+
+signifying the weighted link between each node and hyperedge. 
+
+3.2 Hypergraph-Enhanced Multi-Preference Learning 
+
+Extensive experiments by most existing methods (Hussein et al., 2020; Liu et al., 2021; Nguyen et al., 2014) have consistently shown that users with restricted preferences are highly influenced by the Matthew effect. Thus, the key to alle-viating such bad effect is to model the diverse user preferences. Along this line, we formulate the Hypergraph-Enhanced Multi-Preference Learn-ing, including Multi-Hypergraph Construction and Multi-Preference Learning. 
+
+3.2.1 Multi-Hypergraph Construction 
+
+Traditional KGs focus on pairwise interactions for preference learning, as edges connect only two vertices. However, user preferences often exhibit complex item relation patterns. To address this, we construct multiple hypergraphs (item-aspect, entity-aspect, and word-aspect), enabling connec-tions between more than two vertices. 
+
+Item-based Hypergraph. Items directly reflect users’ genuine preferences. Users might prefer re-lated items, such as products from the same brand or with similar features. Thus, establishing connec-tions among similar or functionally similar items is crucial for exploring a diverse preferences. To do this, we first extract items from a session and treat them as vertices, forming a hyperedge. Then, All hyperedges associated with a user are connected through shared items to create the item-based hy-pergraph G(t)item as: 
+
+G(t)item = ( I(t) 
+
+> i
+
+, H(t) 
+
+> i
+
+, N(t) 
+
+> i
+
+). (1) where I(t) 
+
+> i
+
+means the item set extracted from the historical conversations, H(t) 
+
+> i
+
+is the hyperedge set, and N(t) 
+
+> i
+
+∈ { 0, 1}|I (t)   
+
+> i|×|H (t)
+> i|
+
+is the incidence ma-trix, which can be defined as: 
+
+N(t) 
+
+> v,h
+
+=
+
+(1, if v ∈ h
+
+0, if v / ∈ h (2) The degree of a vertex v ∈ I (t) 
+
+> i
+
+is denoted as 
+
+d(v) = P
+
+> h∈H (t)
+> i
+
+N(t)
+
+> v,h
+
+. Similarly, the degree of an edge h ∈ H (t) 
+
+> i
+
+is written as δ(h) = P
+
+> v∈I (t)
+> i
+
+N(t)
+
+> v,h
+
+.Besides, we use V(t) 
+
+> i
+
+∈ N|I (t)   
+
+> i|×|I (t)
+> i|
+
+and E(t) 
+
+> i
+
+∈
+
+N|H (t)   
+
+> i|×|H (t)
+> i|
+
+to be the diagonal matrices of the vertex degrees and edge degrees, respectively. Figure 1: Overview of our HyCoRec framework, which consists of Hypergraph-Enhanced Multi-Preference Learning and Hypergraph-Aware CRS. The former aims to dynamically learn multi-aspect user preferences, while the latter contains the conversation task to generate diverse responses and the recommendation task to predict target items. 
+
+Entity-based Hypergraph. To address the spar-sity and limitations of historical user-item interac-tion data, we utilize the extensive DBpedia KG (Auer et al., 2007) to construct the entity-based hy-pergraph. Specifically, we extract individual items mentioned in conversations as entities and their 
+
+k-hop neighbors to form each hyperedge. This approach allows us to capture shared semantic con-notations among the extended neighbors. The hy-peredges are then connected based on the entities they have in common. Formally, the entity-based hypergraph G(t)entity can be represented as: 
+
+G(t)entity = ( I(t) 
+
+> i
+
+∪ I (t) 
+
+> e
+
+, H(t) 
+
+> e
+
+, N(t) 
+
+> e
+
+). (3) where I(t) 
+
+> e
+
+represents the k-hop neighbors, H(t) 
+
+> e
+
+is the hyperedge set, and N(t) 
+
+> e
+
+∈ { 0, 1}|I (t)   
+
+> e|×|H (t)
+> e|
+
+is the incidence matrix defined by Eq.(2). Similarly, 
+
+V(t) 
+
+> e
+
+∈ N|I (t)   
+
+> e|×|I (t)
+> e|
+
+and E(t) 
+
+> e
+
+∈ N|H (t)   
+
+> e|×|H (t)
+> e|
+
+de-note the diagonal matrices of vertex degrees and edge degrees, respectively. 
+
+Word-based Hypergraph. Keywords in con-versations are vital for understanding users’ needs. By analyzing prominent words, we can identify specific preferences, which is crucial for model-ing diverse user preferences. To achieve this, we build a word-based hypergraph using the word-oriented KG ConcetNet (Speer et al., 2017) to un-cover semantic relations like synonymy, antonyms, and co-occurrence. We represent each historical conversation item as a keyword and extend it to include k-hop neighbors, forming a hyperedge. All the hyperedges connect through shared words. The word-based hypergraph G(t)word can be defined as follows: 
+
+G(t)word = ( I(t) 
+
+> i
+
+∪ I (t) 
+
+> w
+
+, H(t) 
+
+> w
+
+, N(t) 
+
+> w
+
+). (4) where I(t) 
+
+> w
+
+is k-hop neighbors, H(t) 
+
+> w
+
+means the hy-peredge set, and N(t) 
+
+> w
+
+∈ { 0, 1}|I (t)   
+
+> w|×|H (t)
+> w|
+
+is the incidence matrix defined as Eq.(2). Similarly, let 
+
+V(t) 
+
+> w
+
+∈ N|I (t)   
+
+> w|×|I (t)
+> w|
+
+and E(t) 
+
+> w
+
+∈ N|H (t)   
+
+> w|×|H (t)
+> w|
+
+de-note the diagonal matrices of the vertex degrees and the edge degrees, respectively. 
+
+3.2.2 Multi-Preference Learning 
+
+Upon constructing multiple hypergraphs as de-scribed earlier, we will leverage these hypergraphs to effectively capture diverse user preferences for mitigating the Matthew effect. This includes pref-erences related to items, entities, words, reviews, and knowledge aspects, all of which play a role in modeling multi-aspect preferences. 
+
+Item-aspect Preference. Modeling item-aspect preferences holds significant importance in com-prehending users’ distinct tastes and preferences concerning the various items they interact with. In line with this objective, we derive the item-aspect preference Pi by leveraging the item-based hyper-graph. To effectively capture high-order relations, inspired by (Bai et al., 2021), we define our Hyper-graph Convolution function HConv (·) as follows: 
+
+X(l+1)  
+
+> m
+
+= HConv 
+
+
+
+X(l), N(t) 
+
+> i
+
+, V(t) 
+
+> i
+
+, E(t) 
+
+> i
+
+, I(t)
+
+> i
+
+
+
+,
+
+HConv (·) = ( V(t) 
+
+> i
+
+)−1N(t) 
+
+> i
+
+(E(t) 
+
+> i
+
+)−1(N(t) 
+
+> i
+
+)T X(l)W(l) 
+
+> i
+
+,
+
+X(l+1) = Pooling 
+
+
+
+X(l+1) 
+
+> m
+
+Mm=1 .
+
+(5) Here, Xl and X(l+1) represent the input of the l-th and (l + 1) -th layers, respectively, and W(l) 
+
+> i
+
+de-notes the trainable parameter. The notations N(t) 
+
+> i
+
+,
+
+V(t) 
+
+> i
+
+, and E(t) 
+
+> i
+
+have been discussed in Section 3.2.1. Specifically, I(t) 
+
+> i
+
+signifies the item representations of I(t) 
+
+> i
+
+extracted from the encoded entity embed-dings (Shang et al., 2023). Additionally, m denotes the number of heads in the multi-head architec-ture (Vaswani et al., 2017b). Finally, we apply an average pooling Pooling (·) on the representation 
+
+X(L+1) obtained from the last layer ( i.e. , (L + 1) 
+
+layer) to learn item-aspect preference Pi:
+
+Pi = X(L+1) = Pooling 
+
+
+
+X(L+1) 
+
+> m
+
+Mm=1 , (6) 
+
+Entity-aspect Preference. Capturing entity-aspect preferences is highly advantageous for un-veiling complex relationship patterns underlying users’ behaviors. To achieve this, we employ the entity-based hypergraph as a mechanism to learn entity-aspect preferences. In a similar vein to the item-aspect preference, the entity-aspect prefer-ence Pe can be represented as: 
+
+X(l+1)  
+
+> j
+
+= HConv 
+
+
+
+X(l), N(t) 
+
+> e
+
+, V(t) 
+
+> e
+
+, E(t) 
+
+> e
+
+, I(t)
+
+> i+e
+
+
+
+,
+
+Pe = X(L+1) = Pooling 
+
+
+
+X(L+1) 
+
+> j
+
+Jj=1 .
+
+(7) The specifics of N(t) 
+
+> e
+
+, V(t) 
+
+> e
+
+, and E(t) 
+
+> e
+
+can be found in Section 3.2.1. Besides, I(t) 
+
+> i+e
+
+is the entity repre-sentations of the entity set I(t) 
+
+> i
+
+∪ I (t) 
+
+> e
+
+. Moreover, 
+
+j denotes the number of heads in the multi-head architecture, and W(l) 
+
+> e
+
+is the trainable parameter. 
+
+Word-aspect Preference. Keywords occurring in conversations directly reflect users’ specific or potential preferences. Derived from the word-based hypergraph, the word-aspect preference Pw
+
+can be formulated as: 
+
+X(l+1)  
+
+> f
+
+= HConv 
+
+
+
+X(l), N(t) 
+
+> w
+
+, V(t) 
+
+> w
+
+, E(t) 
+
+> w
+
+, I(t)
+
+> i+w
+
+
+
+,
+
+Pw = X(L+1) = Pooling 
+
+
+
+X(L+1) 
+
+> f
+
+Ff =1 .
+
+(8) Here N(t) 
+
+> w
+
+, V(t) 
+
+> w
+
+, and E(t) 
+
+> w
+
+are explained in more detail in Section 3.2.1. Additionally, I(t) 
+
+> i+w
+
+repre-sents the word representations obtained from the encoded entity embeddings. The variable f denotes the number of heads in the multi-head architecture, and W(l) 
+
+> f
+
+denotes the trainable parameter. 
+
+Review-aspect Preference. Item reviews pro-vide valuable insights into users’ experiences and reflections. Analyzing these reviews helps identify patterns, sentiment trends, and user attitudes, lead-ing to a better understanding of user preferences. Taking inspiration from the merits of Transformer model, we utilize the Transformer framework to encode accessed reviews (Lu et al., 2021). Specif-ically, given a review R, the output embeddings from the previous transformer layer, denoted as 
+
+T l(R), define the subsequent layer T l+1 (R) using the Multi-head Attention function MHA (·) as: 
+
+T l+1 (R) = MHA (T l(R), T l(R), T l(R)) ,
+
+MHA (K, Q, V ) = [ head l
+
+> 1
+
+; · · · ; head lg]Wl,
+
+head lg = SA (T l(R)Wk, T l(R)Wq, T l(R)Wv),
+
+SA (K, Q, V ) = Softmax ( QK T
+
+pd/g )V ,
+
+(9) where g is the number of heads, Wl denotes the trainable parameters, and each head head lg is computed using the Scaled Dot-Product Attention 
+
+(Vaswani et al., 2017c) SA (·). K, Q and V indi-cate the key, query and value matrices, respectively. 
+
+Wk, Wq, and Wv are learnable parameters. For convenience, we consider the output embeddings of the final transformer layer as the review-aspect preferences Pr:
+
+Pr = MHA (T L(R), T L(R), T L(R)) . (10) Here L is the number of transformer layers. 
+
+Knowledge-aspect Preference. The informa-tion conveyed in the ongoing conversation reflects the dynamic preferences of the users, providing valuable insights into their current interests. Thus, our focus lies in modeling the preference for knowl-edge aspects by encoding the entities mentioned in the current conversation. Given the current con-versation context C, we leverage DBpedia and CN-DBpedia, to extract entities Ek = {e1, e 2, · · · , e k}along the paths. To capture high-order entity repre-sentations, we use RGCN to explicitly capture rela-tional semantics by adopt contrastive pre-training (Shang et al., 2023). The representation of entity e
+
+at the (l + 1) -th layer can be computed as: 
+
+el+1 = σ(X
+
+> r∈R
+
+X 
+
+> ˆe∈N re
+
+1
+
+Zl
+
+Wl
+
+> 1
+
+ˆel + Wl
+
+> 2
+
+el), (11) where el is the l-th layer’s representation of entity 
+
+e, σ means the sigmoid function, ˆe refers to entities from the one-hop neighbor set N re under relation 
+
+r, and Zl is the hyperparameter. Wl 
+
+> 1
+
+and Wl 
+
+> 2
+
+can be trained. We use the representation eL from the last layer as knowledge-aspect preference Pc:
+
+Pc = RGCN( Ek) = {eT 
+
+> 1
+
+, eT 
+
+> 2
+
+, · · · , eTk }, (12) where eTi is the embedding of ei via RGCN. 
+
+3.3 Hypergraph-Aware CRS 
+
+To combat the Matthew effect in the CRS, we adopt multi-aspect preferences, i.e. , Pi, Pe, Pw, Pr, and 
+
+Pc, to accurately predict item in the recommenda-tion task and effectively generate responses in the conversational task. 
+
+3.3.1 Recommendation Task 
+
+The recommendation task aims to accurately pre-dict items for users through natural conversations in dynamic user-system interactions. To address the Matthew effect, we first integrate multiple pref-erences to induce the fused preference Pmulrec in the recommendation task as: 
+
+Ph = [ Pi; Pe; Pw; Pr],
+
+Pmulrec = Pooling ([ Pooling (Ph); Pc]) . (13) where ; denotes the concatenation operation. Next, the vector Pmulrec is used to select the suitable items in all the candidate set from item set I, and the recommendation prediction is calculated as: 
+
+Prec = Softmax (Pmulrec · ETI ), (14) where EI is embeddings of all candidate items from item set I. We use cross-entropy loss (Shang et al., 2023) to learn the recommendation task: 
+
+Lr = −
+
+> B
+
+X
+
+> j=1
+> |I|
+
+X
+
+> i=1
+
+[−(1 − yij ) · log(1 − P (j)rec (i)) + yij · log( P(j)rec (i))] ,
+
+(15) here the symbol B represents the size of the mini-batch, and yij ∈ { 0, 1} denotes the target label. 
+
+3.3.2 Conversational Task 
+
+The conversation task focuses on generating proper dialogue utterances to respond to user inputs. To generate diverse responses, we integrate multi-aspect preferences vectors to derive the fused pref-erence in the conversation task Pmulcon as: 
+
+Pmulcon = MHA ([ Pc; Ph; Ph]) , (16) here Ph is defined as Eq.(13). Then, this fused pref-erence Pmulcon is fed into the Transformer-based encoder-decoder framework for generating diverse responses. Let Yn−1 be the output of the last time unit, then the current one Yn is: 
+
+An 
+
+> 0
+
+= MHA (Yn−1, Yn−1, Yn−1),
+
+An 
+
+> 1
+
+= MHA (An 
+
+> 0
+
+, Pmulcon , Pmulcon ),
+
+An 
+
+> 2
+
+= MHA (An 
+
+> 1
+
+, Pc, Pc),
+
+An 
+
+> 3
+
+= MHA (An 
+
+> 1
+
+, Ph, Ph),
+
+An 
+
+> 4
+
+= β · An 
+
+> 2
+
++ (1 − β) · An 
+
+> 3
+
+,
+
+Yn = FFN (An 
+
+> 4
+
+).
+
+(17) Here FFN (·) is the fully-connected feed-forward network, and β is hyper-parameter to balance two signals. To enhance the response diversity, we use preference-aware bias and item-related bias fol-lowing (Shang et al., 2023). Given the predicted sequence {st−1}, the probability of the next token is calculated as: 
+
+Pconv (st|{ st−1}) = P1(st|Yi) + P2(st|Pmulrec )+ P3(st|Pmulrec ),
+
+(18) where st is the t-th utterances, and {st−1} =
+
+s1, s 2, · · · , s t−1. Inspired by (Shang et al., 2023), 
+
+P1(·), P2(·), and P3(·) are the vocabulary probabil-ity, vocabulary bias, and copy probability, respec-tively. Next, we use the cross-entropy loss: 
+
+Lc = −
+
+> B
+
+X
+
+> b=1
+> T
+
+X
+
+> t=1
+
+log( Pconv (st|{ st−1})) . (19) Here T denotes the truncated length of utterances. 
+
+4 Experiments and Analyses 
+
+We conduct experiments to fully evaluate our Hy-CoRec and answer the following questions: • RQ1: How does HyCoRec perform compared with all baselines in the recommendation task? • RQ2: How does HyCoRec perform compared with all baselines in the conversation task? Model REDIAL TG-REDIAL R@10 R@50 M@10 M@50 N@10 N@50 R@10 R@50 M@10 M@50 N@10 N@50 TextCNN 0.0644 0.1821 0.0235 0.0285 0.0328 0.0580 0.0097 0.0208 0.0040 0.0045 0.0053 0.0077 SASRec 0.1117 0.2329 0.0540 0.0593 0.0674 0.0936 0.0043 0.0178 0.0011 0.0017 0.0019 0.0047 BERT4Rec 0.1285 0.3032 0.0475 0.0555 0.0663 0.1045 0.0043 0.0226 0.0013 0.0020 0.0020 0.0058 ReDial 0.1705 0.3077 0.0677 0.0738 0.0925 0.1222 0.0038 0.0165 0.0012 0.0017 0.0018 0.0045 TG-ReDial 0.1679 0.3327 0.0694 0.0771 0.0924 0.1286 0.0110 0.0174 0.0048 0.0050 0.0062 0.0076 KBRD 0.1796 0.3421 0.0722 0.0800 0.0972 0.1333 0.0201 0.0501 0.0077 0.0090 0.0106 0.0171 KGSF 0.1785 0.3690 0.0705 0.0796 0.0956 0.1379 0.0215 0.0643 0.0069 0.0087 0.0103 0.0194 KGConvRec 0.1819 0.3587 0.0711 0.0794 0.0969 0.1358 0.0220 0.0524 0.0088 0.0102 0.0119 0.0185 BERT 0.1608 0.3525 0.0597 0.0688 0.0831 0.1255 0.0040 0.0194 0.0011 0.0017 0.0018 0.0050 XLNet 0.1569 0.3590 0.0583 0.0677 0.0811 0.1255 0.0040 0.0187 0.0011 0.0017 0.0017 0.0048 BART 0.1693 0.3783 0.0646 0.0744 0.0888 0.1350 0.0047 0.0187 0.0012 0.0017 0.0020 0.0048 MHIM 0.1966 0.3832 0.0742 0.0830 0.1027 0.1440 0.0300 0.0783 0.0108 0.0129 0.0152 0.0256             
+
+> HyCoRec* 0.2231 0.4351 0.0797 0.0898 0.1123 0.1579 0.0377 0.0826 0.0154 0.0173 0.0162 0.0245
+
+Table 1: Recommendation results. * indicates statistically significant improvement ( p < 0.05) over all baselines. 
+
+• RQ3: How does HyCoRec alleviate Matthew ef-fect in the CRS? • RQ4: How do the item-based hypergraph G(t)item ,entity-based hypergraph G(t)enti , word-based hyper-graph G(t)word , and item reviews R contribute to the performance? • RQ5: How do parameters affect our HyCoRec? • RQ6: It is better to provide the case studies to comprehensively understand about how HyCoRec handles Matthew effect in the CRS? 
+
+4.1 Experimental Protocol Datasets. We evaluate our HyCoRec on two chal-lenging CRS-based datasets REDIAL (Li et al., 2018b) and TG-REDIAL (Zhou et al., 2020b). The REDIAL consists of 11,348 dialogues involving 956 users and 6,924 items, while the TG-REDIAL contains 10,000 dialogues with 1,482 users and 33,834 items. The reviews in REDIAL are sourced from the IMDb, while the reviews in TG-REDIAL are collected from Douban. 
+
+Baselines. To fully evaluate our HyCoRec, we con-duct a comprehensive evaluation by comparing our method with several state-of-the-art methods. The compared methods include TextCNN (Kim, 2014), 
+
+SASRec (Kang and McAuley, 2018), BERT4Rec 
+
+(Sun et al., 2019), Transformer (Vaswani et al., 2017b), ReDial (Li et al., 2018a), KBRD (Chen et al., 2019), KGSF (Zhou et al., 2020a), KGCon-vRec (Sarkar et al., 2020), BERT (Devlin et al., 2019), XLNet (Yang et al., 2019), BART (Lewis et al., 2020), DialoGPT (Zhang et al., 2020), GPT-3 (Brown et al., 2020), C2-CRS (Zhou et al., 2022), 
+
+LOT-CRS (Zhao et al., 2023), UniCRS (Deng et al., 2021b), and MHIM (Shang et al., 2023). 
+
+> https://www.dbpedia.org/ https://movie.douban.com/
+
+4.2 Recommendation Performance (RQ1) 
+
+Following (Shang et al., 2023), we adopt Recall@ K
+
+(R@ K), MRR@ K (M@ K), NDCG@ K (N@ K)(K=10, 50) to evaluate the recommendation task. Experimental results in Table 1 validate that our HyCoRec outperforms all the compared methods. The improvement of HyCoRec over these base-lines can be attributed to three reasons: (1) Incor-porating external knowledge sources like DBpedia and ConceptNet into the CRS proves beneficial in exploring users’ intricate behaviors, considering the sparse and limited nature of user-item interac-tion data. (2) Dialogues serve as a treasure trove of valuable information beyond the explicit user inputs. By considering the ongoing conversation between the user and the system, HyCoRec can cap-ture the user’s current context and understand their immediate needs. (3) Modeling multi-aspect pref-erences, including item-, entity-, word-, review-, and knowledge-aspect preferences, to enhance rec-ommendation diversity and alleviate the Matthew effect as users interact with the system over time. 
+
+4.3 Conversational Performance (RQ2) 
+
+In the conversational task, we adopt Distinct n-gram (Dist-n) (Shang et al., 2023) ( n=2,3,4) to eval-uate the diversity of generated responses. Table 2 summarizes the experimental results, it is observed that our HyCoRec is superior to all the compared baselines. We can observe that the performance rankings of the four baseline models remain con-sistent, with KBRD leading the way, followed by KGSF, Transformer, and finally ReDial. This can be attributed to the fact that KBRD leverages exter-nal knowledge sources to align the representations of items and words. Besides, KGSF enriches its decoder by incorporating cross-attention mecha-Model REDIAL TG-REDIAL Dist-2 Dist-3 Dist-4 Dist-2 Dist-3 Dist-4 ReDial 0.0214 0.0659 0.1333 0.2178 0.5136 0.7960 Trans. 0.0538 0.1574 0.2696 0.2362 0.7063 1.1800 KBRD 0.0765 0.3344 0.6100 0.8013 1.7840 2.5977 KGSF 0.0572 0.2483 0.4349 0.3891 0.8868 1.3337 C2-CRS 0.2623 0.3891 0.6202 0.5235 1.9961 2.9236 UniCRS 0.2464 0.4273 0.5290 0.6252 2.2352 2.5194 LOT-CRS 0.3312 0.6155 0.9248 0.9287 2.4880 3.4972 DialoGPT 0.3542 0.6209 0.9482 1.1881 2.4269 3.9824 GPT-3 0.3604 0.6399 0.9511 1.2255 2.5713 4.0713 MHIM 0.3278 0.6204 0.9629 1.1100 2.3520 3.8200    
+
+> HyCoRec* 0.3661 0.6434 0.9523 1.2590 2.6000 4.1210
+
+Table 2: Conversation results. * indicates statistically significant improvement ( p < 0.05) over all baselines. 
+
+nisms along with embeddings from both entity- and word-level knowledge graphs (KGs). Nevertheless, Transformer and ReDial solely rely on token se-quences, disregarding the user preferences that are concealed within the entities. Compared with these baselines, the improve-ment of HyCoRec can be attributed to the fact that: (1) HyCoRec considers multi-aspect user pref-erences to generate diverse responses that effec-tively align with the user’s multi-level preferences for alleviating Matthew effect. (2) To accurately forecast the next utterance, we integrate the fused preference obtained from various aspects into a Transformer-based encoder-decoder framework to generate high-quality responses to meet users’ dy-namic needs and interests. 
+
+4.4 Study on Matthew Effect (RQ3) 
+
+As our objective is to alleviate the Matthew effect in the CRS, we extensively examine the recom-mendation outcomes and compare them with the strongest baselines to assess whether HyCoRec can effectively mitigate Matthew effect. To miti-gate the Matthew effect, the crucial factor is to en-hance the diversity of the recommendation results. Thus, we adopt two commonly-used metrics Cov-erage @k (C@k) and Isolation-Index (Iso-Index) to assess the extent of recommendation diversifica-tion by taking into account the distinctions among recommended items. The higher coverage value demonstrates its superior capability to encompass a larger portion of the recommendation space, en-compassing items from various categories. A lower isolation-index value indicates a higher diversity in the recommended results. As shown in Table 3, it is evident that our Hy-CoRec consistently achieves the highest values of Coverage and the lowest isolation-index value                                                             
+
+> Datasets REDIAL Models C@5 C@10 C@15 C@20 Iso-Index KBRD 0.0579 0.0810 0.0961 0.1072 0.1149 KGSF 0.0664 0.0831 0.1195 0.1366 0.1055 KGConvRec 0.0478 0.0735 0.1044 0.1235 0.1003 MHIM 0.1098 0.1492 0.1747 0.1977 0.0923
+> HyCoRec 0.1168 0.1579 0.1848 0.2071 0.0617
+> Datasets TG-REDIAL Models C@5 C@10 C@15 C@20 Iso-Index KBRD 0.0757 0.1204 0.1468 0.1584 0.1222 KGSF 0.0847 0.1324 0.1606 0.1858 0.1198 KGConvRec 0.0720 0.0904 0.1228 0.1515 0.1091 MHIM 0.1749 0.2493 0.2939 0.3423 0.1042
+> HyCoRec 0.1841 0.2743 0.3100 0.3608 0.0791
+
+Table 3: Results on C@k and Iso-Index metrics.              
+
+> Model REDIAL TG-REDIAL R@10 R@50 R@10 R@50
+> HyCoRec 0.2231 0.4351 0.0377 0.0826
+> w/o item hypergraph 0.2061 0.4177 0.0347 0.0733 w/o entity hypergraph 0.2049 0.4206 0.0267 0.0696 w/o word hypergraph 0.2058 0.4194 0.0257 0.0661 w/o item reviews 0.2102 0.4203 0.0267 0.0771
+
+Table 4: Ablation studies on the recommendation task. 
+
+across all datasets compared with the strongest baselines. For instance, on the REDIAL, our HyCoRec achieves substantial improvements of 102.72%, 75.90%, 144.35%, and 63.75% in terms of Cover@5 when compared to all the strong models, namely KBRD, KGSF, KGConvRec, and MHIM, respectively. The results show that Hy-CoRec effectively addresses isolation and ensures extensive coverage of recommended items by pro-viding users with a broader choice range, validating the superiority in alleviating the Matthew effect as the user interacts with the system. 
+
+4.5 Ablation Studies (RQ4) 
+
+In this part, we conduct ablation experiments with different variants of HyCoRec to verify the contri-butions of each component, including: 1) w/o item hypergraph: we remove the item-based hypergraph; 2) w/o entity hypergraph: we remove the entity-based hypergraph; 3) w/o word hypergraph: we remove the word-based hypergraph; 4) w/o item re-views: we remove item reviews. As shown in Table 4, we can observe that a substantial decline in per-formance when removing any type of component. The main reason is that various knowledge data can effectively explore users’ multi-aspect prefer-ences. This observation highlights the effectiveness of HyCoRec in alleviating the Matthew effect by providing diverse recommendation results. Figure 2: Impact of different hyperparameters. 
+
+4.6 Hyperparameters Analysis (RQ5) 
+
+Next, we investigate the impact of several impor-tant hyperparameters on the recommendation per-formance. As depicted in Fig.2, we can observe: Firstly, with the increase of embedding dimen-sion, the recommendation performance continually improves. This is because the large dimension could encode sufficient high-level feature repre-sentations. Secondly, the model performance is optimal when the layer number is set to 2 on both datasets. The main reason is that larger hypergraph convolution layer numbers easily lead to model overfitting while the smaller one fail to capture enough feature representations. Lastly, a suitable hypergraph pooling layer number can enhance the model performance but the larger one might dam-age recommendation performance. The reason is that too large hypergraph pooling layer numbers might lose the important feature representations. 
+
+4.7 Case Studies (RQ6) 
+
+For a more in-depth understanding of how our pro-posed method, HyCoRec, tackles the Matthew ef-fect during user-system interactions, we present comparative case studies between our approach and existing methods, visually illustrating the dialogue recommendation outcomes in human-computer in-teraction. As illustrated in Fig.3, our method ef-
+
+> Figure 3: Case studies to comprehensively understand about how our proposed method HyCoRec handles Matthew effect in the CRS compared with most existing methods. Different colors denote different categories (see (a)) while the same color means the same category (see (b)).
+
+fectively recommends a diverse range of movies from different categories (see (a)), setting itself apart from existing methods that typically recom-mend movies from the same category (see (b)). The results highlight that our method achieves higher recommendation diversity, while most ex-isting methods demonstrate lower diversity in rec-ommendations. Generally, an effective strategy to alleviate the Matthew effect involves enhancing recommendation diversification (Anderson et al., 2020; Hansen et al., 2021; Liang et al., 2021; Zheng et al., 2021b). Thus, these results validate the effec-tiveness of our proposed method in mitigating the Matthew effect as users interact with the system over time in CRS. 
+
+5 Conclusion 
+
+The Matthew effect is a notorious issue in the CRS, and it will be increasingly amplified due to the dy-namic user-system feedback loop. To address these issues, we propose a novel paradigm, HyCoRec, which aims to learn multi-aspect user preferences, 
+
+i.e. , item-, entity-, word-, review-, and knowledge-aspect preferences, to effectively generate diverse responses in the conversation task and accurately predict items in the recommendation task for al-leviating Matthew effect. Extensive experiments validate that our HyCoRec outperforms all the com-pared baselines and the superior of HyCoRec in alleviating Matthew effect in the CRS. 6 Limitations 
+
+While our HyCoRec has attained a remarkable state-of-the-art performance, it does have certain limitations. Firstly, the complexity and extensive nature of item reviews make the construction of the review-based hypergraph challenging and dif-ficult. Consequently, the current version does not include the review-based hypergraph to capture a wider range of multiplex user relation patterns. Sec-ondly, our proposed method necessitates the design of individual hypergraphs for learning multi-aspect preferences. This limitation could be addressed by developing a general framework that integrate any types of hypergraphs, thereby automatically unifying various knowledge sources. 
+
+7 Ethics Statement 
+
+The data utilized in our study are sourced from open-access repositories, and do not pose any pri-vacy concerns. We are confident that our research adheres to the ethical standards set forth by ACL. 
+
+8 Acknowledgements 
+
+This work was supported in part by the National Key Research and Development Program of China under Grant No.2021ZD0111601; Na-tional Natural Science Foundation of China under Grant No.62325605, Grant No.62206110 and Grant No.62206314; Guangzhou Basic Research Project for Basic and Applied Research under Grant No.202201010334; Guangdong Basic and Applied Basic Research Founda-tion under Grant No.2023A1515011374 and Grant No.2022A1515011835; Guangzhou Science and Technology Program under Grant No.2024A04J6365; Science and Tech-nology Projects in Guangzhou under Grant No.2024A04J4388; and Guangdong Province Key Laboratory of Information Security Technology, Sun Yat-sen University. 
+
+References 
+
+Ashton Anderson, Lucas Maystre, Ian Anderson, Rishabh Mehrotra, and Mounia Lalmas. 2020. Al-gorithmic effects on the diversity of consumption on spotify. In The Web Conference , pages 2155–2165. Sören Auer, Christian Bizer, Georgi Kobilarov, Jens Lehmann, Richard Cyganiak, and Zachary G. Ives. 2007. Dbpedia: A nucleus for a web of open data. In International Semantic Web Conference/Asian Se-mantic Web Conference , volume 4825, pages 722– 735. Song Bai, Feihu Zhang, and Philip H. S. Torr. 2021. Hypergraph convolution and hypergraph attention. 
+
+Pattern Recognit. , 110:107637. Tom B. Brown, Benjamin Mann, Nick Ryder, Melanie Subbiah, Jared Kaplan, Prafulla Dhariwal, Arvind Neelakantan, Pranav Shyam, Girish Sastry, Amanda Askell, Sandhini Agarwal, Ariel Herbert-Voss, Gretchen Krueger, Tom Henighan, Rewon Child, Aditya Ramesh, Daniel M. Ziegler, Jeffrey Wu, Clemens Winter, Christopher Hesse, Mark Chen, Eric Sigler, Mateusz Litwin, Scott Gray, Benjamin Chess, Jack Clark, Christopher Berner, Sam McCandlish, Alec Radford, Ilya Sutskever, and Dario Amodei. 2020. Language models are few-shot learners. In 
+
+Conference on Neural Information Processing Sys-tems .Qibin Chen, Junyang Lin, Yichang Zhang, Ming Ding, Yukuo Cen, Hongxia Yang, and Jie Tang. 2019. To-wards knowledge-based recommender dialog system. 
+
+arXiv preprint arXiv:1908.05391 .Yang Deng, Yaliang Li, Fei Sun, Bolin Ding, and Wai Lam. 2021a. Unified conversational recommenda-tion policy learning via graph-based reinforcement learning. In Conference on Research and Develop-ment in Information Retrieval , pages 1431–1441. Yang Deng, Yaliang Li, Fei Sun, Bolin Ding, and Wai Lam. 2021b. Unified conversational recommenda-tion policy learning via graph-based reinforcement learning. In Conference on Research and Develop-ment in Information Retrieval , pages 1431–1441. Yang Deng, Wenxuan Zhang, Weiwen Xu, Wenqiang Lei, Tat-Seng Chua, and Wai Lam. 2023. A unified multi-task learning framework for multi-goal conver-sational recommender systems. ACM Transactions on Information Systems , 41(3):1–25. Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova. 2019. BERT: pre-training of deep bidirectional transformers for language under-standing. In the North American Chapter of the Asso-ciation for Computational Linguistics: Human Lan-guage Technologies , pages 4171–4186. Association for Computational Linguistics. Elena V. Epure and Romain Hennequin. 2023. A human subject study of named entity recognition in conversa-tional music recommendation queries. In European Chapter of the Association for Computational Lin-guistics , pages 1273–1288. Chongming Gao, Kexin Huang, Jiawei Chen, Yuan Zhang, Biao Li, Peng Jiang, Shiqi Wang, Zhong Zhang, and Xiangnan He. 2023. Alleviating matthew effect of offline reinforcement learning in interactive recommendation. In Conference on Research and Development in Information Retrieval , pages 238– 248. ACM. Yingqiang Ge, Shuya Zhao, Honglu Zhou, Changhua Pei, Fei Sun, Wenwu Ou, and Yongfeng Zhang. 2020. Understanding echo chambers in e-commerce rec-ommender systems. In Conference on Research and Development in Information Retrieval , pages 2261– 2270. ACM. Christian Hansen, Rishabh Mehrotra, Casper Hansen, Brian Brost, Lucas Maystre, and Mounia Lalmas. 2021. Shifting consumption towards diverse content on music streaming platforms. In Conference on Web Search and Data Mining , pages 238–246. ACM. Eslam Hussein, Prerna Juneja, and Tanushree Mitra. 2020. Measuring misinformation in video search platforms: An audit study on youtube. ACM on Human-Computer Interaction , 4(CSCW):048:1– 048:27. Xin Jin, Wu Zhou, Jinyu Wang, Duo Xu, and Yongsen Zheng. 2023. An order-complexity aesthetic assess-ment model for aesthetic-aware music recommenda-tion. In Proceedings of the 31st ACM International Conference on Multimedia , pages 6938–6947. Wang-Cheng Kang and Julian J. McAuley. 2018. Self-attentive sequential recommendation. In IEEE In-ternational Conference on Data Mining , pages 197– 206. Yoon Kim. 2014. Convolutional neural networks for sentence classification. In Empirical Methods in Nat-ural Language Processing (Demonstrations) , pages 1746–1751. Wenqiang Lei, Xiangnan He, Yisong Miao, Qingyun Wu, Richang Hong, Min-Yen Kan, and Tat-Seng Chua. 2020a. Estimation-action-reflection: Towards deep interaction between conversational and recom-mender systems. In Web Search and Data Mining ,pages 304–312. Wenqiang Lei, Gangyi Zhang, Xiangnan He, Yisong Miao, Xiang Wang, Liang Chen, and Tat-Seng Chua. 2020b. Interactive path reasoning on graph for con-versational recommendation. In International Con-ference on Knowledge Discovery and Data Mining ,pages 2073–2083. Mike Lewis, Yinhan Liu, Naman Goyal, Marjan Ghazvininejad, Abdelrahman Mohamed, Omer Levy, Veselin Stoyanov, and Luke Zettlemoyer. 2020. BART: denoising sequence-to-sequence pre-training for natural language generation, translation, and com-prehension. In the Association for Computational Linguistics , pages 7871–7880. Association for Com-putational Linguistics. Raymond Li, Samira Ebrahimi Kahou, Hannes Schulz, Vincent Michalski, Laurent Charlin, and Chris Pal. 2018a. Towards deep conversational recommenda-tions. Advances in Neural Information Processing Systems , 31. Raymond Li, Samira Ebrahimi Kahou, Hannes Schulz, Vincent Michalski, Laurent Charlin, and Chris Pal. 2018b. Towards deep conversational recommenda-tions. In Advances in Neural Information Processing Systems , pages 9748–9758. Shimin Li, Qinyuan Cheng, Linyang Li, and Xipeng Qiu. 2023. Mitigating negative style transfer in hybrid dialogue system. In Association for the Advancement of Artificial Intelligence , pages 13103–13111. Shuokai Li, Ruobing Xie, Yongchun Zhu, Xiang Ao, Fuzhen Zhuang, and Qing He. 2022. User-centric conversational recommendation with multi-aspect user modeling. In Conference on Research and De-velopment in Information Retrieval , pages 223–233. Yile Liang, Tieyun Qian, Qing Li, and Hongzhi Yin. 2021. Enhancing domain-level and user-level adap-tivity in diversified recommendation. In Conference on Research and Development in Information Re-trieval , pages 747–756. ACM. Ping Liu, Karthik Shivaram, Aron Culotta, Matthew A. Shapiro, and Mustafa Bilgic. 2021. The interaction between political typology and filter bubbles in news recommendation algorithms. In The Web Conference ,pages 3791–3801. Ying Chieh Liu and Min Qi Huang. 2021. Examin-ing the matthew effect on youtube recommendation system. In Conference on Technologies and Applica-tions of Artificial Intelligence , pages 146–148. Yuanxing Liu, Weinan Zhang, Baohua Dong, Yan Fan, Hang Wang, Fan Feng, Yifan Chen, Ziyu Zhuang, Hengbin Cui, Yongbin Li, and Wanxiang Che. 2023. U-NEED: A fine-grained dataset for user needs-centric e-commerce conversational recommendation. In Conference on Research and Development in In-formation Retrieval , pages 2723–2732. ACM. Yu Lu, Junwei Bao, Yan Song, Zichen Ma, Shuguang Cui, Youzheng Wu, and Xiaodong He. 2021. Revcore: Review-augmented conversational recom-mendation. In Findings of the Association for Com-putational Linguistics , pages 1161–1173. Kshitij Mishra, Priyanshu Priya, and Asif Ekbal. 2023. Help me heal: A reinforced polite and empathetic mental health and legal counseling dialogue system for crime victims. In Association for the Advance-ment of Artificial Intelligence , pages 14408–14416. Tien T. Nguyen, Pik-Mai Hui, F. Maxwell Harper, Loren G. Terveen, and Joseph A. Konstan. 2014. Ex-ploring the filter bubble: the effect of using recom-mender systems on content diversity. In The Web Conference , pages 677–686. ACM. Mingjie Qian, Yongsen Zheng, Jinghui Qin, and Liang Lin. 2023. HutCRS: Hierarchical user-interest track-ing for conversational recommender system. In Pro-ceedings of the 2023 Conference on Empirical Meth-ods in Natural Language Processing , pages 10281– 10290, Singapore. Association for Computational Linguistics. Libo Qin, Zhouyang Li, Qiying Yu, Lehan Wang, and Wanxiang Che. 2023. Towards complex scenarios: Building end-to-end task-oriented dialogue system across multiple knowledge bases. In Association for the Advancement of Artificial Intelligence , pages 13483–13491. Xuhui Ren, Hongzhi Yin, Tong Chen, Hao Wang, Zi Huang, and Kai Zheng. 2021. Learning to ask appropriate questions in conversational recommenda-tion. In Conference on Research and Development in Information Retrieval , pages 808–817. Rajdeep Sarkar, Koustava Goswami, Mihael Arcan, and John Philip McCrae. 2020. Suggest me a movie for tonight: Leveraging knowledge graphs for conversa-tional recommendation. In Conference on Computa-tional Linguistics , pages 4179–4189. Chenzhan Shang, Yupeng Hou, Wayne Xin Zhao, Yaliang Li, and Jing Zhang. 2023. Multi-grained hypergraph interest modeling for conversational rec-ommendation. AI Open , 4:154–164. Robyn Speer, Joshua Chin, and Catherine Havasi. 2017. Conceptnet 5.5: An open multilingual graph of gen-eral knowledge. In Association for the Advancement of Artificial Intelligence , pages 4444–4451. Harald Steck. 2018. Calibrated recommendations. In 
+
+Conference on Recommender Systems , pages 154– 162. Fei Sun, Jun Liu, Jian Wu, Changhua Pei, Xiao Lin, Wenwu Ou, and Peng Jiang. 2019. Bert4rec: Se-quential recommendation with bidirectional encoder representations from transformer. In International Conference on Information and Knowledge Manage-ment , pages 1441–1450. ACM. Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N Gomez, Ł ukasz Kaiser, and Illia Polosukhin. 2017a. Attention is all you need. Advances in neural information processing systems , 30. Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Lukasz Kaiser, and Illia Polosukhin. 2017b. Attention is all you need. In Advances in Neural Information Processing Systems , pages 5998–6008. Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Lukasz Kaiser, and Illia Polosukhin. 2017c. Attention is all you need. In Advances in Neural Information Processing Systems , pages 5998–6008. Hao Wang, Zonghu Wang, and Weishi Zhang. 2019. Quantitative analysis of matthew effect and sparsity problem of recommender systems. CoRR .Kerui Xu, Jingxuan Yang, Jun Xu, Sheng Gao, Jun Guo, and Ji-Rong Wen. 2021. Adapting user preference to online feedback in conversational recommendation. In Web Search and Data Mining , pages 364–372. Zhilin Yang, Zihang Dai, Yiming Yang, Jaime G. Car-bonell, Ruslan Salakhutdinov, and Quoc V. Le. 2019. Xlnet: Generalized autoregressive pretraining for lan-guage understanding. In Advances in Neural Infor-mation Processing Systems , pages 5754–5764. Yang Zhang, Fuli Feng, Xiangnan He, Tianxin Wei, Chonggang Song, Guohui Ling, and Yongdong Zhang. 2021. Causal intervention for leveraging pop-ularity bias in recommendation. In Conference on Research and Development in Information Retrieval ,pages 11–20. ACM. Yizhe Zhang, Siqi Sun, Michel Galley, Yen-Chun Chen, Chris Brockett, Xiang Gao, Jianfeng Gao, Jingjing Liu, and Bill Dolan. 2020. DIALOGPT : Large-scale generative pre-training for conversational response generation. In the Association for Computational Linguistics , pages 270–278. Association for Compu-tational Linguistics. Zhipeng Zhao, Kun Zhou, Xiaolei Wang, Wayne Xin Zhao, Fan Pan, Zhao Cao, and Ji-Rong Wen. 2023. Alleviating the long-tail problem in conversational recommender systems. In ACM Conference on Rec-ommender Systems , pages 374–385. ACM. Yongsen Zheng, Ziliang Chen, Jinghui Qin, and Liang Lin. 2024a. Facetcrs: multi-faceted preference learn-ing for pricking filter bubbles in conversational rec-ommender system. In Proceedings of the Thirty-Eighth AAAI Conference on Artificial Intelligence and Thirty-Sixth Conference on Innovative Applica-tions of Artificial Intelligence and Fourteenth Sym-posium on Educational Advances in Artificial Intelli-gence , AAAI’24/IAAI’24/EAAI’24. AAAI Press. Yongsen Zheng, Mingjie Qian, Guohua Wang, Yang Liu, Ziliang Chen, Mingzhi Mao, Liang Lin, and Kwok-Yan Lam. 2025a. HyperCRS: Hypergraph-aware multi-grained preference learning to burst filter bubbles in conversational recommendation system. In Findings of the Association for Computational Linguistics: ACL 2025 , pages 5597–5608, Vienna, Austria. Association for Computational Linguistics. Yongsen Zheng, Jinghui Qin, Pengxu Wei, Ziliang Chen, and Liang Lin. 2024b. Cipl: Counterfactual interac-tive policy learning to eliminate popularity bias for online recommendation. IEEE Transactions on Neu-ral Networks and Learning Systems , 35(12):17123– 17136. Yongsen Zheng, Guohua Wang, Yang Liu, and Liang Lin. 2024c. Diversity matters: User-centric multi-interest learning for conversational movie recommen-dation. In Proceedings of the 32nd ACM Interna-tional Conference on Multimedia , MM ’24, page 9515–9524, New York, NY, USA. Association for Computing Machinery. Yongsen Zheng, Guohua Wang, Jinghui Qin, Ziliang Chen, Junfan Lin, Pengxu Wei, Liang Lin, and Kwok-Yan Lam. 2026a. Cirec: Causal intervention-inspired policy learning to mitigate exposure bias for interac-tive recommendation. IEEE Transactions on Knowl-edge and Data Engineering , 38(1):123–137. Yongsen Zheng, Pengxu Wei, Ziliang Chen, Yang Cao, and Liang Lin. 2021a. Graph-convolved factorization machines for personalized recommendation. IEEE Transactions on Knowledge and Data Engineering ,35(2):1567–1580. Yongsen Zheng, Pengxu Wei, Ziliang Chen, Chengpei Tang, and Liang Lin. 2024d. Routing user-interest markov tree for scalable personalized knowledge-aware recommendation. IEEE Transactions on Neu-ral Networks and Learning Systems , 35(10):14233– 14246. Yongsen Zheng, Zongxuan Xie, Guohua Wang, Ziyao Liu, Liang Lin, and Kwok-Yan Lam. 2025b. Why multi-interest fairness matters: Hypergraph con-trastive multi-interest learning for fair conversational recommender system. In Findings of the Associa-tion for Computational Linguistics: ACL 2025 , pages 25673–25684, Vienna, Austria. Association for Com-putational Linguistics. Yongsen Zheng, Ruilin Xu, Ziliang Chen, Guohua Wang, Mingjie Qian, Jinghui Qin, and Liang Lin. 2024e. HyCoRec: Hypergraph-enhanced multi-preference learning for alleviating matthew effect in conversational recommendation. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) ,pages 2526–2537, Bangkok, Thailand. Association for Computational Linguistics. Yongsen Zheng, Ruilin Xu, Ye Ma, Guohua Wang, Liang Lin, and Kwok-Yan Lam. 2026b. Diversity is all you need: Self-supervised hypergraph learn-ing for mitigating popularity bias in conversational recommender system. In ICASSP 2026-2026 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) , pages 16602–16606. IEEE. Yongsen Zheng, Ruilin Xu, Guohua Wang, Liang Lin, and Kwok-Yan Lam. 2024f. Mitigating matthew effect: Multi-hypergraph boosted multi-interest self-supervised learning for conversational recommen-dation. In Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing ,pages 1455–1466, Miami, Florida, USA. Association for Computational Linguistics. Yu Zheng, Chen Gao, Liang Chen, Depeng Jin, and Yong Li. 2021b. DGCN: diversified recommenda-tion with graph convolutional networks. In The Web Conference , pages 401–412. Yu Zheng, Chen Gao, Xiang Li, Xiangnan He, Yong Li, and Depeng Jin. 2021c. Disentangling user interest and conformity for recommendation with causal em-bedding. In The Web Conference , pages 2980–2991. Kun Zhou, Wayne Xin Zhao, Shuqing Bian, Yuanhang Zhou, Ji-Rong Wen, and Jingsong Yu. 2020a. Im-proving conversational recommender systems via knowledge graph based semantic fusion. In Inter-national Conference on Knowledge Discovery and Data Mining , pages 1006–1014. Kun Zhou, Yuanhang Zhou, Wayne Xin Zhao, Xiaoke Wang, and Ji-Rong Wen. 2020b. Towards topic-guided conversational recommender system. In Inter-national Conference on Computational Linguistics ,pages 4128–4139. Yuanhang Zhou, Kun Zhou, Wayne Xin Zhao, Cheng Wang, Peng Jiang, and He Hu. 2022. C 2-crs: Coarse-to-fine contrastive learning for conversational recom-mender system. In Web Search and Data Mining ,pages 1488–1496. ACM.

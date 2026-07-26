@@ -1,0 +1,597 @@
+Title: RECAP: Feedback-Driven Streaming Semantic User Profiles for Short-Video Recommendation
+
+URL Source: https://arxiv.org/pdf/2607.15730v1
+
+Published Time: Mon, 20 Jul 2026 00:50:06 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# RECAP: Feedback-Driven Streaming Semantic User Profiles for Short-Video Recommendation 
+
+# Ziyi Zhao 
+
+University of Science and Technology of China Hefei, Anhui, China re2477036@mail.ustc.edu.cn 
+
+# Xiaoyou Zhou Xiao Lv ∗
+
+zhouxiaoyou@kuaishou.com lvxiao03@kuaishou.com Kuaishou Technology Beijing, China 
+
+# Yangyang Li 
+
+China Academy of Cyber Beijing, China liyangyang@live.com 
+
+# Chubo He Zhao Liu 
+
+hechubo03@kuaishou.com liuzhao09@kuaishou.com Kuaishou Technology Beijing, China 
+
+# Jiayao Shen Yuqi Liu 
+
+shenjiayao@kuaishou.com liuyuqi10@kuaishou.com Kuaishou Technology Beijing, China 
+
+# He Li Chengyi Zhang 
+
+lihe12@kuaishou.com zhangchengyi03@kuaishou.com Kuaishou Technology Beijing, China 
+
+# Jian Liang Ming Li 
+
+liangjian03@kuaishou.com liming03@kuaishou.com Kuaishou Technology Beijing, China 
+
+# Chongming Gao ∗
+
+# Fuli Feng 
+
+chongming.gao@gmail.com fulifeng93@gmail.com University of Science and Technology of China Hefei, Anhui, China 
+
+# Ruiming Tang ∗
+
+# Han Li 
+
+tangruiming@kuaishou.com lihan08@kuaishou.com Kuaishou Technology Beijing, China 
+
+## Abstract 
+
+Language-based user profiles convert long behavioral histories into explicit semantic representations for recommendation. However, most profile generators are optimized in an open loop: they may summarize past behavior fluently, but are not directly trained to im-prove future recommendation. We study this problem in real-world short-video recommendation, where user behaviors continuously arrive as streams and profiles must be incrementally updated under limited capacity. This requires maintaining a consistent bounded profile state and constructing profile-targeted semantic feedback from industrial implicit behavior logs. We propose RECAP, an of-fline closed-loop framework for optimizing streaming structured semantic profiles with historical recommendation feedback. RECAP maintains each profile as a bounded structured memory by combin-ing LLM-based semantic updates with deterministic lifecycle and capacity control. RECAP constructs profile-targeted semantic feed-back by filtering label-consistent behavior pairs with an LLM judge and training a dual-tower evaluator whose matching score serves as a GRPO reward. Experiments on Kuaishou short-video data show that RECAP improves uAUC by 0.0084 and Recall@2000 by about 4.9% over the base generator. Further analyses confirm the benefits  
+
+> ∗Corresponding author.
+> This work is licensed under a Creative Commons Attribution 4.0 International License.
+> RecSys ’26, Minneapolis, MN, USA
+> ©2026 Copyright held by the owner/author(s). ACM ISBN 979-8-4007-2284-4/2026/09 https://doi.org/10.1145/3773078.3831930
+
+of feedback construction and policy optimization, and show more grounded refinement and user-level abstraction in profile updates. A seven-day online A/B test further shows a statistically significant 0.139% improvement in average application usage time per user. 
+
+## CCS Concepts 
+
+• Information systems → Recommender systems ; • Comput-ing methodologies → Natural language generation .
+
+## Keywords 
+
+user profiling, user modeling, large language models, short video recommendation 
+
+ACM Reference Format: 
+
+Ziyi Zhao, Xiaoyou Zhou, Xiao Lv, Yangyang Li, Chubo He, Zhao Liu, Jiayao Shen, Yuqi Liu, He Li, Chengyi Zhang, Jian Liang, Ming Li, Chongming Gao, Fuli Feng, Ruiming Tang, and Han Li. 2026. RECAP: Feedback-Driven Streaming Semantic User Profiles for Short-Video Recommendation. In 
+
+20th ACM Conference on Recommender Systems (RecSys ’26), September 27-October 02, 2026, Minneapolis, MN, USA. ACM, New York, NY, USA, 9 pages. https://doi.org/10.1145/3773078.3831930 
+
+## 1 Introduction 
+
+Traditional recommender systems rely on user behavior signals, ID embeddings, and interaction statistics to model user interests [ 2 , 3, 5,13 ]. While effective for behavioral co-occurrence, these representa-tions often lack explicit descriptions of the semantic content behind user behaviors, such as topics users care about and interests connect-ing their interactions [ 23 ]. Recent studies have explored using large language models (LLMs) to enhance recommender systems with arXiv:2607.15730v1 [cs.IR] 17 Jul 2026 RecSys ’26, September 27-October 02, 2026, Minneapolis, MN, USA Zhao et al. 
+
+semantic understanding and natural-language reasoning [ 7, 24 ]. Among them, language-based user profiles describe interests from user histories, providing interpretable features that enrich user representations and support personalization and cross-scenario transfer [1, 17, 22]. When applying language-based profiles to industrial recom-mender systems, one-shot generation is often insufficient. In large-scale short-video recommendation, users may accumulate thou-sands of historical interactions, while new behaviors are continu-ously logged as users interact with the platform, causing their inter-ests to evolve [ 16 , 18 , 25 , 27 ]. This naturally calls for streaming pro-file generation: behaviors are split into chronological chunks, and the LLM updates the existing profile after each new chunk [ 6, 25 , 27 ]. To support cross-round inheritance and localized revision, the pro-file should be maintained as a structured state rather than regener-ated as a disposable free-text summary. This streaming formulation raises a further question: how can such structured profiles be opti-mized from historical implicit feedback in industrial systems? Recent studies have explored two relevant directions for language-based user profiling: feedback-driven profile optimization and long-history semantic modeling. LangPTune and LettinGo optimize natural-language profiles with downstream recommendation sig-nals [ 1, 15 ], while LIBER and HiT-LBM improve long-history mod-eling by segmenting user behaviors and constructing or selecting high-quality interest representations [ 18 , 27 ]. These studies demon-strate the value of recommendation-aligned profile generation and long-history semantic modeling. However, they mainly focus on constructing profile texts, summaries, or interest representations, rather than closing the loop between raw implicit feedback and the policy that incrementally updates a bounded structured profile state. How to optimize such a stateful profile updater in industrial short-video recommendation therefore remains underexplored. Optimizing such a stateful profile updater faces two key chal-lenges. (1) Streaming profile-state maintenance : the profile must preserve a reliable structured state over long-term, multi-round up-dates. As user interests evolve under bounded capacity, the system must decide which interests to retain, update, merge, or remove while maintaining consistency. (2) Profile-targeted semantic feed-back construction : optimizing the profile updater requires feedback that can assess the quality of generated profiles. A straightforward choice is to reuse scores from a frozen industrial recommender, but its ranking scores are entangled with many features beyond profile semantics, which may dilute the signal for profile-item semantic alignment. Moreover, logged watches and skips are implicit behav-ior labels, whose semantic meaning can be affected by content form, exposure context, or user inertia. Thus, these raw signals do not directly correspond to profile-item semantic alignment. To address these challenges, we propose RECAP, an offline closed-loop framework that recaps evolving user interests into bounded structured semantic profiles and optimizes profile updates with recommendation-aligned feedback. (1) For streaming profile-state maintenance, RECAP combines an LLM semantic updater for inter-est recognition, topic merging, and description refinement with a deterministic state machine for strength decay, lifecycle transitions, and capacity control. (2) For profile-targeted semantic feedback construction, RECAP first uses an LLM pairwise judge to identify behavior pairs whose implicit labels are consistent with semantic preferences, producing higher-confidence feedback from logged interactions. (3) It then turns this feedback into a profile-targeted reward by training a dual-tower semantic evaluator over rendered profile text and video captions, using its profile-item matching scores as a semantic proxy reward for GRPO-based optimization of the profile updater. Our contributions are summarized as follows. 
+
+• We identify and study a practical problem in industrial recom-mender systems: optimizing streaming structured semantic pro-files with downstream recommendation feedback. This problem extends profile generation from one-shot summarization to long-term structured updates, involving two key challenges: streaming profile-state maintenance and profile-targeted semantic feedback construction. 
+
+• We propose RECAP, an offline closed-loop framework that com-bines LLM-based semantic updates with a deterministic state machine, label-consistency-based feedback construction from logged implicit behaviors, and a dual-tower semantic evaluator whose scores guide GRPO-based policy optimization. 
+
+• We evaluate RECAP on real-world short-video recommendation data from Kuaishou. Offline experiments show improvements in uAUC and Recall, while further analyses confirm the benefits of feedback construction, profile capacity, and policy optimization. A seven-day online A/B test further confirms the effectiveness of RECAP in production. 
+
+## 2 Related Work 2.1 Language-based User Profiles for Recommendation 
+
+Language-based user profiling for recommendation has recently evolved along two directions: long-history profile construction and feedback-driven profile optimization. For long-history con-struction, LLM-TRSR compresses segmented text-rich behavior sequences with hierarchical or recurrent LLM summarization for sequential recommendation [ 25 ]. PersonaX selects representative sub-sequences and caches multiple personas to support recommen-dation agents with lower online profiling overhead [ 12 ]. LIBER partitions lifelong behaviors into short segments, summarizes intra-segment interests and inter-segment shifts, and fuses the result-ing textual knowledge into recommendation backbones [ 27 ]. HiT-LBM further improves cascaded chunk-level interest extraction by using process rating models and hierarchical tree search to se-lect high-quality interest paths [ 18 ]. These methods improve long-history compression and interest representation, but they mainly construct profile or interest representations as outputs of a genera-tion pipeline. For feedback-driven optimization, LangPTune trains an LLM profile encoder toward downstream ranking performance with a recommender decoder [ 1]. LettinGo explores multiple free-form profiles and uses a downstream LLM predictor to construct prefer-ence pairs for profile alignment [ 15 ]. Unlike these methods, which optimize or select textual profile representations, RECAP treats the profile as a bounded structured interest state. It focuses on how such a state should be maintained under streaming updates and optimized with high-confidence feedback from industrial implicit interactions. RECAP: Feedback-Driven Streaming Semantic User Profiles for Short-Video Recommendation RecSys ’26, September 27-October 02, 2026, Minneapolis, MN, USA 
+
+## 2.2 Long-term Memory for LLM-based User Modeling 
+
+Long-term memory has been widely explored to help LLM systems preserve information beyond a single context window. Generative Agents and MemoryBank store, retrieve, and update experiences or user memories over long interactions [ 9 , 26 ], while recent sys-tems such as A-Mem and MemoryOS further organize memories with structured notes or modular memory operations [ 4, 19 ]. These studies motivate treating user-related information as an explicit memory object that can be maintained over time. RECAP instanti-ates this idea in recommendation by maintaining semantic profiles as a bounded memory of structured interest entries over streaming user behaviors. 
+
+## 3 Preliminaries 3.1 Video Caption Generation 
+
+To provide textual inputs for profile updating and reward modeling, we use Qwen3-VL-8B to generate a structured video caption 𝑐 𝑣 =
+
+(tag 𝑣 , desc 𝑣 ) for each video 𝑣 . Here tag 𝑣 is drawn from a closed-set taxonomy of 25 content categories, and desc 𝑣 is a concise free-text summary of the video content. Caption generation is performed offline and treated as given in this work. 
+
+## 3.2 Task Formulation 
+
+Data. Let U and V denote the sets of users and short videos, respectively. Following the engagement criterion used in the pro-duction system, an effective view refers to a watch event where the play duration exceeds 7 seconds or the video is watched to com-pletion. An observed negative interaction refers to a video that is exposed in the single-column feed but not effectively watched. For each user 𝑢 ∈ U , we collect up to the latest 𝑁 = 500 effective views before a cutoff time as the behavioral history H𝑢 = [𝑐 𝑣 1 , . . . , 𝑐 𝑣 |H 𝑢 | ],ordered chronologically. 
+
+Chunked streaming formulation. In online recommendation, user behaviors arrive sequentially, and profiles must be updated from the previous state rather than regenerated from scratch. This streaming setting also makes it impractical to process all 𝑁 captions in a single LLM call due to context-length constraints. We therefore partition H𝑢 into 𝑀 chronologically ordered chunks 𝐶 1, . . . , 𝐶 𝑀 
+
+(each containing up to 𝐵 = 50 captions, with 𝑀 = ⌈|H 𝑢 |/ 𝐵 ⌉) and maintain a user profile 𝑃 𝑡 𝑢 that is updated incrementally: 
+
+𝑃 𝑡 𝑢 = 𝑓 𝜃 (𝐶 𝑡 , 𝑃 𝑡 −1 
+
+> 𝑢
+
+), 𝑡 = 1, . . . , 𝑀, (1) where 𝑃 0 
+
+> 𝑢
+
+= ∅ and 𝑓 𝜃 denotes the learnable semantic update func-tion parameterized by the LLM policy 𝜃 . The concrete design of 𝑃 𝑡 𝑢 
+
+is presented in Section 4.2. 
+
+Optimization objective. During offline training, RECAP does not interact with the production recommender or observe online feed-back from deployed profiles. Instead, it uses logged implicit feedback from historical user behaviors to train a learned proxy reward 𝑅 (·) .The resulting offline closed-loop optimizes the profile generator through this proxy reward: 
+
+𝜃 ∗ = arg max  
+
+> 𝜃
+
+E𝑢 ∼U 
+
+𝑅  𝑃 𝑀 𝑢 
+
+ . (2) The design of 𝑃 𝑡 𝑢 , 𝑅 (·) , and the optimization procedure are detailed in Section 4. 
+
+## 4 Method 4.1 Overview 
+
+As illustrated in Figure 1, RECAP instantiates the streaming pro-file optimization objective with three components. Structured User Memory maintains a bounded profile state using LLM-generated semantic diffs and deterministic lifecycle control. Recommendation-Aligned Reward constructs profile-targeted semantic feedback by filtering logged implicit behaviors with an LLM judge and training a dual-tower evaluator over rendered profiles and video captions. 
+
+GRPO Training optimizes the updater by sampling multiple diffs for each chunk and using evaluator-based rewards with format and diversity constraints. 
+
+## 4.2 Structured User Memory 
+
+Profile schema. To support controllable long-horizon updates, we represent each profile 𝑃 𝑡 𝑢 as a fixed-size set of up to 𝐿 structured interest entries, following recent slot-based user-state designs [ 21 ]. Compared with free-form summaries, slot-based entries can be independently confirmed, inserted, or evicted, limiting drift under repeated updates while keeping a predictable token budget. Each entry contains a semantic pair (topic 𝑙 , desc 𝑙 ) and lifecy-cle metadata. The topic is a concise interest label for cross-chunk matching, while the description specifies the user’s content pref-erence. The lifecycle fields, managed only by the state machine and never exposed to the LLM, include span , recency , and strength ,summarizing confirmation history, inactivity, and eviction priority. Lifecycle fields further categorize entries as stable or recent :stable entries capture established long-term interests, while recent entries capture emerging short-term interests. The LLM only re-ceives ordered (topic , desc ) pairs, while these labels are preserved for profile rendering. 
+
+Two-component decomposition. We decompose the streaming update 𝑓 𝜃 into an LLM semantic module and a deterministic state machine. The LLM emits only a minimal semantic diff —re-observed existing interests and newly emerged ones—while deterministic rules handle lifecycle bookkeeping and capacity control. This split is motivated by the observation that LLMs are effective at semantic abstraction but less reliable at maintaining compact and valid nu-merical state. Directly asking the model to update lifecycle fields can produce inconsistent spans, recencies, or strengths, whereas deterministic rules provide stable bookkeeping while keeping the LLM output focused on semantics. 
+
+Semantic module (parameterized by 𝜃 ). Given the current chunk 
+
+𝐶 𝑡 and the (topic , desc ) pairs from 𝑃 𝑡 −1 
+
+> 𝑢
+
+, the LLM outputs a struc-tured JSON containing: 
+
+• confirmed_interests : existing topics re-observed in 𝐶 𝑡 , with optionally refined descriptions; 
+
+• new_interests : newly emerged topics discovered from 𝐶 𝑡 .Each output interest is associated with video_indices , i.e., the positions of supporting videos within the input chunk 𝐶 𝑡 . They ground the LLM output in observed behavior and help the state RecSys ’26, September 27-October 02, 2026, Minneapolis, MN, USA Zhao et al. State      
+
+> Machine
+> Chunk-level Profile Generation
+> ADD /
+> UPDATE /
+> REMOVE
+> Update
+> lifecycle fields
+> High-Confidence Feedback Construction
+> Dual-Tower Reward Model
+> Input at Step
+> Behavior Chunk
+> User
+> Encoder
+> Profile Pos
+> Neg
+> Raw
+> Feedback
+> (Implicit)
+> LLM
+> Pairwise
+> Judge
+> A or B?
+> Score &
+> Filter
+> Pos
+> Neg
+> Cleaned
+> Feedback
+> (High conf.)
+> video
+> Encoder
+> s( )
+> Policy LLM
+> Output:
+> Semantic Diff
+> - confirmed interests
+> - new interests
+> Reward
+> GRPO Update
+> Data / Profile
+> Learnable Model
+> Process
+> Reward
+> Group / Fields
+> :
+> :
+> :rendered profile text
+> :score thereshold
+> user's video set
+> consistency score
+
+Figure 1: Overview of the RECAP framework. 
+
+machine control redundancy, but are not rendered into the pro-file. A new entry is inserted only when supported by at least two videos, because insertion consumes limited profile capacity and thus requires stronger evidence than updating an existing entry. 
+
+State machine SM (·) (no learnable parameters). The state ma-chine applies three operations to the LLM output and 𝑃 𝑡 −1 
+
+> 𝑢
+
+: Update 
+
+matches confirmed topics to existing entries, refines descriptions when provided, and refreshes or ages their lifecycle fields; Add 
+
+filters LLM-proposed new topics, then initializes qualified topics as recent entries; and Remove recomputes strengths, reassigns sta-ble/recent entries, and evicts low-priority stale entries under the memory budget. 
+
+𝑃 𝑡 𝑢 = SM  LLM 𝜃 (𝐶 𝑡 , 𝑃 𝑡 −1 
+
+> 𝑢
+
+), 𝑃 𝑡 −1
+
+> 𝑢
+
+. (3) 
+
+Profile-to-text assembly. For downstream use, 𝑃 𝑡 𝑢 is rendered as 
+
+𝑠 (𝑃 𝑡 𝑢 ), listing stable entries under Core Interests and recent entries under Recent Interests , each formatted as topic: description . The rendered text is used by the dual-tower evaluator and downstream recommendation models. 
+
+## 4.3 Recommendation-Aligned Reward 
+
+To optimize the profile generator offline, we construct a profile-targeted proxy reward from historical behaviors. Rather than using production-ranker outputs, which mix profile, ID, context, popu-larity, and ranking signals, we train a dual-tower evaluator over the rendered profile 𝑠 (𝑃 𝑢 ) and video caption 𝑐 𝑣 as a controlled profile-item utility signal. 
+
+4.3.1 Dual-tower semantic evaluator. The evaluator encodes 𝑠 (𝑃 𝑢 )
+
+and 𝑐 𝑣 with a user tower and an item tower, respectively, and projects them into a shared embedding space. It contains a ranking head, whose embeddings er
+
+> 𝑢
+
+, er 
+
+> 𝑣
+
+are used for effective-view predic-tion, and a contrastive head, whose normalized embeddings ec
+
+> 𝑢
+
+, ec
+
+> 𝑣
+
+are used for semantic separation. The evaluator is trained with 
+
+Leval = 𝑤 bce Lbce + 𝑤 nce Lnce , (4) where Lbce predicts effective views and Lnce applies a contrastive loss on positive interactions with distributed in-batch negatives [ 10 ,14 ]. Together, the two losses support both implicit-feedback dis-crimination and retrieval-style semantic comparison. 
+
+4.3.2 High-confidence feedback construction. Because watch and skip labels are implicit behavior signals rather than explicit se-mantic preferences, we first estimate their consistency with the user’s recent interests. We construct cleaned behavioral data via LLM-judge consistency filtering, as illustrated in Figure 1. For each user, the LLM judge observes recent effective-view his-tory before the candidate interaction window and chooses, from a randomized positive–negative video pair, which item the user is more likely to effectively watch. Aggregating multiple pairwise comparisons gives each item a label-consistency score 𝑞 cons , indi-cating how often the judge’s context-conditioned preference agrees with the observed feedback label. To avoid using unreliable nega-tives as references for positives, we first identify high-confidence negatives and then re-estimate positive consistency only against these confirmed negatives. Samples with 𝑞 cons > 𝜏 are retained as cleaned behavioral data for training cleaned evaluators and com-puting cleaned-feedback rewards. 
+
+4.3.3 Recommendation-aligned reward. For a candidate interme-diate profile ˜𝑃 𝑡 𝑢,𝑖 obtained after processing chunk 𝐶 𝑡 , we score its semantic compatibility with a cleaned reward set V𝑢 = V+ 
+
+> 𝑢
+
+∪ V − 
+
+> 𝑢
+
+,where V+ 
+
+> 𝑢
+
+and V− 
+
+> 𝑢
+
+denote positive and negative videos retained af-ter label-consistency filtering. The recommendation-aligned reward is defined as 
+
+𝑅 rec ( ˜𝑃 𝑡 𝑢,𝑖 ) = exp 
+
+
+
+−L bce 
+
+ 𝑠 ( ˜𝑃 𝑡 𝑢,𝑖 ), V𝑢 
+
+
+
++𝑤 rec · Δcos  𝑠 ( ˜𝑃 𝑡 𝑢,𝑖 ), V𝑢 
+
+, (5) RECAP: Feedback-Driven Streaming Semantic User Profiles for Short-Video Recommendation RecSys ’26, September 27-October 02, 2026, Minneapolis, MN, USA 
+
+where 𝑤 rec controls the weight of the cosine-margin reward term. The first term measures how well the profile predicts the corre-sponding feedback labels, and the second term measures the se-mantic separation between positive and negative video items: 
+
+Δcos  𝑠 ( ˜𝑃 𝑡 𝑢,𝑖 ), V𝑢 
+
+ = 1
+
+|V + 
+
+> 𝑢
+
+|∑︁ 𝑣 ∈ V +
+
+> 𝑢
+
+cos (ec˜𝑃 , ec 
+
+> 𝑣
+
+)− 1
+
+|V − 
+
+> 𝑢
+
+|∑︁ 𝑣 ∈ V −
+
+> 𝑢
+
+cos (ec˜𝑃 , ec 
+
+> 𝑣
+
+).
+
+(6) The evaluator is trained once and kept frozen; its score provides the recommendation-aligned reward used in GRPO, before adding output-control penalties. 
+
+## 4.4 GRPO Training 
+
+SFT initialization. Before policy optimization, we warm-start the profile generator with SFT demonstrations generated by a stronger teacher model under the same structured output schema. The result-ing SFT checkpoint initializes 𝜋 𝜃 and serves as the frozen reference policy 𝜋 ref .
+
+Parallel chunk-level rollouts. Directly optimizing the streaming process requires sequential rollouts over all 𝑀 chunks for each user. To reduce this cost, we pre-compute prefix profiles with the SFT model and optimize each chunk-level update independently. For user 𝑢 and chunk 𝑡 , we construct a training instance ⟨𝐶 𝑡 , ¯𝑃 𝑡 −1 
+
+> 𝑢
+
+⟩,where ¯𝑃 𝑡 −1 
+
+> 𝑢
+
+is the profile obtained from preceding chunks by the SFT model. The current policy is responsible only for generating the semantic diff for chunk 𝐶 𝑡 , enabling parallel rollouts across users and chunks. 
+
+Reward composition. For each chunk-level input ⟨𝐶 𝑡 , ¯𝑃 𝑡 −1 
+
+> 𝑢
+
+⟩, the policy samples 𝐾 candidate semantic diffs {𝑂 𝑡 𝑢, 1, . . . , 𝑂 𝑡 𝑢,𝐾 }. Each diff is applied to the deterministic state machine to obtain a candidate updated profile: 
+
+˜𝑃 𝑡 𝑢,𝑖 = SM (𝑂 𝑡 𝑢,𝑖 , ¯𝑃 𝑡 −1 
+
+> 𝑢
+
+). (7) The rollout reward combines the recommendation-aligned reward with output-control penalties: 
+
+𝑟 𝑡 𝑢,𝑖 = 𝑅 rec ( ˜𝑃 𝑡 𝑢,𝑖 ) − 𝜆 fmt 𝑃 fmt (𝑂 𝑡 𝑢,𝑖 ) − 𝜆 div 𝑃 div ( ˜𝑃 𝑡 𝑢,𝑖 ). (8) 
+
+𝑃 fmt penalizes invalid JSON, mismatched confirmed-interest ref-erences, and over-length descriptions, so that the semantic diff remains executable by the state machine and concise enough for bounded profile updates. 𝑃 div penalizes pairs of interest entries with highly overlapping supporting video_indices , treating evidence overlap as a soft redundancy signal. This is designed for locally concentrated behavior chunks, where many watched videos may reflect the same dominant content type and should not consume multiple profile slots with near-duplicate preference descriptions. 
+
+Group-relative policy optimization. Within each rollout group, rewards are normalized into group-relative advantages: 
+
+ˆ𝐴 𝑡 𝑢,𝑖 = 𝑟 𝑡 𝑢,𝑖 − mean 𝑗 (𝑟 𝑡 𝑢,𝑗 )
+
+std 𝑗 (𝑟 𝑡 𝑢,𝑗 ) + 𝜖 std 
+
+. (9) 
+
+Table 1: Statistics of the training and target-window data. 
+
+User Set Data Users Items # Train # Target Policy Raw 10K 1,639,176 2,000,000 5,558,911 Policy Cleaned 10K 1,288,972 1,298,655 3,609,485 Held-out Raw 10K 1,643,388 2,000,000 5,644,058 Held-out Cleaned 10K 1,290,175 1,295,564 3,659,622 Following GRPO [ 11 ], we update the policy with a clipped surrogate objective and a KL penalty to the frozen reference policy: 
+
+LGRPO (𝜃 ) = − E𝑢,𝑡,𝑖,𝑗 
+
+ℓ𝑡 𝑢,𝑖,𝑗 
+
+ + 𝛽𝐷 KL 
+
+ 𝜋 𝜃 ∥ 𝜋 ref 
+
+,ℓ𝑡 𝑢,𝑖,𝑗 = min 
+
+
+
+𝜌 𝑡 𝑢,𝑖,𝑗 ˆ𝐴 𝑡 𝑢,𝑖 , clip (𝜌 𝑡 𝑢,𝑖,𝑗 , 1 − 𝜖 clip , 1 + 𝜖 clip ) ˆ𝐴 𝑡 𝑢,𝑖 
+
+
+
+.
+
+(10) Here 𝑗 indexes output tokens, and 𝜌 𝑡 𝑢,𝑖,𝑗 is the probability ratio between the current policy and the rollout policy. 
+
+## 5 Experiments 
+
+Our experiments are designed to answer the following research questions: 
+
+• RQ1: Does feedback-driven optimization improve the utility of streaming structured semantic profiles in offline dual-tower evaluation? 
+
+• RQ2: How do behavioral-data cleaning and reward design affect profile optimization? 
+
+• RQ3: Are memory-update decomposition and profile capacity important for stable and practical profile generation? 
+
+• RQ4: How do different training signals change the behavior and semantics of generated profiles? 
+
+## 5.1 Experimental Setup 
+
+Dataset construction. We evaluate on an internal Kuaishou short-video recommendation dataset with two disjoint 10K-user sets: a policy set for reward computation and GRPO optimization, and a held-out set used only for final profile utility evaluation. For each user, interactions are temporally divided into a profile window, a training window, and a later target window, which serves as the reward window on the policy set and the evaluation window on the held-out set. The profile window provides up to the latest 500 historical effective views for streaming profile construction, with an average length of 463. The training and target windows provide user-item pairs for dual-tower training and downstream reward/evaluation scoring, respectively; training pairs are capped at the latest 200 interactions per user, yielding up to 2M pairs for each 10K-user set. For both user sets, we construct raw behavioral data from observed implicit interactions and cleaned behavioral data using the LLM-judge consistency filtering process. Table 1 summarizes the resulting data statistics. 
+
+Training and evaluation protocol. We use the same dual-tower architecture for reward construction and final offline evaluation, but instantiate and train separate evaluators on disjoint user sets. For policy optimization, the policy set is used to train reward evaluators and compute GRPO rewards on its reward window. For each reward setting, the reward evaluator is trained on the training RecSys ’26, September 27-October 02, 2026, Minneapolis, MN, USA Zhao et al. 
+
+window and then frozen to score candidate profiles on the reward window. GRPO-clean and GRPO-raw use reward evaluators trained with cleaned and raw behavioral data, respectively. Since the eval-uator takes generated user profiles as user-side inputs, its training profiles are generated by the corresponding initialization model, so that the evaluator input distribution matches the starting policy distribution. For profile utility evaluation, all profile generators are evaluated on the held-out user set. Each generator first performs streaming inference on the profile window of these users to produce final pro-files, which are then used as user-side semantic inputs for training and evaluating the offline dual-tower evaluator. For each data set-ting, the evaluator is trained and evaluated with the corresponding behavioral data: cleaned evaluation uses cleaned training and eval-uation pairs, while raw evaluation uses raw training and evaluation pairs. Thus, all variants share the same held-out users, temporal split, captions, evaluator architecture, hyperparameters, and met-rics; only the profile generator changes. 
+
+Compared variants and metrics. We compare five controlled vari-ants under the same structured profile framework. Base denotes the original profile generator. GRPO-raw and GRPO-clean further opti-mize the Base generator with raw-feedback and cleaned-feedback rewards, respectively. SFT is trained with teacher-generated demon-strations. RECAP (SFT+GRPO) is the full model, which initializes the policy with SFT and further optimizes it with cleaned-feedback rewards. We report uAUC and Recall@ 2000 for offline dual-tower evalu-ation on both cleaned and raw evaluation data. We use Recall to denote Recall@ 2000 hereafter. For profile behavior analysis, we fur-ther compute programmatic diagnostics from the structured model outputs, including historical coverage, duplicate assignment rate, update rate, and empty-interest count. 
+
+Implementation details. The profile generator is initialized from Qwen3-4B-Instruct-2507 [ 20 ]. SFT uses 8K teacher-generated demon-strations from Claude Sonnet 4.5. GRPO is trained for 80 steps with batch size 64, learning rate 2.5 × 10 −5, LoRA rank 32, KL coeffi-cient 0.01, and 𝐾 = 8 sampled outputs per instance. In Eq. (5) ,
+
+𝑤 rec weights the cosine-margin reward term and is set to 1 in all experiments. The dual-tower evaluator uses Qwen3-Embedding-0.6B to encode both user profiles and video captions, followed by task-specific projection heads; we set 𝑤 bce = 1 and 𝑤 nce = 0.1 for evaluator training. The LLM judge used for consistency filtering is Qwen3-30B-A3B-Instruct-2507, and its first valid A/B token is parsed as the pairwise preference. We set the consistency threshold 
+
+𝜏 to 0.45 .
+
+## 5.2 Overall Performance 
+
+Table 2 reports the offline dual-tower evaluation results of different profile generators on the held-out user set. We report results on both cleaned and raw evaluation data: cleaned evaluation provides a higher-confidence view of semantic profile–video alignment, while raw evaluation retains the original implicit behavioral distribu-tion and avoids evaluating only on the cleaned subset. On cleaned evaluation, RECAP (SFT+GRPO) achieves the best performance on 
+
+Table 2: Overall performance in offline dual-tower evaluation on the held-out user set.                          
+
+> Method Cleaned Eval. Raw Eval. uAUC Recall uAUC Recall Base 0.7519 0.0122 0.5871 0.0088 GRPO-raw 0.7539 0.0119 0.5874 0.0087 GRPO-clean 0.7572 0.0121 0.5883 0.0087 SFT 0.7564 0.0127 0.5866 0.0091
+> RECAP (SFT+GRPO) 0.7603 0.0128 0.5886 0.0089
+
+both uAUC and Recall. Compared with Base, it improves cleaned-evaluation uAUC from 0.7519 to 0.7603 and Recall from 0.0122 to 0.0128. Compared with GRPO-raw, GRPO-clean achieves higher cleaned-evaluation performance and also improves raw-evaluation uAUC from the same Base generator. This suggests that filtering ambigu-ous implicit feedback provides a cleaner reward signal without merely overfitting to the cleaned subset. At the dual-tower evalua-tion level, these results show that SFT initialization with cleaned-feedback GRPO gives the strongest profile–video alignment; Sec-tion 5.4 further analyzes how this improvement appears in the generated profiles. 
+
+## 5.3 Ablation Studies 
+
+Figure 2 studies the main design choices in RECAP, including re-ward formulation, profile capacity, memory-update decomposition, and state-field reliability. 
+
+5.3.1 Reward design. Figure 2(a) compares different reward formu-lations for GRPO. The combined BCE and cosine-margin reward achieves the strongest overall performance in offline dual-tower evaluation. This suggests that effective profile optimization requires both label-level discrimination and semantic separation between positive and negative items. Using only BCE weakens the retrieval-oriented semantic signal, while directly optimizing coarse evalu-ation metrics provides a less stable reward for chunk-level policy updates. 
+
+5.3.2 Profile capacity. Figure 2(b) studies the maximum number of interest entries 𝐿 . Larger capacities can represent more diverse interests and improve offline dual-tower performance, but increase the cost of streaming generation, GRPO rollouts, profile encoding, inspection, and maintenance. Under our training and serving bud-get, 𝐿 = 8 balances interest diversity with profile compactness and is used by default. 
+
+5.3.3 Memory-update decomposition. Figure 2(c) compares RECAP with a coupled full-state updater, where the LLM directly generates the complete updated profile, including both interest semantics and lifecycle fields. The coupled updater is a competitive compact semantic-summary variant and achieves comparable offline dual-tower performance to the decoupled design. However, Figure 2(d) shows that directly generating lifecycle fields causes frequent state-transition errors, especially for cross-chunk span updates, making the resulting profile difficult to trace over time. This supports the RECAP: Feedback-Driven Streaming Semantic User Profiles for Short-Video Recommendation RecSys ’26, September 27-October 02, 2026, Minneapolis, MN, USA BCE uAUC                 
+
+> +Rec.
+> BCE
+> +Cos
+> 0.745
+> 0.750
+> 0.755
+> 0.760
+> uAUC
+> (a) Reward design
+> BCE uAUC
+> +Rec.
+> BCE
+> +Cos
+> 0.010
+> 0.011
+> 0.012
+> 0.013
+> Recall
+> 46810 12
+> (b) Capacity
+> 46810 12
+> Capacity L
+> Coupled Decoupled
+> (c) Architecture
+> Coupled Decoupled
+> Span Last seen Strength
+> 0
+> 25
+> 50
+> 75
+> 100
+> Error rate (%)
+> (d) State-wise errors
+> Span Error
+> Reason
+> No increment
+> Init ≠1
+> Span decreased
+> Others
+
+Figure 2: Ablation studies of RECAP. (a) compares different reward formulations. (b) evaluates different profile capacities 𝐿 . (c) studies the effect of decoupling semantic updates from state management. (d) analyzes state-field errors in the coupled design, including field-wise error rates and span-error reasons.        
+
+> Method Generated interest for the same relationship-guidance behav-ior cluster GRPO-raw Relationship Tarot Readings. Enjoys tarot sessions with direct address, dramatic visuals, and spiritual or mystical fram-ing around jealousy, reconciliation, and past relationships. GRPO-clean Romantic Relationship Predictions. Engages with tarot-based readings about love and relationship dynamics, espe-cially emotionally charged predictions about past relationships, conflicts, and potential reconnections. SFT+GRPO Relationship Conflict Resolution Stories. Aggregates tarot, horoscope, and relationship-advice content into emo-tional guidance about healing, proactive opportunity creation, independence, and self-worth.
+
+Figure 3: Qualitative comparison of generated profile descrip-tions for the same relationship-guidance behavior cluster from one sampled user. 
+
+decoupled design: the LLM handles semantic updates, while deter-ministic rules manage recency, span, strength, and capacity control. 
+
+## 5.4 Profile Behavior Analysis 
+
+5.4.1 Diagnostic Protocol. We complement offline dual-tower eval-uation with profile-level behavior diagnostics. We use gpt-oss-120b [ 8 ] for LLM-based semantic judgments, including historical coverage and semantic annotation. For coverage, the judge assigns each historical video to a generated interest or to an unknown cate-gory, and coverage is the fraction assigned to non-unknown interests. For semantic annotation, we first ask the LLM judge to compare sampled GRPO-clean/GRPO-raw profile pairs in an open-ended manner and summarize recurring differences; the two dominant dimensions, description focus and reliance on surface textual cues, are then used as annotation criteria. The remaining diagnostics are computed programmatically from raw structured outputs before support-based filtering: duplicate assignment from overlapping 
+
+video_indices , update rate from refined confirmed interests, and empty interests from proposed entries with no supporting videos. Coverage is computed on 500 users, while semantic annotation is performed on 500 sampled chunks for content diversity. All di-agnostics are used only for analysis and are not used as training rewards. 
+
+5.4.2 Update Behavior under Raw and Cleaned Rewards. Figure 4(c) and Figure 4(d) reveal a failure mode under raw-feedback rewards. GRPO-raw updates existing interest descriptions much less fre-quently than GRPO-clean, while producing many more empty in-terests, i.e., proposed entries with no supporting videos before filtering. This suggests that raw-feedback rewards fail to provide a stable optimization direction for profile editing. One interpretation is that, under an uncertain reward signal, leaving existing interests unchanged or proposing unsupported entries can become low-risk actions: the former avoids harmful rewrites, while the latter is removed before the state machine update. In contrast, cleaned-feedback rewards provide a clearer optimization direction, so the policy more often makes grounded edits, either by refining existing interests or by proposing new interests supported by the current chunk. 
+
+5.4.3 Semantic Focus under Cleaned-Feedback Rewards. Beyond up-date behavior, we examine the semantics captured by generated pro-files. Figure 5(a) shows that GRPO-clean produces more motivation-focused descriptions of why users watch, whereas GRPO-raw pro-duces more content-feature-focused descriptions of what appears in the videos. Consistently, Figure 5(b) shows that raw-feedback pro-files mention named entities and video-format cues more frequently, suggesting that raw-feedback rewards encourage surface-feature matching while cleaned-feedback rewards enable deeper seman-tic abstraction. This also helps interpret duplicate assignment in Figure 4(b): motivation-level descriptions may overlap when re-lated user intents explain similar videos, whereas surface-feature descriptions may appear more separated through concrete entities or format cues without necessarily modeling user interests better. RecSys ’26, September 27-October 02, 2026, Minneapolis, MN, USA Zhao et al. 1 3 5 7 9            
+
+> Chunk
+> 50
+> 60
+> 70
+> Coverage ↑ (%)
+> (a) Coverage over chunks
+> Base Raw Clean S+G
+> 0
+> 5
+> 10
+> 15
+> 20
+> Dup. rate ↓ (%)
+> (b) Duplicate assignment
+> Base Raw Clean S+G
+> 0
+> 20
+> 40
+> 60
+> 80
+> Update ↑ (%)
+> (c) Update rate
+> Base Raw Clean S+G
+> 0
+> 1
+> 2
+> 3
+> Avg. count ↓
+> 0.004
+> (d) Empty interests
+> Base GRPO-raw GRPO-clean SFT+GRPO
+
+Figure 4: Profile behavior diagnostics under different training signals. (a) Coverage is the LLM-judged fraction of videos in each historical chunk covered by the final generated profile. (b) Duplicate assignment rate measures how often the same historical video is assigned to multiple interest entries. (c) Update rate measures how often existing interest descriptions are refined. (d) Empty interests are generated entries with no supporting videos. In the bar plots, Raw, Clean, and S+G abbreviate GRPO-raw, GRPO-clean, and SFT+GRPO, respectively. Clean Raw  
+
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Percentage (%)
+> 26.9%
+> 67.1%
+> 6.0%
+> 4.2%
+> 70.8%
+> 25.0%
+> (a) Description focus
+> Motivation
+> Mixed
+> Content feature
+> Clean Raw
+> 0
+> 10
+> 20
+> 30
+> 40
+> 50
+> 60
+> 70
+> 80
+> Percentage (%)
+> 6.6%
+> 46.9%
+> 10.8%
+> 63.9%
+> (b) Surface cues
+> Named Entities
+> Format cues
+
+Figure 5: LLM-as-judge annotation of GRPO-clean and GRPO-raw profiles. (a) Description focus classifies each generated interest as motivation-focused, content-feature-focused, or mixed. (b) Surface cues report how often generated interests explicitly mention named entities or video-format cues. 
+
+5.4.4 Complementary Effects of SFT and GRPO.. These diagnos-tics provide a profile-level explanation for the dual-tower gains in Table 2: SFT and GRPO play complementary roles in profile gen-eration. Figure 4(a–b) shows that SFT+GRPO achieves the highest historical coverage and the lowest duplicate assignment rate, in-dicating that supervised demonstrations improve both behavioral coverage and separation among interests. In contrast, GRPO shapes profile editing and abstraction under recommendation feedback: the GRPO-clean/GRPO-raw comparison shows that reward qual-ity determines whether the model performs grounded refinement or resorts to low-impact, surface-level updates. Figure 3 provides a consistent qualitative example: GRPO-raw emphasizes surface format, GRPO-clean abstracts relationship-oriented viewing moti-vation, and SFT+GRPO further aggregates related formats into a broader interest. Overall, SFT improves profile organization, while GRPO with cleaned-feedback rewards improves how the profile is updated and abstracted. 
+
+## 5.5 Online A/B Test 
+
+We conduct a seven-day online A/B test on Kuaishou’s overseas short-video recommendation service, allocating 10% of the traffic to the treatment group and 20% to the control group. For treatment users, RECAP-generated user memory is rendered as text, encoded using Qwen3-Embedding-0.6B, and provided to the production U2I retrieval model as an additional feature; the control group uses the original model without this feature. Compared with the control group, RECAP yields a statistically significant relative improvement of 0.139% in average application usage time per user. 
+
+## 6 Conclusion 
+
+Streaming structured semantic profiles provide an interpretable state for evolving user interests, but optimizing a bounded profile updater from industrial implicit feedback remains challenging. We propose RECAP, an offline closed-loop framework that maintains bounded structured user memory, constructs profile-targeted se-mantic rewards from label-consistency-filtered behavior pairs, and optimizes LLM-based profile updates with GRPO. Experiments on real-world Kuaishou short-video data show that RECAP improves profile utility in offline evaluation. Further analyses verify that cleaned-feedback rewards produce more grounded and semanti-cally abstract profile refinements, while decoupled lifecycle man-agement improves the reliability of streaming state maintenance. An online A/B test further confirms the practical effectiveness of RECAP in real-world short-video recommendation. 
+
+## Acknowledgments 
+
+This work was supported by the National Natural Science Foun-dation of China (62402470), the Fundamental Research Funds for the Central Universities of China (WK2100000053), and the Anhui Provincial Natural Science Foundation (2408085QF189). This work was also supported by the Open Innovation Program for jointly trained master’s-to-doctoral students at the Institute of Computing Technology, Chinese Academy of Sciences, and by the advanced computing resources provided by the Supercomputing Center of USTC. RECAP: Feedback-Driven Streaming Semantic User Profiles for Short-Video Recommendation RecSys ’26, September 27-October 02, 2026, Minneapolis, MN, USA 
+
+## References 
+
+[1] Zhaolin Gao, Joyce Zhou, Yijia Dai, and Thorsten Joachims. 2025. End-to-end Training for Recommendation with Language-based User Profiles. arXiv:2410.18870 [cs.IR] https://arxiv.org/abs/2410.18870 [2] Xiangnan He, Lizi Liao, Hanwang Zhang, Liqiang Nie, Xia Hu, and Tat-Seng Chua. 2017. Neural Collaborative Filtering. In Proceedings of the 26th International Conference on World Wide Web (Perth, Australia) (WWW ’17) . International World Wide Web Conferences Steering Committee, Republic and Canton of Geneva, CHE, 173–182. doi:10.1145/3038912.3052569 [3] Yifan Hu, Yehuda Koren, and Chris Volinsky. 2008. Collaborative Filtering for Implicit Feedback Datasets. In 2008 Eighth IEEE International Conference on Data Mining . 263–272. doi:10.1109/ICDM.2008.22 [4] Jiazheng Kang, Mingming Ji, Zhe Zhao, and Ting Bai. 2025. Memory OS of AI Agent. In Proceedings of the 2025 Conference on Empirical Methods in Natural Lan-guage Processing , Christos Christodoulopoulos, Tanmoy Chakraborty, Carolyn Rose, and Violet Peng (Eds.). Association for Computational Linguistics, Suzhou, China, 25961–25970. doi:10.18653/v1/2025.emnlp-main.1318 [5] Wang-Cheng Kang and Julian McAuley. 2018. Self-Attentive Sequential Rec-ommendation. In 2018 IEEE International Conference on Data Mining (ICDM) .197–206. doi:10.1109/ICDM.2018.00035 [6] Sein Kim, Hongseok Kang, Kibum Kim, Jiwan Kim, Donghyun Kim, Minchul Yang, Kwangjin Oh, Julian McAuley, and Chanyoung Park. 2025. Lost in Sequence: Do Large Language Models Understand Sequential Recommendation?. In Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining V.2 
+
+(Toronto ON, Canada) (KDD ’25) . Association for Computing Machinery, New York, NY, USA, 1160–1171. doi:10.1145/3711896.3737035 [7] Jianghao Lin, Xinyi Dai, Yunjia Xi, Weiwen Liu, Bo Chen, Hao Zhang, Yong Liu, Chuhan Wu, Xiangyang Li, Chenxu Zhu, Huifeng Guo, Yong Yu, Ruiming Tang, and Weinan Zhang. 2025. How Can Recommender Systems Benefit from Large Language Models: A Survey. ACM Trans. Inf. Syst. 43, 2, Article 28 (Jan. 2025), 47 pages. doi:10.1145/3678004 [8] OpenAI. 2025. gpt-oss-120b & gpt-oss-20b Model Card. arXiv:2508.10925 [cs.CL] https://arxiv.org/abs/2508.10925 [9] Joon Sung Park, Joseph O’Brien, Carrie Jun Cai, Meredith Ringel Morris, Percy Liang, and Michael S. Bernstein. 2023. Generative Agents: Interactive Simulacra of Human Behavior. In Proceedings of the 36th Annual ACM Symposium on User Interface Software and Technology (San Francisco, CA, USA) (UIST ’23) . Association for Computing Machinery, New York, NY, USA, Article 2, 22 pages. doi:10.1145/ 3586183.3606763 [10] Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya Ramesh, Gabriel Goh, Sandhini Agarwal, Girish Sastry, Amanda Askell, Pamela Mishkin, Jack Clark, Gretchen Krueger, and Ilya Sutskever. 2021. Learning Transferable Visual Models From Natural Language Supervision. In Proceedings of the 38th Inter-national Conference on Machine Learning (Proceedings of Machine Learning Research, Vol. 139) , Marina Meila and Tong Zhang (Eds.). PMLR, 8748–8763. https://proceedings.mlr.press/v139/radford21a.html [11] Zhihong Shao, Peiyi Wang, Qihao Zhu, Runxin Xu, Junxiao Song, Xiao Bi, Haowei Zhang, Mingchuan Zhang, Y. K. Li, Y. Wu, and Daya Guo. 2024. DeepSeek-Math: Pushing the Limits of Mathematical Reasoning in Open Language Models. arXiv:2402.03300 [cs.CL] https://arxiv.org/abs/2402.03300 [12] Yunxiao Shi, Wujiang Xu, Zhang Zeqi, Xing Zi, Qiang Wu, and Min Xu. 2025. PersonaX: A Recommendation Agent-Oriented User Modeling Framework for Long Behavior Sequence. In Findings of the Association for Computational Linguis-tics: ACL 2025 , Wanxiang Che, Joyce Nabende, Ekaterina Shutova, and Moham-mad Taher Pilehvar (Eds.). Association for Computational Linguistics, Vienna, Austria, 5764–5787. doi:10.18653/v1/2025.findings-acl.300 [13] Fei Sun, Jun Liu, Jian Wu, Changhua Pei, Xiao Lin, Wenwu Ou, and Peng Jiang. 2019. BERT4Rec: Sequential Recommendation with Bidirectional Encoder Rep-resentations from Transformer. In Proceedings of the 28th ACM International Conference on Information and Knowledge Management (Beijing, China) (CIKM ’19) . ACM, New York, NY, USA, 1441–1450. doi:10.1145/3357384.3357895 [14] Aaron van den Oord, Yazhe Li, and Oriol Vinyals. 2019. Representation Learning with Contrastive Predictive Coding. arXiv:1807.03748 [cs.LG] https://arxiv.org/ abs/1807.03748 [15] Lu Wang, Di Zhang, Fangkai Yang, Pu Zhao, Jianfeng Liu, Yuefeng Zhan, Hao Sun, Qingwei Lin, Weiwei Deng, Dongmei Zhang, Feng Sun, and Qi Zhang. 2025. LettinGo: Explore User Profile Generation for Recommendation System. In Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining V.2 (Toronto ON, Canada) (KDD ’25) . Association for Computing Machinery, New York, NY, USA, 2985–2995. doi:10.1145/3711896.3737024 [16] Shoujin Wang, Liang Hu, Yan Wang, Longbing Cao, Quan Z. Sheng, and Mehmet Orgun. 2019. Sequential Recommender Systems: Challenges, Progress and Prospects. In Proceedings of the Twenty-Eighth International Joint Conference on Artificial Intelligence, IJCAI-19 . International Joint Conferences on Artificial Intelligence Organization, 6332–6338. doi:10.24963/ijcai.2019/883 [17] Yunjia Xi, Weiwen Liu, Jianghao Lin, Xiaoling Cai, Hong Zhu, Jieming Zhu, Bo Chen, Ruiming Tang, Weinan Zhang, and Yong Yu. 2024. Towards Open-World Recommendation with Knowledge Augmentation from Large Language Models. In Proceedings of the 18th ACM Conference on Recommender Systems (Bari, Italy) 
+
+(RecSys ’24) . Association for Computing Machinery, New York, NY, USA, 12–22. doi:10.1145/3640457.3688104 [18] Yu Xia, Rui Zhong, Hao Gu, Wei Yang, Chi Lu, Peng Jiang, and Kun Gai. 2025. Hierarchical Tree Search-based User Lifelong Behavior Modeling on Large Language Model. In Proceedings of the 48th International ACM SIGIR Confer-ence on Research and Development in Information Retrieval (Padua, Italy) (SIGIR ’25) . Association for Computing Machinery, New York, NY, USA, 1758–1767. doi:10.1145/3726302.3729995 [19] Wujiang Xu, Zujie Liang, Kai Mei, Hang Gao, Juntao Tan, and Yongfeng Zhang. 2025. A-MEM: Agentic Memory for LLM Agents. arXiv:2502.12110 [cs.CL] https://arxiv.org/abs/2502.12110 [20] An Yang, Anfeng Li, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chang Gao, Chengen Huang, Chenxu Lv, Chujie Zheng, Dayiheng Liu, Fan Zhou, Fei Huang, Feng Hu, Hao Ge, Haoran Wei, Huan Lin, Jialong Tang, Jian Yang, Jianhong Tu, Jianwei Zhang, Jianxin Yang, Jiaxi Yang, Jing Zhou, Jingren Zhou, Junyang Lin, Kai Dang, Keqin Bao, Kexin Yang, Le Yu, Lianghao Deng, Mei Li, Mingfeng Xue, Mingze Li, Pei Zhang, Peng Wang, Qin Zhu, Rui Men, Ruize Gao, Shixuan Liu, Shuang Luo, Tianhao Li, Tianyi Tang, Wenbiao Yin, Xingzhang Ren, Xinyu Wang, Xinyu Zhang, Xuancheng Ren, Yang Fan, Yang Su, Yichang Zhang, Yinger Zhang, Yu Wan, Yuqiong Liu, Zekun Wang, Zeyu Cui, Zhenru Zhang, Zhipeng Zhou, and Zihan Qiu. 2025. Qwen3 Technical Report. arXiv:2505.09388 [cs.CL] https://arxiv.org/abs/2505.09388 [21] Chao Yi, Dian Chen, Gaoyang Guo, Jiakai Tang, Jian Wu, Jing Yu, Mao Zhang, Wen Chen, Wenjun Yang, Yujie Luo, Yuning Jiang, Zhujin Gao, Bo Zheng, Binbin Cao, Changfa Wu, Dixuan Wang, Han Wu, Haoyi Hu, Kewei Zhu, Lang Tian, Lin Yang, Qiqi Huang, Siqi Yang, Wenbo Su, Xiaoxiao He, Xin Tong, Xu Chen, Xunke Xi, Xiaowei Huang, Yaxuan Wu, Yeqiu Yang, Yi Hu, Yujin Yuan, Yuliang Yan, and Zile Zhou. 2025. RecGPT-V2 Technical Report. arXiv:2512.14503 [cs.IR] https://arxiv.org/abs/2512.14503 [22] Chao Yi, Dian Chen, Gaoyang Guo, Jiakai Tang, Jian Wu, Jing Yu, Mao Zhang, Sunhao Dai, Wen Chen, Wenjun Yang, Yuning Jiang, Zhujin Gao, Bo Zheng, Chi Li, Dimin Wang, Dixuan Wang, Fan Li, Fan Zhang, Haibin Chen, Haozhuang Liu, Jialin Zhu, Jiamang Wang, Jiawei Wu, Jin Cui, Ju Huang, Kai Zhang, Kan Liu, Lang Tian, Liang Rao, Longbin Li, Lulu Zhao, Na He, Peiyang Wang, Qiqi Huang, Tao Luo, Wenbo Su, Xiaoxiao He, Xin Tong, Xu Chen, Xunke Xi, Yang Li, Yaxuan Wu, Yeqiu Yang, Yi Hu, Yinnan Song, Yuchen Li, Yujie Luo, Yujin Yuan, Yuliang Yan, Zhengyang Wang, Zhibo Xiao, Zhixin Ma, Zile Zhou, and Ziqi Zhang. 2025. RecGPT Technical Report. arXiv:2507.22879 [cs.IR] https: //arxiv.org/abs/2507.22879 [23] Yongfeng Zhang and Xu Chen. 2020. Explainable Recommendation: A Survey and New Perspectives. Found. Trends Inf. Retr. 14, 1 (March 2020), 1–101. doi:10. 1561/1500000066 [24] Zihuai Zhao, Wenqi Fan, Jiatong Li, Yunqing Liu, Xiaowei Mei, Yiqi Wang, Zhen Wen, Fei Wang, Xiangyu Zhao, Jiliang Tang, and Qing Li. 2024. Recommender Systems in the Era of Large Language Models (LLMs). IEEE Trans. on Knowl. and Data Eng. 36, 11 (Nov. 2024), 6889–6907. doi:10.1109/TKDE.2024.3392335 [25] Zhi Zheng, WenShuo Chao, Zhaopeng Qiu, Hengshu Zhu, and Hui Xiong. 2024. Harnessing Large Language Models for Text-Rich Sequential Recommendation. In Proceedings of the ACM Web Conference 2024 (Singapore, Singapore) (WWW ’24) . Association for Computing Machinery, New York, NY, USA, 3207–3216. doi:10.1145/3589334.3645358 [26] Wanjun Zhong, Lianghong Guo, Qiqi Gao, He Ye, and Yanlin Wang. 2024. MemoryBank: enhancing large language models with long-term memory. In 
+
+Proceedings of the Thirty-Eighth AAAI Conference on Artificial Intelligence and Thirty-Sixth Conference on Innovative Applications of Artificial Intelligence and Fourteenth Symposium on Educational Advances in Artificial Intelligence (AAAI’24/IAAI’24/EAAI’24) . AAAI Press, Article 2198, 8 pages. doi:10.1609/aaai. v38i17.29946 [27] Chenxu Zhu, Shigang Quan, Bo Chen, Jianghao Lin, Xiaoling Cai, Hong Zhu, Xiangyang Li, Yunjia Xi, Weinan Zhang, and Ruiming Tang. 2024. LIBER: Lifelong User Behavior Modeling Based on Large Language Models. arXiv:2411.14713 [cs.IR] https://arxiv.org/abs/2411.14713
