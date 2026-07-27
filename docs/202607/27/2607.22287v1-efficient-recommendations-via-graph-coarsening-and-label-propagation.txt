@@ -1,0 +1,508 @@
+Title: Efficient Recommendations via Graph Coarsening and Label Propagation
+
+URL Source: https://arxiv.org/pdf/2607.22287v1
+
+Published Time: Mon, 27 Jul 2026 00:46:06 GMT
+
+Number of Pages: 13
+
+Markdown Content:
+# Efficient Recommendations via Graph Coarsening and Label Propagation 
+
+Alessandro Sbandi 12 , Federico Siciliano 1 and Fabrizio Silvestri 1
+
+> 1
+
+Sapienza University of Rome, Rome, Italy 
+
+> 2
+
+TIM S.p.A. 
+
+Abstract 
+
+Graph-based recommendations are widely adopted in real-world industrial applications. However, graphs in these systems often reach a massive scale, posing notable scalability and efficiency challenges. This requires techniques that can effectively balance predictive quality with computational cost. One promising approach is graph coarsening, an adaptive graph reduction technique that offers a way to systematically construct smaller, yet structurally representative, versions of the original large-scale graphs. In this work, we propose a flexible two-stage diffusion framework that combines graph coarsening with multi-step label propagation in the telecommunications domain. Domain-specific heuristics are applied to first aggregate nodes into meaningful communities, reducing graph size while preserving essential business-relevant relationships. An initial diffusion process done by a Label Propagation Algorithm (LPA) or a Graph Neural Network (GNN) propagates labels across the coarsened graph to produce coarse-grained predictions. Finally, a second LPA within subgraphs generates the final recommendations for individual users. On a real-world telecommunications dataset, when using LPA in both stages, our method achieves up to +24% NDCG@5 over the full-graph LPA baseline. Incorporating a lightweight GNN in the first stage further boosts NDCG@5 by more than 50%, but requires substantial training and inference time. Through extensive experiments and a detailed ablation, we quantify these trade-offs and demonstrate that our coarsening-driven approach delivers an optimal balance between scalability, latency, and recommendation quality. 
+
+Keywords 
+
+Graph Recommender Systems, Graph Coarsening, Label Propagation, Telecommunications 
+
+# 1. Introduction 
+
+Graph-structured data has become widespread across various domains, such as social networks [1, 2], biological networks [ 3 ], financial transactions [ 4 ], e-commerce platforms [ 5 , 6 ] because it naturally represents complex relationships between entities. In recommendation systems [ 7 , 8 ], user-item interactions form large bipartite graphs [ 1], whose rich connectivity enables machine learning models to uncover latent patterns and deliver personalized recommendations [ 9 ]. However, as industrial-scale datasets grow to millions or billions of nodes and edges [ 10 ], this expressiveness comes at a steep computational cost: memory demands increase, training and inference times become prohibitively long, and graph algorithms face scalability bottlenecks [11, 12]. Graph Neural Networks (GNNs) [ 13 , 14 ] have emerged as a powerful paradigm for recommendation, learning node embeddings through repeated message exchanges across edges. Yet even state-of-the-art large-scale GNNs rely on sampling techniques to handle these large-scale graphs, require heavy computational resources [ 15 ], and struggle with problems like over-smoothing [ 16 ] and capturing long-range dependencies [ 17 ]. These factors make handling truly massive graphs challenging in low-latency production settings and highlight the need for more scalable alternatives that maintain high-quality recommendations [12]. Lightweight alternatives such as the Label Propagation Algorithm (LPA) [ 18 ] bypass expensive gradient computations by diffusing information across the graph by iteratively updating node labels based on its neighbors. Compared to GNNs, LPA is computationally efficient and achieves competitive 
+
+RS4SD – 1st Workshop on Recommender Systems for Sustainable Development using Responsible Nudging, Seoul, Korea 
+
+$ alessandro.sbandi@telecomitalia.it (A. Sbandi); siciliano@diag.uniroma1.it (F. Siciliano); fsilvestri@diag.uniroma1.it (F. Silvestri) 
+
+ 0009-0002-8804-2362 (A. Sbandi); 0000-0003-1339-6983 (F. Siciliano); 0000-0001-7669-9055 (F. Silvestri)    
+
+> ©2025 Copyright for this paper by its authors. Use permitted under Creative Commons License Attribution 4.0 International (CC BY 4.0). Full Graph Intra-Community
+> Propagation
+> Coarsened graph Inter-Community
+> Propagation
+
+Figure 1: Overview of the proposed framework. On the left, the original full graph, where colors illustrate the business-driven rules used to group nodes into communities, while dashed lines highlight inter-community interactions. In the middle is shown the coarsened graph and inter-community propagation. On the right, the intra-community refinement stage is shown. 
+
+accuracy [ 19 ]. However, directly applying LPA to industrial-scale graphs still involves iterating over every edge multiple times, resulting in significant runtime and memory requirements. Naïve down-sampling of the graph can reduce costs, but it often severs critical links, destroying community structures or isolating hubs, which in turn degrades recommendation quality. Graph coarsening [ 20 ] offers a systematic approach to reduction, involving the aggregation of nodes to create a smaller, more computationally efficient representation of the original graph. While coarsening can improve scalability [ 21 ] and reduce noise [ 22 ], it may lead to information loss, potentially impacting effectiveness. In fact, a propagation algorithm can diffuse labels efficiently on a coarsened graph, but recommendations become too coarse for fine-grained personalization. In our industrial telecommunications setting, offers (e.g. additional services, bundled products) must be tailored to implicit user groups, that are not explicitly encoded in the raw data, and only made to users who do not already have these services. To address these challenges, we propose a framework that integrates business-driven graph coarsening with at two-step propagation process. Our approach is designed for large-scale, real-world datasets and follow these steps: (i) first, users are grouped into super nodes that approximate real families by applying community detection techniques driven by business-specific domain rules, e.g shared billing and call frequency; (ii) either LPA or a lightweight GNN is applied on the coarsened graph to efficiently generate initial recommendations; (iii) a parallel label propagation step is performed within each subgraph to refine recommendations back down to the individual user level. This design combines the efficiency of reduction with the accuracy of localized propagation. Offline experiments demonstrate the superiority of our proposed framework, achieving sub-second inference times and improving NDCG@5 by up to 24% (LPA) and over 90% (GNN) over a full-graph LPA baseline. Our contributions are: 
+
+• We formalize a business-driven coarsening technique that uses business rules to uncover implicit family structures, preserving essential relationships and reducing the graph size by over 70%. 
+
+• We have designed an efficient two-step propagation scheme that combines coarse-graph diffusion with fine-grained refinement to ensure low latency and high accuracy. 
+
+• We empirically validate our approach against full-graph LPA and alternative coarsening methods, demonstrating significant improvements in terms of scalability and recommendations quality. 
+
+# 2. Methodology 
+
+Fig. 1 presents our framework for scalable offer recommendations, which consists of three steps: 1) coarsening the interaction graph into communities, 2) propagating labels across communities, and 3) intra-community propagation. Our data can be represented as an undirected user graph 𝐺 = ( 𝑉, 𝐸, Y), where 𝑉 = {1, . . . , 𝑁 } is the set of nodes (users), 𝐸 = {1, . . . , 𝑀 } is the set of edges (calls between users) and Y ∈ { 0, 1}𝑁 ×𝐿 is the label matrix, with 𝐿 denoting the number of unique labels (offers) and Y𝑖𝑗 = 1 if user 𝑖 has accepted marketing offer 𝑗 , 0 otherwise. 
+
+2.1. Graph Coarsening 
+
+A coarsened graph 𝐺 ′ = ( 𝑉 ′, 𝐸 ′) contains 𝑉 ′ = {1, . . . , 𝑁 ′} super nodes and 𝐸 ′ = {1, . . . , 𝑀 ′} super edges, with N’ < N. The coarsening process is represented by a surjective mapping C : 𝑉 → 𝑉 ′,where C ∈ { 0, 1}𝑁 ×𝑁 ′
+
+, ensuring each node 𝑖 in 𝑉 is mapped to exactly one super node in 𝑉 ′ (i.e. ∑︀  
+
+> N’
+> 𝑗 =1
+
+C𝑖𝑗 = 1 ). To ensure that the detected communities align with business goals, we incorporate domain-specific rules. The following heuristics indicate which users can be clustered together to capture implicit family and household structure: 
+
+Interaction Frequency: users who communicate more frequently based on call duration and number of calls per week. 
+
+Surname: users with the same surname. 
+
+Caring: users who frequently contacts customer support on behalf of someone else. 
+
+Balance: financial dependencies (e.g. topping up another user’s mobile balance, charging someone else bills), especially for younger users 
+
+Number of lines: lines associated with a single user are redundant for personalized recommendation. Users who satisfy at least one of these conditions and who comply with established marketing constraints (e.g. node degree and community size), are merged together to create a super node. To create the new label matrix Y’ , for each super node, we concatenate all label vectors y ∈ Y of the nodes part of that community. Formally, given the mapping C, the new label Y’ 𝑗 of community 𝑗 is computed as Y’ 𝑗 = 1(︁∑︀ 𝑁 𝑖 =1 C𝑖𝑗 Y𝑗 ≥ 1)︁ . This results in each community label Y’ 𝑗 containing all the offers activated by all of its users. At this stage, super edges between communities are created based on inter-community interactions (e.g. calls between families). 
+
+2.2. Inter-Community Propagation 
+
+After graph coarsening, a first propagation is performed. We explore two algorithms: LPA and GNNs. LPA offers an efficient method for information diffusion. It iteratively updates super nodes 𝑣 ∈ 𝑉 ′
+
+labels based on predominant labels within their local neighborhoods. The LPA is defined as: 
+
+^Y = 𝛼 · D−1/2AD −1/2Y + (1 − 𝛼 )Y
+
+where 𝛼 is the propagation hyperparameter, A is the adjacency matrix of the graph, and D is the diagonal degree matrix with D𝑖𝑖 =∑︀ 𝑗 A𝑖𝑗 .When employing a GNN for the first propagation step, we adopt a more expressive graph represen-tation to model interactions more accurately. Specifically, we transform the coarsened community-community graph 𝐺 ′ = ( 𝑉 ′, 𝐸 ′) into a heterogeneous graph, denoted as 𝐺 ℎ. This graph consists of two distinct node types: communities (the super nodes from 𝑉 ′) and items (the 𝐿 unique offers avail-able in the catalog). The connectivity of 𝐺 ℎ is defined by two types of edges: 
+
+• Community-Community edges, which correspond to the super-edges in 𝐸 ′.
+
+• Community-Item edges, which capture the user-item interactions at the community level. To learn representations on this heterogeneous graph, we utilize the GraphSAGE architecture [ 23 ]. Let h(0)  
+
+> 𝑣
+
+be the initial representations of super node 𝑣 ∈ 𝑉 ′. In each layer 𝑙 , an aggregated message 
+
+𝑎 (𝑙 ) 
+
+> 𝑣
+
+is computed by applying an AGG function over the representations h(𝑙 −1)  
+
+> 𝑢
+
+of 𝑣 neighboring super nodes u ∈ 𝑁 (𝑣 ). 𝑣 representation is updated through h(𝑙 ) 
+
+> 𝑣
+
+= 𝜎 (︁ W(𝑙 ) · a(𝑙 ) 
+
+> 𝑣
+
++ 𝑏 (𝑙 ))︁ , where W(𝑙 ) and 𝑏 (𝑙 )
+
+are learnable parameters. After 𝐿 layer, the final representation h(𝐿 ) 
+
+> 𝑣
+
+is obtained. 2.3. Intra-Community Propagation 
+
+In this final step, we refine the initial recommendations obtained from the coarsened graph by leverag-ing the interactions within each community. Although the coarsened graph, or its heterogeneous coun-terpart, efficiently propagates information across large communities, it misses finer intra-community relationships. The recommendations generated from the inter-community step are uniform for all users within the same super-node, lacking the personalization required for individual level predictions. The intra-community step is designed to address this by refining these coarse-grained predictions and rein-troducing user personalization. This refinement is performed independently and in parallel for each community 𝑐 identified during the coarsening phase. We augment the original user-level subgraph of each community adding a community representative node 𝑟 𝑐 , containing the aggregated label information from the previous propagation. By connecting this representative node to all users in the community, we build a subgraph 𝐺 𝑐,𝑎𝑢𝑔 that integrates both local (user-level) and global (community-level) information. Finally, we apply LPA over each subgraph to refine the recommendations, ensuring a more accurate and personalized output ^Y𝑓 𝑖𝑛𝑎𝑙 .The presented framework is detailed in Algorithm 1. 
+
+Algorithm 1 Efficient Recommendations via Graph Coarsening and Label Propagation  
+
+> 1:
+
+Input: Full user graph 𝐺 = ( 𝑉, 𝐸, Y); Coarsening business rules ℛ; Propagation algorithm 
+
+𝑃 𝐴 1𝑠𝑡 ∈ { LPA, GNN } 
+
+> 2:
+
+Output: Personalized recommendation scores ^Y𝑓 𝑖𝑛𝑎𝑙 for all users in 𝑉 
+
+Stage 1: Graph Coarsening  
+
+> 3:
+
+𝐸 𝑎𝑢𝑥 ← ∅ {Initialize auxiliary edges for coarsening}  
+
+> 4:
+
+for each user pair (𝑢, 𝑣 ) ∈ 𝑉 × 𝑉 do  
+
+> 5:
+
+if SatisfiesRules( (𝑢, 𝑣 ), ℛ) and MeetsConstraints( (𝑢, 𝑣 )) then  
+
+> 6:
+
+𝐸 𝑎𝑢𝑥 ← 𝐸 𝑎𝑢𝑥 ∪ { (𝑢, 𝑣 )} 
+
+> 7:
+
+end if  
+
+> 8:
+
+end for  
+
+> 9:
+
+C ← ConnectedComponents (𝑉, 𝐸 𝑎𝑢𝑥 ) Generate community mapping matrix  
+
+> 10:
+
+𝐺 ′ = ( 𝑉 ′, 𝐸 ′, Y’ ) ← CoarsenGraph (𝐺, C) {Create coarsened graph} 
+
+Stage 2: Inter-Community Propagation  
+
+> 11:
+
+if 𝑃 𝐴 𝑖𝑛𝑡𝑒𝑟 is GNN then  
+
+> 12:
+
+𝐺 ℎ ← CreateHeterogeneousGraph (𝐺 ′) 
+
+> 13:
+
+h(𝐿 )
+
+> 𝑐𝑜𝑚𝑚
+
+, h(𝐿 ) 
+
+> 𝑖𝑡𝑒𝑚
+
+← GraphSAGE (𝐺 ℎ) 
+
+> 14:
+
+^Y′ 
+
+> 𝑠𝑐𝑜𝑟𝑒𝑠
+
+← ComputeScores (h(𝐿 )
+
+> 𝑐𝑜𝑚𝑚
+
+, h(𝐿 )
+
+> 𝑖𝑡𝑒𝑚
+
+) {Scores from GNN embeddings}  
+
+> 15:
+
+else  
+
+> 16:
+
+^Y′ 
+
+> 𝑠𝑐𝑜𝑟𝑒𝑠
+
+← LPA (𝐺 ′, Y’ ) {Scores from LPA}  
+
+> 17:
+
+end if Stage 3: Intra-Community Propagation (in parallel)  
+
+> 18:
+
+for each community 𝑐 with super-node 𝑣 ′ 
+
+> 𝑐
+
+∈ 𝑉 ′ do  
+
+> 19:
+
+𝐺 𝑐 ← ExtractSubgraph (𝐺, 𝑐 ) {Get original users and edges for community 𝑐 } 
+
+> 20:
+
+𝑟 𝑐 ← CreateRepresentativeNode (^ Y′
+
+> 𝑠𝑐𝑜𝑟𝑒𝑠
+
+[𝑐 ]) {Node with global info}  
+
+> 21:
+
+𝐺 𝑐,𝑎𝑢𝑔 ← AugmentSubgraph (𝐺 𝑐 , 𝑟 𝑐 ) {Connect 𝑟 𝑐 to all users in 𝐺 𝑐 } 
+
+> 22:
+
+^Y𝑓 𝑖𝑛𝑎𝑙 ← LPA (𝐺 𝑐,𝑎𝑢𝑔 ) {Refine recommendations locally}  
+
+> 23:
+
+end for  
+
+> 24:
+
+return ^Y𝑓 𝑖𝑛𝑎𝑙 3. Experiments 
+
+We conduct comprehensive experiments to demonstrate the effectiveness of the proposed method. Specifically, we aim to answer the following research questions: 
+
+• Effectiveness (RQ1): How does our graph coarsening, compare in terms of recommendation quality, to (i) full-graph label propagation and (ii) alternative coarsening methods? 
+
+• Structural integrity (RQ2): To what extent do different coarsening strategies preserve the topological properties (e.g. community structure, clustering and degree distribution) of the original graph? 
+
+• Efficiency and Scalability (RQ3): How does the proposed approach perform in terms of computational efficiency and scalability when compared to full-graph propagation and other coarsening approaches? 
+
+• Ablation (RQ4): Which LPA design choices (number of propagation layers 𝐿 and propagation hyperparameter 𝛼 ) drive performance and efficiency gains? 
+
+3.1. Experimental Setup 
+
+3.1.1. Dataset 
+
+We employ a real-world industrial dataset, containing more than 13 million users, collected from marketing campaigns run by TIM, an Italian telecommunications company, containing more than 13 million users. Specifically, it captures instances where customer care agents, during phone calls, suggest multiple products or services to a customer in a single engagement. This characteristic is central in the evaluation process, as discussed in Sec. 3.1.4, because agents usually present a list of recommendations. The dataset spans from January to September 2024 and captures user interactions with promotional offers. To ensure a realistic evaluation, we split the data chronologically: the last month is used as test set, and the previous months as training set. Tab. 1 provides comprehensive details about train and test split statistics.                  
+
+> Table 1
+> Summary of Dataset Statistics Train Test Unique users buying 2,552,477 736,648 Total items bought 4,818,165 1,070,679 % of users with ≥1 items bought 18 .49 %5.34 %% of users with ≥2 items bought 7.34% 1.42 %% of users with ≥3 items bought 3.62% 0.53 %
+
+The item catalog within our industrial recommendation dataset covers a diverse range of offers: 
+
+• Telecommunications Services: including voice and Wi-Fi plans. 
+
+• TV & Streaming Subscriptions: such as DAZN, Netflix, Amazon Prime, Disney+, and TIMVI-SION. 
+
+• Promotional Discounts: such as percentage-off deals or limited-time offer. 
+
+• Smart Home Devices: for example, Google Nest or security cameras. 
+
+• Network Equipment: including routers and related hardware. The nature of offers allowing for collective access or use by a group (such as a family) has a dual implication for our recommendation task. Firstly, it can lead to lower individual adoption rates and contribute to dataset sparsity. Secondly, this makes identifying family members (or communities) particularly valuable for tailoring recommendations, as it’s often redundant or ineffective to recommend the same item to multiple people in the same family. Each of the 561 unique items represents a distinct promotional offer or service package. We focus on purchases as the primary signal of user intent. This naturally leads to a sparse dataset, with an overall interaction density of 0.06% in the training set. This sparsity highlights one of the challenges of industrial recommendation. 
+
+3.1.2. Baseline Models 
+
+We compare the proposed framework with three coarsening baselines: 
+
+• Users : the full user’s graph, where each node represents an individual user and edges denote direct interactions. 
+
+• Unique : a coarsened version where super nodes are created based on unique label combinations. 
+
+• Louvain : a coarsened version where the Louvain algorithm [ 24 ] is used to partition the original graph into communities. To ensure consistency in the evaluation, for all models, we follow the same methodology as in the proposed framework: PA is first applied to the coarsened graph, then LPA within each community. 
+
+3.1.3. Implementation Details 
+
+As mentioned in Sec. 2.2, we implemented a GraphSAGE model for the GNN-based inter-community propagation. The model was trained to perform link prediction on the heterogeneous graph 𝐺 ℎ, with the objective of predicting Community-Item edges. Specifically, the model was trained using a binary cross-entropy loss function, and key hyperparameters (learning rate, hidden dimension, number of layers, negative samples, batch size) were tuned using a Bayesian optimization on the validation set [ 25 ]. 
+
+3.1.4. Evaluation Metrics 
+
+To evaluate the effectiveness of our model, we investigate three areas. First, we measure the quality of the recommendation using standard ranking metrics: Precision@K, NDCG@K, Recall@K and Mean Average Precision (MAP). To evaluate the structural preservation of the coarsened graphs, we measure Degree Similarity (DS), Average Clustering Coefficient (AC), Connected Components Similarity (CCS), and Edge Density (ED), along with a comparison of the node count. This helps us determine if the coarsening process retains the key features of the original graph. The DS and CCS are computed using the formula 1/(1 + 𝑑 (𝑥, 𝑦 )) , where 𝑑 is the Wasserstein distance, and 𝑥 and 𝑦 are the lists of node degrees or connected component sizes for the original and coarsened graphs, respectively. Finally, we compare runtime efficiency by recording LPA execution time, to show how scalable and fast our approach is when handling large graphs. Given that customer care agents typically propose at least five items during these interactions, evaluating the effectiveness of their call recommendations requires to consider and focus on K=5. This is precisely why NDCG@5 is our primarily evaluation metric. It allows us to measure how well the most relevant items are prioritized within the top 5 positions, which is crucial in a scenario where an agent offers a limited set of options during a brief interaction. 
+
+3.2. Effectiveness (RQ1) 
+
+Tab. 2 reports the results for the complete set of metrics of our proposed framework against several baselines. The comparison includes our coarsening business-driven strategy and alternative methods, each evaluated with LPA or GNN as the first propagation algorithm, and the full-graph LPA baseline. A critical initial observation is the Out Of Memory (OOM) encountered when attempting to apply the GNN to the original full graph, underlining the necessity of graph coarsening. All of these use the best configuration found (see Sec. 3.5 for LPA). Since customer agents typically recommend up to five offers from the recommendation list, we set the primary evaluation goal to K = 5 .1st PA Model MAP @3 @5 @10 @20 P NDCG R P NDCG R P NDCG R P NDCG RLPA                                                                                                         
+
+> Users 0.0220 0.0155 0.0260 0.0275 0.0112 0.0275 0.0318 0.0062 0.0282 0.0339 0.0031 0.0282 0.0341
+> Unique 0.0181 0.0105 0.0191 0.0207 0.0080 0.0211 0.0260 0.0051 0.0236 0.0330 0.0028 0.0243 0.0357
+> Louvain 0.0234 0.0134 0.0270 0.0268 0.0084 0.0270 0.0281 0.0043 0.0271 0.0285 0.0021 0.0271 0.0286
+> Ours 0.0281 0.0182 0.0313 0.0332 0.0138 0.0341 0.0405 0.0084 0.0367 0.0481 0.0043 0.0372 0.0498
+> GNN
+> Users OOM OOM OOM OOM OOM OOM OOM OOM OOM OOM OOM OOM OOM
+> Unique 0.0305 0.0172 0.0318 0.0321 0.0124 0.0352 0.0393 0.0078 0.0382 0.0455 0.0043 0.0394 0.0491
+> Louvain 0.0390 0.0181 0.0373 0.0489 0.0121 0.0392 0.0532 0.0095 0.0498 0.0859 0.0058 0.0543 0.1026
+> Ours 0.0434 0.0312 0.0552 0.0461 0.0193 0.0528 0.0471 0.0098 0.0524 0.0478 0.0049 0.0524 0.0478
+
+Table 2 
+
+Performance metrics averaged over 3 runs for baselines. Standard deviation is not reported due to space constraints, but is always less than 0.001 . PA = Propagation Algorithm, OOM = Out Of Memory. Bold 
+
+indicates the best metric with those parameters, underlined are second best. 
+
+When LPA is applied as the first PA, our approach achieves the highest recommendation quality consistently across all metrics. Notably, our method improves NDCG@5 by 24% over the full-graph propagation baseline. Using a GNN as the first PA notably enhances performance, particularly when combined with our coarsening strategy. Our approach achieves overall best results across several metrics. It improves the 
+
+𝑁 𝐷𝐶𝐺 @5 by 54% over its LPA counterpart and by 35% over the GNN trained on Louvain coarsened graph. The latter generally stands as the second best method, achieving always highest recall and best metrics @20. In summary, these results confirm that graph coarsening is indispensable for applying GNNs to large industrial-scale graphs. Moreover, Ours business-driven coarsening approach is consistently having high performance with both (LPA and GNN) PA. GNN in the first propagation step achieves the highest recommendation quality, significantly outperforming LPA approaches. 
+
+3.3. Structural Integrity (RQ2) 
+
+Tab. 3 reports the five structural metrics for each coarsening strategy compared to the original user–item graph. Together, these metrics help quantify how faithfully each method preserves global and local structural properties. Our approach yields an AC that most closely matches that of the original graph. The low clustering coefficient similarity reflects the sparse and loosely connected nature of user-item interactions within the generated communities, which is consistent with typical user behavior on large-scale platforms. This low clustering coefficient aligns with our goal of preserving realistic connectivity patterns without introducing artificial density. Similarly, the edge density (ED) of our coarsened graph remains low, indicating that the compression process preserves the original structure’s natural sparsity, avoiding excessive over-connection among super nodes. At the same time, our method achieves moderate compression (in terms of node count), avoiding the extreme reductions that may compromise structural fidelity. 
+
+Graph DS AC CCS ED NN 
+
+Users - 6.287 · 10 −7 - 2.839 · 10 −7 13.80 
+
+Unique 0.263 0.327 2.820 · 10 −4 3.312 · 10 −5 0.14 
+
+Louvain 0.587 0.984 5.152 ·10 −2 1.976 · 10 −6 0.49 
+
+Ours 0.485 1.070 ·10 −6 1.647 · 10 −2 9.105 ·10 −7 4.27 
+
+Table 3 
+
+Comparison of graph properties across different methods: degree similarity (DS), average clustering (AC), connected components similarity (CCS), edge density (ED), and number of nodes (NN) in millions. The Louvain method produces a more compact graph than ours, and it exhibits the highest DS and CCS scores, indicating that it doesn’t distort the original component structure and degree distribution heavily. Despite a low ED value — suggesting nodes with poor connectivity — the AC deviates greatly from the original graph’s, limiting Louvain effectiveness. On the other hand, the Unique coarsening strategy achieves the most aggressive reduction in node count, resulting in a very compact graph. It yields the lowest DS and CCS, indicating that it doesn’t preserve some macro-structural properties of the original graph. However, this comes at the cost of excessive edge density and lowest clustering coefficient similarity, both of which suggest overly tight communities that may inhibit meaningful diffusion and lead to unstable performance (as observed in RQ1). Overall, our coarsening framework strikes the best balance between graph compression and structural fidelity. 0.2 0.4 0.6 0.8          
+
+> 0.020
+> 0.023
+> 0.026
+> 0.029
+> 0.032
+> 0.035
+> NDCG@5
+> L= 1
+> Ours
+> Users
+> Louvain
+> Unique
+> 0.2 0.4 0.6 0.8
+> L= 3
+> 0.2 0.4 0.6 0.8
+> L= 5
+
+Figure 2: NDCG@5 values for all coarsening methods, varying the number of layers 𝐿 , with corre-sponding 𝛼 values indicated. 
+
+3.4. Efficiency and Scalability (RQ3) 
+
+Tab. 4 summarizes, for each method, the graph size (nodes and edges) at each propagation step and the corresponding runtimes for both coarsening and propagation steps. The full-graph baseline ( Users ), which involves performing a single propagation on an original graph comprising roughly 14 million nodes and 10 million edges, taking significantly longer ( >17 minutes) than all the other methods. Crucially, attempting to run GNN propagation on this full graph results in Out Of Memory (OOM), highlighting the necessity of coarsening for GNN-based approaches. By contrast, our business-driven coarsening achieves a minimal coarsening time ( 34 s), thanks to lightweight heuristics that can be precomputed offline. The resulting coarsened graph contains 4 million nodes and 6 million edges, and undergoes two LPA propagation steps in nine minutes: the first on the reduced graph and the second in parallel across smaller user-level subgraphs. On the other side, GNN propagation is the slowest with approximately 13 minutes. The Unique strategy completes the coarsening process in around 4 minutes), producing the smaller graph (140 thousand nodes and 270 thousand edges). While its first propagations are the fastest ( ∼5minutes LPA, ∼10 minutes GNN), this advantage is reversed in the second step, where it takes over 
+
+4 seconds per graph, the longest of all methods, due denser communities. While Louvain coarsening produces well-balanced partitions, it is the slowest to run, taking over two hours. Though its propagation steps are marginally faster than ours, the upfront cost dominates its total runtime and, ultimately, our approach remains competitive in terms of total LPA and GNN runtime while achieving superior recommendation performance, as shown in Tab. 2. From a theoretical point of view, from [ 26 , 27 , 28 ], LPA algorithm has a running time of 𝒪 (𝑇 𝑀 ),where 𝑇 is the number of iterations and 𝑀 is the number of edges in the graph. The number of iterations can either be fixed or left to convergence. However, no theoretical proof of LPA convergence time has been found [ 28 ] except for special cases. Empirical studies suggest that a few iterations are usually sufficient to stabilize the labels [ 26 ]. Reported complexity also depends on LPA variant, with studies citing 𝒪 (𝑁 𝑙𝑜𝑔 2𝑁 ) [29 ] and 𝒪 (𝑀 + 𝑁 ) [30 ]. GNNs typically exhibit higher computational complexity: with 𝐿 layers, a graph with 𝑁 nodes, and 𝑀 edges, the complexity is 𝒪 (𝐿 · (𝑀 + 𝑁 )) 
+
+[31]. This factor inherently make GNNs more resource-intensive compared to LPA. In our case, the first step, whether LPA or GNN, is expected to be the most computationally intensive due to the large scale of the coarsened graph, which contains millions of nodes and edges. The GNN runtimes clearly demonstrate a higher computational demand than LPA on the same coarsened graph. Conversely, the second LPA step operates on much smaller community graphs, containing only tens or hundreds of nodes, making it computationally light. An additional advantage of our approach is that the second LPA step can be efficiently parallelized. As it operates at the user level, it can be performed online at inference time, while the first propagation step can be precomputed offline. This design ensures that our method remains scalable and operates within sub-second inference times.                                           
+
+> Coarsening First Propagation Second LPA (per community) Approach Runtime Nodes (M) Edges (M) LPA Runtime GNN Runtime Nodes Edges LPA Runtime
+> Users 0s 13.80 9.65 17m41s ±30s OOM ---
+> Unique 3min53s ±40s 0.14 0.27 5m07s ±50s 10m39s ±24s 99.57 463.57 4457ms ±264ms
+> Louvain 2h12min ±2m 0.49 0.26 6m47s ±30s 11m02s ±35s 29.16 32.65 1571ms ±423ms
+> Ours 34s ±5s 4.27 6.36 9m01s ±47s 12 𝑚 59 𝑠 ±14s 4.23 7.68 358ms ±24ms
+
+Table 4 
+
+Comparison of graph statistics across the three steps, including number of nodes, edges and runtime. The best runtime for each step is highlighted in bold .
+
+3.5. Ablation (RQ4) 
+
+To analyze the effect of the main hyperparameters on recommendation accuracy, we perform an ablation study by varying the number of propagation layers L ∈ { 1, 3, 5}, and damping parameter 
+
+𝛼 ∈ { 0.1, 0.5, 0.9}. Due to the computational complexity associated with GNN training, we conduct this ablation study specifically using LPA as our propagation algorithm. For each configuration, we evaluate all coarsening strategies against the full graph baseline. As shown in Tab. 5, our coarsening approach consistently outperforms all baselines across different hyperparameter settings. In particular, it shows a clear upward trend in performance as the number of propagation layers 𝐿 increases, while the performance of the other models remain largely stable. This is also observable in Fig. 2. Moving from a single propagation step to five, yields and average NDCG@5 gain of over 17 %, regardless of the chosen 𝛼 .In contrast, the alternative coarsening methods and full-graph propagation remain largely insensitive to changes in 𝐿 or 𝛼 . As can be seen in Fig. 2, their NDCG@5 curves are essentially flat, indicating that deeper or more aggressive propagation does not result in significant improvements to either the original or differently coarsened graphs. The only exception is Unique , which shows a high sensitivity to hyperparameter variation - its performance deteriorates at 𝐿 = 5 and fluctuates unpredictably with 
+
+𝛼 when 𝐿 = 3 .Based on these results, we set the optimal hyperparameters to L = 5 and 𝛼 = 0 .5, as this configuration gives the highest NDCG@5. 
+
+# 4. Conclusion 
+
+In this paper, we have introduced a novel graph coarsening framework for industrial-scale recommen-dation systems that incorporates business-driven rules to improve scalability. The framework involves a two-stage propagation: inter-community propagation (LPA or GNN-based) is applied to the coarsened graph to efficiently spread information across communities, and intra-community propagation refines the initial recommendations within each community. This method effectively utilizes user interactions L 𝛼 Model MAP @3 @5 @10 @20 P NDCG R P NDCG R P NDCG R P NDCG R10.1 
+
+Users 0.0213 0.0152 0.0256 0.0267 0.0109 0.0267 0.0304 0.0059 0.0272 0.0319 0.0030 0.0272 0.0320 
+
+Unique 0.0240 0.0134 0.0243 0.0266 0.0109 0.0278 0.0354 0.0069 0.0309 0.0442 0.0036 0.0315 0.0462 
+
+Louvain 0.0235 0.0132 0.0270 0.0269 0.0084 0.0270 0.0282 0.0043 0.0270 0.0287 0.0021 0.0271 0.0287 
+
+Ours 0.0243 0.0168 0.0287 0.0302 0.0121 0.0302 0.0347 0.0066 0.0309 0.0368 0.0033 0.0309 0.0369 0.5 
+
+Users 0.0212 0.0152 0.0255 0.0266 0.0109 0.0266 0.0302 0.0060 0.0271 0.0317 0.0029 0.0271 0.0319 
+
+Unique 0.0164 0.0158 0.0245 0.0263 0.0116 0.0269 0.0327 0.0054 0.0295 0.0297 0.0029 0.0301 0.0421 
+
+Louvain 0.0234 0.0132 0.0269 0.0268 0.0084 0.0269 0.0282 0.0043 0.0270 0.0286 0.0021 0.0270 0.0286 
+
+Ours 0.0239 0.0166 0.0282 0.0297 0.0120 0.0297 0.0342 0.0065 0.0304 0.0363 0.0033 0.0304 0.0364 
+
+0.9 
+
+Users 0.0215 0.0122 0.0248 0.0244 0.0077 0.0248 0.0256 0.0039 0.0248 0.0261 0.0019 0.0248 0.0261 
+
+Unique 0.0138 0.0120 0.0218 0.0239 0.0095 0.0244 0.0303 0.0063 0.0272 0.0333 0.0027 0.0278 0.0405 
+
+Louvain 0.0233 0.0132 0.0269 0.0264 0.0082 0.0267 0.0274 0.0041 0.0267 0.0278 0.0021 0.0268 0.0279 
+
+Ours 0.0236 0.0165 0.0282 0.0294 0.0118 0.0294 0.0333 0.0064 0.0299 0.0349 0.0032 0.0299 0.0350 30.1 
+
+Users 0.0215 0.0152 0.0257 0.0269 0.0110 0.0269 0.0307 0.0060 0.0275 0.0326 0.0030 0.0275 0.0327 
+
+Unique 0.0266 0.0149 0.0274 0.0298 0.0122 0.0315 0.0399 0.0079 0.0353 0.0505 0.0040 0.0358 0.0521 
+
+Louvain 0.0232 0.0131 0.0266 0.0264 0.0082 0.0266 0.0277 0.0042 0.0266 0.0282 0.0021 0.0266 0.0282 
+
+Ours 0.0271 0.0179 0.0307 0.0326 0.0135 0.0332 0.0393 0.0078 0.0351 0.0448 0.0040 0.0354 0.0458 0.5 
+
+Users 0.0215 0.0123 0.0248 0.0247 0.0078 0.0250 0.0263 0.0040 0.0251 0.0268 0.0020 0.0251 0.0269 
+
+Unique 0.0175 0.0105 0.0184 0.0205 0.0085 0.0211 0.0273 0.0054 0.0237 0.0345 0.0028 0.0242 0.0363 
+
+Louvain 0.0238 0.0134 0.0273 0.0269 0.0084 0.0273 0.0283 0.0043 0.0273 0.0289 0.0022 0.0273 0.0289 
+
+Ours 0.0270 0.0179 0.0308 0.0325 0.0132 0.0330 0.0386 0.0077 0.0348 0.0437 0.0039 0.0350 0.0445 
+
+0.9 
+
+Users 0.0216 0.0153 0.0257 0.0270 0.0110 0.0270 0.0309 0.0060 0.0276 0.0327 0.0030 0.0276 0.0329 
+
+Unique 0.0231 0.0125 0.0238 0.0262 0.0098 0.0269 0.0339 0.0062 0.0298 0.0421 0.0032 0.0303 0.0438 
+
+Louvain 0.0234 0.0135 0.0271 0.0268 0.0085 0.0270 0.0281 0.0043 0.0271 0.0285 0.0022 0.0271 0.0286 
+
+Ours 0.0182 0.0179 0.0308 0.0327 0.0134 0.0331 0.0391 0.0078 0.0350 0.0446 0.0040 0.0352 0.0454 
+
+50.1 
+
+Users 0.0215 0.0153 0.0257 0.0270 0.0110 0.0269 0.0309 0.0060 0.0276 0.0328 0.0030 0.0276 0.0329 
+
+Unique 0.0199 0.0120 0.0211 0.0234 0.0095 0.0240 0.0308 0.0059 0.0264 0.0378 0.0031 0.0272 0.0403 
+
+Louvain 0.0235 0.0133 0.0270 0.0269 0.0084 0.0270 0.0283 0.0043 0.0270 0.0287 0.0021 0.0271 0.0288 
+
+Ours 0.0282 0.0182 0.0314 0.0334 0.0138 0.0341 0.0405 0.0084 0.0368 0.0481 0.0043 0.0373 0.0499 
+
+0.5 
+
+Users 0.0219 0.0155 0.0260 0.0274 0.0112 0.0273 0.0315 0.0062 0.0280 0.0335 0.0031 0.0281 0.0336 
+
+Unique 0.0194 0.0111 0.0205 0.0221 0.0086 0.0227 0.0280 0.0054 0.0252 0.0349 0.0029 0.0260 0.0378 
+
+Louvain 0.0234 0.0132 0.0269 0.0264 0.0083 0.0268 0.0276 0.0042 0.0268 0.0280 0.0021 0.0269 0.0281 
+
+Ours 0.0283 0.0182 0.0314 0.0333 0.0138 0.0342 0.0406 0.0084 0.0368 0.0482 0.0043 0.0373 0.0499 
+
+0.9 
+
+Users 0.0218 0.0154 0.0259 0.0273 0.0111 0.0273 0.0315 0.0062 0.0279 0.0335 0.0031 0.0280 0.0337 
+
+Unique 0.0175 0.0101 0.0184 0.0202 0.0077 0.0204 0.0253 0.0050 0.0231 0.0330 0.0027 0.0238 0.0357 
+
+Louvain 0.0233 0.0132 0.0268 0.0267 0.0083 0.0268 0.0280 0.0042 0.0269 0.0284 0.0021 0.0269 0.0285 
+
+Ours 0.0282 0.0181 0.0312 0.0332 0.0138 0.0340 0.0406 0.0085 0.0368 0.0487 0.0044 0.0374 0.0505 
+
+Table 5 
+
+Performance metrics with baselines for different layers and alpha values. Bold and 𝑢𝑛𝑑𝑒𝑟𝑙𝑖𝑛𝑒𝑑 indicate the best and second-best metric with those parameters, respectively. 
+
+to enhance the recommendation of family offers and provides more scalable recommendation updates, which is crucial when user and community interactions are subject to frequent changes. Through extensive evaluation, we have shown that our approach outperforms baseline models in terms of recommendation quality, particularly for key industrial metrics at rank 𝐾 = 5 . Additionally, it achieves improved scalability while preserving important topological properties of the original full graph. These results highlight the practical applicability of our method in real-world marketing campaigns, where maintaining both high quality recommendations and scalability are critical. The LPA-only pipeline is immediately deployable in low-latency environments, while the GNN-enhanced option suits settings where higher predictive performance justifies extra training cost. Future work will investigate adaptive coarsening techniques to further optimize performance in dynamic environments. 
+
+# 5. Related Work 
+
+5.1. Graph Coarsening 
+
+Graph coarsening is widely used across industries primarily because it offers a practical way to distill massive graphs into manageable representations, enabling faster computations and clear understanding without losing the underlying connections. Foundational to this is the multi-level paradigm posed by METIS [ 32 ], which uses techniques like heavy-edge matching to recursively simplify graphs for high-quality partitioning. The Louvain method [24] performs coarsening by grouping densely connected nodes into communities. This approach has been further refined by algorithms like the Leiden method [ 33 ]. Lean Algebraic Multigrid (LAMG) [ 34 ]leverages advanced numerical techniques for coarsening that maintains spectral fidelity, while [ 35 ]introduced frameworks for spectrally approximating large graphs with smaller counterparts. However, the most recent advancements are concentrated in learnable graph coarsening for Graph Neural Networks (GNNs). [ 36 ] introduced a differentiable method to learn hierarchical cluster assign-ments for pooling nodes. Starting from this, many alternative approaches such as the node selection strategy [37], Self-Attention Graph Pooling (SAGPool) [38] has been implemented. 
+
+5.2. Label Propagation Algorithms 
+
+LPAs are extensively utilized in industry because they offer a remarkably efficient and intuitive method for inferring missing information or uncovering latent structure within large-scale graphs. In original LPA, [26], nodes in the network keep copying the most common label from their neighbors. More recently, GNNs have become very popular. GNNs can be seen as a smart, learnable way to do label propagation. The general idea of message passing [ 39 ], or attention-based GNN [ 40 ], also work by passing information between neighbors. These deep learning models have achieved top results on many graph tasks. However, in [ 19 ], it is demonstrated that classical label propagation can work as well as, or even better than, complex GNNs. This is especially true when there isn’t much labeled data, or when speed is fundamental. This key finding shows that simple propagation methods are still very powerful and efficient. 
+
+5.3. GNNs in Industrial Recommender Systems 
+
+GNNs have become fundamental in modern industrial recommender systems. Pinterest’s Pinsage [ 41 ]was a seminal work demonstrating how GNNs, leveraging random walks and graph convolutions, could learn recommendations for billions of items. Alibaba further pushed the boundaries with algorithms [ 42 , 43 ] designed to handle large-scale heterogeneous graphs. Furthermore, foundational advancements in GNN architectures, such as Graph Attention Networks (GAT) [ 40 ], have provided powerful mechanism for modeling complex relational data, significantly influencing the subsequent design of GNN-based rec-ommendations systems across the industry. Leveraging the power of such graph learning architectures, Linkedin has developed models like LiGNN [ 44 ], which refines recommendation within its vast graph. 
+
+# 6. GenAI Usage Disclosure 
+
+In accordance with the ACM’s guidelines on the use of generative AI tools, we confirm that generative AI technologies were used solely to assist with code debugging and grammar checking when preparing this paper. All research ideas, experiments, analyses and writing were conducted and critically reviewed by the authors. No part of the scientific content or creative reasoning was generated or substantially rewritten by generative AI tools. 
+
+# References 
+
+[1] W. Fan, Y. Ma, Q. Li, Y. He, E. Zhao, J. Tang, D. Yin, Graph neural networks for social recommen-dation, in: The world wide web conference, 2019, pp. 417–426. [2] K. Sharma, Y.-C. Lee, S. Nambi, A. Salian, S. Shah, S.-W. Kim, S. Kumar, A survey of graph neural networks for social recommender systems, ACM Computing Surveys 56 (2024) 1–34. [3] H. Wang, J. Yang, J. Wang, Leverage large-scale biological networks to decipher the genetic basis of human diseases using machine learning, in: Artificial Neural Networks, Springer, 2020, pp. 229–248. [4] J. Wang, S. Zhang, Y. Xiao, R. Song, A review on graph neural network methods in financial applications, arXiv preprint arXiv:2111.15367 (2021). [5] Z. Huang, W. Chung, H. Chen, A graph model for e-commerce recommender systems, Journal of the American Society for information science and technology 55 (2004) 259–274. [6] D. Xu, C. Ruan, E. Korpeoglu, S. Kumar, K. Achan, Product knowledge graph embedding for e-commerce, in: Proceedings of the 13th international conference on web search and data mining, 2020, pp. 672–680. [7] S. Wu, F. Sun, W. Zhang, X. Xie, B. Cui, Graph neural networks in recommender systems: a survey, ACM Computing Surveys 55 (2022) 1–37. [8] C. Gao, Y. Zheng, N. Li, Y. Li, Y. Qin, J. Piao, Y. Quan, J. Chang, D. Jin, X. He, et al., A survey of graph neural networks for recommender systems: Challenges, methods, and directions, ACM Transactions on Recommender Systems 1 (2023) 1–51. [9] Y. Pang, L. Wu, Q. Shen, Y. Zhang, Z. Wei, F. Xu, E. Chang, B. Long, J. Pei, Heterogeneous global graph neural networks for personalized session-based recommendation, in: Proceedings of the fifteenth ACM international conference on web search and data mining, 2022, pp. 775–783. [10] L. Dhulipala, J. Łącki, J. Lee, V. Mirrokni, Terahac: Hierarchical agglomerative clustering of trillion-edge graphs, Proceedings of the ACM on Management of Data 1 (2023) 1–27. [11] S. Sahu, A. Mhedhbi, S. Salihoglu, J. Lin, M. T. Özsu, The ubiquity of large graphs and surprising challenges of graph processing, Proceedings of the VLDB Endowment 11 (2017) 420–431. [12] W. Ju, S. Yi, Y. Wang, Z. Xiao, Z. Mao, H. Li, Y. Gu, Y. Qin, N. Yin, S. Wang, et al., A survey of graph neural networks in real world: Imbalance, noise, privacy and ood challenges, arXiv preprint arXiv:2403.04468 (2024). [13] J. Dong, D. Zheng, L. F. Yang, G. Karypis, Global neighbor sampling for mixed cpu-gpu training on giant graphs, in: Proceedings of the 27th ACM SIGKDD Conference on Knowledge Discovery & Data Mining, 2021, pp. 289–299. [14] G. Malewicz, M. H. Austern, A. J. Bik, J. C. Dehnert, I. Horn, N. Leiser, G. Czajkowski, Pregel: a system for large-scale graph processing, in: Proceedings of the 2010 ACM SIGMOD International Conference on Management of data, 2010, pp. 135–146. [15] H. Zhang, Z. Yu, G. Dai, G. Huang, Y. Ding, Y. Xie, Y. Wang, Understanding gnn computational graph: A coordinated computation, io, and memory perspective, Proceedings of Machine Learning and Systems 4 (2022) 467–484. [16] D. Chen, Y. Lin, W. Li, P. Li, J. Zhou, X. Sun, Measuring and relieving the over-smoothing problem for graph neural networks from the topological view, in: Proceedings of the AAAI conference on artificial intelligence, volume 34, 2020, pp. 3438–3445. [17] Q. Li, Z. Han, X.-M. Wu, Deeper insights into graph convolutional networks for semi-supervised learning, in: Proceedings of the AAAI conference on artificial intelligence, volume 32, 2018. [18] Y. Xing, F. Meng, Y. Zhou, M. Zhu, M. Shi, G. Sun, A node influence based label propagation algorithm for community detection in networks, The Scientific World Journal 2014 (2014) 627581. [19] Q. Huang, H. He, A. Singh, S.-N. Lim, A. R. Benson, Combining label propagation and simple models out-performs graph neural networks, arXiv preprint arXiv:2010.13993 (2020). [20] C. Cai, D. Wang, Y. Wang, Graph coarsening with neural networks, arXiv preprint arXiv:2102.01350 (2021). [21] Z. Huang, S. Zhang, C. Xi, T. Liu, M. Zhou, Scaling up graph neural networks via graph coarsening, in: Proceedings of the 27th ACM SIGKDD conference on knowledge discovery & data mining, 2021, pp. 675–684. [22] M. Hmimida, R. Kanawati, A graph-coarsening approach for tag recommendation, in: Proceedings of the 25th International Conference Companion on World Wide Web, WWW ’16 Companion, Inter-national World Wide Web Conferences Steering Committee, Republic and Canton of Geneva, CHE, 2016, p. 43–44. URL: https://doi.org/10.1145/2872518.2889415. doi: 10.1145/2872518.2889415 .[23] W. Hamilton, Z. Ying, J. Leskovec, Inductive representation learning on large graphs, Advances in neural information processing systems 30 (2017). [24] V. D. Blondel, J.-L. Guillaume, R. Lambiotte, E. Lefebvre, Fast unfolding of communities in large networks, Journal of statistical mechanics: theory and experiment 2008 (2008) P10008. [25] T. Akiba, S. Sano, T. Yanase, T. Ohta, M. Koyama, Optuna: A next-generation hyperparameter optimization framework, in: Proceedings of the 25th ACM SIGKDD international conference on knowledge discovery & data mining, 2019, pp. 2623–2631. [26] U. N. Raghavan, R. Albert, S. Kumara, Near linear time algorithm to detect community structures in large-scale networks, Physical Review E—Statistical, Nonlinear, and Soft Matter Physics 76 (2007) 036106. [27] T. Wang, S. Chen, X. Wang, J. Wang, Label propagation algorithm based on node importance, Physica A: Statistical Mechanics and its Applications 551 (2020) 124137. [28] V. A. Traag, L. Šubelj, Large network community detection by fast label propagation, Scientific Reports 13 (2023) 2701. [29] A. Clauset, M. E. Newman, C. Moore, Finding community structure in very large networks, Physical Review E—Statistical, Nonlinear, and Soft Matter Physics 70 (2004) 066111. [30] F. Wu, B. A. Huberman, Finding communities in linear time: a physics approach, The European Physical Journal B 38 (2004) 331–338. [31] Z. Wu, S. Pan, F. Chen, G. Long, C. Zhang, P. S. Yu, A comprehensive survey on graph neural networks, IEEE transactions on neural networks and learning systems 32 (2020) 4–24. [32] G. Karypis, V. Kumar, Metis: A software package for partitioning unstructured graphs, partitioning meshes, and computing fill-reducing orderings of sparse matrices (1997). [33] V. A. Traag, L. Waltman, N. J. Van Eck, From louvain to leiden: guaranteeing well-connected communities, Scientific reports 9 (2019) 1–12. [34] O. E. Livne, A. Brandt, Lean algebraic multigrid (lamg): Fast graph laplacian linear solver, SIAM Journal on Scientific Computing 34 (2012) B499–B522. [35] A. Loukas, P. Vandergheynst, Spectrally approximating large graphs with smaller graphs, in: International conference on machine learning, PMLR, 2018, pp. 3237–3246. [36] Z. Ying, J. You, C. Morris, X. Ren, W. Hamilton, J. Leskovec, Hierarchical graph representation learning with differentiable pooling, Advances in neural information processing systems 31 (2018). [37] H. Gao, S. Ji, Graph u-nets, in: international conference on machine learning, PMLR, 2019, pp. 2083–2092. [38] J. Lee, I. Lee, J. Kang, Self-attention graph pooling, in: International conference on machine learning, pmlr, 2019, pp. 3734–3743. [39] J. Gilmer, S. S. Schoenholz, P. F. Riley, O. Vinyals, G. E. Dahl, Neural message passing for quantum chemistry, in: International conference on machine learning, PMLR, 2017, pp. 1263–1272. [40] P. Veličković, G. Cucurull, A. Casanova, A. Romero, P. Lio, Y. Bengio, Graph attention networks, arXiv preprint arXiv:1710.10903 (2017). [41] R. Ying, R. He, K. Chen, P. Eksombatchai, W. L. Hamilton, J. Leskovec, Graph convolutional neural networks for web-scale recommender systems, in: Proceedings of the 24th ACM SIGKDD international conference on knowledge discovery & data mining, 2018, pp. 974–983. [42] J. Wang, P. Huang, H. Zhao, Z. Zhang, B. Zhao, D. L. Lee, Billion-scale commodity embedding for e-commerce recommendation in alibaba, in: Proceedings of the 24th ACM SIGKDD international conference on knowledge discovery & data mining, 2018, pp. 839–848. [43] M. Wang, Y. Lin, G. Lin, K. Yang, X.-m. Wu, M2grl: A multi-task multi-view graph representation learning framework for web-scale recommender systems, in: Proceedings of the 26th ACM SIGKDD international conference on knowledge discovery & data mining, 2020, pp. 2349–2358. [44] F. Borisyuk, S. He, Y. Ouyang, M. Ramezani, P. Du, X. Hou, C. Jiang, N. Pasumarthy, P. Bannur, B. Tiwana, et al., Lignn: Graph neural networks at linkedin, in: Proceedings of the 30th ACM SIGKDD Conference on Knowledge Discovery and Data Mining, 2024, pp. 4793–4803.
