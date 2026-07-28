@@ -1,0 +1,920 @@
+Title: Escaping the Euclidean Void: Manifold-Informed Flow Matching for Sequential Recommendation
+
+URL Source: https://arxiv.org/pdf/2607.23762v1
+
+Published Time: Tue, 28 Jul 2026 01:14:57 GMT
+
+Number of Pages: 13
+
+Markdown Content:
+# Escaping the Euclidean Void: Manifold-Informed Flow Matching for Sequential Recommendation 
+
+# Dengzhao Fang 
+
+Jilin University Changchun, China fangdz25@mails.jlu.edu.cn 
+
+# Jingtong Gao 
+
+City University of Hong Kong Hong Kong, China jt.g@my.cityu.edu.hk 
+
+# Yu Li ∗
+
+Jilin University Changchun, China liyu90@jlu.edu.cn 
+
+# Xiangyu Zhao 
+
+City University of Hong Kong Hong Kong, China xianzhao@cityu.edu.hk 
+
+# Yi Chang 
+
+Jilin University Changchun, China yichang@jlu.edu.cn 
+
+## Abstract 
+
+Conventional recommenders capture users’ preferences by optimiz-ing observed user-item relations, whereas continuous generative recommendation additionally learns the trajectory of synthesiz-ing a target item. Flow matching drives this process by gradu-ally shaping initial noise into a definitive next-item representation through intermediate states in a continuous embedding space. How-ever, item catalogs are discrete and sparsely supported, meaning even a straight Euclidean path can cross continuous regions that contain little evidence of valid item semantics. Formalizing this failure as the Euclidean void , we propose MIRAGE , a Manifold-
+
+Informed Rectification framework for Accelerated Generation of 
+
+Embeddings in sequential recommendation, which rectifies the learned embedding geometry around an unchanged straight proba-bility path. By leveraging an item co-occurrence graph as a proxy for the underlying semantic manifold, MIRAGE aligns interpolated path states with local anchors, reorganizing the embedding space to ground the trajectory in valid item support. MIRAGE retains the original probability path and uses the graph only during train-ing, thereby enabling accurate and efficient one-step inference. Extensive experiments on four real-world datasets reveal that MI-RAGE consistently outperforms state-of-the-art baselines, effec-tively boosting performance on sparsely observed targets while achieving robust overall accuracy. Our code will be made publicly available upon publication. 
+
+## CCS Concepts 
+
+• Information systems → Recommender systems .
+
+## Keywords 
+
+Sequential Recommendation, Generative Models, Flow Matching, Topology Regularization 
+
+## 1 Introduction 
+
+Sequential recommendation (SR) predicts a user’s next interaction from an ordered behavior history, whose encoding has been pro-gressively strengthened by recurrent, convolutional, Transformer, and graph architectures [ 15 , 17 , 24 , 44 , 45 , 49 ]. Most established objectives remain focused on target discrimination, as SASRec [ 17 ]    
+
+> ∗Corresponding author. (a) Vanilla Flow Matching (b) MIRAGE
+> Euclidean Void
+> Manifold of Jackets Manifold of Jackets
+> : Candidate Items : Candidate Items : Noise Prior : Noise Prior : Noise Prior : Target Item : Target Item : Target Item
+> Euclidean Void
+
+Figure 1: Euclidean void and MIRAGE rectification. (a) Vanilla straight paths traverse unsupported regions. (b) MIRAGE reorganizes item embeddings around the path via topology regularization to promote semantic support. 
+
+scores candidate items against a sequence representation, Light-GCN [ 14 ] scores items after propagating relational signals, and ranking or contrastive objectives make the observed target more compatible with the user than competing items. This design is ef-fective because recommendation ultimately depends on the relative scores of these discrete learned points and therefore does not re-quire the continuous region between a user and target to carry meaningful item semantics. Continuous generative recommendation changes this require-ment because the model must learn the dynamic evolution of user intent rather than merely a target score, with diffusion-based meth-ods perturbing target embeddings and recovering them through iterative denoising [ 7, 16 , 22 , 23 , 43 , 52 ]. Flow matching instead learns a time-dependent vector field and integrates an ordinary differential equation (ODE) [ 25 ]. Since this field is trained at inter-mediate states and queried along the generated path, its success heavily depends on the geometry encountered between the source noise and the target item. While target discrimination remains nec-essary for ranking, it is no longer sufficient for learning reliable continuous transport toward the precise target semantics. Rectified flow improves transport efficiency by learning nearly straight ODE trajectories, which incur less discretization error arXiv:2607.23762v1 [cs.IR] 26 Jul 2026 Fang et al. 
+
+and can be integrated with fewer solver steps [ 30 ]. Following this straight-trajectory principle, FMRec [ 27 ] adapts target-recovery flow matching and ODE sampling to SR, while FAVE [ 40 ] further enables one-step transport through a history-informed prior and average-velocity modeling. However, while these methods opti-mize transport efficiency, they do not guarantee that the resulting straight path traverses meaningful regions of the embedding space. Consequently, a trajectory may be numerically simple yet seman-tically unsafe, causing the generated representations to drift into empty regions that yield inaccurate or irrelevant recommendations. The source of this risk lies in the fundamental mismatch between a continuous Euclidean space and a discrete item catalog, where learned embeddings populate the space sparsely and unevenly. This aligns with the broader observation that high-dimensional data typically concentrates near lower-dimensional manifolds [ 6, 11 ]. However, a straight interpolation path between a source and a target is not guaranteed to remain on this manifold [2, 8]. Consequently, an intermediate state can drift far from any valid item semantics, falling into what we term the Euclidean void .Unlike ODE discretization errors, the Euclidean void degrades the learning signal. Flow matching requires the neural network to infer the target direction from sampled states along the path. When a state falls into the void, it lacks surrounding geometric evidence, forcing the predictor to rely almost entirely on the user history to recover precise target semantics. Consequently, increasing the number of solver steps cannot resolve this structural failure, as finer numerical integration cannot synthesize missing catalog support. The central challenge is therefore not only to learn a short path, but also to make the space traversed by that path semantically informa-tive. This challenge is particularly critical for long-tail items, whose representations receive limited direct supervision from user histo-ries [ 19 , 34 , 48 ], relying on the local support of semantic neighbors to guide the trajectory away from the void. Figure 1 makes this distinction concrete. A vanilla flow model projects a straight path toward the target, but crossing the Euclidean void causes the generated state to deviate from the true target. In contrast, our proposed framework retains the straight probability path while reorganizing valid item embeddings around its interior, ensuring the generated trajectory is semantically grounded and safely reaches the target. This contrast captures a shift from target-focused optimization to path-aware representation learning. To realize this shift, we introduce MIRAGE , a Manifold-Informed 
+
+Rectification framework for Accelerated Generation of Embeddings in SR. Rather than distorting the straight probability trajectory, MIRAGE rectifies the underlying embedding geometry around a structurally straight path. Since strict continuous manifolds are in-trinsically absent in discrete item catalogs, MIRAGE treats an item co-occurrence graph as a discrete proxy for the underlying data manifold, exploiting the strong transition regularities inherent in user histories [ 4, 49 ]. Specifically, the framework applies a topology regularizer that directly aligns the interpolated path states with active graph anchors drawn from the target’s neighborhood. A time modulation schedule suppresses this regularization at the source noise and the target item, concentrating the spatial restructuring ex-clusively on the unsupported path interior. By accumulating these geometric adjustments across sampled times and shared items, lo-cally related embeddings are dynamically repositioned to form a cohesive semantic manifold that envelops the generative trajecto-ries. Consequently, MIRAGE prepares a semantically safe transport route, which translates the underlying continuous trajectory into accurate next-item recommendations. Crucially, this design separates topology supervision from model inference. The co-occurrence graph supplies neighborhood anchors exclusively during training. The generation phase relies entirely on the newly rectified space without any graph lookups or neighbor-hood traversals. This allows MIRAGE to retain the computational efficiency of one-step transport. Furthermore, our spatial rectifica-tion focuses entirely on whether the learned space supports the journey, making it highly complementary to existing improvements in prior distributions and numerical solvers. Extensive experiments on four real datasets confirm that ensuring semantic path support translates to consistent recommendation gains. MIRAGE signifi-cantly outperforms the best-performing baselines and demonstrates particular effectiveness for long-tail items, where geometric ground-ing successfully compensates for sparse direct supervision. Our contributions are as follows: 
+
+• We identify locally supported intermediate states as a critical yet neglected requirement for reliable transport in continuous gener-ative recommendation, formalizing the absence of this semantic grounding as the Euclidean void .
+
+• We propose MIRAGE, a novel manifold-informed rectification framework centered on interpolated states, which dynamically reorganizes the embedding space around straight transport paths while preserving graph-free inference. 
+
+• Comprehensive evaluations across four datasets validate MI-RAGE’s superiority in state-of-the-art overall accuracy, robust long-tail gains, and one-step inference efficiency. 
+
+## 2 Related Work 2.1 Generative Sequential Recommendation 
+
+Sequential recommendation (SR) models encode user behavior through deep sequence models (e.g., recurrent and self-attentive networks) or contrastive and translation-based objectives [ 10 , 12 ,15 , 17 , 29 , 38 , 39 , 44 , 45 ]. Graph-based variants propagate collabora-tive signals over session or interaction graphs [ 14 , 47 , 49 , 54 ], while tail-enhancement frameworks transfer information to sparsely ob-served targets [ 9, 19 ]. While these methods establish the predictive value of relational structure, they primarily use it to encode static representations for direct target scoring. This optimizes the latent space for endpoint similarity without requiring the continuous regions between users and items to carry meaningful semantics. Moving beyond this static point estimation, diffusion-based SR approaches next-item prediction by modeling continuous genera-tive trajectories. These methods perturb target representations and recover them through iterative denoising [ 16 , 31 , 43 , 46 , 51 , 56 ]. Re-cent advancements improve this process by generating ideal target representations [ 52 ], modeling multiple interests [ 22 ], mitigating data sparsity via diffusion-based augmentation [ 28 , 33 ], address-ing popularity bias and corruption stability [ 3, 7 , 23 , 34 , 57 ], or incorporating item co-occurrence graphs to strengthen diffusion guidance [ 50 ]. Although successfully introducing generative condi-tioning, these methods collectively inherit the discrete Markovian Escaping the Euclidean Void: Manifold-Informed Flow Matching for Sequential Recommendation 
+
+dynamics of diffusion, which require complex multi-step transport processes and significant discretization errors. 
+
+## 2.2 Flow Matching and Geometric Support 
+
+To overcome the inefficiencies of discrete diffusion, flow matching (FM) regresses continuous vector fields along prescribed straight probability paths [ 1, 20 , 25 , 30 , 37 , 42 ]. In SR, FMRec pioneered this transition by adapting target-recovery FM with deterministic Euler sampling [ 27 ]. Subsequent methods like FlowRec [ 21 ], FAVE [ 40 ], FlowCF [ 26 ], and GMFlowRec [ 53 ] accelerate generation by opti-mizing priors, velocities, or mixture distributions. Although recent attempts like DAE4Rec [ 41 ] incorporate graph guidance for condi-tion enhancement, these methods uniformly assume their continu-ous paths traverse semantically safe regions, largely overlooking the underlying geometric validity. The vulnerability of these unsupported continuous paths is rooted in representation geometry. The manifold hypothesis posits that high-dimensional data concentrates near structured, lower-dimensional subsets [ 6 , 11 ]. Standard Euclidean interpolants often deviate from these curved manifolds, leading to regions devoid of meaningful semantics [ 2 , 8]. While classical manifold regularization promotes smoothness among observed samples via graph struc-tures [ 5], and Riemannian FM constructs explicit flows on known continuous manifolds [ 8], generative recommendation lacks an ex-plicit continuous manifold to guide the transport. Building upon this geometric perspective, we propose MIRAGE to resolve the Euclidean void. Rather than redesigning the transport velocity or re-quiring a known continuous manifold, MIRAGE leverages training-only discrete topology to rectify the shared embedding geometry around straight probability paths. This decouples spatial semantic safety from trajectory acceleration, ensuring that generative paths remain reliably grounded in valid representation geometry. 
+
+## 3 Preliminaries 3.1 Sequential Recommendation 
+
+Let U and I denote the user set and the item catalog, respectively. For a given user 𝑢 ∈ U , the ordered history is 𝑆 𝑢 = (𝑖 1, . . . , 𝑖 𝑚 )
+
+with 𝑖 ℓ ∈ I . Sequential recommendation ranks candidate items as the next interaction 𝑖 𝑚 +1, denoted by 𝑖 +. Each item 𝑖 is associated with a trainable embedding 𝒆 𝑖 ∈ R𝑑 .Generative sequential recommendation models depart from di-rect discrimination over the discrete item catalog, modeling a trans-port process in a continuous latent space to generate the target rep-resentation. Given a tractable source distribution 𝑝 0 (e.g., standard Gaussian) and a target distribution 𝑝 1 over next-item embeddings, the model learns to transport a source sample 𝒙 0 ∼ 𝑝 0 toward a tar-get sample 𝒙 1 = 𝒆 𝑖 + ∼ 𝑝 1. Diffusion-based recommenders instanti-ate this paradigm through iterative denoising [ 23 , 52 ], whereas flow-based recommenders learn deterministic probability paths [27]. 
+
+## 3.2 Flow Matching 
+
+Flow matching learns a time-dependent vector field that transports samples from 𝑝 0 to 𝑝 1 through an ordinary differential equation (ODE) [ 25 , 30 ]. Under the common linear probability path, a training pair (𝒙 0, 𝒙 1) defines an interpolated state 
+
+𝒙 𝑡 = (1 − 𝑡 )𝒙 0 + 𝑡 𝒙 1, 𝑡 ∈ [ 0, 1]. (1) The corresponding conditional velocity is 
+
+𝒖 𝑡 (𝒙 𝑡 | 𝒙 0, 𝒙 1) = 𝑑 𝒙 𝑡 
+
+𝑑𝑡 = 𝒙 1 − 𝒙 0. (2) In the sequential recommendation setting, conditional flow match-ing trains a neural vector field 𝒗 𝜃 conditioned on the user history 
+
+𝑆 𝑢 to approximate this direction by minimizing the objective 
+
+LCFM = E𝑡, 𝒙 0,𝒙 1,𝑆 𝑢 ∥𝒗 𝜃 (𝒙 𝑡 , 𝑡, 𝑆 𝑢 ) − ( 𝒙 1 − 𝒙 0)∥ 22 . (3) Target-recovery flow matching instead directly generates the clean target embedding 𝒙 1 and derives the velocity from that generation. MIRAGE adopts this parameterization in Section 4. 
+
+## 3.3 Co-occurrence Neighborhoods 
+
+Flow matching operates in a continuous latent space, but the item catalog is discrete. We construct an item graph G = (I , E) from training-set co-occurrences only. Edges count ordered item pairs co-occurring within a context window of size 𝑐 , and N𝐾 (𝑖 ) contains the 𝐾 items with the largest nonzero counts for item 𝑖 . The graph is precomputed and fixed during optimization. The graph provides a criterion for measuring whether an interpo-lated state is close to the target-local co-occurrence neighborhood. For an interpolated state 𝒙 𝑡 associated with target item 𝑖 +, we define its graph-neighborhood distance as 
+
+𝑑 G (𝒙 𝑡 , 𝑖 +) = min     
+
+> 𝑗 ∈ N 𝐾 (𝑖 +)
+
+𝒙 𝑡 − 𝒆 𝑗 22 . (4) A large value indicates 𝒙 𝑡 is far from the target’s co-occurrence neighborhood despite being a valid Euclidean vector, thus quanti-fying the Euclidean void introduced in Section 1. 
+
+## 4 Methodology 4.1 Overview 
+
+As illustrated in Figure 2, MIRAGE introduces a manifold-informed rectification mechanism over target-local co-occurrence neighbor-hoods. This dynamically reshapes the shared item geometry during training to encourage straight target-recovery trajectories to re-main semantically supported while leaving inference graph-free. For a user history 𝑆 𝑢 , source noise 𝒙 0 ∼ N ( 0, 𝑰 ), and target 𝒙 1 = 𝒆 𝑖 + ,a flow matching network 𝑓 𝜃 predicts the clean target ˆ𝒙 1 directly from the interpolated state at time 𝑡 ∈ [ 𝜖, 1].
+
+## 4.2 The Euclidean Void and Manifold Mismatch 
+
+Building upon the conceptual intuition provided in Section 1, we now formalize the Euclidean void as a measurable geometric mis-match inherent to continuous recommendation spaces. Standard flow matching optimizes the vector field to approximate the target direction by minimizing LCFM in Eq. (3) . However, this objective strictly supervises the velocity field, leaving the spatial and seman-tic validity of the intermediate states 𝒙 𝑡 unconstrained. Since the ideal linear interpolation path in Eq. (1) is constructed in a global Euclidean space, it remains blind to the discrete underly-ing item structure. The exposure to the Euclidean void during train-ing can be quantified by the expected geometric deviation along Fang et al. User History 
+
+> Lookup
+> Embedding Table
+
+# ... 
+
+> Flow Matching Network Flow Matching Network
+> Time Sampling
+
+User Sequence Representation 
+
+Target -Recovery Flow Backbone 
+
+Manifold -Informed Rectification 
+
+> Time Modulation Schedule
+> Modulate
+> Rectify Embeddings
+
+Inference               
+
+> Generated
+> Target
+> Generated
+> Target
+> ... ...
+> Top -
+> KItems
+> ...
+> Top -
+> KItems
+> Forward Data Flow Forward Data Flow Auxiliary & Gradient Flow Auxiliary & Gradient Flow Trainable Module Trainable Module Frozen Module Frozen Module
+> Generated Target Generated Target User History User History
+> Source Noise Source Noise Source Noise
+> Source Noise Source Noise
+> Linear Interpolation Linear Interpolation
+> Target Item Target Item FM Network FM Network
+> Co-occurrence Graph Co-occurrence Graph
+> Gradient Dynamics
+> Align anchor
+> to interpolation state .
+> Reposition the target
+> so that approaches the anchor .
+
+Figure 2: Overview of MIRAGE. The backbone 𝑓 𝜃 predicts targets from interpolated user-conditioned states. A manifold-informed rectification mechanism dynamically reshapes the embedding space by aligning interpolated path states with local graph anchors, ensuring the generative path remains grounded in a valid semantic manifold. 
+
+this prescribed probability path. Using the graph-neighborhood distance from Eq. (4), the expected path deviation is defined as 
+
+Dvoid (𝑖 +) = E𝑡 ∼𝑈 (0,1)
+
+𝑑 G (𝒙 𝑡 , 𝑖 +) . (5) For standard continuous recommenders, this expected deviation 
+
+Dvoid (𝑖 +) is usually large. The mismatch is most consequential in the path interior, where the model must infer target-directed transport without the semantic certainty available at the endpoints, easily drifting into unsupported continuous regions. Eq. (5) translates the Euclidean void into a quantifiable training proxy. In standard models, the generator is forced to decode precise target semantics from intermediate vectors lacking local semantic support. To ensure that the actual generative trajectories remain reliable, the underlying space must actively suppress Dvoid (𝑖 +).Rather than computing an explicit continuous manifold, MIRAGE treats this prescribed deviation as a direct topology regularizer, letting the geometric penalties reshape the trainable item geometry to safely envelop generative trajectories. 
+
+## 4.3 Target-Recovery Flow Backbone 
+
+We adopt a target-recovery backbone as the generative foundation, optimized for target recovery, item discrimination, and historical reconstruction. We detail these base objectives before integrating our core manifold-informed rectification. 
+
+4.3.1 Target Recovery. To align with how sequential recommenda-tion retrieves items via inner products, MIRAGE is designed to gen-erate the target embedding directly. Consequently, we parameterize the conditioned vector field 𝒗 𝜃 to approximate the ground-truth conditional velocity from Eq. (2) by predicting the target state: 
+
+𝒗 𝜃 (𝒙 𝑡 , 𝑡, 𝑆 𝑢 ) = 𝑓 𝜃 (𝒙 𝑡 , 𝑡, 𝑆 𝑢 ) − 𝒙 0, (6) where 𝑓 𝜃 denotes the flow matching network. Substituting this parameterization into Eq. (3) gives 
+
+Lrecov = E𝑡, 𝒙 0,𝒙 1,𝑆 𝑢 ∥( 𝑓 𝜃 (𝒙 𝑡 , 𝑡, 𝑆 𝑢 ) − 𝒙 0) − ( 𝒙 1 − 𝒙 0)∥ 22
+
+= E𝑡, 𝒙 0,𝒙 1,𝑆 𝑢 ∥ ˆ𝒙 1 − 𝒙 1 ∥22 , (7) where ˆ𝒙 1 = 𝑓 𝜃 (𝒙 𝑡 , 𝑡, 𝑆 𝑢 ) is the generated target state. By eliminat-ing the source noise 𝒙 0, this formulation shows that matching the conditional velocity is equivalent to minimizing the Euclidean dis-tance to the clean target embedding 𝒙 1. Appendix A.1 gives the step-by-step equivalence. 
+
+4.3.2 Catalog Ranking. Recovery alone pulls generations toward target coordinates and can collapse trainable item embeddings [ 7 ,52 ]. To enforce robust contrastive separation, we augment training with a standard catalog-ranking objective over either the full item set or a sampled candidate set C𝑢 that includes 𝑖 +. The objective is 
+
+Lrank = − log exp ( ˆ𝒙 ⊤ 
+
+> 1
+
+𝒆 𝑖 + )
+
+Í𝑎 ∈ C 𝑢 exp ( ˆ𝒙 ⊤ 
+
+> 1
+
+𝒆 𝑎 ) . (8) This auxiliary term preserves catalog-level discrimination while 
+
+Lrecov learns the continuous transport map. 
+
+4.3.3 History Reconstruction. To preserve historical preference semantics under continuous noise perturbations, we incorporate a history reconstruction objective [ 27 , 40 ]. Specifically, after the flow backbone encodes the user sequence into a final hidden state 
+
+𝒉 𝑢 , we train a lightweight decoder 𝑔 𝜔 to reconstruct the multi-hot Escaping the Euclidean Void: Manifold-Informed Flow Matching for Sequential Recommendation 
+
+user history vector 𝒓 𝑢 ∈ { 0, 1}| I | directly from this representation, yielding the predicted interaction probabilities ˆ𝒓 𝑢 = 𝑔 𝜔 (𝒉 𝑢 ).To maintain computational efficiency, the loss is evaluated over a targeted subset Ω𝑢 , which consists of all observed items and a sampled set of unobserved items. The reconstruction objective is formally defined as the mean squared error over this subset: 
+
+Lhist = 1
+
+|B| ∑︁ 𝑢 ∈ B 
+
+1
+
+|Ω𝑢 |∑︁ 𝑎 ∈Ω𝑢 
+
+ ˆ𝑟 𝑢,𝑎 − 𝑟 𝑢,𝑎 
+
+2 , (9) where B denotes a mini-batch of users, while ˆ𝑟 𝑢,𝑎 and 𝑟 𝑢,𝑎 denote the scalar values of the predicted vector ˆ𝒓 𝑢 and the ground-truth vector 𝒓 𝑢 at index 𝑎 , respectively. 
+
+## 4.4 Manifold-Informed Rectification 
+
+To implement the manifold-informed rectification, MIRAGE over-comes the Euclidean void by anchoring each interpolated state to its target-local neighborhood. The resulting gradients dynamically re-shape the embedding space around the unchanged probability path. We formulate this through a time-modulated topology regularizer. 
+
+4.4.1 Target-Local Alignment. To explicitly enforce spatial validity, MIRAGE relies on hard alignment , which anchors an interpolated state to a single valid item in the target-local neighborhood. Recall-ing Eq. (4) and assuming a unique nearest neighbor, we define the active anchor 𝑗 ∗ 
+
+> 𝑡
+
+and its gradient: 
+
+𝑗 ∗ 
+
+> 𝑡
+
+= arg min    
+
+> 𝑗 ∈ N 𝐾 (𝑖 +)
+
+∥𝒙 𝑡 − 𝒆 𝑗 ∥22, ∇𝒙 𝑡 𝑑 G (𝒙 𝑡 , 𝑖 +) = 2(𝒙 𝑡 − 𝒆 𝑗 ∗ 
+
+> 𝑡
+
+). (10) This unique minimum renders the distance function differentiable almost everywhere, yielding a gradient that pulls the interpolant toward the semantic anchor 𝒆 𝑗 ∗ 
+
+> 𝑡
+
+. Alternatively, we formulate a soft alignment variant via a temperature-controlled smooth minimum: 
+
+𝑑 soft  
+
+> G,𝜏
+
+= −𝜏 log 
+
+
+
+1
+
+𝐾 ∑︁ 𝑗 ∈ N 𝐾 (𝑖 + )
+
+exp 
+
+
+
+− ∥𝒙 𝑡 − 𝒆 𝑗 ∥22
+
+𝜏 
+
+ 
+
+, (11) whose gradient points toward a softmax-weighted centroid of local neighbors. Unlike standard graph-based contrastive learning where continuous averages of discrete items may fall into unsupported regions, hard alignment offers a stricter geometric constraint on the discrete item manifold while soft alignment provides a smoother optimization landscape. We evaluate both variants empirically, pro-viding complete theoretical derivations in Appendix A.2. 
+
+4.4.2 Time Modulation Schedule. To enforce the aforementioned spatial alignment without violating the boundary conditions of the generative flow, MIRAGE applies this target-local constraint dynam-ically. The regularizer must strictly vanish at 𝑡 = 0 to preserve the unstructured source prior, and at 𝑡 = 1 to leave the clean target state unconstrained. Among symmetric quadratic schedules normalized to a peak of 𝑤 (1/2) = 1, these standard boundary conditions yield: 
+
+𝑤 (𝑡 ) = 4𝑡 (1 − 𝑡 ). (12) This schedule concentrates semantic guidance in the path inte-rior, where the interpolant mixes the source and target strongly. Its parabolic shape matches the uncertainty profile 𝑡 (1 − 𝑡 ) of a unit Brownian bridge, serving here as a geometric analogy [ 18 ]. By applying this weight to minimize the expected path deviation 
+
+Dvoid (𝑖 +) defined in Eq. (5) , we formulate the target-local regular-izer: 
+
+Ltopo = E𝑡, 𝒙 0,𝒙 1,𝑆 𝑢 
+
+h
+
+𝑤 (𝑡 ) · ∥ 𝒙 𝑡 − 𝒆 𝑗 ∗ 
+
+> 𝑡
+
+∥22
+
+i
+
+. (13) Appendix A.3 analyzes the uniqueness of this normalized quadratic schedule and details its bridge covariance properties. 
+
+4.4.3 Gradient Dynamics and Geometric Rectification. To analyze how this regularizer reshapes the space, consider its per-sample integrand ℓtopo = 𝑤 (𝑡 )∥ 𝒙 𝑡 − 𝒆 𝑗 ∗ 
+
+> 𝑡
+
+∥22. The active anchor is locally constant almost surely, and 𝜕 𝒙 𝑡 /𝜕 𝒆 𝑖 + = 𝑡 𝑰 . The chain rule yields: 
+
+∇𝒆 𝑖 + ℓtopo = 2𝑤 (𝑡 )𝑡 
+
+
+
+𝒙 𝑡 − 𝒆 𝑗 ∗
+
+> 𝑡
+
+
+
+,
+
+∇𝒆 𝑗 ∗
+
+> 𝑡
+
+ℓtopo = −2𝑤 (𝑡 )
+
+
+
+𝒙 𝑡 − 𝒆 𝑗 ∗
+
+> 𝑡
+
+
+
+.
+
+(14) Through these updates, gradient descent repositions the target embedding 𝒆 𝑖 + so that the interpolated state 𝒙 𝑡 approaches the anchor 𝒆 𝑗 ∗ 
+
+> 𝑡
+
+, while simultaneously aligning the anchor 𝒆 𝑗 ∗ 
+
+> 𝑡
+
+toward the current interpolation state. The time-modulation factor 𝑤 (𝑡 )
+
+suppresses both updates at the source and target boundaries, con-centrating the spatial reorganization exclusively in the path interior. Appendix A.4 demonstrates that these joint updates contract the residual distance under a small step size. Notably, these pairwise forces update the shared embedding ta-ble without explicit graph message passing. Although the topology term does not directly update flow parameters, it reorganizes the Euclidean space to envelop sampled path interiors with valid item evidence. This reshapes the target trajectories into a smoother con-tinuous vector field for the flow backbone to regress. Consequently, this path-interior topology supervision restructures the space into a well-behaved vector field, minimizing discretization errors and ensuring accurate one-step target recovery. 
+
+## 4.5 Training Objective and Inference 
+
+The full training objective integrates the flow backbone and the geometric regularization: 
+
+LMIRAGE = Lrecov + 𝜆 rank Lrank + 𝜆 hist Lhist + 𝜆 topo Ltopo . (15) At inference time, MIRAGE operates without requiring any graph computations. Given a user history 𝑆 𝑢 , the model samples a source noise 𝒙 0 ∼ N ( 0, 𝑰 ) and generates the target representation via 𝑞 -step deterministic Euler sampling ( 𝑞 ∈ N+). Dividing the inte-gration interval [𝜖, 1] into 𝑞 uniform steps, the network times are discretized as 𝑡 𝑛 = 𝜖 + ( 1 − 𝜖 ) 𝑛 𝑞 , for 𝑛 = 0, . . . , 𝑞 − 1. Following the linear velocity formulation in Eq. (2) , our target-recovery network explicitly predicts the clean target 𝒙 1 as 𝑓 𝜃 ( ˜𝒙 𝑛 , 𝑡 𝑛 , 𝑆 𝑢 ). Thus, the intermediate states are recursively updated via Euler integration using the exact step size Δ𝑡 = 1−𝜖 𝑞 :
+
+˜𝒙 𝑛 +1 = ˜𝒙 𝑛 + 1 − 𝜖 𝑞 [𝑓 𝜃 ( ˜𝒙 𝑛 , 𝑡 𝑛 , 𝑆 𝑢 ) − 𝒙 0] , (16) with ˜𝒙 0 = 𝒙 0. For efficient one-step generation ( 𝑞 = 1), this recur-sion evaluates to ˜𝒙 1 = (1 −𝜖 )𝑓 𝜃 (𝒙 0, 𝜖, 𝑆 𝑢 ) + 𝜖 𝒙 0. Since the minimum network time 𝜖 is negligible, this expression reduces to 
+
+ˆ𝒙 1 = 𝑓 𝜃 (𝒙 0, 𝜖, 𝑆 𝑢 ). (17) Fang et al. 
+
+Table 1: Main results on four datasets (%; higher is better). Best and second are marked. ± denotes standard deviation over 5 runs. MIRAGE significantly outperforms the best baselines (paired t-test, 𝑝 < 0.05 ). 
+
+Beauty Sports Toys CDs 
+
+Type Model H@10 H@20 N@10 N@20 H@10 H@20 N@10 N@20 H@10 H@20 N@10 N@20 H@10 H@20 N@10 N@20 
+
+> Trad.
+
+GRU4Rec 2.53 ±0.10 4.26 ±0.22 1.21 ±0.05 1.64 ±0.10 1.92 ±0.12 2.96 ±0.18 1.01 ±0.07 1.27 ±0.07 1.79 ±0.09 3.19 ±0.17 0.86 ±0.07 1.21 ±0.06 3.77 ±0.25 6.29 ±0.37 1.86 ±0.10 2.50 ±0.12 
+
+Caser 2.37 ±0.11 3.97 ±0.25 1.16 ±0.07 1.56 ±0.10 1.82 ±0.10 2.78 ±0.15 0.90 ±0.05 1.14 ±0.08 1.75 ±0.11 2.74 ±0.12 0.88 ±0.07 1.13 ±0.06 3.00 ±0.12 5.00 ±0.18 1.48 ±0.10 1.98 ±0.12 
+
+HGN 1.94 ±0.10 3.09 ±0.20 0.93 ±0.06 1.22 ±0.10 1.22 ±0.08 2.02 ±0.12 0.67 ±0.06 0.87 ±0.07 1.32 ±0.07 2.27 ±0.10 0.68 ±0.06 0.92 ±0.06 0.57 ±0.05 0.96 ±0.06 0.29 ±0.04 0.39 ±0.04 
+
+NextItNet 4.47 ±0.28 7.14 ±0.31 2.20 ±0.10 2.87 ±0.17 2.65 ±0.14 4.33 ±0.28 1.35 ±0.07 1.77 ±0.09 3.24 ±0.13 5.09 ±0.23 1.62 ±0.06 2.08 ±0.13 5.45 ±0.20 8.56 ±0.34 2.73 ±0.17 3.51 ±0.20 
+
+LightGCN 4.38 ±0.17 6.90 ±0.35 2.12 ±0.14 2.76 ±0.16 2.79 ±0.12 4.73 ±0.31 1.43 ±0.08 1.92 ±0.12 4.30 ±0.26 6.33 ±0.27 2.14 ±0.14 2.65 ±0.11 5.18 ±0.20 7.98 ±0.27 2.62 ±0.13 3.32 ±0.12 
+
+SASRec 4.89 ±0.21 7.69 ±0.32 2.11 ±0.14 2.82 ±0.17 2.95 ±0.15 4.71 ±0.21 1.26 ±0.07 1.70 ±0.09 5.67 ±0.34 8.31 ±0.41 2.47 ±0.13 3.13 ±0.14 4.79 ±0.28 7.90 ±0.39 2.08 ±0.12 2.86 ±0.13 
+
+BERT4Rec 4.13 ±0.19 6.27 ±0.28 2.20 ±0.10 2.74 ±0.12 2.03 ±0.13 3.48 ±0.17 1.01 ±0.06 1.37 ±0.10 3.54 ±0.22 5.18 ±0.22 1.86 ±0.13 2.27 ±0.12 5.66 ±0.34 8.70 ±0.53 2.85 ±0.12 3.61 ±0.19 
+
+> Diff.
+
+ADRec 7.62 ±0.12 10.52 ±0.09 4.49 ±0.05 5.22 ±0.06 4.03 ±0.14 5.96 ±0.13 2.21 ±0.06 2.69 ±0.05 7.75 ±0.20 10.37 ±0.25 4.84 ±0.07 5.50 ±0.08 6.86 ±0.17 9.91 ±0.22 3.69 ±0.07 4.46 ±0.08 
+
+DiffuRec 7.63 ±0.08 10.49 ±0.15 4.58 ±0.09 5.30 ±0.11 3.70 ±0.23 5.51 ±0.20 2.03 ±0.19 2.49 ±0.18 7.26 ±0.14 9.74 ±0.18 4.59 ±0.05 5.21 ±0.06 8.55 ±0.50 12.55 ±0.64 4.41 ±0.25 5.41 ±0.28 
+
+DimeRec 6.25 ±0.10 9.76 ±0.18 3.07 ±0.10 3.96 ±0.11 3.70 ±0.11 5.89 ±0.13 1.93 ±0.08 2.48 ±0.08 5.86 ±0.27 8.86 ±0.31 2.91 ±0.12 3.66 ±0.12 5.52 ±0.16 8.85 ±0.26 2.76 ±0.09 3.60 ±0.11 
+
+TA-Rec 0.42 ±0.04 0.85 ±0.06 0.21 ±0.02 0.35 ±0.03 0.38 ±0.03 0.72 ±0.06 0.18 ±0.03 0.25 ±0.03 0.55 ±0.05 0.92 ±0.06 0.25 ±0.03 0.38 ±0.03 0.48 ±0.05 0.81 ±0.06 0.22 ±0.02 0.31 ±0.02 
+
+DreamRec 0.05 ±0.02 0.08 ±0.02 0.02 ±0.02 0.03 ±0.02 0.03 ±0.02 0.06 ±0.02 0.01 ±0.03 0.02 ±0.03 0.04 ±0.03 0.09 ±0.03 0.02 ±0.03 0.03 ±0.01 0.06 ±0.02 0.12 ±0.03 0.03 ±0.03 0.04 ±0.03 
+
+FMRec 8.20 ±0.10 11.47 ±0.16 4.79 ±0.04 5.61 ±0.04 4.36 ±0.23 6.45 ±0.23 2.43 ±0.19 2.95 ±0.19 8.31 ±0.08 11.21 ±0.14 5.17 ±0.04 5.90 ±0.05 8.77 ±0.23 12.97 ±0.32 4.49 ±0.11 5.55 ±0.13 
+
+FAVE 7.97 ±0.27 11.44 ±0.39 4.20 ±0.13 5.08 ±0.16 2.90 ±1.80 4.52 ±2.49 1.56 ±0.95 1.96 ±1.13 5.35 ±4.01 7.53 ±5.34 2.80 ±2.07 3.35 ±2.40 8.21 ±0.23 12.34 ±0.30 4.14 ±0.07 5.18 ±0.09 
+
+MIRAGE 8.53 ±0.13 12.37 ±0.11 4.94 ±0.07 5.71 ±0.07 4.77 ±0.15 7.14 ±0.14 2.51 ±0.07 3.11 ±0.06 8.89 ±0.37 12.52 ±0.34 5.31 ±0.35 6.08 ±0.34 9.11 ±0.24 13.51 ±0.45 4.65 ±0.10 5.76 ±0.15 
+
+> Flow
+
+Imp.(%) +4.02 +7.85 +3.13 +1.78 +9.40 +10.70 +3.29 +5.42 +6.98 +11.69 +2.71 +3.05 +3.88 +4.16 +3.56 +3.78 
+
+Setting the final target representation as ˆ𝒙 1 ≡ ˜𝒙 𝑞 , we compute the candidate scores for ranking via inner products: 
+
+𝑠 𝑎 = ˆ𝒙 ⊤
+
+1 𝒆 𝑎 , ∀𝑎 ∈ I . (18) The integration step 𝑞 balances inference cost and refinement. Our training-time topological guidance enables zero-graph overhead during generation while maintaining robust recommendation qual-ity even at 𝑞 = 1 as demonstrated in Section 5.6. 
+
+## 5 Experiments 
+
+We evaluate MIRAGE through overall ranking performance, geo-metric rectification, component analysis, long-tail recommendation, hyperparameter sensitivity, and inference efficiency. 
+
+## 5.1 Experimental Setup 
+
+5.1.1 Datasets & Baselines. To evaluate across diverse topologi-cal structures and sparsity levels, we use four standard Amazon review datasets (Beauty, Sports, Toys, and CDs) [ 13 ]. 1 Following established protocols [ 17 , 44 ], we apply 5-core filtering and retain each user’s 20 most recent interactions (statistics in Table 2). 
+
+Table 2: Statistics of the datasets. 
+
+Dataset #Users #Items #Interactions Avg. Len. Sparsity 
+
+Beauty 22,363 12,101 198,502 8.88 99.93% Sports 35,598 18,357 296,337 8.32 99.95% Toys 19,412 11,924 167,597 8.63 99.93% CDs 75,258 64,443 1,097,592 14.58 99.98% 
+
+We evaluate MIRAGE against three groups of baselines. Tra-ditional models include GRU4Rec [ 15 ] based on recurrent net-works, Caser [ 45 ] and NextItNet [ 55 ] using convolutional networks, HGN [ 32 ] with hierarchical gates, graph-based LightGCN [ 14 ], and 
+
+> 1
+
+The datasets are available at https://jmcauley.ucsd.edu/data/amazon/. 
+
+attention-based SASRec [ 17 ] and BERT4Rec [ 44 ]. Diffusion-based models consist of ADRec [ 7 ] for staged token-level diffusion, Dif-fuRec [ 23 ] for distributional target generation, DimeRec [ 22 ] for spherical geodesic diffusion, TA-Rec [ 35 ] for one-step denoising, and DreamRec [ 52 ] for oracle-like target reconstruction. Flow-matching models include FMRec [ 27 ], which constructs straight continuous trajectories and applies deterministic Euler solvers for direct target recovery, and FAVE [ 40 ], which jointly leverages a history-informed semantic prior and regularizes flow consistency to enable accurate one-step generation. 
+
+5.1.2 Metrics & Implementation Details. We adopt leave-one-out evaluation with full-catalog ranking and report Hit Rate (H@K) and Normalized Discounted Cumulative Gain (N@K) for 𝐾 ∈{10 , 20 } [ 14 ]. All experiments are conducted on an NVIDIA RTX 4090 GPU. The flow network 𝑓 𝜃 utilizes a Transformer with 4 blocks, 4 heads, and a hidden dimension 𝑑 = 128 , while the history decoder 
+
+𝑔 𝜔 consists of 2 layers with widths 512 and 2048. We optimize using Adam with a learning rate of 10 −3 and a batch size of 512, applying early stopping governed by validation N@20. We fix 𝜆 hist = 0.4 [ 27 ], 
+
+𝜖 = 0.001 , tuning other parameters via validation and detailing sen-sitivity in Appendix B.2. Hard alignment proves optimal for Beauty, Sports, and Toys, whereas CDs require the soft variant. Inference strictly defaults to direct one-step generation with 𝑞 = 1. To ensure robustness, our main performance comparisons report averages across five random seeds (2022–2026). All subsequent analyses fix seed 2026 to isolate individual experimental factors. 
+
+## 5.2 Performance and Geometric Rectification 
+
+5.2.1 Overall Performance. Table 1 summarizes the recommenda-tion performance, where MIRAGE achieves the best results across all datasets and metrics. Compared to the strongest baseline FMRec, our framework delivers substantial relative improvements, high-lighted by a 10.70% and 11.69% increase in H@20 on the Sports and Escaping the Euclidean Void: Manifold-Informed Flow Matching for Sequential Recommendation 0.0 0.5 1.0         
+
+> Generation progress
+> 0.000
+> 0.005
+> 0.010
+> 0.015
+> 0.020
+> Δ Text-neighbor support  (a) Actual semantic support
+> Diff AD FM FAVE MIR
+> Models
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> 1.2
+> Local support radius
+> (b) Support geometry
+> DiffuRec ADRec FMRec FAVE MIRAGE
+
+Figure 3: Geometric rectification analysis. (a) Semantic sup-port along the actual generation trajectories, evaluated using an independent text embedding space. (b) Distributions of the normalized local support radius across the item catalog. 
+
+Toys datasets. Conversely, DreamRec and TA-Rec experience sig-nificant performance degradation. Under our rigorous full-catalog protocol, DreamRec’s omission of negative sampling [ 7 , 22 ] and TA-Rec’s preference alignment on sparse sequences lead to reduced embedding dispersion, making target items difficult to distinguish. While continuous generative approaches generally outperform tra-ditional models, MIRAGE maintains a distinct advantage over stan-dard flow-based methods. This advantage validates our core struc-tural hypothesis that optimizing for a straight trajectory leaves the intermediate states of standard methods vulnerable to unsupported continuous regions. By dynamically rectifying the embedding ge-ometry during training to enforce continuous semantic support, MIRAGE prevents generated representations from drifting into the Euclidean void, thereby translating straight transport routes into accurate next-item predictions. 
+
+5.2.2 Geometric Rectification. To evaluate whether models escape the Euclidean void during inference, we analyze the intermedi-ate states along the actual generated trajectories. Specifically, we retrieve the nearest neighbors of these states within the learned em-bedding space and measure their similarity to the true target using a frozen, independent text embedding space. 2 Figure 3a illustrates the relative gain in this text-neighbor support. While baselines traverse regions with sparse target semantics, MIRAGE exhibits an earlier and more pronounced rise in semantic alignment. This confirms our training proxy anchors actual paths, a trend that directly correlates with the overall accuracy improvements in Table 1. Beyond securing individual trajectories, we examine the global catalog geometry in Figure 3b using the local support radius, defined as the normalized distance from each item to its semantic neighbors. The violin plots show that MIRAGE shifts this distribution down-ward, yielding a lower median radius than the baselines. A smaller normalized radius reflects denser semantic clustering across the catalog. This indicates that our manifold-informed regularization reorganizes the underlying Euclidean space, establishing a more compact and cohesive environment for continuous generation. 
+
+> 2Semantic similarity is computed using cosine similarity on frozen item text embed-dings extracted via Sentence-T5.
+
+Table 3: Ablation study of MIRAGE.                                             
+
+> Variant Beauty Sports Toys CDs H@20 N@20 H@20 N@20 H@20 N@20 H@20 N@20 MIRAGE 12.27 5.71 7.22 3.12 12.78 6.03 13.84 5.91
+> w/o Topology 11.67 5.64 6.57 3.04 10.99 5.82 13.54 5.85
+> w/o Time Mod. 12.25 5.63 6.55 2.82 12.74 5.90 13.63 5.78
+> w/ Alt. Alignment 11.98 5.45 5.67 2.44 12.66 5.98 13.75 5.77
+> w/ Endpoint Reg. 10.16 4.47 5.25 2.18 10.12 4.59 13.69 5.74
+
+## 5.3 Ablation Study 
+
+To disentangle the contributions of MIRAGE, Table 3 compares the full MIRAGE framework against four specific variants. The ablated variants are defined as follows: 1) w/o Topology disables the geometric regularizer entirely by setting the weight 𝜆 topo = 0
+
+in Eq. (15) ; 2) w/o Time Mod. removes the parabolic schedule 
+
+𝑤 (𝑡 ) = 4𝑡 (1 − 𝑡 ) defined in Eq. (12) , uniformly applying a con-stant topology penalty across the entire interpolation timeframe; 3) w/ Alt. Alignment inverts the optimal dataset-specific config-uration by switching between the hard discrete anchor 𝒆 𝑗 ∗ 
+
+> 𝑡
+
+and a soft weighted centroid; and 4) w/ Endpoint Reg. acts as standard Graph Laplacian smoothing by minimizing the L2 distance between target and neighbor embeddings, isolating our path-interior gains. Removing the topology term yields the most severe performance degradation, highlighted by a drop in H@20 from 12 .78 to 10 .99 on the Toys dataset. This confirms that the generative flow backbone alone, despite its sequence modeling capabilities, struggles with the Euclidean void and relies on explicit geometric regularization to maintain valid semantic support. Furthermore, replacing the time modulation schedule with a constant penalty undermines recom-mendation quality, reducing H@20 from 7.22 to 6.55 on Sports. This outcome validates that applying the topological constraint indiscriminately near the boundary endpoints ( 𝑡 → 0 or 1) corrupts the unstructured source noise and the clean target representations. Switching alignment configurations degrades performance across all domains. Dense datasets rely on discrete hard anchors to keep in-termediate states out of unsupported regions, while sparse datasets like CDs require continuous soft aggregation to stabilize local gra-dients. This demonstrates that alignment techniques must naturally adapt to the underlying structural sparsity. Furthermore, standard Graph Laplacian smoothing at the target endpoint performs worse than omitting the graph entirely. Forcing target items too close to their neighbors collapses their distinct representations and degrades precise ranking. This confirms that semantic support must be ap-plied dynamically to the intermediate states along the generative trajectory, rather than statically at the final destination. 
+
+## 5.4 Long-Tail Performance 
+
+To evaluate performance across item popularities, we divide the catalog based on training-set frequency. Items in the bottom 80% of the catalog ranked by their training frequency form the long tail, while the remaining 20% constitute the head. As shown in Figure 4, MIRAGE achieves its most substantial relative gains on long-tail targets. On Sports, it improves H@20 over the strongest baseline by 14.0% for the tail compared to 8.7% Fang et al. Long-tail     
+
+> n=20,032
+> Head
+> n=15,566
+> 0
+> 10
+> 20
+> H@20 (%)
+> 14.0%
+> 8.7%
+> (a) Sports
+> Long-tail
+> n=35,245
+> Head
+> n=40,013
+> 17.5%
+> 1.0%
+> (b) CDs
+> DiffuRec ADRec FMRec FAVE MIRAGE
+
+Figure 4: H@20 for Long-Tail and Head Items on Sports/CDs (𝑛 denotes the number of test targets in each group). 
+
+for the head. On CDs, these respective gains reach 17.5% and 1.0%, with consistent trends across the remaining datasets detailed in Appendix B.6. This pronounced improvement on sparse items re-flects the utility of our target-local support. Infrequent items receive fewer gradient updates during training, leaving their surrounding embedding geometry poorly defined by standard target supervision. By leveraging shared co-occurrence anchors, MIRAGE allows these sparse targets to draw geometric support from high-frequency re-lated items, accumulating local evidence throughout the shared em-bedding space. Without introducing popularity-specific parameters or sacrificing head accuracy, this mechanism effectively concen-trates geometric guidance exactly where the continuous generative trajectory is most vulnerable to the Euclidean void. Crucially, con-fining this support to the path interior prevents sparse items from collapsing into popular neighbors, avoiding popularity bias while preserving their distinct rankability. 
+
+## 5.5 Hyperparameter Analysis 5 10 20 40                  
+
+> (a) K
+> 0.050
+> 0.075
+> 0.100
+> 0.125
+> HR@20
+> 0.01 0.05 0.1 0.2
+> (b) λtopo
+> 0.060
+> 0.090
+> 0.120
+> 0.05 0.1 0.2 0.5 1
+> (c) λrank
+> 0.000
+> 0.050
+> 0.100
+> 0.150
+> HR@20
+> 32 64 128 256
+> (d) d
+> 0.040
+> 0.080
+> 0.120
+> Beauty Sports Toys CDs
+
+Figure 5: H@20 under one-at-a-time hyperparameter sweeps. 
+
+To systematically assess model sensitivity, Figure 5 shows that optimal neighborhood sizes and loss weights vary across datasets and thus justify our selection through validation. While MIRAGE 1x 10x 100x 
+
+> Relative cost (log)
+> Params
+> Latency
+> Time
+
+(a) Efficiency profile   
+
+> 115 30
+> Inference steps
+> 10.00
+> 11.00
+> 12.00
+> 13.00
+> H@20 (%)
+
+(b) Step stability      
+
+> H@20 N@20
+> 5.00
+> 6.00
+> 7.00
+> 8.00
+> N@20 (%)
+> DiffuRec ADRec FMRec FAVE MIRAGE
+
+Figure 6: Efficiency profile and step stability. MIRAGE min-imizes relative inference latency while maintaining robust accuracy under direct one-step generation. 
+
+maintains robust performance over a broad middle range of val-ues, the irregular response on the Toys dataset to both 𝐾 and 𝜆 topo 
+
+reveals a genuine sensitivity to local graph structure. The neighbor-hood size governs the balance between support and specificity; a small 𝐾 provides precise but potentially unstable anchors, whereas a large 𝐾 increases geometric coverage at the risk of pulling the generative trajectory toward weakly related items. Similarly, the interior optima for the topology weight confirm that geometric rectification complements item discrimination. Sweeps over the ranking weight and embedding dimension (peaking at 
+
+𝑑 = 128 ) verify that adequate spatial separation and controlled model capacity remain necessary alongside geometric reorgani-zation. Appendix B.2 details the exact search grids and further analyzes the co-occurrence window size 𝑐 , showing that dense cata-logs benefit from broader semantic contexts ( 𝑐 = 5) whereas sparse datasets require strict adjacency ( 𝑐 = 1) to prevent noisy guidance. 
+
+## 5.6 Efficiency Analysis 
+
+The efficiency profile in Figure 6 compares the relative inference costs of MIRAGE against recent generative recommenders. MI-RAGE establishes the lowest latency and total inference time, oper-ating orders of magnitude faster than iterative models like DiffuRec while further outperforming the one-step FAVE by eliminating its prior-construction overhead. Since MIRAGE shares the exact same model capacity as FMRec and FAVE, its superior inference speed stems from its one-step generation strategy rather than a reduced model size. The topology regularizer and neighborhood retrieval operations are discarded after optimization to achieve zero graph overhead during deployment, while establishing an optimal training time trade-off detailed in Appendix B.4. The step stability plot in Figure 6 further justifies this direct generation strategy by tracking recommendation accuracy across varying inference steps. Both metrics remain stable as the inte-gration steps increase from 1 to 30. This stability aligns with our target recovery parameterization and straight probability path. Ad-ditional sampling steps only refine a target estimate that already receives direct supervision during training. This verifies that our training-time manifold rectification shapes a well-behaved contin-uous vector field, enabling safe and accurate one-step traversal. Escaping the Euclidean Void: Manifold-Informed Flow Matching for Sequential Recommendation 
+
+These extra steps therefore multiply the computational cost with-out supplying new semantic evidence or measurable accuracy gains and confirm one-step inference as the optimal practical setting. 
+
+## 6 Conclusion and Future Work 
+
+In this paper, we identify the Euclidean void as a critical failure mode in continuous generative recommendation. We demonstrate that straight interpolation paths often traverse unsupported re-gions and cause intermediate states to lose semantic guidance. To address this limitation, we propose MIRAGE, which dynamically rectifies the underlying item geometry to ensure continuous seman-tic support throughout the generation process. This reorganization prevents representation drift while preserving an efficient inference mechanism. Extensive evaluations on four datasets confirm that this geometric grounding delivers robust performance improvements and yields particular benefits for sparsely observed items. While MIRAGE operates in flat Euclidean spaces, future work will explore hyperbolic embeddings to better capture hierarchical item relationships [ 36 ]. Such non-Euclidean manifolds accommo-date complex category structures and asymmetric user interactions. Integrating these geometric priors into the continuous transport process could provide even tighter bounds on intermediate represen-tations, thereby further elevating the overall generative reliability. Fang et al. 
+
+## References 
+
+[1] Michael S. Albergo and Eric Vanden-Eijnden. 2023. Building Normalizing Flows with Stochastic Interpolants. In Proc. of ICLR .[2] Georgios Arvanitidis, Lars Kai Hansen, and Søren Hauberg. 2018. Latent Space Oddity: On the Curvature of Deep Generative Models. In Proc. of ICLR .[3] Yimeng Bai, Yang Zhang, Sihao Ding, Shaohui Ruan, Han Yao, Danhui Guan, Fuli Feng, and Tat-Seng Chua. 2026. Brownian Bridge Diffusion for Sequential Recommendation. arXiv:2507.06121 [4] Oren Barkan and Noam Koenigstein. 2016. Item2vec: neural item embedding for collaborative filtering. In 2016 IEEE 26th international workshop on machine learning for signal processing (MLSP) . 1–6. [5] Mikhail Belkin, Partha Niyogi, and Vikas Sindhwani. 2006. Manifold Regu-larization: A Geometric Framework for Learning from Labeled and Unlabeled Examples. J. Mach. Learn. Res. 7, 85 (2006), 2399–2434. [6] Yoshua Bengio, Aaron Courville, and Pascal Vincent. 2013. Representation Learning: A Review and New Perspectives. IEEE Trans. Pattern Anal. Mach. Intell. 
+
+35, 8 (2013), 1798–1828. [7] Jialei Chen, Yuanbo Xu, and Yiheng Jiang. 2025. Unlocking the Power of Diffusion Models in Sequential Recommendation: A Simple and Effective Approach. In 
+
+Proc. of KDD . 155–166. [8] Ricky T. Q. Chen and Yaron Lipman. 2024. Flow Matching on General Geometries. In Proc. of ICLR .[9] Mingyue Cheng, Qi Liu, Wenyu Zhang, Zhiding Liu, Hongke Zhao, and Enhong Chen. 2024. A General Tail Item Representation Enhancement Framework for Sequential Recommendation. Front. Comput. Sci. 18, 6 (2024), 186333. [10] Ziwei Fan, Zhiwei Liu, Yu Wang, Alice Wang, Zahra Nazari, Lei Zheng, Hao Peng, and Philip S. Yu. 2022. Sequential Recommendation via Stochastic Self-Attention. In Proc. of WWW . 2036–2047. [11] Charles Fefferman, Sanjoy Mitter, and Hariharan Narayanan. 2016. Testing the Manifold Hypothesis. J. Amer. Math. Soc. 29, 4 (2016), 983–1049. [12] Ruining He, Wang-Cheng Kang, and Julian McAuley. 2017. Translation-Based Recommendation. In Proc. of RecSys . 161–169. [13] Ruining He and Julian McAuley. 2016. Ups and Downs: Modeling the Visual Evolution of Fashion Trends with One-Class Collaborative Filtering. In Proc. of WWW . 507–517. [14] Xiangnan He, Kuan Deng, Xiang Wang, Yan Li, Yong-Dong Zhang, and Meng Wang. 2020. LightGCN: Simplifying and Powering Graph Convolution Network for Recommendation. In Proc. of SIGIR . 639–648. [15] Balázs Hidasi, Alexandros Karatzoglou, Linas Baltrunas, and Domonkos Tikk. 2016. Session-Based Recommendations with Recurrent Neural Networks. In Proc. of ICLR .[16] Jonathan Ho, Ajay Jain, and Pieter Abbeel. 2020. Denoising Diffusion Probabilistic Models. In Proc. of NeurIPS . 6840–6851. [17] Wang-Cheng Kang and Julian McAuley. 2018. Self-Attentive Sequential Recom-mendation. In Proc. of ICDM . 197–206. [18] Ioannis Karatzas and Steven E. Shreve. 1991. Brownian Motion and Stochastic Calculus (2 ed.). Vol. 113. Springer, New York, NY, USA. [19] Kibum Kim, Dongmin Hyun, Sukwon Yun, and Chanyoung Park. 2023. MELT: Mutual Enhancement of Long-Tailed User and Item for Sequential Recommenda-tion. In Proc. of SIGIR . 68–77. [20] Nikita Kornilov, Petr Mokrov, Alexander V. Gasnikov, and Alexander Korotin. 2024. Optimal Flow Matching: Learning Straight Trajectories in Just One Step. In Proc. of NeurIPS .[21] Li Li, Mingyue Cheng, Yuyang Ye, Zhiding Liu, and Enhong Chen. 2025. Prefer-ence Trajectory Modeling via Flow Matching for Sequential Recommendation. 
+
+arXiv preprint arXiv:2508.17618 (2025). [22] Wuchao Li, Rui Huang, Haijun Zhao, Chi Liu, Kai Zheng, Qi Liu, Na Mou, Guorui Zhou, Defu Lian, Yang Song, Wentian Bao, Enyun Yu, and Wenwu Ou. 2025. DimeRec: A Unified Framework for Enhanced Sequential Recommendation via Generative Diffusion Models. In Proc. of WSDM . 726–734. [23] Zihao Li, Aixin Sun, and Chenliang Li. 2024. DiffuRec: A Diffusion Model for Sequential Recommendation. ACM Trans. Inf. Syst. 42, 3 (2024), 66:1–66:28. [24] Zihao Li, Chao Yang, Yakun Chen, Xianzhi Wang, Hongxu Chen, Guandong Xu, Lina Yao, and Michael Sheng. 2024. Graph and sequential neural networks in session-based recommendation: A survey. Comput. Surveys 57, 2 (2024), 1–37. [25] Yaron Lipman, Ricky T. Q. Chen, Heli Ben-Hamu, Maximilian Nickel, and Matthew Le. 2023. Flow Matching for Generative Modeling. In Proc. of ICLR .[26] Chengkai Liu, Yangtian Zhang, Jianling Wang, Rex Ying, and James Caverlee. 2025. Flow Matching for Collaborative Filtering. In Proc. of KDD . 1765–1775. [27] Feng Liu, Lixin Zou, Xiangyu Zhao, Min Tang, Liming Dong, Dan Luo, Xiangyang Luo, and Chenliang Li. 2025. Flow Matching Based Sequential Recommender Model. In Proc. of IJCAI . 3108–3116. [28] Qidong Liu, Fan Yan, Xiangyu Zhao, Zhaocheng Du, Huifeng Guo, Ruiming Tang, and Feng Tian. 2023. Diffusion augmentation for sequential recommendation. In 
+
+Proc. of CIKM . 1576–1586. [29] Sijia Liu, Jiahao Liu, Hansu Gu, Dongsheng Li, Tun Lu, Peng Zhang, and Ning Gu. 2023. AutoSeqRec: Autoencoder for Efficient Sequential Recommendation. In Proc. of CIKM . 1493–1502. [30] Xingchao Liu, Chengyue Gong, and Qiang Liu. 2023. Flow Straight and Fast: Learning to Generate and Transfer Data with Rectified Flow. In Proc. of ICLR .[31] Jing Long, Guanhua Ye, Tong Chen, Yang Wang, Meng Wang, and Hongzhi Yin. 2024. Diffusion-based cloud-edge-device collaborative learning for next POI recommendations. In Proc. of KDD . 2026–2036. [32] Chen Ma, Peng Kang, and Xue Liu. 2019. Hierarchical Gating Networks for Sequential Recommendation. In Proc. of KDD . 825–833. [33] Haokai Ma, Ruobing Xie, Lei Meng, Xin Chen, Xu Zhang, Leyu Lin, and Zhanhui Kang. 2024. Plug-in diffusion model for sequential recommendation. In Proc. of AAAI . 8886–8894. [34] Wenyu Mao, Shuchang Liu, Haoyang Liu, Haozhe Liu, Xiang Li, and Lantao Hu. 2025. Distinguished Quantized Guidance for Diffusion-Based Sequence Recommendation. In Proc. of WWW . 425–435. [35] Wenyu Mao, Jiancan Wu, Guoqing Hu, Zhengyi Yang, Wei Ji, and Xiang Wang. 2025. On Efficiency-Effectiveness Trade-off of Diffusion-based Recommenders. In Proc. of NeurIPS . 92565–92591. [36] Maximilian Nickel and Douwe Kiela. 2017. Poincaré Embeddings for Learning Hierarchical Representations. In Proc. of NeurIPS . 6338–6347. [37] Aram-Alexandre Pooladian, Heli Ben-Hamu, Carles Domingo-Enrich, Brandon Amos, Yaron Lipman, and Ricky TQ Chen. 2023. Multisample Flow Matching: Straightening Flows with Minibatch Couplings. In Proc. of ICML . 28100–28127. [38] Ruihong Qiu, Zi Huang, Hongzhi Yin, and Zijian Wang. 2022. Contrastive Learn-ing for Representation Degeneration Problem in Sequential Recommendation. In Proc. of WSDM . 813–823. [39] Noveen Sachdeva, Giuseppe Manco, Ettore Ritacco, and Vikram Pudi. 2019. Sequential Variational Autoencoders for Collaborative Filtering. In Proc. of WSDM .600–608. [40] Ke Shi, Yao Zhang, Feng Guo, Jinyuan Zhang, JunShuo Zhang, Shen Gao, and Shuo Shang. 2026. FAVE: Flow-Based Average Velocity Establishment for Se-quential Recommendation. In Proc. of SIGIR . 1633–1643. [41] Te Song, Lianyong Qi, Weiming Liu, Fan Wang, Xiaolong Xu, Xuyun Zhang, Amin Beheshti, Xiaokang Zhou, and Wanchun Dou. 2025. Enhancing diffusion model with auxiliary information mining-exploration and efficient sampling mechanism for sequential recommendation. In Proc. of AAAI . 12568–12576. [42] Yang Song, Prafulla Dhariwal, Mark Chen, and Ilya Sutskever. 2023. Consistency Models. In Proc. of ICML . 32211–32252. [43] Yang Song, Jascha Sohl-Dickstein, Diederik P. Kingma, Abhishek Kumar, Ste-fano Ermon, and Ben Poole. 2021. Score-Based Generative Modeling through Stochastic Differential Equations. In Proc. of ICLR .[44] Fei Sun, Jun Liu, Jian Wu, Changhua Pei, Xiao Lin, Wenwu Ou, and Peng Jiang. 2019. BERT4Rec: Sequential Recommendation with Bidirectional Encoder Rep-resentations from Transformer. In Proc. of CIKM . 1441–1450. [45] Jiaxi Tang and Ke Wang. 2018. Personalized Top-N Sequential Recommendation via Convolutional Sequence Embedding. In Proc. of WSDM . 565–573. [46] Wenjie Wang, Yiyan Xu, Fuli Feng, Xinyu Lin, Xiangnan He, and Tat-Seng Chua. 2023. Diffusion Recommender Model. In Proc. of SIGIR . 832–841. [47] Ziyang Wang, Wei Wei, Gao Cong, Xiao-Li Li, Xian-Ling Mao, and Minghui Qiu. 2020. Global Context Enhanced Graph Neural Networks for Session-Based Recommendation. In Proc. of SIGIR . 169–178. [48] Chunyu Wei, Jian Liang, Di Liu, Zehui Dai, Mang Li, and Fei Wang. 2023. Meta graph learning for long-tail recommendation. In Proc. of KDD . 2512–2522. [49] Shu Wu, Yuyuan Tang, Yanqiao Zhu, Liang Wang, Xing Xie, and Tieniu Tan. 2019. Session-Based Recommendation with Graph Neural Networks. In Proc. of AAAI . 346–353. [50] Shaoheng Xie, Xuan Zhang, Kunpeng Du, Jishu Wang, Xiaopeng Li, Junda Li, Weiyi Shang, and Zhi Jin. 2027. Diffusion sequential recommendation model based on item co-occurrence anchoring and user semantic collaboration. Expert Systems with Applications 332 (2027), 133431. [51] Yiyuan Yang, Ming Jin, Haomin Wen, Chaoli Zhang, Yuxuan Liang, Lintao Ma, Yi Wang, Chenghao Liu, Bin Yang, Zenglin Xu, Shirui Pan, and Qingsong Wen. 2026. A Survey on Diffusion Models for Time Series and Spatio-Temporal Data. 
+
+ACM Comput. Surv. 58, 8 (2026). [52] Zhengyi Yang, Jiancan Wu, Zhicai Wang, Xiang Wang, Yancheng Yuan, and Xiangnan He. 2023. Generate What You Prefer: Reshaping Sequential Recom-mendation via Guided Diffusion. In Proc. of NeurIPS .[53] Xiaoxin Ye, Chengkai Huang, Hongtao Huang, and Lina Yao. 2026. Gaussian Mixture Flow Matching with Domain Alignment for Multi-Domain Sequential Recommendation. In Proc. of WWW . 6159–6170. [54] Yaowen Ye, Lianghao Xia, and Chao Huang. 2023. Graph Masked Autoencoder for Sequential Recommendation. In Proc. of SIGIR . 321–330. [55] Fajie Yuan, Alexandros Karatzoglou, Ioannis Arapakis, Joemon M. Jose, and Xiangnan He. 2019. A Simple Convolutional Generative Network for Next Item Recommendation. In Proc. of WSDM . 582–590. [56] Jujia Zhao, Wenjie Wang, Yiyan Xu, Teng Sun, Fuli Feng, and Tat-Seng Chua. 2024. Denoising Diffusion Recommender Model. In Proc. of SIGIR . 1370–1379. [57] Yunqin Zhu, Chao Wang, Qi Zhang, and Hui Xiong. 2024. Graph Signal Diffusion Model for Collaborative Filtering. In Proc. of SIGIR . 1380–1390. Escaping the Euclidean Void: Manifold-Informed Flow Matching for Sequential Recommendation 
+
+## A Detailed Methodology A.1 Target-Recovery Parameterization 
+
+For the linear path in Eq. (1) , the conditional velocity is 𝒙 1 − 𝒙 0.MIRAGE parameterizes it by predicting the target state, as in Eq. (6) .Substituting this parameterized velocity into the conditional flow-matching objective yields: 
+
+LCFM = E𝑡, 𝒙 0,𝒙 1,𝑆 𝑢 ∥𝑓 𝜃 (𝒙 𝑡 , 𝑡, 𝑆 𝑢 ) − 𝒙 0 − ( 𝒙 1 − 𝒙 0)∥ 22
+
+= E𝑡, 𝒙 0,𝒙 1,𝑆 𝑢 ∥𝑓 𝜃 (𝒙 𝑡 , 𝑡, 𝑆 𝑢 ) − 𝒙 1 ∥22
+
+= E𝑡, 𝒙 0,𝒙 1,𝑆 𝑢 ∥ ˆ𝒙 1 − 𝒙 1 ∥22 .
+
+(19) Thus, target recovery is not an additional approximation to condi-tional flow matching. Under the selected parameterization, it is the same training objective expressed in target coordinates. 
+
+## A.2 Alignment Derivations 
+
+A.2.1 Hard Alignment. For a target sequence and its next-item 𝑖 +,we define the squared Euclidean distance to a graph neighbor as 
+
+𝜙 𝑗 (𝒙 𝑡 ) = 𝒙 𝑡 − 𝒆 𝑗 22 , 𝑗 ∈ N 𝐾 (𝑖 +). (20) Assuming the minimizer 𝑗 ∗ 
+
+> 𝑡
+
+is unique, the continuity of the finitely many distance functions 𝜙 𝑗 ensures that this specific neighbor remains the active anchor throughout a small continuous neighbor-hood around 𝒙 𝑡 . Consequently, within this local region, the distance function and its gradient are well-defined as: 
+
+𝑑 G (𝒙 𝑡 , 𝑖 +) = 𝜙 𝑗 ∗ 
+
+> 𝑡
+
+(𝒙 𝑡 ), ∇𝒙 𝑡 𝑑 G (𝒙 𝑡 , 𝑖 +) = 2
+
+
+
+𝒙 𝑡 − 𝒆 𝑗 ∗
+
+> 𝑡
+
+
+
+. (21) While nondifferentiable states technically arise when there are distance ties between multiple neighbors, the probability of en-countering these boundaries in a continuous high-dimensional embedding space is theoretically negligible. Consequently, they do not impede stochastic gradient descent in practice. Crucially, this hard objective supplies a direct gradient toward one valid item embedding, rather than pointing toward a weighted centroid in the unsupported interstitial space. 
+
+A.2.2 Soft Alignment. To provide a differentiable alternative across the entire embedding space, we introduce a temperature parameter 
+
+𝜏 > 0 and define the soft alignment using a smooth minimum over the squared Euclidean distances 𝜙 𝑗 (𝒙 𝑡 ). This formulation and its corresponding softmax weights are structured as: 
+
+𝑑 soft  
+
+> G,𝜏
+
+(𝒙 𝑡 , 𝑖 +) = −𝜏 log 
+
+
+
+1
+
+𝐾 ∑︁ 𝑗 ∈ N 𝐾 (𝑖 + )
+
+exp 
+
+
+
+−𝜙 𝑗 (𝒙 𝑡 )
+
+𝜏 
+
+ 
+
+,𝛼 𝑡,𝑗 = exp (− 𝜙 𝑗 (𝒙 𝑡 )/ 𝜏 )
+
+Í𝑎 ∈ N 𝐾 (𝑖 + ) exp (− 𝜙 𝑎 (𝒙 𝑡 )/ 𝜏 ) .
+
+(22) Differentiating this smooth minimum naturally produces the softmax weights 𝛼 𝑡,𝑗 as coefficients. Since the constant scaling factor 1/𝐾 vanishes during differentiation, applying the chain rule directly yields the geometric gradient: 
+
+∇𝒙 𝑡 𝑑 soft  
+
+> G,𝜏
+
+=∑︁    
+
+> 𝑗 ∈ N 𝐾 (𝑖 +)
+
+𝛼 𝑡,𝑗 ∇𝒙 𝑡 𝜙 𝑗 (𝒙 𝑡 )
+
+=∑︁    
+
+> 𝑗 ∈ N 𝐾 (𝑖 +)
+
+𝛼 𝑡,𝑗 2  𝒙 𝑡 − 𝒆 𝑗 
+
+
+
+= 2 ©«
+
+𝒙 𝑡 −∑︁    
+
+> 𝑗 ∈ N 𝐾 (𝑖 +)
+
+𝛼 𝑡,𝑗 𝒆 𝑗 ª®¬
+
+.
+
+(23) This derivation demonstrates that the soft gradient continuously pulls the interpolant toward a convex combination of the neighbor embeddings, effectively acting as a unified topological centroid. To establish the connection between the hard and soft alignment strategies, we examine the behavior as the temperature approaches 
+
+0. Assuming a closest neighbor 𝑗 ∗ 
+
+> 𝑡
+
+, its distance is smaller than any other neighbor 𝑗 . By factoring out the dominant exponential term of this minimum distance, the relative distance gap Δ𝑗 = 𝜙 𝑗 (𝒙 𝑡 ) − 
+
+𝜙 𝑗 ∗ 
+
+> 𝑡
+
+(𝒙 𝑡 ) dictates the weight assigned to the active anchor: 
+
+𝛼 𝑡,𝑗 ∗ 
+
+> 𝑡
+
+= ©«
+
+1 +∑︁ 
+
+> 𝑗 ≠𝑗 ∗
+> 𝑡
+
+exp 
+
+
+
+− Δ𝑗 
+
+𝜏 
+
+ª®¬
+
+> −1
+
+−→ 1 as 𝜏 → 0. (24) Since every gap Δ𝑗 is positive, all other weights 𝛼 𝑡,𝑗 ≠𝑗 ∗ 
+
+> 𝑡
+
+exponentially decay to zero. Consequently, as the temperature approaches zero, the soft formulation and its geometric gradient converge to their hard-alignment counterparts almost everywhere. 
+
+## A.3 Time Modulation 
+
+A.3.1 Parabolic Time Modulation. To control the strength of the topological regularization along the flow path dynamically, we construct a general quadratic schedule 𝑤 (𝑡 ) = 𝑎𝑡 2 + 𝑏𝑡 + 𝑐 . To ensure that this geometric intervention does not interfere with the prescribed source and target distributions, we impose strict boundary conditions 𝑤 (0) = 𝑤 (1) = 0. This yields 𝑐 = 0 and 
+
+𝑏 = −𝑎 , reducing the form to 𝑤 (𝑡 ) = −𝑎𝑡 (1 − 𝑡 ). Furthermore, to normalize the maximum intervention at the midpoint of the trajectory, we enforce 𝑤 (1/2) = 1, which gives 𝑎 = −4. Thus, the time modulation schedule is uniquely determined as: 
+
+𝑤 (𝑡 ) = 4𝑡 (1 − 𝑡 ). (25) This parabolic weight guarantees a symmetric profile that peaks at 
+
+𝑡 = 1/2 and vanishes at both endpoints, concentrating the geomet-ric rectification on the unconstrained path interior. This schedule mirrors the spatial uncertainty variance Var (𝑩 𝑡 ) = 𝑡 (1 − 𝑡 )𝑰 of a standard Brownian bridge, establishing a theoretical connection between our deterministic geometric modulation and stochastically constrained trajectories. 
+
+## A.4 Gradient Dynamics 
+
+To understand how the topological loss reshapes the embedding space, we analyze the gradient dynamics during a local optimization step. Assuming a training state where the active anchor 𝑗 ∗ 
+
+> 𝑡
+
+remains locally constant and is distinct from the target item, we define the residual vector as 𝒓 = 𝒙 𝑡 − 𝒆 𝑗 ∗ 
+
+> 𝑡
+
+. Applying a gradient step of size 𝜂 Fang et al. 1 3 5 10 15 20     
+
+> Window size c
+> 12.50
+> 12.60
+> 12.70
+> 12.80 c= 5
+> H@20
+
+(a) Toys          
+
+> 13510 15 20
+> Window size c
+> 13.40
+> 13.60
+> 13.80
+> 14.00
+> 14.20 c= 5
+> H@20
+
+(b) CDs  
+
+> 5.60
+> 5.80
+> 6.00
+> N@20
+> 5.60
+> 5.70
+> 5.80
+> 5.90
+> 6.00
+> 6.10
+> N@20
+> H@20 N@20
+
+Figure 7: Effect of the co-occurrence window size 𝑐 .
+
+updates the target and anchor embeddings according to: 
+
+𝒆 ′ 
+
+> 𝑖 +
+
+= 𝒆 𝑖 + − 2𝜂𝑤 (𝑡 )𝑡 𝒓 ,
+
+𝒆 ′ 
+
+> 𝑗 ∗
+> 𝑡
+
+= 𝒆 𝑗 ∗ 
+
+> 𝑡
+
++ 2𝜂𝑤 (𝑡 )𝒓 . (26) Since the interpolation is defined as 𝒙 𝑡 = (1−𝑡 )𝒙 0 +𝑡 𝒆 𝑖 + , this update to the target embedding simultaneously shifts the intermediate state to 𝒙 ′ 
+
+> 𝑡
+
+= 𝒙 𝑡 − 2𝜂𝑤 (𝑡 )𝑡 2𝒓 . Consequently, the new residual becomes: 
+
+𝒓 ′ = 𝒙 ′ 
+
+> 𝑡
+
+− 𝒆 ′ 
+
+> 𝑗 ∗
+> 𝑡
+
+= 1 − 2𝜂𝑤 (𝑡 )( 1 + 𝑡 2) 𝒓 . (27) A learning rate constrained within 0 < 𝜂𝑤 (𝑡 )( 1 + 𝑡 2) < 1 ensures this local step decreases the residual norm. Even with additional gradients from the recovery, ranking, and history components dur-ing full training, the topological term enforces this local contraction toward valid semantic anchors. This dynamic accounts for the im-plicit geometric rectification. 
+
+## A.5 Inference Consistency 
+
+To demonstrate the efficiency of single-step generation where 𝑞 = 1,we evaluate the Euler integration over the full interval length 1 − 𝜖 .Initializing the integration with ˜𝒙 0 = 𝒙 0 at 𝑡 0 = 𝜖 and substituting the parameterized velocity yields: 
+
+˜𝒙 1 = 𝒙 0 + ( 1 − 𝜖 ) [ 𝑓 𝜃 (𝒙 0, 𝜖, 𝑆 𝑢 ) − 𝒙 0]
+
+= (1 − 𝜖 )𝑓 𝜃 (𝒙 0, 𝜖, 𝑆 𝑢 ) + 𝜖 𝒙 0. (28) Since the boundary margin 𝜖 is chosen to be negligibly small, this expression naturally reduces to the direct target prediction formu-lation ˆ𝒙 1. Furthermore, because the co-occurrence graph is utilized exclusively within the topological loss during training, it remains decoupled from the learned vector field and inference equations, eliminating the need for graph lookups during deployment. 
+
+## B Additional Experimental Details B.1 Baseline Implementation Details 
+
+All evaluated baselines were strictly reproduced using their official open-source implementations and recommended protocols. Recent related models, such as FlowRec and DAE4Rec, are omitted because their official source codes are not publicly available. 
+
+## B.2 Hyperparameter Sensitivity 
+
+We evaluate hyperparameter sensitivity by isolating individual vari-ables. The optimal neighborhood size 𝐾 ∈ { 5, 10 , 20 , 40 } depends 0 5 10 15      
+
+> Avg. epoch time
+> DiffuRec
+> ADRec
+> FMRec
+> FAVE
+> MIRAGE
+> 13s
+> 2.8s
+> 11s
+> 11s
+> 13s
+> (a) Training cost
+> 6m 1.0h
+> Est. total time
+> 10.0
+> 10.5
+> 11.0
+> 11.5
+> 12.0
+> 12.5
+> H@20 (%)
+> (b) Accuracy-cost trade-off
+> DiffuRec ADRec FMRec FAVE MIRAGE
+
+Figure 8: Training efficiency and performance trade-off. MI-RAGE requires comparable per-epoch training time while establishing the optimal Pareto frontier in overall accuracy and total training cost. 
+
+on data sparsity. Sparser domains like CDs and Toys benefit from broader structural support with 𝐾 = 40 , whereas the denser Beauty dataset peaks at 𝐾 = 5. Furthermore, performance exhibits pro-nounced dataset-specific sensitivity to both the topology weight 
+
+𝜆 topo and the ranking weight 𝜆 rank . Toys, in particular, experiences degradation if these weights deviate from their respective optima of 0.2 and 0.5, underscoring the necessity of balancing geometric rectification with the contrastive ranking objective. As illustrated in Figure 7, evaluating the co-occurrence window size 𝑐 ∈ { 1, 3, 5, 10 , 15 , 20 } reveals distinct geometric requirements across different data distributions. Dense catalogs like Toys achieve optimal performance at an intermediate window of 𝑐 = 5, forming a pronounced inverted U-shaped trend. This shows that moder-ately larger windows capture broader semantic contexts to support hard alignment before eventually introducing overly smoothed correlations. Conversely, the sparse and sequential CDs dataset favors adjacent co-occurrences at 𝑐 = 1. Extending the window for this sparse catalog rapidly introduces distant noisy edges, which dilute the weighted centroid of the soft alignment variant and con-sequently degrade the geometric guidance. 
+
+## B.3 Graph Construction and Complexity 
+
+We construct the topology graph once using the training split ex-clusively. By concatenating the history and target for each train-ing instance, we count ordered item pairs co-occurring within a dataset-specific context window ( 𝑐 = 1 for CDs and 𝑐 = 5 otherwise). The stored neighborhood for every item comprises those with the highest positive co-occurrence frequencies, resolving ties deter-ministically to ensure reproducibility. Because this graph remains fixed during optimization, dynamic embedding updates never alter neighborhood memberships or leak future information. Processing a mini-batch of size 𝐵 with hard alignment requires retrieving up to 𝐾 neighbor embeddings per target to compute their squared distances to the interpolated state. This introduces a distance computation cost of O( 𝐵𝐾𝑑 ) and caches O(|I| 𝐾 ) indices. The soft alignment applies a normalized weighting over these dis-tances, resulting in identical asymptotic complexity. Both strategies reuse the existing item table without introducing auxiliary encoders. Furthermore, we discard the cached graph and neighbor retrieval Escaping the Euclidean Void: Manifold-Informed Flow Matching for Sequential Recommendation 0.5 0.75 1.0               
+
+> transport progress t
+> orthogonal residual
+> (a) FMRec Dvoid =0.69
+> 0.5 0.75 1.0
+> transport progress t
+> orthogonal residual
+> (b) FAVE Dvoid =0.68
+> 0.5 0.75 1.0
+> transport progress t
+> orthogonal residual
+> (c) MIRAGE Dvoid =0.45
+> Context items Support corridor Late trajectory Intermediate state Target
+
+Figure 9: Target-local transport plane visualization. MIRAGE rectifies the embedding space to form a tight support corridor along the late generative trajectory, whereas baselines traverse the unsupported Euclidean void. 
+
+mechanisms after training, which preserves the baseline parameter count and ensures zero graph overhead during inference. 
+
+## B.4 Training Efficiency 
+
+To address potential concerns regarding the computational over-head of topological regularization, Figure 8 compares the average epoch time and the overall accuracy-efficiency trade-off. MIRAGE requires 13 seconds per epoch, remaining comparable to standard generative baselines like FMRec and FAVE which require 11 sec-onds. The scatter plot confirms that MIRAGE achieves a favorable Pareto trade-off by yielding the highest performance for a similar overall training budget. This demonstrates that the geometric recti-fication process introduces negligible computational burden while delivering recommendation improvements. 
+
+## B.5 Qualitative Trajectory Support Analysis 
+
+To qualitatively illustrate how MIRAGE reshapes the latent item geometry, Figure 9 visualizes the target-local transport plane during the late generation phase ( 𝑡 ≥ 0.5). The horizontal axis represents the progress of the interpolant toward the target item, while the vertical axis measures the orthogonal residual deviation from this straight probability path. For sampled time bins along the trajectory, faint lines connect the continuous path to its nearest valid graph anchors in the learned embedding space. Generative baselines like FMRec and FAVE project straight paths that traverse sparse continuous regions. Their nearest valid item representations exhibit large orthogonal residuals and uneven dis-tributions, yielding long projection lines that indicate a lack of local semantic grounding. By contrast, MIRAGE reorganizes the underly-ing item geometry to envelop these straight generative trajectories. The nearest graph anchors tightly align with the trajectory and dis-tribute along the generation progress. These aligned anchors form a continuous support corridor that provides dense structural support for the intermediate states toward the intended target semantics. Long-tail     
+
+> n=12,632
+> Head
+> n=9,731
+> 0
+> 10
+> 20
+> H@20 (%)
+> 9.0%
+> 1.6%
+> (a) Beauty
+> Long-tail
+> n=11,929
+> Head
+> n=7,483
+> 9.9%
+> 13.5%
+> (b) Toys
+> DiffuRec ADRec FMRec FAVE MIRAGE
+
+Figure 10: Additional long-tail H@20 results on Beauty and Toys. Buckets use training-set item frequency ( 𝑛 denotes the number of test targets in each group). 
+
+## B.6 Additional Long-Tail Results 
+
+To evaluate long-tail performance, we partition the bottom 80% of the catalog based on training-set frequency as the long tail and the remaining 20% as the head. Test instances are assigned to these fixed subsets based on ground-truth targets to ensure fair, model-independent evaluations. On Beauty, MIRAGE improves H@20 over the strongest baseline by 9.0% for long-tail targets and 1.6% for head targets. Toys similarly achieves respective gains of 9.9% on the tail and 13 .5% on the head. Alongside the main text results for Sports and CDs, these findings demonstrate that MIRAGE consistently enhances generative recommendations for sparsely observed items without sacrificing accuracy on popular targets. Unlike other domains, Toys exhibits a gain of 13 .5% on head targets alongside its 9.9% tail improvement. This concurrent im-provement stems from the unique category characteristics of toys, where popular items share tightly coupled interaction sequences. In such densely correlated item spaces, our topological regulariza-tion effectively captures high-frequency structural paths without suffering from performance saturation, simultaneously boosting popular and sparsely observed recommendations.

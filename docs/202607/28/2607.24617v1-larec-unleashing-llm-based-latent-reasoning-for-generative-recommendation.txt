@@ -1,0 +1,816 @@
+Title: LaRec: Unleashing LLM-based Latent Reasoning for Generative Recommendation
+
+URL Source: https://arxiv.org/pdf/2607.24617v1
+
+Published Time: Tue, 28 Jul 2026 02:14:49 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# LaRec: Unleashing LLM-based Latent Reasoning for Generative Recommendation 
+
+## Yu Xia ∗
+
+University of Chinese Academy of Sciences Beijing, China xiayu24@mails.ucas.ac.cn 
+
+## Zihan Lin ∗
+
+Xiaohongshu Beijing, China linzihan2@xiaohongshu.com 
+
+## Wei Yang 
+
+Xiaohongshu Beijing, China weiyangvia@gmail.com 
+
+## Rui Zhong 
+
+Xiaohongshu Beijing, China zhongrui815@gmail.com 
+
+## Cheng Chen 
+
+Xiaohongshu Beijing, China mengde@xiaohongshu.com 
+
+## Huan Ren 
+
+Xiaohongshu Beijing, China renhuan@xiaohongshu.com 
+
+## Yao Hu 
+
+Xiaohongshu Beijing, China xiahou@xiaohongshu.com 
+
+## Abstract 
+
+Large Language Models (LLMs) have shown great promise in rec-ommendation due to superior reasoning abilities. However, existing methods mainly rely on explicit Chain-of-Thought (CoT), resulting in verbose reasoning texts and inefficient response times. latent reasoning aims to balance efficiency by thinking within a contin-uous latent space, yet it faces two major challenges: (1) Lack of Fine-grained Supervision: Latent reasoning relies solely on feed-back from the final labels, providing sparse supervisory signals that struggle to effectively guide the optimization of multiple hidden reasoning steps. (2) Single Reasoning Path: The deterministic na-ture of latent reasoning impedes the exploration of users’ diverse interests and preferences, thereby limiting the recommendation capabilities of LLMs. To address these issues, we propose 𝐿𝑎𝑅𝑒𝑐 ,an efficient generative recommendation framework designed to unleash the potential of latent reasoning in LLMs. 𝐿𝑎𝑅𝑒𝑐 consists of two core stages: First, we design Latent Pre-training that em-powers LLMs with latent reasoning capabilities by providing rich supervisory signals to the latent space reasoning via step-level alignment and process direction alignment. Second, we introduce Personalized RL-tuning. Specifically, we construct a personalized Gaussian Mixture Distribution for each user based on their histor-ical interests. By randomly sampling distinct reasoning starting points from this distribution during training, we guide the LLMs to traverse diverse reasoning paths within the latent space, enabling efficient exploration of user’s multi-faceted interests. Experiments on multiple datasets show that 𝐿𝑎𝑅𝑒𝑐 significantly outperforms existing baselines with comparable efficiency. 
+
+## CCS Concepts 
+
+• Information systems → Recommender systems .
+
+## Keywords 
+
+Large Language Models, Latent Reasoning, Recommender Systems 
+
+> ∗Both authors contributed equally to this research.
+
+ACM Reference Format: 
+
+Yu Xia, Zihan Lin, Wei Yang, Rui Zhong, Cheng Chen, Huan Ren, and Yao Hu. 2018. LaRec: Unleashing LLM-based Latent Reasoning for Generative Recommendation. In Proceedings of Make sure to enter the correct conference title from your rights confirmation email (Conference acronym ’XX). ACM, New York, NY, USA, 10 pages. https://doi.org/XXXXXXX.XXXXXXX 
+
+## 1 Introduction 
+
+Large Language Models [ 1, 8, 29 , 30 ], with their extensive world knowledge and logical reasoning capabilities, are driving the evolu-tion of recommender systems from traditional matching paradigms relying on IDs or shallow semantics [ 11 , 31 , 42 , 43 , 52 , 53 ] toward deep understanding and reasoning. To fully exploit the reasoning potential of LLMs, existing research [ 9, 21 , 37 , 38 , 45 ] typically employs explicit CoT, generating step-by-step textual reasoning processes to enhance both interpretability and accuracy of recom-mendation. However, these approaches introduced a step-by-step generation process with several reasoning tokens, which makes the response latency unaffordable while deploying. LLM LLM      
+
+> No Supervision
+> User Prompt User Prompt
+> Category
+> electronics black
+> Color
+> phone
+> Trend
+> electronics black phone
+> Instruction Tuning
+
+Figure 1: Left: Explicit Reason for Recommendation; Right: Latent Reason for Recommendation. 
+
+To improve inference efficiency, recent studies [ 13 , 14 , 24 , 36 ]have begun to explore the path of latent reasoning, which updates prolix text reasoning tokens with several controllable hidden reason-ing embeddings. With the help of high-dimensional representations, arXiv:2607.24617v1 [cs.IR] 27 Jul 2026 Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Trovato et al. 
+
+the latent reasoning approach could encode multiple reasoning steps into limited tokens, thus significantly reducing latency [35]. Although latent reasoning theoretically balances effectiveness and efficiency, directly integrating it into recommendation system faces two fundamental challenges in practice: (1) Lack of Fine-grained Supervision . As shown in Figure 1, the success of Explicit CoT is largely attributed to the loss of Next Token Prediction (NTP) on reasoning tokens at the pre-training stage[ 1 , 30 ]. Conversely, latent reasoning encapsulates the thinking process into a "black box" where the entire multi-step reasoning chain is optimized solely with the supervision signal from final recommendation target. This sparse and delayed feedback struggles to penetrate deep reason-ing steps, failing to effectively guide the learning of intermediate latent states and consequently limiting final recommendation per-formance. (2) Limitations of Deterministic Reasoning Path .Recommendation tasks inherently require handling the diversity and dynamics of user interests. Explicit CoT can explore diverse reasoning paths through sampling strategies (such as Best-of-N) to identify results that best match the recommendation target. How-ever, current latent reasoning is typically modeled as a deterministic mapping function, allowing the model to execute only a single rea-soning trajectory within the latent space [ 26 ]. This deterministic nature not only hinders the exploration of diverse user latent inter-ests but also makes it difficult to perform optimization via strategic sampling and alignment, as is done in Explicit CoT. Although some works [ 20 , 47 ] attempt to introduce exploration by injecting random Gaussian noise during reasoning, several shortages also appear. On one hand, the misalignment between Gaussian noise and reasoning space can lead to a collapse of reasoning process. On the other hand, random exploration could leads to a vast, hard-to-converge search space, making it difficult to achieve effective alignment with recommendation targets. To address the aforementioned challenges, we propose 𝐿𝑎𝑅𝑒𝑐 ,an efficient generative recommendation framework. Our design ad-heres to the principle of "Pre-training then RL Alignment"[ 10 ]. First, to enhance the supervision during reasoning, we design Latent Pre-training. This stage provides auxiliary supervision signals for each latent state by constructing a step-level alignment with fine-grained preference reasoning signal and process direction alignment be-tween each reasoning step. Specifically, step-level alignment aims to leverage the designability and explainability of explicit reasoning to construct fine-grained guiding signals of user preference reason-ing. And distill the organized knowledge from text into the latent reasoning hidden states, to normalize the latent reasoning process and broaden the reasoning space. Meanwhile, process direction alignment focuses on constraining the reasoning direction between each step, making the latent hidden state progressively point to the final recommendation target to disclose user preference from shadow to deep while reasoning. Secondly, we propose Personalized RL-tuning to further strengthen exploration capacity of the LLM itself with personalized guide distri-bution and reinforcement alignment. We construct the personalized Gaussian Mixture Distribution for each user based on their histori-cal interests. During reinforcement alignment, each reasoning path is independently directed by the user-level distribution at the be-ginning of reasoning. This design constrains the exploration space from unbounded random noise to a user-related semantic space, achieving "anchored exploration". Furthermore, we build our rein-forcement alignment with GRPO algorithm [ 10 ]. To precisely align the reasoning process with recommendation targets, we define a composite reward function comprising a sparse hit reward and a dense semantic similarity reward. This design not only provides richer learning feedback but also facilitates more efficient model optimization. Our contributions are summarized as follows: 
+
+• We propose 𝐿𝑎𝑅𝑒𝑐 , an efficient generative recommendation frame-work. By adhering to the paradigm of "Pre-training then RL Alignment", our framework fully unleashes the implicit reason-ing potential of LLMs within recommendation systems. 
+
+• The proposed 𝐿𝑎𝑅𝑒𝑐 incorporates a two-stage training strategy: Latent Pre-training introduces step-level and process-direction alignment, significantly enhancing reasoning coherence and ef-fectiveness; Personalized RL-tuning further optimizes reasoning paths through an efficient "exploration-alignment" mechanism, breaking deterministic limitations and boosting recommendation performance. 
+
+• We conduct extensive experiments on multiple public and in-dustrial datasets to validate the superiority of 𝐿𝑎𝑅𝑒𝑐 . Results demonstrate that 𝐿𝑎𝑅𝑒𝑐 not only significantly outperforms ex-isting baselines in recommendation accuracy but also achieves superior inference efficiency. 
+
+## 2 Related Work 2.1 Generative Recommendation 
+
+With the rapid advancement of LLMs, the potential of Generative Recommendation (GR) [ 7, 12 , 17 , 33 , 46 ] has garnered increasing at-tention. TIGER [ 23 ] pioneered the generative recommendation par-adigm by discretizing item sequences into semantic tokens. OneRec series [ 50 , 51 ] explored model architectures, proposing paradigms based on encoder-decoder and decoder-only structures. LC-Rec and HI-Rec [ 48 , 49 ] leveraged the natural language understanding capabilities of LLMs to support diverse, task-specific fine-tuning for recommendation tasks. OneRec-Think [ 21 ] empowered LLMs with user understanding capabilities while performing recommenda-tion tasks through a three-stage process involving item alignment, reasoning activation, and reasoning enhancement. Furthermore, several studies focus on optimizing semantic tokens. LETTER [ 32 ]incorporated collaborative filtering embedding vectors and addi-tional loss functions to enhance codebook utilization. DAS [ 44 ]proposed a one-stage dual-aligned semantic ID framework that simultaneously optimizes the semantic ID model and the collabo-rative filtering model, utilizing co-training to reduce information loss during alignment. MMQ [ 40 ] addressed the issues of modal-ity imbalance and semantic-behavior misalignment by employing multi-expert networks and behavior-aware fine-tuning. 
+
+## 2.2 Reasoning-Enhanced Recommendation 
+
+The rapid development of test-time compute scaling techniques [ 6,16 ] has shifted the research focus in generative AI from Large Lan-guage Models (LLMs) [ 19 , 34 ] to Large Reasoning Models (LRMs) [5 , 22 , 39 ], injecting new vitality into recommendation systems. Cur-rent work on reasoning-enhanced recommendation falls primarily LaRec: Unleashing LLM-based Latent Reasoning for Generative Recommendation Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+into two categories: (1) Reason-then-Apply. This approach primar-ily utilizes the powerful reasoning capabilities of LLMs to generate accurate and rich auxiliary information, thereby enhancing the performance of traditional recommendation models. TrackRec [ 38 ]continuously guides LLMs to generate more precise user prefer-ences through iterative alternating feedback learning. To utilize user behaviors as comprehensively as possible, HiT-LBM [ 37 ] employs a partition strategy to generate multiple user preferences and com-bines temporal modeling to yield long-term user representations. (2) Reason-then-Recommend. This approach is mainly applied to end-to-end sequential recommendation, where reasoning is performed prior to recommendation to improve performance. OneRec-Think [21 ] conducts explicit user preference analysis before generating the next item. Although this improves recommendation performance, it significantly increases inference latency. Consequently, subse-quent work has shifted towards latent reasoning. ReaRec [ 28 ] is the first to introduce latent reasoning into sequential recommendation. LARES [ 20 ] enhances model representation capabilities by increas-ing parameter computation density through deep recurrent latent reasoning. 𝐿𝑎𝑡𝑒𝑛𝑡𝑅 3 [ 47 ] applies latent reasoning to LLM-based recommendations. While these methods have achieved certain re-sults, they consistently fail to fully unleash the potential of latent reasoning due to the lack of fine-gained supervision. 
+
+## 3 Methodology 
+
+In this section, we first elaborate on the modeling of latent reasoning-enhanced generative recommendation. Subsequently, we detail the core components of 𝐿𝑎𝑅𝑒𝑐 , specifically including Latent Pre-training (LPT) for establishing reasoning capabilities and Person-alized RL-tuning (PRL) for aligning with recommendation target. The overall framework is illustrated in Figure 2. 
+
+## 3.1 Problem Formulation 
+
+Let U denote the set of users and I denote the set of items. For each user 𝑢 ∈ U , their historical interaction sequence is represented as 
+
+𝑆 𝑢 = {𝑖 1, 𝑖 2, . . . , 𝑖 𝑡 }, where each 𝑖 𝑘 ∈ I . The goal of generative rec-ommendation is to learn a function 𝑓 𝜃 that generates the identifier (ID or Title) of the next item 𝑖 𝑡 +1 based on the historical sequence 
+
+𝑆 𝑢 . Unlike Explicit CoT methods that generate step-by-step user preferences 𝐶 = {𝑐 1, 𝑐 2, . . . , 𝑐 𝑛 }, our objective is to generate a se-quence of latent states 𝑍 = {z1, z2, . . . , z𝐾 } within a continuous latent vector space, where 𝐾 represents the number of reasoning steps. The final recommendation result is predicted based on the reasoning state z1: 𝐾 :
+
+𝑃 (𝑖 𝑡 +1 | 𝑆 𝑢 ) = 𝑃 (𝑖 𝑡 +1 | z𝐾 ) · 
+
+> 𝐾
+
+Ö
+
+> 𝑘 =1
+
+𝑃 (z𝑘 | z<𝑘 , 𝑆 𝑢 ) (1) The standard optimization objective for this task is to maximize the log-likelihood probability of the pair (𝑆 𝑢 , 𝑖 𝑡 +1). Consequently, the loss for this component, denoted as L𝑅𝑒𝑐 , is defined as the standard Cross-Entropy Loss: 
+
+L𝑅𝑒𝑐 = − log 𝑃 (𝑖 𝑡 +1 | 𝑆 𝑢 , z1, z2, . . . , z𝐾 ) (2) 
+
+## 3.2 Latent Pre-training 
+
+The effectiveness of explicit CoT in recommendation tasks stems largely from the token-wise, fine-grained supervision introduced during the training phase, which enables the model to learn struc-tured, multi-step reasoning processes. In contrast, latent reasoning occurs entirely within a continuous latent space. If trained solely on the final recommendation task loss 𝐿 Rec , the intermediate reasoning process lacks direct constraints and is prone to degeneration into shallow pattern matching rather than genuine multi-step reason-ing. To address this issue, we propose step-level alignment and process direction alignment mechanisms to provide fine-grained supervision for the evolution of hidden states during latent reason-ing. In practice, considering the distribution discrepancy between the LLM’s decoder-layer hidden states and the input embedding space, we follow the approach [ 26 , 47 ] by introducing a lightweight Reasoning Head. This head maps latent reasoning states into the text input embedding space to facilitate subsequent alignment and optimization. 
+
+3.2.1 Step-level Alignment . Step-level Alignment draws upon the successful experience of explicit CoT. It distills the logical struc-ture of explicit, fine-grained user preferences into the latent space, thereby facilitating the knowledge transfer from explicit prefer-ences to implicit representations. Using fine-grained user prefer-ences as teacher signals, we guide the latent states to learn the teacher’s reasoning trajectory within the semantic space. This pro-cess involves two key steps: Fine-grained User Preference Extrac-tion and Alignment Optimization. 
+
+Fine-grained User Preference Extraction. To provide accurate guid-ance for latent reasoning, it is essential to extraction explicit, fine-grained user preference CoT. To this end, we employ a Target-Oriented Reverse Reasoning Generation strategy. Specifically, for each training instance (𝑆 𝑢 , 𝑖 𝑡𝑔𝑡 ), we feed both the user history 𝑆 𝑢 and the ground-truth target item 𝑖 𝑡𝑔𝑡 into a powerful reasoning model like Qwen-72B [ 30 ]. We design a user preference reasoning prompt 
+
+𝑝𝑟𝑜𝑚𝑝𝑡 𝑐𝑜𝑡 , as illustrated in Figure 3, which instructs the LLM to generate a logically coherent reasoning path 𝐶 + = {𝑐 1, 𝑐 2, . . . , 𝑐 𝐾 }.This path must originate from the user history and logically deduce the target item. However, the reasoning process itself can not con-tain any information regarding the target item 𝑖 𝑡𝑔𝑡 . Subsequently, we utilize LLM to extract the hidden states of these CoT steps in the following manner, denoted as 𝐻 = {h1, . . . , h𝐾 }:
+
+ℎ𝑘 = LLM 𝑙𝑎𝑠𝑡 (𝑝𝑟𝑜𝑚𝑝𝑡 𝑐𝑜𝑡 (𝑆 𝑢 , 𝑖 𝑡𝑔𝑡 ), 𝑐 1: 𝑘 ) (3) where LLM 𝑙𝑎𝑠𝑡 (·) denotes the output of the LLM’s final decoding layer. The LLM here is the same one used for the latent pre-training mentioned below. 
+
+Alignment Optimization. We represent both the explicit and la-tent reasoning processes as state sequences composed of multiple steps. For each training sample, we construct a fine-grained, high-quality explicit CoT reasoning trajectory to obtain a sequence of explicit reasoning states 𝐻 = {ℎ𝑘 }𝐾 𝑘 =1. Simultaneously, during the latent reasoning, the model internally generates a corresponding sequence of hidden states {z𝑘 }𝐾 𝑘 =1. To establish a step-level corre-spondence between these two processes, we constrain each latent Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Trovato et al. Large Language Model 
+
+𝑧 !
+
+𝑧 !
+
+𝑧 "
+
+𝑧 "
+
+𝑧 #
+
+Reasoning head 
+
+𝑧 !"#
+
+𝑐 ! 𝑐 " 𝑐 #
+
+𝐿 $%
+
+Step 1 : Identify 
+
+Core Instrument… 
+
+Step 2 : Determine Brand 
+
+Preferences… 
+
+Step K : The user prefers 
+
+Fender -branded … 
+
+Pull Pull 𝐿 &% 
+
+𝑧 '
+
+𝑧 '
+
+𝑐 '
+
+Pull 
+
+𝑂 
+
+𝐿 $%& 
+
+LLM 
+
+𝑧 "
+
+! 𝑧 '
+
+!
+
+𝑧 !
+
+𝑧 "
+
+" 𝑧 '
+
+"
+
+𝑧 "
+
+( 𝑧 '
+
+(
+
+𝑂 "
+
+𝑂 (
+
+Group Norm 
+
+Rollout 
+
+Personalized sample 
+
+𝐻 )
+
+!
+
+𝐻 )
+
+"
+
+𝐻 )
+
+(
+
+𝑧 !
+
+!
+
+𝑧 !
+
+"
+
+𝑧 !
+
+(
+
+Reward Model 
+
+Personalized Guide Distribution 
+
+𝑂 ! 𝑟 !
+
+𝑟 "
+
+𝑟 (
+
+𝐴 !
+
+𝐴 "
+
+𝐴 (
+
+𝑧 * Latent token 
+
+step cot hidden state 
+
+User History Input 
+
+Step -level Alignment 
+
+guidance signal 
+
+Reward Model 
+
+Next Item token 
+
+𝐿 !"
+
+𝐿 #" Process Direction 
+
+Alignment 
+
+(1) Latent Pre -Training (LPT) 
+
+(2) Personalized RL -tuning (PRL) 
+
+Target Item 
+
+𝑐 *
+
+𝑂 
+
+𝐻 '
+
+(
+
+Qwen -72B 
+
+Preference Prompt 
+
+Figure 2: An overview of 𝐿𝑎𝑅𝑒𝑐 . It mainly consists of two core stages: Latent Pre-Training and Personalized RL-tuning. You are a recommendation master capable of deeply analyzing user preferences based on their historical                                                                                                                                                                                                                           
+
+> interactions. \nThe following are the items the user has interacted with:
+> <Historical Interactions >title :Gretsch G9500 Jim Dandy Flat Top -Vintage Sunburst, category:
+> Musical Instruments -Guitars -Acoustic Guitars -Steel -string Acoustics \ntitle:Hosa FSC -
+> 385 Footswitch, Guitar -style, Dual -latching, category:Musical Instruments -Band &…
+> <Next Item User Likes >
+> title :lotmusic A0594 6pcs 6R Guitar Tuning Pegs Tuners Machine Heads for Fender Replacement, category
+> :Musical Instruments -Instrument Accessories -Guitar &Bass Accessories -
+> Acoustic &Classical Guitar Parts -Tuning Pegs
+> Please analyze the user's preferences step by step based on their historical behavior. Your analysis shoul
+> dalign closely with the next item the user likes, but the analysis content must not include any informati
+> on related to the next item the user likes. \nOutput requirements: \nAnalyze preferences step by step. Ea
+> ch step of the analysis must start with ###.
+> Preference Reasoning Prompt
+> Answer
+> ### Step 1:Instrument Focus \nThe user has shown interest in multiple guitar -
+> related products, indicating astrong preference for guitars or guitar accessories. The items include an ac
+> oustic guitar (Gretsch G9500), an electric guitar strap, and guitar amplifiers (Fender Champion 40). \n\n
+> ### Step 2:Brand Inclination \nThere is anotable brand preference for Fender, as it appears twice in
+> the list (Fender Champion 40 and Fender Electric Guitar Strap). Additionally, Gretsch is mentioned with t
+> he Gretsch G9500 . …
+> ### Step 6:Footswitch Interest \nWhile only one footswitch was mentioned, this could indicate abroa
+> der interest in controlling various aspects of their instrument setup through additional devices, though
+> more data would be needed to confirm this.
+
+Figure 3: Preference Reasoning Prompt: Example prompt and response. 
+
+reasoning state z𝑘 to maintain semantic consistency with its corre-sponding explicit reasoning state h+
+
+𝑘 in the representation space, while ensuring it remains distinguishable from the reasoning states of other samples. Within a mini-batch, the explicit reasoning states of other samples naturally form a contrastive reference set 𝐻 − ,enabling stable state-alignment constraints without the need for additional manual annotation. To this end, we employ an InfoNCE-based contrastive loss for step-level state alignment: 
+
+L𝑆𝐴 =
+
+𝐵 ∑︁ 
+
+𝑖 =1
+
+𝐾 ∑︁ 
+
+𝑘 =1
+
+− log exp  sim (z𝑖,𝑘 , h𝑖,𝑘 )/ 𝜏 1
+
+Í𝐵 𝑗 =1 exp  sim (z𝑖,𝑘 , h𝑗,𝑘 )/ 𝜏 1
+
+ (4) where sim (·) denotes cosine similarity and 𝜏 1 is the temperature coefficient. This loss constrains the representation consistency be-tween latent and explicit reasoning states at the step level. It encour-ages LLMs’s latent reasoning process to progressively approximate the semantic structure of the explicit CoT reasoning trajectory, thereby mitigating the issue of reasoning degeneration to a certain extent. 
+
+3.2.2 Process Direction Alignment. While Step-level Alignment en-sures the semantic validity of individual reasoning steps, it fails to guarantee that these steps are coherently directed towards the final target within the high-dimensional embedding space. In the absence of directional constraints, the evolution of latent states is prone to "semantic idling" [ 35 ]—a phenomenon where the model stagnates locally within the semantic space, thereby degrading recommen-dation performance. To address this, Process Direction Alignment leverages the target item as a directional guide. Specifically, for a target item 𝑖 𝑡𝑔𝑡 , we apply Mean Pooling to the embeddings of its title text tokens to derive the target semantic vector e𝑡𝑔𝑡 :
+
+e𝑡𝑔𝑡 = MeanPooling (𝐿𝐿𝑀 𝑇 𝐾𝑍 (𝑖 𝑡𝑔𝑡 )) (5) LaRec: Unleashing LLM-based Latent Reasoning for Generative Recommendation Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+where 𝐿𝐿𝑀 𝑇 𝐾𝑍 (·) presents the LLM tokenizer and word embedding layer, encapsulating the process of transforming textual metadata into token representations. Building upon this, we define the actual evolutionary direction of the (𝑘 + 1)𝑡ℎ latent reasoning step as v𝑘 +1 = z𝑘 +1 − z𝑘 . Drawing on the principle of "linear accumulation" [ 41 ], each reasoning step should function as a sub-component of the final target e𝑡𝑔𝑡 . Con-sequently, the ideal update vector corresponds to the direction of the target item itself, scaled by a factor of 1  
+
+> 𝐾 −1
+
+. We constrain the reasoning process by maximizing the cosine consistency between the actual update vector v𝑘 +1 and the scaled target vector: 
+
+L𝑃𝐴 =
+
+> 𝐾
+
+∑︁ 
+
+> 𝑘 =2
+
+max 
+
+
+
+0, 1 − sim 
+
+
+
+v𝑘 , 1
+
+𝐾 − 1 e𝑡𝑔𝑡 
+
+ 
+
+(6) where sim (·) denotes cosine similarity, and 𝐾 represents the maxi-mum steps of latent reasoning. 
+
+3.2.3 Overall Optimization. The overall objective function for La-tent Pre-training is formulated as: 
+
+L𝐿𝑃𝑇 = L𝑅𝑒𝑐 + 𝛼 L𝑆𝐴 + 𝛾 L𝑃𝐴 (7) where 𝛼 and 𝛾 are hyperparameters designed to balance the weights of the different loss components during the optimization process. Upon completion of Latent Pre-training, we obtain the pre-trained model, denoted as 𝐿𝐿𝑀 𝑝𝑟𝑒𝑡𝑟𝑎𝑖𝑛 .
+
+## 3.3 Personalized RL-tuning 
+
+After undergoing latent pre-training, the model 𝐿𝐿𝑀 𝑝𝑟𝑒𝑡𝑟𝑎𝑖𝑛 ac-quires implicit reasoning capabilities. However, the entire implicit reasoning process remains essentially a deterministic mapping, which limits the exploration potential of the LLM. To break the deterministic constraint while avoiding blind exploration, this stage introduces a Personalized RL-tuning mechanism. Specifically, we design a personalized behavior distribution tailored to the charac-teristics of the recommendation domain. This allows the LLM to explore within the latent space and align with recommendation objectives via GRPO[ 10 ], thereby further enhancing the model’s recommendation performance. 
+
+3.3.1 Personalized Guide Distribution Construction. The conven-tional approach to breaking determinism involves introducing ran-dom noise (e.g., standard Gaussian noise N ( 𝜇, 𝜎 2)). However, in a high-dimensional latent space, blind random perturbations are prone to disrupting the semantic structure established during the latent pre-training phase, leading to a collapse of reasoning logic. To achieve "effective exploration", we propose an Anchored Explo-ration strategy, positing that exploration should originate from the user’s interest neighborhood rather than from random Gaussian noise. We leverage the user’s historical interaction items as "seman-tic anchors" for exploration. We define the user’s Interest Anchor Set Ω𝑢 as the set of embeddings corresponding to their historical interactions: 
+
+e𝑖 = MeanPooling  LLM TKZ (𝑖 𝑡 ),
+
+Ω𝑢 = {e𝑡 | 𝑖 𝑡 ∈ 𝑆 𝑢 } (8) where 𝐿𝐿𝑀 𝑇 𝐾𝑍 (·) presents the LLM tokenizer and word embedding layer, 𝑒 𝑡 denotes the semantic representation of item 𝑖 𝑡 , and 𝑆 𝑢 
+
+denotes a user’s interaction sequence. We model the guidance signal 𝐻 0 as a Uniform Gaussian Mixture Model centered on Ω𝑢 . This embodies the assumption that every historical behavior of the user has the potential to serve as a starting point for triggering a new interest: 
+
+𝐻 0 ∼ P guide (𝑢 ) = 1
+
+|Ω𝑢 |∑︁ e∈Ω𝑢 
+
+N ( e, 𝜎 2I) (9) where 𝜎 is a hyperparameter controlling the local exploration ra-dius. By sampling 𝐻 0 from Pguide (𝑢 ), we introduce the randomness to break determinism while simultaneously ensuring that the per-turbation vectors remain within the effective scope of the User Interest Manifold. 
+
+3.3.2 Reinforcement Alignment. Next, we employ the Personalized Guide Distribution to conduct reinforcement learning, aligning with recommendation objectives and further enhancing the recom-mendation capabilities of LLMs. 
+
+Rollout. We inject the sampled guidance signal 𝐻 0 into the rea-soning process as a perturbation to the initial latent state. Conse-quently, the input latent state of the model is modified as 
+
+z𝑖  
+
+> 1
+
+= z1 + 𝐻 𝑖  
+
+> 0
+
+(10) where 𝐻 𝑖  
+
+> 0
+
+denotes the guidance signal for the 𝑖 𝑡ℎ rollout. During the training phase, as shown in figure 2, for each user 
+
+𝑢 , we execute the sampling process as follows: we independently sample from Pguide (𝑢 ) 𝑛 times to generate 𝑛 parallel latent rea-soning paths, yielding a corresponding set of prediction results 
+
+O = {𝑂 1, 𝑂 2, . . . , 𝑂 𝑛 }.
+
+Reward. To balance recommendation accuracy with semantic relevance, we design a composite reward function 𝑅 (𝑂 𝑖 , 𝑖 𝑡𝑔𝑡 ) for the latent reasoning paths: 
+
+𝑟 (𝑂 𝑖 ) = I(𝑂 𝑖 = 𝑖 𝑡𝑔𝑡 ) + 𝜆 · sim (Emb (𝑂 𝑖 ), Emb (𝑖 𝑡𝑔𝑡 )) (11) where I(·) is the indicator function, providing a sparse "hit" sig-nal; sim (·) computes the semantic cosine similarity between the predicted item and the ground-truth item. This latter component provides a dense signal, enabling the model to discern the direction for optimization even in cases of non-hits. 
+
+Optimization. Based on the designed reward, we use the GRPO algorithm to conduct alignment training for the latent pre-trained 
+
+𝐿𝐿𝑀 𝑝𝑟𝑒𝑡𝑟𝑎𝑖𝑛 . For each user’s 𝑛 reasoning paths and prediction re-sults, we calculate the reward values for each path ( 𝑟 1, 𝑟 2, ..., 𝑟 𝑛 ). Subsequently, we compute the relative advantages of each latent reasoning path within the group to guide the optimization direction: 
+
+𝐴 𝑖 = 𝑟 𝑖 − 𝜇 𝜎 , 𝜇 = 1
+
+𝑛 
+
+> 𝑛
+
+∑︁ 
+
+> 𝑖 =1
+
+𝑟 𝑖 , 𝜎 =
+
+vt 1
+
+𝑛 
+
+> 𝑛
+
+∑︁ 
+
+> 𝑖 =1
+
+(𝑟 𝑖 − 𝜇 )2 (12) Here, 𝐴 𝑖 represents the advantage of the 𝑖 𝑡ℎ latent reasoning path within the group, and 𝜇 and 𝜎 represent the mean and standard deviation, respectively. Therefore, our GRPO optimization objective Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Trovato et al. 
+
+is: 
+
+JGRPO (𝜃 ) = E{𝑂 𝑖 }𝑛 𝑖 =1 ∼ 𝐿𝐿𝑀 𝜃 old (𝑂 𝑖 | 𝑧 𝑖  
+
+> 1: 𝐾
+
+, 𝑆 𝑢 )
+
+1
+
+𝑛 
+
+> 𝑛
+
+∑︁ 
+
+> 𝑖 =1
+
+ 𝜌 𝑖 − 𝛽𝐷 KL (𝐿𝐿𝑀 𝜃 ∥ 𝐿𝐿𝑀 ref ) ,𝜌 𝑖 = min 𝛿 𝑖 𝐴 𝑖 , clip  𝛿 𝑖 , 1 − 𝜖, 1 + 𝜖  𝐴 𝑖  ,𝛿 𝑖 = 𝐿𝐿𝑀 𝜃 
+
+ 𝑂 𝑖 | 𝑧 𝑖  
+
+> 1: 𝐾
+
+, 𝑆 𝑢 
+
+
+
+𝐿𝐿𝑀 𝜃 old 
+
+ 𝑂 𝑖 | 𝑧 𝑖  
+
+> 1: 𝐾
+
+, 𝑆 𝑢 
+
+ (13) Here, 𝐿𝐿𝑀 𝜃 and 𝐿𝐿𝑀 ref are initialized as 𝐿𝐿𝑀 𝑝𝑟𝑒𝑡𝑟𝑎𝑖𝑛 , 𝛽 and 𝜖 are hyperparameters. 
+
+## 4 Experiments 
+
+Table 1: Statistics of datasets used in this paper 
+
+Dataset #Train #Valid #Test #User #Item Sparsity Toys 53898 6737 6738 11311 6299 99.89% Instruments 66500 8312 8313 12044 5030 99.84% Movie 121009 15126 15127 2025 3405 99.14% Industry 294624 36828 36829 41414 7398 99.87% 
+
+## 4.1 Experiment Setup 
+
+4.1.1 Datasets. Experiments are conducted based on the public Amazon datasets and MovieLens-100K. For the Amazon datasets, we evaluate the 𝐿𝑎𝑅𝑒𝑐 primarily on two specific domains: Toys and Instruments. Additionally, we construct a real-world offline indus-trial dataset to assess the model’s robustness under realistic data distribution conditions. Following previous work [ 47 ], we applied a 5-core filtering strategy to exclude inactive users and unpopular items with fewer than 5 interactions, thereby ensuring the relia-bility of the evaluation results. To simulate real-world application scenarios, we perform a temporal split on the preprocessed datasets based on interaction timestamps, partitioning them into training, validation, and testing sets in an 8:1:1 ratio. Furthermore, to align with the requirements of baseline models across all experimental settings, we standardize the maximum length of user interaction sequences to 10, ensuring consistency in sequential pattern analysis. Key statistics of these datasets are summarized in Table 1. 
+
+4.1.2 Baseline Models. For the Top-N recommendation task, we compare our proposed 𝐿𝑎𝑅𝑒𝑐 against two categories of baselines. (1) Traditional Sequential Recommendation Models: GRU4Rec [ 15 ]captures sequential user behavior patterns via RNNs. SASRec [ 18 ]and BERT4Rec [ 25 ] utilize uni- and bi-directional self-attention. ReaRec [ 28 ] integrates latent reasoning into sequential modeling. PLR [ 27 ] aggregates parallel latent reasoning paths for ID-based rec-ommendation. (2) LLM-based Methods: TallRec [ 4 ] directly predicts target items from history. BIGRec [ 2] ranks items by mapping gen-erated semantics to item space. 𝐷 3 [ 3] is a representative generative recommendation method that fine-tunes LLMs to perform next-item prediction. TrackRec [ 38 ] adopts a "reason-then-recommend" paradigm with explicit CoT. 𝐿𝑎𝑡𝑒𝑛𝑡𝑅 3 [47] applies implicit reason-ing to llm based generative recommendation. For a fair comparison, all LLM-based methods uniformly employ Trie-constrained beam search [47] to generate Top-N items. 
+
+4.1.3 Evaluation Metrics. We evaluate the Top-N recommendation effectiveness using Hit Ratio (HR@N) and Normalized Discounted Cumulative Gain (NDCG@N), with N set to 5 and 10. For brevity, we denote HR@5 and NDCG@5 as H@5 and N@5, respectively, similarly for "@10" cases. 
+
+4.1.4 Implemenation. For traditional recommendation models, we use the Adam optimizer and perform grid searches over learning rates in { 1𝑒 −3, 5𝑒 −4, 1𝑒 −4 } and weight decay values in { 1𝑒 −4, 1𝑒 −5,
+
+1𝑒 −6 }, and all models are trained using Binary Cross-Entropy loss with randomly sampled negative items. For LLM-based methods, we use Qwen2.5-1.5B Team [ 30 ] as the backbone LLM. Latent Pre-training is conducted using the AdamW optimizer, with learning rates selected from { 3𝑒 −4, 5𝑒 −5, 1𝑒 −5 }, and early stopping is applied with a patience of 1. Based on the number of steps in the constructed high-quality CoT, we set the latent reasoning step count 𝐾 = 6. The alignment loss weights 𝛼 and 𝛾 in 𝐿 𝐿𝑃𝑇 are both set to 1.0. During the reinforcement learning stage, we set local exploration radius 𝜎 
+
+= 1.5, 𝜆 = 1.0, and search learning rates within { 1𝑒 −5, 1𝑒 −4, 5e −4 }. All experiments are run on 8 NVIDIA H20 GPUs. 
+
+## 4.2 Overall Performance 
+
+We evaluate 𝐿𝑎𝑅𝑒𝑐 against various baseline methods across three public datasets and one offline industrial dataset. These baselines are categorized into two groups: (1) ID-based sequential recommen-dation methods, and (2) LLM-based sequential recommendation methods. Table 2 presents the comprehensive experimental results, from which we derive the following core observations: 
+
+• LLM-based methods generally outperform ID-based methods. On most datasets (Instruments, Movie, and Industry), the Top-N recommendation metrics of LLM-based methods consistently sur-pass those of ID-based methods. Similarly, on the Toys dataset, the majority of LLM-based methods lead their ID-based counterparts. This demonstrates that the superior understanding capabilities of LLMs enable the capture of richer semantic information, thereby enhancing Top-N recommendation performance. 
+
+• Incorporating latent reasoning improves recommendation per-formance for both ID-based and LLM-based approaches. On the Instruments dataset, ReaRec, which introduces autoregressive prediction within the ID latent space, achieves improvements of 17.71% and 15.08% in H@5 and N@5, respectively, compared to SASRec. Similarly, 𝐿𝑎𝑅𝑒𝑐 achieves improvements of 10.34% and 9.16% over TallRec. This indicates that performing latent reason-ing effectively captures user preferences within the latent space, establishing more accurate connections between user history and target items. 
+
+• The proposed 𝐿𝑎𝑅𝑒𝑐 significantly outperforms all baselines across all evaluation metrics on four datasets. Furthermore, our ap-proach achieves varying degrees of improvement compared to other reasoning-enhanced methods. This consistent performance superiority fully attests to its advanced capabilities in sequential generative recommendation tasks. 
+
+## 4.3 Ablation Study 
+
+We conduct ablation studies to validate the contributions of the core components within 𝐿𝑎𝑅𝑒𝑐 , specifically Latent Pre-training (LPT) (where w/o PA and w/o SA denote the removal of Process direction LaRec: Unleashing LLM-based Latent Reasoning for Generative Recommendation Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+Table 2: Performance Comparison. The best results are highlighted in bold and the second-best results are underlined. 
+
+Datasets Methods ID based LLM based Metrics GRU4Rec SASRec BERT4Rec ReaRec PLR TallRec BIGRec 𝐷 3 TrackRec 𝐿𝑎𝑡𝑒𝑛𝑡𝑅 3 𝐿𝑎𝑅𝑒𝑐 
+
+Toys H@5 0.0417 0.0700 0.0709 0.0721 0.0752 0.0651 0.0560 0.0651 0.0693 0.0785 0.0813 *
+
+H@10 0.0564 0.0884 0.0888 0.0900 0.0933 0.0837 0.0802 0.0900 0.0969 0.1055 0.1073 *
+
+N@5 0.0305 0.0427 0.0438 0.0517 0.0540 0.0479 0.0420 0.0499 0.0496 0.0573 0.0612 *
+
+N@10 0.0352 0.0487 0.0496 0.0575 0.0590 0.0539 0.0497 0.0566 0.0586 0.0657 0.0695 *
+
+Instruments H@5 0.0834 0.0762 0.0756 0.0897 0.0968 0.0926 0.0920 0.0938 0.0959 0.0997 0.1024 *
+
+H@10 0.0949 0.0850 0.0852 0.1065 0.1175 0.1082 0.1093 0.1106 0.1180 0.1208 0.1238 *
+
+N@5 0.0709 0.0676 0.0658 0.0778 0.0847 0.0819 0.0783 0.0839 0.0793 0.0877 0.0894 *
+
+N@10 0.0746 0.0704 0.0689 0.0832 0.0913 0.0870 0.0860 0.0893 0.0864 0.0939 0.0963 *
+
+Movie H@5 0.1153 0.1431 0.1349 0.1409 0.1468 0.1526 0.1512 0.1535 0.1471 0.1528 0.1648 *
+
+H@10 0.1661 0.1849 0.1801 0.2156 0.2168 0.2172 0.2160 0.2083 0.1840 0.2175 0.2256 *
+
+N@5 0.0802 0.1037 0.0975 0.0868 0.0888 0.1075 0.1068 0.1104 0.1116 0.1078 0.1174 *
+
+N@10 0.0965 0.1171 0.1121 0.1109 0.1123 0.1284 0.1268 0.1281 0.1335 0.1281 0.1370 *
+
+Industry H@5 0.1706 0.1956 0.1897 0.2485 0.2612 0.2628 0.2540 0.2880 0.2900 0.2899 0.3033 *
+
+H@10 0.2612 0.2914 0.2847 0.3285 0.3436 0.3654 0.3462 0.4010 0.3827 0.4020 0.4090 *
+
+N@5 0.1116 0.1313 0.1284 0.1768 0.1955 0.1842 0.1798 0.2029 0.2071 0.2079 0.2168 *
+
+N@10 0.1407 0.1622 0.1590 0.2027 0.2187 0.2174 0.2045 0.2394 0.2371 0.2425 0.2509 *
+
+* denotes statistically significant improvement (measured by t-test with p-value<0.001) over baselines. 
+
+Table 3: Ablation study of 𝐿𝑎𝑅𝑒𝑐 across four datasets (H@10 and N@10). Variants Toy Instruments Movies Industry                                                          
+
+> H@10 N@10 H@10 N@10 H@10 N@10 H@10 N@10
+> 𝐿𝑎𝑅𝑒𝑐 0.1073 0.0695 0.1238 0.0964 0.2256 0.1370 0.4090 0.2509
+> w/o PRL w/o PGD 0.1053 0.0664 0.1233 0.0950 0.2210 0.1340 0.4061 0.2474 w/o RL 0.1050 0.0662 0.1229 0.0949 0.2206 0.1329 0.4058 0.2470 w/o LPT w/o PA 0.0995 0.0640 0.1190 0.0923 0.2182 0.1302 0.4025 0.2441 w/o SA 0.0948 0.0596 0.1142 0.0901 0.2161 0.1285 0.3948 0.2407 w/o LR 0.0900 0.0566 0.1106 0.0893 0.2083 0.1270 0.3654 0.2174
+
+Alignment and Step-level Alignment, respectively), Personalized RL-tuning (PRL) (where w/o PGD and w/o RL denote the removal of the Personalized Guidance Distribution and Reinforcement Alignment, respectively), and Latent Reasoning (LR). As shown in Table 3, we progressively removed these components and derived the following experimental conclusions: 
+
+• Removing any single component (either Latent Pre-training or Personalized Reinforcement Alignment) leads to a noticeable decline in model performance across all datasets. The model achieves its worst performance when all components are re-moved. This indicates that both alignment objectives in the Latent Pre-training phase are essential core modules, while personalized RL-tuning provides additional performance gains. 
+
+• The model variant integrating both Step-level Alignment and Process direction Alignment outperforms the version using Step-level Alignment alone. This corroborates that the two alignment strategies offer complementary advantages: Step-level Alignment transfers knowledge from explicit CoT to enhance reasoning coherence at the step level, while Process direction Alignment improves the correctness of the reasoning direction. 
+
+• In the Personalized RL-tuning (PRL) phase, replacing the "Person-alized Guide Distribution" with standard Gaussian noise (de-noted as w/o PGD) results in recommendation performance significantly inferior to 𝐿𝑎𝑅𝑒𝑐 . This directly validates our "An-chored Exploration" hypothesis: in a sparse recommendation space, blind random perturbations struggle to effectively explore correct paths, whereas personalized exploration based on the neighborhood of user historical interests can efficiently discover paths leading to the correct answer. 
+
+## 4.4 Further Analysis 0.06           
+
+> 0.065
+> 0.07
+> 0.075
+> 0.08
+> 0.085
+> 0.09
+> H@5 H@10 N@5 N@10
+> Instruments
+> SASRec w/ CoT w/ latent
+> 0.06
+> 0.1
+> 0.14
+> 0.18
+> 0.22
+> 0.26
+> H@5 H@10 N@5 N@10
+> Industry
+> SASRec w/ CoT w/ latent
+
+Figure 4: Analysis of Reasoning Process Effectiveness. 
+
+4.4.1 Analysis of Reasoning Process Effectiveness. To validate the effectiveness of latent reasoning in 𝐿𝑎𝑅𝑒𝑐 , we select the classic SAS-Rec model as our evaluation backbone. We inject both the hidden states from Explicit CoT and the latent states from implicit reason-ing into SASRec as user embeddings to observe their respective gains in recommendation performance. Specifically, we utilize the Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Trovato et al. 
+
+hidden state corresponding to the final token of the explicit CoT as the standard representation of explicit user preference. Conversely, we employ the average pooling of the 𝐾 -step latent reasoning states as the standard representation of implicit user preference. As shown in Figure 4, we observe that injecting reasoning-based user rep-resentations into SASRec consistently enhances recommendation performance. Notably, the implicit user representations achieve results that are comparable to, or even surpass, those of the explicit user representations. This demonstrates that reasoning representa-tions derived from Latent Pre-training can more precisely capture complex user preferences, thereby validating the effectiveness of the dual alignment strategy within Latent Pre-training. 0.084           
+
+> 0.088
+> 0.092
+> 0.096
+> 0.1
+> 0.1
+> 0.105
+> 0.11
+> 0.115
+> 0.12
+> 0.125
+> 02468
+> N@10
+> H@10
+> reasoning length
+> Instruments
+> H@10 N@10
+> 0.21
+> 0.23
+> 0.25
+> 0.27
+> 0.34
+> 0.36
+> 0.38
+> 0.4
+> 0.42
+> 02468
+> N@10
+> H@10
+> reasoning length
+> Industry
+> H@10 N@10
+
+Figure 5: Impact of Reasoning Length. 0.092         
+
+> 0.094
+> 0.096
+> 0.098
+> 0.1
+> 0.118
+> 0.12
+> 0.122
+> 0.124
+> 0.126
+> 0.128
+> 0.5 1.5 37
+> N@10
+> H@10
+> Model Size (B)
+> Instruments
+> H@10 N@10
+> 0.235
+> 0.24
+> 0.245
+> 0.25
+> 0.255
+> 0.26
+> 0.39
+> 0.395
+> 0.4
+> 0.405
+> 0.41
+> 0.415
+> 0.42
+> 0.5 1.5 37
+> N@10
+> H@10
+> Model Size (B)
+> Industry
+> H@10 N@10
+
+Figure 6: Impact of LLM Scaling Laws. 
+
+4.4.2 Impact of Reasoning Length. To analyze the impact of the number of latent reasoning steps, we vary the reasoning steps 𝐾 
+
+within the set {0, 2, 4, 6, 8} (where 0 indicates no reasoning). The experimental results in Figure 5 exhibit a consistent trend: as the number of reasoning steps increases, recommendation performance initially improves, reaches an optimal peak, and subsequently be-gins to decline. We observe that the metrics for reasoning instances (𝐾 ∈ { 2, 4, 6, 8}) consistently outperform those without reasoning (𝐾 = 0), thereby demonstrating the effectiveness of the implicit reasoning mechanism. This observation aligns with findings from previous studies such as ReaRec[ 28 ] and LARES [ 20 ]. Furthermore, we find that both datasets achieve optimal performance at 𝐾 = 6,which corresponds to the number of reasoning steps present in the majority of samples within our constructed data for Step-level Alignment. We attribute this to the fact that during Latent Pre-training, too few steps may fail to fully transfer the semantic logic of the Explicit CoT, leading to insufficient user reasoning; con-versely, excessive steps may result in "over-thinking". Therefore, to maximize the efficacy of implicit reasoning, it is crucial to select an appropriate number of steps during the training phase. 
+
+4.4.3 Impact of LLM Scaling Laws. To verify whether latent rea-soning exhibits scaling laws analogous to explicit reasoning, we implemented 𝐿𝑎𝑅𝑒𝑐 using the Qwen2.5 series LLMs across varying parameter scales on the Instruments and Industry datasets. As il-lustrated in Figure 6, the recommendation performance of 𝐿𝑎𝑅𝑒𝑐 
+
+consistently improves as the model size increases. This demon-strates that implicit reasoning also adheres to the scaling laws characteristic of LLMs. 
+
+4.4.4 Hyperparameter Sensitivity. We investigate the impact of the step-level alignment coefficient 𝛼 and process direction alignment coefficient 𝛾 . As illustrated in Figure 7, the performance of 𝐿𝑎𝑅𝑒𝑐 
+
+on both datasets exhibits fluctuations as 𝛼 increases, achieving op-timal results at 𝛼 = 0.8 and 𝛼 = 1.0, respectively. This suggests that a larger step-level alignment weight generally facilitates model learning. Regarding 𝛾 , the performance follows an initial increase followed by a decline on Instruments, whereas on the Industry dataset, it exhibits a steady upward trend after an initial dip. These variations reflect the differing sensitivities of various data distribu-tions to process direction alignment. Furthermore, we conduct an analysis of the local exploration radius 𝜎 in personalized RL-tuning. The performance of 𝐿𝑎𝑅𝑒𝑐 exhibits an initial increase followed by a decline as the value of 𝜎 increases, reaching its peak effectiveness at 𝜎 = 1.5. This indicates that an appropriate exploration space facilitates reinforced alignment for the LLM, thereby enhancing recommendation performance. 
+
+Table 4: Inference Latency Comparison across Different Datasets (seconds per sample). Method Toys Instruments MovieLens Industry 
+
+TALLRec 0.20s 0.23s 0.16s 0.56s Ours 0.24s 0.34s 0.19s 0.67s CoT 2.49s 2.88s 2.85s 3.92s 
+
+4.4.5 Analysis of Reasoning Efficiency. To systematically evalu-ate the inference efficiency of 𝐿𝑎𝑅𝑒𝑐 , we conduct efficiency tests across all four experimental datasets. We compare the per-sample inference latency of the method under three conditions: without a reasoning mechanism (w/o Reason), with latent reasoning ( 𝐾 = 6), and with Explicit CoT reasoning. All tests were executed on a sin-gle H20 GPU. As illustrated in Table 4, the latency of our implicit reasoning approach is nearly on par with that of the non-reasoning method and is significantly lower than the time required for ex-plicit reasoning mechanisms. These results demonstrate that 𝐿𝑎𝑅𝑒𝑐 
+
+effectively achieves an optimal balance between effectiveness and efficiency, maintaining low latency while ensuring high recommen-dation performance. 
+
+4.4.6 Analysis of User Preference Strategy. We further analyze the user preference reasoning strategy. By comparing Non-Target CoT with Target-Oriented CoT (as shown in Table 5), we observed that Target-Oriented CoT achieves better performance, indicating that target-oriented CoT reasoning can generate higher-quality user preference trajectories without information leakage. LaRec: Unleashing LLM-based Latent Reasoning for Generative Recommendation Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 0.093                                   
+
+> 0.094
+> 0.095
+> 0.096
+> 0.097
+> 0.12
+> 0.121
+> 0.122
+> 0.123
+> 0.124
+> 0.125
+> 0.2 0.4 0.6 0.8 1
+> N@10
+> H@10
+> Alpha α
+> Instruments
+> H@10 N@10
+> 0.239
+> 0.241
+> 0.243
+> 0.245
+> 0.247
+> 0.381
+> 0.389
+> 0.397
+> 0.405
+> 0.2 0.4 0.6 0.8 1
+> N@10
+> H@10
+> Alpha α
+> Industry
+> H@10 N@10
+> 0.094
+> 0.095
+> 0.096
+> 0.097
+> 0.119
+> 0.121
+> 0.123
+> 0.125
+> 0.2 0.4 0.6 0.8 1
+> N@10
+> H@10
+> Gamma γ
+> Instruments
+> H@10 N@10
+> 0.242
+> 0.244
+> 0.246
+> 0.248
+> 0.388
+> 0.392
+> 0.396
+> 0.4
+> 0.404
+> 0.2 0.4 0.6 0.8 1
+> N@10
+> H@10
+> Gamma γ
+> Industry
+> H@10 N@10
+> 0.094
+> 0.096
+> 0.098
+> 0.12
+> 0.121
+> 0.122
+> 0.123
+> 0.124
+> 0.5 11.5 2
+> N@10
+> H@10
+> simga δ
+> Instruments
+> H@10 N@10
+> 0.249
+> 0.25
+> 0.251
+> 0.252
+> 0.406
+> 0.407
+> 0.408
+> 0.409
+> 0.5 11.5 2
+> N@10
+> H@10
+> simga δ
+> Industry
+> H@10 N@10
+
+Figure 7: Impact of different alignment coefficients 𝛼 , 𝛾 and 𝜎 .Table 5: Analysis of reasoning strategies. Reasoning Strategy Instruments Industry 
+
+H@10 N@10 H@10 N@10 Non-Target CoT 0.1225 0.0950 0.4071 0.2485 
+
+Target-Oriented CoT 0.1238 0.0963 0.4090 0.2509 Table 6: Online A/B Test Results. Exposure Costs Conversion 
+
+𝐿𝑎𝑅𝑒𝑐 +0.46% +1.39% +2.93% 
+
+## 4.5 Online Performance 
+
+We deployed the proposed 𝐿𝑎𝑅𝑒𝑐 on a real-world advertising plat-form with hundreds of millions of active users as an additional LLM-based Recall channel. We use the text description of the items that the user clicked on in two months to construct the prompts and export the output embeddings as key vector to retrieve similar advertisements by Approximate Nearest Neighbor (ANN). The item embeddings are generated by LLM with the content and keywords of advertisements. All embeddings are updated daily by 𝐿𝑎𝑅𝑒𝑐 . The comparison baseline is the online system that contains multiple ID-based and text-based Recall channels. We select the number of 
+
+Exposure , the number of Conversion , and Costs as the primary metrics. And the A/B test is conducted for a weak to get credible per-formance. The results, shown in Table 6, reveal that 𝐿𝑎𝑅𝑒𝑐 achieved significant improvements in all metrics, highlighting its strong po-tential for real-world deployment in the industrial recommender system. 
+
+## 5 Conclusions 
+
+We propose 𝐿𝑎𝑅𝑒𝑐 , an efficient generative recommendation frame-work that enhances performance through latent reasoning while maintaining low inference latency. To fully unleash the reasoning potential of LLMs, we introduce a two-stage optimization strategy: (1) Latent Pre-training, which provides dense supervisory signals via step-level and process-direction alignment to mitigate process sparsity; and (2) Personalized RL-tuning, which encourages the exploration of diverse, optimal reasoning paths while avoiding de-terministic constraints. Extensive experiments demonstrate that 
+
+𝐿𝑎𝑅𝑒𝑐 achieves superior recommendation performance while main-taining exceptional inference efficiency. 
+
+## References 
+
+[1] Josh Achiam, Steven Adler, Sandhini Agarwal, Lama Ahmad, Ilge Akkaya, Floren-cia Leoni Aleman, Diogo Almeida, Janko Altenschmidt, Sam Altman, Shyamal Anadkat, et al . 2023. Gpt-4 technical report. arXiv preprint arXiv:2303.08774 
+
+(2023). [2] Keqin Bao, Jizhi Zhang, Wenjie Wang, Yang Zhang, Zhengyi Yang, Yanchen Luo, Chong Chen, Fuli Feng, and Qi Tian. 2025. A bi-step grounding paradigm for large language models in recommendation systems. ACM Transactions on Recommender Systems 3, 4 (2025), 1–27. [3] Keqin Bao, Jizhi Zhang, Yang Zhang, Xinyue Huo, Chong Chen, and Fuli Feng. 2024. Decoding matters: Addressing amplification bias and homogeneity issue in recommendations for large language models. In Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing . 10540–10552. [4] Keqin Bao, Jizhi Zhang, Yang Zhang, Wenjie Wang, Fuli Feng, and Xiangnan He. 2023. Tallrec: An effective and efficient tuning framework to align large language model with recommendation. In Proceedings of the 17th ACM conference on recommender systems . 1007–1014. [5] Qiguang Chen, Libo Qin, Jinhao Liu, Dengyun Peng, Jiannan Guan, Peng Wang, Mengkang Hu, Yuhang Zhou, Te Gao, and Wanxiang Che. 2025. Towards reason-ing era: A survey of long chain-of-thought for reasoning large language models. 
+
+arXiv preprint arXiv:2503.09567 (2025). [6] Zhipeng Chen, Yingqian Min, Beichen Zhang, Jie Chen, Jinhao Jiang, Daixuan Cheng, Wayne Xin Zhao, Zheng Liu, Xu Miao, Yang Lu, et al . 2025. An empir-ical study on eliciting and improving r1-like reasoning models. arXiv preprint arXiv:2503.04548 (2025). [7] Kairui Fu, Tao Zhang, Shuwen Xiao, Ziyang Wang, Xinming Zhang, Chenchi Zhang, Yuliang Yan, Junjun Zheng, Yu Li, Zhihong Chen, et al . 2025. Forge: Forming semantic identifiers for generative retrieval in industrial datasets. arXiv preprint arXiv:2509.20904 (2025). [8] Aaron Grattafiori, Abhimanyu Dubey, Abhinav Jauhri, Abhinav Pandey, Abhishek Kadian, Ahmad Al-Dahle, Aiesha Letman, Akhil Mathur, Alan Schelten, Alex Vaughan, et al . 2024. The llama 3 herd of models. arXiv preprint arXiv:2407.21783 
+
+(2024). [9] Hao Gu, Rui Zhong, Yu Xia, Wei Yang, Chi Lu, Peng Jiang, and Kun Gai. 2025. R 4ec: A reasoning, reflection, and refinement framework for recommendation sys-tems. In Proceedings of the Nineteenth ACM Conference on Recommender Systems .411–421. [10] Daya Guo, Dejian Yang, Haowei Zhang, Junxiao Song, Ruoyu Zhang, Runxin Xu, Qihao Zhu, Shirong Ma, Peiyi Wang, Xiao Bi, et al . 2025. Deepseek-r1: Incentivizing reasoning capability in llms via reinforcement learning. arXiv preprint arXiv:2501.12948 (2025). [11] Huifeng Guo, Ruiming Tang, Yunming Ye, Zhenguo Li, and Xiuqiang He. 2017. DeepFM: a factorization-machine based neural network for CTR prediction. arXiv preprint arXiv:1703.04247 (2017). [12] Ruidong Han, Bin Yin, Shangyu Chen, He Jiang, Fei Jiang, Xiang Li, Chi Ma, Mincong Huang, Xiaoguang Li, Chunzhen Jing, et al . 2025. Mtgr: Industrial-scale generative recommendation framework in meituan. In Proceedings of the 34th ACM International Conference on Information and Knowledge Management .5731–5738. [13] Shibo Hao, Sainbayar Sukhbaatar, DiJia Su, Xian Li, Zhiting Hu, Jason Weston, and Yuandong Tian. 2024. Training large language models to reason in a continuous latent space. arXiv preprint arXiv:2412.06769 (2024). [14] Yinhan He, Wendy Zheng, Yaochen Zhu, Zaiyi Zheng, Lin Su, Sriram Vasudevan, Qi Guo, Liangjie Hong, and Jundong Li. 2025. SemCoT: Accelerating Chain-of-Thought Reasoning through Semantically-Aligned Implicit Tokens. arXiv preprint arXiv:2510.24940 (2025). [15] Balázs Hidasi, Alexandros Karatzoglou, Linas Baltrunas, and Domonkos Tikk. 2015. Session-based recommendations with recurrent neural networks. arXiv preprint arXiv:1511.06939 (2015). [16] Chengsong Huang, Wenhao Yu, Xiaoyang Wang, Hongming Zhang, Zongxia Li, Ruosen Li, Jiaxin Huang, Haitao Mi, and Dong Yu. 2025. R-zero: Self-evolving reasoning llm from zero data. arXiv preprint arXiv:2508.05004 (2025). [17] Jianchao Ji, Zelong Li, Shuyuan Xu, Wenyue Hua, Yingqiang Ge, Juntao Tan, and Yongfeng Zhang. 2024. Genrec: Large language model for generative recommen-dation. In European Conference on Information Retrieval . Springer, 494–502. [18] Wang-Cheng Kang and Julian McAuley. 2018. Self-attentive sequential recom-mendation. In 2018 IEEE international conference on data mining (ICDM) . IEEE, 197–206. [19] Zhong-Zhi Li, Duzhen Zhang, Ming-Liang Zhang, Jiaxin Zhang, Zengyan Liu, Yuxuan Yao, Haotian Xu, Junhao Zheng, Pei-Jie Wang, Xiuyi Chen, et al . 2025. Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Trovato et al. 
+
+From system 1 to system 2: A survey of reasoning large language models. arXiv preprint arXiv:2502.17419 (2025). [20] Enze Liu, Bowen Zheng, Xiaolei Wang, Wayne Xin Zhao, Jinpeng Wang, Sheng Chen, and Ji-Rong Wen. 2025. LARES: Latent Reasoning for Sequential Recom-mendation. arXiv preprint arXiv:2505.16865 (2025). [21] Zhanyu Liu, Shiyao Wang, Xingmei Wang, Rongzhou Zhang, Jiaxin Deng, Honghui Bao, Jinghao Zhang, Wuchao Li, Pengfei Zheng, Xiangyu Wu, et al .2025. Onerec-think: In-text reasoning for generative recommendation. arXiv preprint arXiv:2510.11639 (2025). [22] Avinash Patil and Aryan Jadon. 2025. Advancing reasoning in large language models: Promising methods and approaches. arXiv preprint arXiv:2502.03671 
+
+(2025). [23] Shashank Rajput, Nikhil Mehta, Anima Singh, Raghunandan Hulikal Keshavan, Trung Vu, Lukasz Heldt, Lichan Hong, Yi Tay, Vinh Tran, Jonah Samost, et al .2023. Recommender systems with generative retrieval. Advances in Neural Information Processing Systems 36 (2023), 10299–10315. [24] Zhenyi Shen, Hanqi Yan, Linhai Zhang, Zhanghao Hu, Yali Du, and Yulan He. 2025. Codi: Compressing chain-of-thought into continuous space via self-distillation. 
+
+arXiv preprint arXiv:2502.21074 (2025). [25] Fei Sun, Jun Liu, Jian Wu, Changhua Pei, Xiao Lin, Wenwu Ou, and Peng Jiang. 2019. BERT4Rec: Sequential recommendation with bidirectional encoder rep-resentations from transformer. In Proceedings of the 28th ACM international conference on information and knowledge management . 1441–1450. [26] Wenhui Tan, Jiaze Li, Jianzhong Ju, Zhenbo Luo, Jian Luan, and Ruihua Song. 2025. Think Silently, Think Fast: Dynamic Latent Compression of LLM Reasoning Chains. arXiv:2505.16552 [cs.CL] https://arxiv.org/abs/2505.16552 [27] Jiakai Tang, Xu Chen, Wen Chen, Jian Wu, Yuning Jiang, and Bo Zheng. 2026. Parallel Latent Reasoning for Sequential Recommendation. arXiv preprint arXiv:2601.03153 (2026). [28] Jiakai Tang, Sunhao Dai, Teng Shi, Jun Xu, Xu Chen, Wen Chen, Wu Jian, and Yuning Jiang. 2025. Think Before Recommend: Unleashing the Latent Reasoning Power for Sequential Recommendation. CoRR abs/2503.22675 (2025). doi: 10. 48550. arXiv preprint ARXIV.2503.22675 (2025). [29] Kimi Team, Yifan Bai, Yiping Bao, Guanduo Chen, Jiahao Chen, Ningxin Chen, Ruijue Chen, Yanru Chen, Yuankun Chen, Yutian Chen, et al . 2025. Kimi k2: Open agentic intelligence. arXiv preprint arXiv:2507.20534 (2025). [30] Qwen Team. 2024. Qwen2.5: A Party of Foundation Models. https://qwenlm. github.io/blog/qwen2.5/ [31] Ruoxi Wang, Rakesh Shivanna, Derek Cheng, Sagar Jain, Dong Lin, Lichan Hong, and Ed Chi. 2021. Dcn v2: Improved deep & cross network and practical lessons for web-scale learning to rank systems. In Proceedings of the web conference 2021 .1785–1797. [32] Wenjie Wang, Honghui Bao, Xinyu Lin, Jizhi Zhang, Yongqi Li, Fuli Feng, See-Kiong Ng, and Tat-Seng Chua. 2024. Learnable item tokenization for generative recommendation. In Proceedings of the 33rd ACM International Conference on Information and Knowledge Management . 2400–2409. [33] Wenjie Wang, Xinyu Lin, Fuli Feng, Xiangnan He, and Tat-Seng Chua. 2023. Generative recommendation: Towards next-generation recommender paradigm. 
+
+arXiv preprint arXiv:2304.03516 (2023). [34] Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, Fei Xia, Ed Chi, Quoc V Le, Denny Zhou, et al . 2022. Chain-of-thought prompting elicits reasoning in large language models. Advances in neural information processing systems 35 (2022), 24824–24837. [35] Xilin Wei, Xiaoran Liu, Yuhang Zang, Xiaoyi Dong, Yuhang Cao, Jiaqi Wang, Xipeng Qiu, and Dahua Lin. 2025. SIM-CoT: Supervised Implicit Chain-of-Thought. arXiv preprint arXiv:2509.20317 (2025). [36] Bohong Wu, Mengzhao Chen, Xiang Luo, Shen Yan, Qifan Yu, Fan Xia, Tianqi Zhang, Hongrui Zhan, Zheng Zhong, Xun Zhou, et al . 2025. Parallel Loop Transformer for Efficient Test-Time Computation Scaling. arXiv preprint arXiv:2510.24824 (2025). [37] Yu Xia, Rui Zhong, Hao Gu, Wei Yang, Chi Lu, Peng Jiang, and Kun Gai. 2025. Hierarchical tree search-based user lifelong behavior modeling on large language model. In Proceedings of the 48th International ACM SIGIR Conference on Research and Development in Information Retrieval . 1758–1767. [38] Yu Xia, Rui Zhong, Zeyu Song, Wei Yang, Junchen Wan, Qingpeng Cai, Chi Lu, and Peng Jiang. 2025. Trackrec: Iterative alternating feedback with chain-of-thought via preference alignment for recommendation. arXiv preprint arXiv:2508.15388 
+
+(2025). [39] Fengli Xu, Qianyue Hao, Zefang Zong, Jingwei Wang, Yunke Zhang, Jingyi Wang, Xiaochong Lan, Jiahui Gong, Tianjian Ouyang, Fanjin Meng, et al . 2025. Towards large reasoning models: A survey of reinforced reasoning with large language models. arXiv preprint arXiv:2501.09686 (2025). [40] Yi Xu, Moyu Zhang, Chenxuan Li, Zhihao Liao, Haibo Xing, Hao Deng, Jinxin Hu, Yu Zhang, Xiaoyi Zeng, and Jing Zhang. 2025. Mmq: Multimodal mixture-of-quantization tokenization for semantic id generation and user behavioral adaptation. arXiv preprint arXiv:2508.15281 (2025). [41] Mengjiao Yang, Dale Schuurmans, Pieter Abbeel, and Ofir Nachum. 2022. Chain of Thought Imitation with Procedure Cloning. arXiv:2205.10816 [cs.LG] https: //arxiv.org/abs/2205.10816 [42] Wei Yang, Rui Zhong, Yiqun Chen, Shixuan Li, Heng Ping, Chi Lu, and Peng Jiang. 2025. FITMM: Adaptive Frequency-Aware Multimodal Recommendation via Information-Theoretic Representation Learning. In Proceedings of the 33rd ACM International Conference on Multimedia . 6193–6202. [43] Wei Yang, Rui Zhong, Yiqun Chen, Chi Lu, and Peng Jiang. 2025. Structured Spectral Reasoning for Frequency-Adaptive Multimodal Recommendation. arXiv preprint arXiv:2512.01372 (2025). [44] Wencai Ye, Mingjie Sun, Shaoyun Shi, Peng Wang, Wenjin Wu, and Peng Jiang. 2025. DAS: Dual-Aligned Semantic IDs Empowered Industrial Recommender System. In Proceedings of the 34th ACM International Conference on Information and Knowledge Management . 6217–6224. [45] Qihang Yu, Kairui Fu, Shengyu Zhang, Zheqi Lv, Fan Wu, and Fei Wu. 2025. ThinkRec: Thinking-based recommendation via LLM. arXiv preprint arXiv:2505.15091 (2025). [46] Jiaqi Zhai, Lucy Liao, Xing Liu, Yueming Wang, Rui Li, Xuan Cao, Leon Gao, Zhaojie Gong, Fangda Gu, Jiayuan He, et al . 2024. Actions speak louder than words: trillion-parameter sequential transducers for generative recommendations. In Proceedings of the 41st International Conference on Machine Learning . 58484– 58509. [47] Yang Zhang, Wenxin Xu, Xiaoyan Zhao, Wenjie Wang, Fuli Feng, Xiangnan He, and Tat-Seng Chua. 2025. Reinforced Latent Reasoning for LLM-based Recommendation. arXiv preprint arXiv:2505.19092 (2025). [48] Rui Zhao, Rui Zhong, Haoran Zheng, Wei Yang, Chi Lu, Beihong Jin, Peng Jiang, and Kun Gai. 2025. Hierarchical Sequence ID Representation of Large Language Models for Large-scale Recommendation Systems. In Companion Proceedings of the ACM on Web Conference 2025 . 641–650. [49] Bowen Zheng, Yupeng Hou, Hongyu Lu, Yu Chen, Wayne Xin Zhao, Ming Chen, and Ji-Rong Wen. 2024. Adapting large language models by integrating collaborative semantics for recommendation. In 2024 IEEE 40th International Conference on Data Engineering (ICDE) . IEEE, 1435–1448. [50] Guorui Zhou, Jiaxin Deng, Jinghao Zhang, Kuo Cai, Lejian Ren, Qiang Luo, Qian-qian Wang, Qigen Hu, Rui Huang, Shiyao Wang, et al . 2025. OneRec Technical Report. arXiv preprint arXiv:2506.13695 (2025). [51] Guorui Zhou, Hengrui Hu, Hongtao Cheng, Huanjie Wang, Jiaxin Deng, Jinghao Zhang, Kuo Cai, Lejian Ren, Lu Ren, Liao Yu, et al . 2025. Onerec-v2 technical report. arXiv preprint arXiv:2508.20900 (2025). [52] Guorui Zhou, Xiaoqiang Zhu, Chenru Song, Ying Fan, Han Zhu, Xiao Ma, Yanghui Yan, Junqi Jin, Han Li, and Kun Gai. 2018. Deep interest network for click-through rate prediction. In Proceedings of the 24th ACM SIGKDD international conference on knowledge discovery & data mining . 1059–1068. [53] Jie Zhu, Zhifang Fan, Xiaoxie Zhu, Yuchen Jiang, Hangyu Wang, Xintian Han, Haoran Ding, Xinmin Wang, Wenlin Zhao, Zhen Gong, et al . 2025. Rankmixer: Scaling up ranking models in industrial recommenders. In Proceedings of the 34th ACM International Conference on Information and Knowledge Management .6309–6316.

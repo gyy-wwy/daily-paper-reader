@@ -1,0 +1,266 @@
+Title: MEMOIR: Temporal Behavioral Memory for Recommendation Across the Preference-Drift Spectrum
+
+URL Source: https://arxiv.org/pdf/2607.23986v1
+
+Published Time: Tue, 28 Jul 2026 01:30:42 GMT
+
+Number of Pages: 6
+
+Markdown Content:
+# MEMOIR: Temporal Behavioral Memory for Recommendation Across the Preference-Drift Spectrum 
+
+# Younggue Bae ∗
+
+Independent Researcher Vancouver, Canada louiezzang@gmail.com 
+
+## Abstract 
+
+We propose MEMOIR, a framework that segments user interaction histories into temporal windows, generates semantic behavioral memory for each period using an LLM, and aggregates current state, evolution direction, and predicted future into a single user repre-sentation. On the Electronics and Clothing_Shoes_and_Jewelry categories of Amazon Reviews 2023, MEMOIR is statistically tied with UniSRec, the strongest baseline, on aggregate NDCG@10 (0.0643 vs. 0.0641), splitting the four reported metrics 2–2: MEMOIR leads NDCG@10 and MRR, UniSRec leads HR@10 and HR@20. An ablation study finds that no single architectural component—the evolution-preserving contrastive loss, its directional-consistency term, or temporal window segmentation itself—individually ex-plains much of MEMOIR’s ≈18% relative gain over ID-based SAS-Rec; all four ablations land within 2% of the full model on aggregate NDCG@10. Stratifying test performance by a composite preference-drift score instead reveals where the gain concentrates: MEMOIR leads on ranking-quality metrics (NDCG@10, MRR) specifically among users at the high- and low-drift extremes of the distribution, while UniSRec leads the volume-oriented HR@10/HR@20 metrics across all drift strata and edges out MEMOIR on ranking quality in the middle band. We report this drift-stratified pattern, rather than the near-tied aggregate numbers or any single ablated compo-nent, as MEMOIR’s most substantive and reproducible finding, and surface why it holds as an open question for future work. 
+
+## CCS Concepts 
+
+• Information systems → Recommender systems ; • Comput-ing methodologies → Natural language processing .
+
+## Keywords 
+
+Recommender Systems, Preference Evolution, Contrastive Learning, Large Language Models, Temporal User Modeling 
+
+## 1 Introduction 
+
+Sequential recommendation models such as SASRec [ 8] and BERT4Rec [ 13 ] capture user preferences from interaction histories, implicitly learning behavioral patterns through item-level sequence processing. Recent LLM-enhanced methods like SRA-CL [ 3] fur-ther enrich representations with semantic knowledge from large language models. However, these approaches treat user preference as either a static summary or a byproduct of next-item prediction— none explicitly models how preferences evolve over time. We argue that preference evolution deserves first-class modeling. Two users who both currently purchase athletic wear may have 
+
+> 1Code: https://github.com/louiezzang/MEMOIR
+
+very different recommendation needs if one is a long-time fitness enthusiast while the other just started exercising. A static repre-sentation or a single LLM-generated summary cannot distinguish these trajectories. Empirically, we find that this drift is pervasive: on the Electronics and Clothing_Shoes_and_Jewelry categories of Amazon Reviews 2023, the mean Jensen-Shannon divergence be-tween a user’s adjacent monthly category distributions is 0.795 (out of 1.0), and 92.2% of items interacted with in any given window are items the user has never engaged with before. Even the bot-tom quartile of users by drift score exhibits substantial preference change, suggesting that evolution-aware modeling benefits nearly all users, not only an extreme minority. We propose MEMOIR (Memory-based Evolution MO del for 
+
+Inference in Recommendation), a framework that: (1) Segments user interaction histories into temporal windows and generates semantic behavioral memory for each period using an LLM encoder; (2) Learns the evolution trajectory through a novel evolution-preserving contrastive loss that enforces both temporal smoothness and directional consistency; (3) Aggregates user representations by fusing current state, evolution direction, and predicted future into an evolution-aware memory. We test each of these three components individually via ablation (§4.3); as we report there, none in isolation explains most of MEM-OIR’s aggregate gain over ID-based baselines, and the more robust, reproducible effect we identify is concentrated in a specific part of the user population rather than uniform across it (§4.5). More fundamentally, existing LLM-enhanced methods remain ID-based sequential models at their core: the LLM generates of-fline summaries or augmented views that improve training qual-ity, but the recommendation backbone still operates on item-ID embeddings, and any contrastive or semantic signal serves as an auxiliary that is discarded at inference time. MEMOIR inverts this relationship: the LLM is the user encoder, contrastive learning is the mechanism through which the structure of preference evolution is learned, and the evolution-aware representation persists through to the final recommendation score. Our key insight is that recom-mendation should target a user’s evolving trajectory, not just their current state —and that trajectory modeling requires the LLM to be a first-class architectural component, not an offline preprocessing step. 
+
+## 2 Related Work 
+
+Sequential and Temporal User Modeling. Early sequential rec-ommendation models capture behavioral patterns via recurrent networks [ 5] or self-attention [ 8, 13 ], producing a single implicit arXiv:2607.23986v1 [cs.IR] 27 Jul 2026 representation of the user’s full history without explicitly modeling change over time. Time-aware extensions such as TiSASRec [ 9]incorporate explicit time-interval embeddings between consecutive interactions, enabling sensitivity to recency and interaction gaps, but still collapse history into a single aggregated state. SURGE [ 2]constructs dynamic interest graphs that cluster items into soft in-terest categories, providing coarse-grained temporal grouping of evolving interests. Unlike these methods, MEMOIR treats the trajec-tory of change as the primary modeling target: temporal windows yield a sequence of semantic memory states, and contrastive losses are applied directly to the directions of change between those states. 
+
+LLM-Based Recommendation. Large language models have been applied to recommendation as frozen feature encoders [ 3] and instruction-tuned rankers [ 1, 10 ]. In all of these settings the LLM serves an auxiliary role—enriching an underlying ID-based sequen-tial model—and produces a single, session-level representation with no mechanism to model how preferences evolve across time. Cru-cially, the contrastive and semantic objectives in these methods function as training-time tools to improve the ID-based backbone’s representation quality; they are discarded at inference. MEMOIR instead uses the LLM as a first-class temporal memory encoder , gen-erating a distinct semantic embedding for each window of activity. Contrastive learning is not an auxiliary training signal but the mechanism through which the structure of preference evolution— temporal smoothness and directional consistency—is encoded into the representation space and carried through to inference. 
+
+Memory-Augmented User Modeling. External memory mecha-nisms [ 12 ] have been applied to user modeling to retain long-horizon behavioral context beyond what recurrent hidden states can store. Memory-augmented recommendation systems [ 4] maintain differentiable key-value stores that are updated as new interactions arrive, enabling persistent preference tracking. MEMOIR shares the intuition of maintaining explicit behavioral memory, but departs from slot-based write-and-read architectures: it uses an LLM to dis-till each temporal window into a semantic summary and then learns the evolution of those summaries through contrastive trajectory objectives rather than slot-update rules. 
+
+## 3 MEMOIR Framework 
+
+Figure 1 illustrates the overall architecture. Given a user’s time-stamped interaction history, MEMOIR processes it through four stages: temporal segmentation, memory encoding, evolution-preserving contrastive learning, and evolution-aware aggregation. 
+
+## 3.1 Temporal Behavioral Memory 
+
+Given a user 𝑢 ’s interaction history H𝑢 = {( 𝑖 1, 𝑡 1), . . . , (𝑖 𝑛 , 𝑡 𝑛 )} , we partition it into 𝑊 temporal windows based on calendar months. Each window 𝑤 𝑡 is serialized into a natural language description (e.g., “User highly rated ‘running shoes’ in Sports; purchased ‘protein powder’ in Health” ). An LLM encoder 𝑓 𝜃 with LoRA fine-tuning maps each window text to a semantic memory embedding: 
+
+m𝑡 = Proj (MeanPool (𝑓 𝜃 (𝑤 𝑡 ))) ∈ R𝐷 (1)                                       
+
+> User Interaction History
+> (𝑖 1, 𝑡 1),(𝑖 2, 𝑡 2), . . . , (𝑖 𝑛 , 𝑡 𝑛 )
+> Window 𝑡 1
+> shoes, gym gear
+> Window 𝑡 2
+> protein, yoga
+> Window 𝑡 3
+> suit, tie · · ·
+> Temporal Segmentation
+> m1m2m3· · ·
+> LLM Memory Encoder (LoRA)
+> Evolution CL
+> Lsmooth (InfoNCE)
+> Ldir (Direction)
+> Trajectory (GRU)
+> direction d
+> predicted ˆm𝑊 +1
+> Evolution-Aware Aggregator
+> u∗=MLP ( [ ¯m;d;ˆm𝑊 +1] )
+> direction + future
+> current state
+> Recommendation
+> Item Retrieval (dot product) →Top-𝐾
+> Item Encoder
+> SentenceTransformer (frozen)
+> L=Lrec +𝜆 1Levo +𝜆 2Lcon +𝜆 3Lextrap
+> 1
+> 2
+> 34
+> 5
+> 6
+
+Figure 1: MEMOIR architecture: user history is segmented into temporal windows, encoded into behavioral memory via an LLM, and learned through evolution-preserving con-trastive loss. The evolution-aware aggregator fuses current state, direction, and predicted future. 
+
+where Proj is a two-layer MLP projecting the LLM hidden states to the embedding space. The result is a memory sequence M𝑢 =
+
+[m1, . . . , m𝑊 ] representing the user’s behavioral evolution. 
+
+## 3.2 Evolution-Preserving Contrastive Loss 
+
+We introduce a contrastive loss Levo comprising two complemen-tary terms: 
+
+Temporal Smoothness. Adjacent windows from the same user form positive pairs, enforcing continuity: 
+
+Lsmooth = − log exp (sim (m𝑡 , m𝑡 +1)/ 𝜏 )
+
+Í𝑗 ∈ N exp (sim (m𝑡 , m𝑗 )/ 𝜏 ) (2) where N includes windows from other users as negatives and 𝜏 is the temperature. 
+
+Directional Consistency. Beyond smoothness, we enforce that the 
+
+direction of evolution remains coherent: 
+
+Ldir = ReLU (𝛾 − cos (d𝑡 −1, d𝑡 )) (3) where d𝑡 = ˆm𝑡 +1 − ˆm𝑡 is the evolution direction vector computed on ℓ2-normalized memories ˆm = m/∥ m∥2, and 𝛾 is a margin hy-perparameter. This loss encodes the inductive bias that if a user’s preferences shift from casual wear to sportswear, consecutive di-rection vectors should be aligned. The combined evolution loss is: 
+
+Levo = Lsmooth + 𝛼 · L dir (4) 
+
+> 2
+
+## 3.3 Trajectory Prediction 
+
+A GRU processes the window memory sequence and emits a final hidden state: 
+
+h𝑊 = GRU ([ m1, . . . , m𝑊 ]) (5) A two-layer MLP projection head maps this hidden state to a pre-dicted next-step memory: 
+
+ˆm𝑊 +1 = MLP pred (h𝑊 ) (6) The evolution direction is computed directly from consecutive win-dow embeddings: 
+
+d = m𝑊 − m𝑊 −1 (7) We supervise the predictor with a trajectory extrapolation loss using hold-out-last-window supervision: during training the GRU is applied to the first 𝑊 − 1 windows to predict ˆm𝑊 , which is then compared to the held-out actual embedding: 
+
+Lextrap = InfoNCE ( ˆm𝑊 , m𝑊 ) (8) The positive for each example is the held-out window m𝑊 of the same user; negatives are the held-out windows of all other users in the same mini-batch (in-batch negatives, following the standard InfoNCE construction [14]). 
+
+## 3.4 Evolution-Aware Aggregation 
+
+Instead of a simple weighted mean of window memories, we fuse three signals via an MLP: 
+
+u∗ = MLP ([ ¯m; d; ˆ m𝑊 +1]) (9) where ¯m is the recency-weighted aggregate (current state), d is the direction vector (where from), and ˆm𝑊 +1 is the predicted future (where to). This ensures that users with identical current prefer-ences but different evolution paths receive distinct representations. 
+
+## 3.5 Behavioral Consistency Loss 
+
+To anchor the evolution-aware user representation to the item embedding space, we add a consistency regularizer that penalises the squared distance between the normalized aggregate memory and the normalized target item embedding: 
+
+Lcon = u∗
+
+∥u∗ ∥2
+
+− e𝑖 
+
+∥e𝑖 ∥2
+
+> 22
+
+(10) where e𝑖 is the target item embedding, treated as a fixed target (gradients are not propagated through it in this term). This loss prevents the evolution trajectory from drifting into regions of the embedding space that are semantically detached from the items the user actually interacts with. 
+
+## 3.6 Training Objective 
+
+The full training loss combines recommendation, evolution, consis-tency, and extrapolation: 
+
+L = Lrec + 𝜆 1 Levo + 𝜆 2 Lcon + 𝜆 3 Lextrap (11) where Lrec is an InfoNCE recommendation loss over user-item dot products. 
+
+## 3.7 Design Assumptions and Limitations 
+
+Directional consistency assumption. Ldir encodes the inductive bias that consecutive evolution direction vectors should be aligned, which suits users with monotonic drift (e.g., a gradual shift from casual to formal wear). This assumption is violated for users with oscillating or seasonal preferences (e.g., alternating between sum-mer and winter categories), where consecutive direction vectors are naturally opposed. To mitigate this, Ldir fires only when at least three consecutive windows are available and uses a hinge formulation with margin 𝛾 , so a small degree of direction reversal is tolerated without penalty. Users with strongly oscillating prefer-ences may nonetheless be hurt by this term; reducing 𝛼 or disabling 
+
+Ldir is advisable in such domains. 
+
+Sparse-user degradation. Monthly calendar segmentation yields fewer windows for low-activity users. MEMOIR degrades gracefully: for users with a single window, the direction vector d is set to zero (no evolution signal), and Ldir and Lextrap are not computed (they require ≥ 2 and ≥ 3 windows respectively). In these cases the model reduces to an LLM-encoded single-state representation with the recommendation loss Lrec and consistency loss Lcon as the sole training signal, which remains competitive with standard LLM-based baselines. 
+
+## 3.8 Complexity Analysis 
+
+Training. The dominant cost is the LLM memory encoder: en-coding all user windows requires O(|U| · 𝑊 · 𝐿 · 𝑑 LLM ) FLOPs, where |U| is the number of users, 𝑊 is the maximum number of windows, 𝐿 is average tokens per window, and 𝑑 LLM is the LLM hidden dimension. With freeze_llm=True this cost is paid once and fully cached before training begins; subsequent training steps incur only O( 𝑊 · ℎ2) for the GRU (hidden size ℎ) and O( 𝐵 · 𝐾 )
+
+for the contrastive losses (batch size 𝐵 , negatives per anchor 𝐾 ). With LoRA fine-tuning, the LLM forward pass repeats each epoch but operates only over trainable adapter parameters ( 𝑟 ≪ 𝑑 LLM ), keeping the added parameter count at O( 𝑟 ·𝑑 LLM ) per adapted layer. 
+
+Inference. Given cached or freshly computed window embed-dings, inference requires a single GRU pass ( O( 𝑊 ·ℎ)) and one MLP aggregation step ( O( 3𝐷 · 𝑑 agg )), yielding a user representation in 
+
+O( 𝑊 · 𝐷 ) time—linear in the number of windows and independent of raw interaction count. Storage is O(|U| · 𝑊 · 𝐷 ) for the memory grid, comparable to standard matrix-factorization user tables. 
+
+## 4 Experiments 4.1 Setup 
+
+Dataset. We use the Electronics and Clothing_Shoes_and_Jewelry categories of Amazon Reviews 2023 [ 6], filtering users with ≥5interactions. After temporal segmentation with monthly windows, the dataset contains 99,355 users with 569,397 behavioral windows (mean 5.7 windows per user). We use an 80/10/10 chronological train/validation/test split. A pre-training drift analysis (§4.5) classifies users into high (top 25%), medium (middle 50%), and low (bottom 25%) drift groups based on a composite score of category JSD, rating variance, and novelty rate; mean composite drift score is 0.695. 
+
+> 3
+
+Table 1: Recommendation performance on Amazon Reviews. Best results in bold, second best underlined.                                     
+
+> Model HR@10 NDCG@10 HR@20 MRR
+> GRU4Rec 0.0258 0.0137 0.0395 0.0146 SASRec 0.0888 0.0543 0.1198 0.0500 CL4SRec 0.0892 0.0541 0.1214 0.0497 DuoRec 0.0538 0.0345 0.0729 0.0348 SASRec-Text 0.0810 0.0415 0.1339 0.0415 UniSRec 0.1176 0.0641 0.1791 0.0603 SRA-CL †0.0340 0.0183 0.0573 0.0201
+> MEMOIR (Ours) 0.1084 0.0643 0.1594 0.0617
+> †SRA-CL was originally evaluated on smaller Amazon subcategories (Sports, Beauty, Office) with batch size 256; our setting uses the Electronics and Clothing_Shoes_and_Jewelry categories of Amazon Reviews 2023 (99k users) with batch size 16, reducing effective InfoNCE negatives from 512 to 32.
+
+Baselines. We compare against seven baselines spanning four categories: (1) Traditional sequential : GRU4Rec [ 5 ], SASRec [ 8]; (2) Contrastive sequential : CL4SRec [ 15 ], DuoRec [ 11 ]; (3) Text-aware sequential : SASRec-Text (SASRec with MiniLM text embeddings re-placing learned ID embeddings), UniSRec [ 7] (whitening transform and mixture-of-experts adaptor over pretrained text representa-tions); (4) LLM-enhanced contrastive : SRA-CL [ 3]. All baselines are trained with a full-catalog softmax cross-entropy recommendation objective, scoring each user representation against the entire item catalog rather than a sampled subset; this standardizes the training signal across methods so that reported differences reflect architec-tural choices rather than negative-sampling scheme, and departs from some baselines’ original training procedures (e.g., SASRec and GRU4Rec originally used sampled or in-batch negative objec-tives). The text-aware baselines use the same pretrained encoder (all-MiniLM-L6-v2) as MEMOIR’s item encoder, ensuring that any performance gap reflects architectural differences rather than en-coder quality. Notably, SASRec-Text serves as a controlled probe: it tests whether replacing learned ID embeddings with frozen se-mantic embeddings alone improves recommendation, without any evolution modeling or alignment training. 
+
+Implementation. MEMOIR uses TinyLlama-1.1B-Chat [ 16 ] as the memory encoder and all-MiniLM-L6-v2 as the frozen item encoder. Embedding dimension 𝐷 =256, temperature 𝜏 =0.07, 𝜆 1=0.5, 𝜆 2=0.3, 
+
+𝜆 3=0.3, 𝛼 =0.2. All experiments use the frozen LLM mode: the LLM is held fixed, window embeddings are pre-computed once and cached, and only the projection MLP, GRU, and aggregator are trained end-to-end (AdamW, lr=1e-4, weight decay=0.01). We train for up to 100 epochs with early stopping (patience=15) based on validation NDCG@10. 
+
+Metrics. HR@ 𝐾 , NDCG@ 𝐾 (𝐾 ∈ { 5, 10 , 20 }), and MRR, following the sampled evaluation protocol with 999 negative items. 
+
+## 4.2 Main Results 
+
+Table 1 shows the overall recommendation performance. MEM-OIR and UniSRec split the four metrics 2–2: MEMOIR leads on NDCG@10 and MRR, while UniSRec leads on the wider-cutoff, recall-oriented HR@10 and HR@20; NDCG@10, the metric used for model selection, is effectively a statistical tie (0.0643 vs. 0.0641). Both models clearly outperform the remaining six baselines on every metric. 
+
+Semantic features alone do not help. A striking finding is that SASRec-Text underperforms vanilla SASRec (NDCG@10: 0.0415 vs. 0.0543), despite using the same backbone and a pretrained semantic encoder. This occurs because MiniLM embeddings are optimized for semantic similarity between sentences, which does not directly correspond to behavioral co-occurrence patterns that drive recom-mendation. A shallow linear projection is insufficient to bridge this gap: it can rotate the semantic space but cannot align it with the collaborative filtering signal that SASRec’s learnable ID embed-dings acquire organically through training. MEMOIR avoids this pitfall through two mechanisms: (1) the behavioral consistency loss 
+
+Lcon explicitly anchors the user’s semantic representation to the item embedding space, and (2) the evolution-aware aggregation gives the model a richer signal—trajectory, direction, and predicted future—that compensates for any misalignment in the raw semantic features. SRA-CL, which augments SASRec with LLM-based cross-sequence contrastive learning, similarly underperforms SASRec in our setting (see Table 1, †), further confirming that LLM augmen-tation without evolution-aware design does not reliably improve over a well-tuned ID backbone. Part of this gap is attributable to scale: fitting the full 99k-user set forces a batch size of 16 rather than SRA-CL’s original 256, shrinking effective InfoNCE negatives from 512 to 32 ( †) and substantially weakening the cross-sequence contrastive signal the method relies on. But negative count alone does not explain the deficit—the same mechanism identified above for SASRec-Text applies here too: a contrastive term that pulls repre-sentations toward LLM-semantic similarity provides no guarantee of alignment with the behavioral co-occurrence signal that drives recommendation, so a weakened version of that signal can inter-fere with the next-item objective rather than complement it. This result suggests that the benefit of language model representations in recommendation is not automatic: it requires an architectural mechanism to align semantic and behavioral spaces. 
+
+An open question: what explains the remaining gain? The improve-ment over the strongest ID-based baseline (SASRec) is substantial (≈18% relative on NDCG@10), and SASRec-Text underperforming SASRec (Table 1) rules out pretrained semantics alone as the expla-nation. The ablation study below (Table 2), however, rules out the converse story too: none of MEMOIR’s own evolution-modeling components individually explains the gain either. We do not yet have a component-level account of why MEMOIR outperforms SAS-Rec in aggregate; §4.5 instead localizes where in the user population the gain (and the near-tie with UniSRec) actually comes from. 
+
+## 4.3 Ablation Study 
+
+The “w/ Random-Init Items” variant replaces the pretrained MiniLM item encoder with randomly initialized ID embeddings, isolating the contribution of MEMOIR’s architecture from the pretrained text representations. Contrary to our expectation going in, Table 2 does not validate any individual component’s necessity: all four ablations land within 2% of the full model’s NDCG@10, and w/ Random-Init 
+
+> 4
+
+Table 2: Ablation study on Amazon Reviews. Best per column in bold, second best underlined.             
+
+> Variant HR@10 NDCG@10
+> MEMOIR (Full) 0.1084 0.0643 w/o Evolution CL 0.1099 0.0642 w/o Direction Loss 0.1088 0.0644 w/o Temporal Seg. 0.1055 0.0633 w/ Random-Init Items 0.1121 0.0650
+
+Table 3: Sensitivity of MEMOIR to contrastive temperature 
+
+𝜏 and number of windows 𝑊 (HR@10 on Amazon Reviews). Default values in bold.           
+
+> Parameter Value HR@10
+> 𝜏 (temperature) 0.03 0.1101
+> 0.07 0.1084
+> 0.2 0.1013
+> 𝑊 (max windows) 30.1084
+> 60.1084
+> 12 0.1084
+
+Items —which discards pretrained item semantics entirely—scores best of all five variants on both HR@10 and NDCG@10. Removing temporal window segmentation ( w/o Temporal Seg. ), the component the model’s name and prior framing of this work centered on, costs only 1.6% relative NDCG@10—an order of magnitude larger than removing the evolution or directional-consistency losses (0.16% each), but still the same order of magnitude as the 1.1% gain from 
+
+w/ Random-Init Items . This mirrors the near-tie with UniSRec in Table 1: whatever produces MEMOIR’s aggregate advantage over SASRec does not isolate cleanly to any one architectural piece we tested here. We return to this puzzle in the drift-stratified analysis below (§4.5), where the gain’s location, if not yet its mechanism, becomes clearer. 
+
+## 4.4 Hyperparameter Sensitivity 
+
+Table 3 reports HR@10 as 𝜏 and 𝑊 are varied while holding the oth-ers at default. MEMOIR is far more sensitive to the contrastive tem-perature 𝜏 than to window count 𝑊 , but the pattern is monotonic rather than the U-shape a collapsed-vs.-under-separated-gradient account would predict: HR@10 decreases steadily from 𝜏 =0.03 (0.1101, best of the three) through the default 𝜏 =0.07 (0.1084) to 𝜏 =0.2 (0.1013, an ≈8% relative drop from 𝜏 =0.03). We do not currently have an explanation for why smaller 𝜏 continues to help within this range rather than eventually hurting; retuning the default toward 
+
+𝜏 =0.03 rather than 0.07 is a low-cost change worth revisiting in future runs. The number of windows 𝑊 has no measurable impact in our range (3, 6, and 12 windows are numerically identical to four decimal places), suggesting the aggregator is insensitive to window count once 𝑊 ≥ 3, at least on this dataset’s activity distribution. We have not swept the loss weights 𝜆 1 (evolution) or 𝛼 (directional consistency) and make no claim about their sensitivity; this is left to future work. 
+
+Figure 2: Distribution of composite preference drift scores across 99,354 Amazon users. Groups are defined by the 25th (low) and 75th (high) percentile thresholds (dashed lines). The median score of 0.70 and the absence of users near zero confirm that preference evolution is pervasive across all user segments. 
+
+## 4.5 Preference Drift Analysis 
+
+To characterize the degree of preference evolution in our dataset and validate MEMOIR’s design motivation, we compute three per-user drift metrics across temporal windows: (1) Category JSD : Jensen-Shannon divergence between adjacent windows’ category distribu-tions, measuring how much the types of items a user engages with shift over time; (2) Rating drift : variance in mean rating across win-dows, capturing satisfaction fluctuation; (3) Novelty rate : fraction of items in each window not seen in any prior window, reflect-ing exploration breadth. A composite drift score is derived as the mean of the three min-max-normalized metrics. Users are classified into high (composite ≥ 75th percentile), medium, and low ( ≤ 25th percentile) drift groups. On the Electronics and Clothing_Shoes_and_Jewelry categories of Amazon Reviews 2023, the mean category JSD is 0.795 and the median novelty rate is 1.0 (i.e., the typical user interacts exclu-sively with new items in every window). These figures confirm that preference evolution is not a rare edge case but a dominant behavioral pattern, motivating evolution-aware modeling for all users (Figure 2). Table 4 reports test-set HR@10, NDCG@10, HR@20, and MRR stratified by drift group, comparing MEMOIR against SASRec (strongest ID-based baseline), DuoRec, and UniSRec (strongest over-all baseline, per Table 1). A consistent pattern emerges, and it mirrors the aggregate split in Table 1 rather than contradicting it: UniSRec leads the volume-oriented HR@10/HR@20 metrics in every drift stratum, includ-ing both extremes. MEMOIR’s specific edge is on ranking-quality metrics—NDCG@10 and MRR—and only at the high- and low-drift extremes; in the medium-drift band, which holds half the user pop-ulation, UniSRec leads on all four metrics and MEMOIR’s aggregate near-tie (Table 1) is fully attributable to this stratum’s majority weight working against it elsewhere. We do not yet have a mecha-nistic explanation for why MEMOIR’s ranking-quality advantage concentrates at the drift extremes—the ablation study (Table 2) 
+
+> 5
+
+Table 4: Performance stratified by preference drift group (Amazon Reviews). Best per column within each group in bold, second best underlined. 
+
+Drift Model HR@10 NDCG@10 HR@20 MRR 
+
+High SASRec 0.1017 0.0623 0.1302 0.0559 DuoRec 0.0605 0.0397 0.0803 0.0396 UniSRec 0.1158 0.0612 0.1789 0.0570 MEMOIR 0.1078 0.0653 0.1554 0.0627 
+
+Medium SASRec 0.0918 0.0565 0.1229 0.0519 DuoRec 0.0550 0.0354 0.0740 0.0358 UniSRec 0.1099 0.0610 0.1679 0.0581 
+
+MEMOIR 0.0967 0.0578 0.1427 0.0563 Low SASRec 0.0800 0.0478 0.1121 0.0446 DuoRec 0.0486 0.0305 0.0674 0.0312 UniSRec 0.1286 0.0703 0.1940 0.0657 MEMOIR 0.1239 0.0714 0.1861 0.0673 
+
+shows this is not attributable to any single tested component in aggregate, and we have not re-run that ablation stratified by drift group, which would be a natural next step. One plausible connec-tion is the directional-consistency assumption discussed in §3.7: it is best suited to users with a clear, monotonic drift direction (arguably true of both high-drift users mid-transition and low-drift users with a stable direction), and may be neutral-to-harmful for the oscillating, less-directional preference changes more typical of the medium-drift band—but we surface this as a hypothesis for future ablation, not a demonstrated mechanism. 
+
+## 5 Conclusion 
+
+We presented MEMOIR, a framework that segments user history into temporal windows of LLM-generated behavioral memory and aggregates current state, evolution direction, and predicted future into a user representation. On Amazon Reviews, MEMOIR clearly outperforms six traditional and LLM-enhanced baselines, and is statistically tied with the strongest baseline, UniSRec, in aggregate NDCG@10. Neither result decomposes cleanly: an ablation over MEMOIR’s own components shows none individually explains the gain over SASRec (§4.3), and stratifying by preference drift shows the near-tie with UniSRec masks a real, specific pattern—MEMOIR leads on ranking-quality metrics at the high- and low-drift extremes, while UniSRec leads throughout the medium-drift majority and on volume-oriented metrics everywhere (§4.5). We report the drift-stratified result, not the aggregate comparison or any single archi-tectural ablation, as this paper’s most substantive finding, and leave open why MEMOIR’s advantage concentrates where it does. Known limitations include the directional-consistency assumption that may penalize users with oscillating seasonal preferences—plausibly connected to the medium-drift band’s weaker results, though not yet tested directly—and reduced evolution signal for sparse users with fewer than three windows (§3.7). More broadly, MEMOIR trades the inference simplicity and model-agnostic flexibility of ID-based approaches—where lightweight backbones such as SASRec or GRU4Rec serve recommendations in single-digit milliseconds and contrastive or LLM-based augmentation can be applied as a plug-in training signal—for richer evolution-aware representations that require LLM-derived window embeddings. In latency-critical production settings where sub-millisecond serving is required, or when the deployment stack must remain backbone-agnostic, these ID-based methods with semantic augmentation remain a practical and competitive alternative. Future work includes adaptive window granularity to handle irregular activity patterns, scaling to multiple domains, and exploring inference-time efficiency through incre-mental memory caching to narrow the latency gap with ID-based pipelines. 
+
+## References 
+
+[1] Keqin Bao, Jizhi Zhang, Yang Zhang, Wenjie Wang, Fuli Feng, and Xiangnan He. 2023. TALLRec: An Effective and Efficient Tuning Framework to Align Large Language Model with Recommendation. In Proceedings of the 17th ACM Conference on Recommender Systems (RecSys) . 1007–1014. [2] Jianxin Chang, Chen Gao, Yu Zheng, Yiqun Hui, Yanan Niu, Yang Song, Depeng Jin, and Yong Li. 2021. Sequential Recommendation with Graph Neural Networks. In Proceedings of the 44th International ACM SIGIR Conference on Research and Development in Information Retrieval . 378–387. [3] Ziqiang Cui, Yunpeng Weng, Xing Tang, Xiaokun Zhang, Shiwei Li, Peiyang Liu, Bowei He, Dugang Liu, Weihong Luo, Xiuqiang He, and Chen Ma. 2025. Semantic Retrieval Augmented Contrastive Learning for Sequential Recommendation. 
+
+arXiv preprint arXiv:2503.04162 (2025). [4] Travis Ebesu, Bin Shen, and Yi Fang. 2018. Collaborative Memory Network for Recommendation Systems. In Proceedings of the 41st International ACM SIGIR Conference on Research and Development in Information Retrieval . 515–524. [5] Balázs Hidasi, Alexandros Karatzoglou, Linas Baltrunas, and Domonkos Tikk. 2016. Session-based Recommendations with Recurrent Neural Networks. In 
+
+Proceedings of the International Conference on Learning Representations (ICLR) .[6] Yupeng Hou, Jiacheng Li, Zhankui He, An Yan, Xiusi Chen, and Julian McAuley. 2024. Bridging Language and Items for Retrieval and Recommendation. arXiv preprint arXiv:2403.03952 (2024). [7] Yupeng Hou, Shanlei Mu, Wayne Xin Zhao, Yaliang Li, Bolin Ding, and Ji-Rong Wen. 2022. Towards Universal Sequence Representation Learning for Recom-mender Systems. In Proceedings of the 28th ACM SIGKDD Conference on Knowl-edge Discovery and Data Mining (KDD) . 585–593. [8] Wang-Cheng Kang and Julian McAuley. 2018. Self-Attentive Sequential Recom-mendation. In Proceedings of the IEEE International Conference on Data Mining (ICDM) . 197–206. [9] Jiacheng Li, Yujie Wang, and Julian McAuley. 2020. Time Interval Aware Self-Attention for Sequential Recommendation. In Proceedings of the 13th ACM Inter-national Conference on Web Search and Data Mining (WSDM) . 322–330. [10] Jiayi Liao, Sihang Li, Zhengyi Yang, Jiancan Wu, Yancheng Yuan, Xiang Wang, and Xiangnan He. 2024. LLaRA: Large Language-Recommendation Assistant. In Proceedings of the 47th International ACM SIGIR Conference on Research and Development in Information Retrieval . 1785–1795. [11] Ruihong Qiu, Zi Huang, Hongzhi Yin, and Zijian Wang. 2022. Contrastive Learn-ing for Representation Degeneration Problem in Sequential Recommendation. In Proceedings of the 15th ACM International Conference on Web Search and Data Mining (WSDM) . 813–823. [12] Sainbayar Sukhbaatar, Arthur Szlam, Jason Weston, and Rob Fergus. 2015. End-To-End Memory Networks. In Advances in Neural Information Processing Systems (NeurIPS) , Vol. 28. [13] Fei Sun, Jun Liu, Jian Wu, Changhua Pei, Xiao Lin, Wenwu Ou, and Peng Jiang. 2019. BERT4Rec: Sequential Recommendation with Bidirectional Encoder Rep-resentations from Transformer. In Proceedings of the 28th ACM International Conference on Information and Knowledge Management (CIKM) . 1441–1450. [14] Aaron van den Oord, Yazhe Li, and Oriol Vinyals. 2018. Representation Learning with Contrastive Predictive Coding. arXiv preprint arXiv:1807.03748 (2018). [15] Xu Xie, Fei Sun, Zhaoyang Liu, Shiwen Wu, Jinyang Gao, Jiandong Zhang, Bolin Ding, and Bin Cui. 2022. Contrastive Learning for Sequential Recommendation. In Proceedings of the IEEE 38th International Conference on Data Engineering (ICDE) . 1259–1273. [16] Peiyuan Zhang, Guangteng Zeng, Tianhao Wang, and Wei Lu. 2024. TinyLlama: An Open-Source Small Language Model. arXiv preprint arXiv:2401.02385 (2024).

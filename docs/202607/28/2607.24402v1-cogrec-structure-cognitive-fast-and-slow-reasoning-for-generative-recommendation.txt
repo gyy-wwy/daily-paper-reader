@@ -1,0 +1,969 @@
+Title: CogRec: Structure-Cognitive Fast-and-Slow Reasoning for Generative Recommendation
+
+URL Source: https://arxiv.org/pdf/2607.24402v1
+
+Published Time: Tue, 28 Jul 2026 02:22:28 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+# CogRec: Structure-Cognitive Fast-and-Slow Reasoning for Generative Recommendation 
+
+## Xiang Liu 
+
+Institute of Information Engineering, Chinese Academy of Sciences Beijing, China School of Cyber Security, University of Chinese Academy of Sciences Beijing, China liuxiang@iie.ac.cn 
+
+## Jingsong Su 
+
+School of Artificial Intelligence, Beijing Normal University Beijing, China sujingsong@mail.bnu.edu.cn 
+
+## Shuqi Zhao 
+
+Institute of Information Engineering, Chinese Academy of Sciences Beijing, China School of Cyber Security, University of Chinese Academy of Sciences Beijing, China zhaoshuqi@iie.ac.cn 
+
+## Pengbo Mo 
+
+Institute of Information Engineering, Chinese Academy of Sciences Beijing, China School of Cyber Security, University of Chinese Academy of Sciences Beijing, China mopengbo@iie.ac.cn 
+
+## Yiming Qiu Huimu Wang 
+
+qiuyiming@jd.com wanghuimu@jd.com JD.com Beijing, China 
+
+## Mingming Li ∗
+
+Institute of Information Engineering, Chinese Academy of Sciences Beijing, China limingming@iie.ac.cn 
+
+## Jiao Dai 
+
+Institute of Information Engineering, Chinese Academy of Sciences Beijing, China daijiao@iie.ac.cn 
+
+## Jizhong Han 
+
+Institute of Information Engineering, Chinese Academy of Sciences Beijing, China hanjizhong@iie.ac.cn 
+
+## Songlin Hu 
+
+Institute of Information Engineering, Chinese Academy of Sciences Beijing, China School of Cyber Security, University of Chinese Academy of Sciences Beijing, China husonglin@iie.ac.cn 
+
+## Abstract 
+
+Semantic-ID-based generative recommendation represents each item as a hierarchical discrete token sequence and reformulates next-item prediction as constrained sequence generation. Existing methods, however, mainly use Semantic IDs as target sequences to be memorized, leaving the hierarchy, intra-layer relations, and item neighborhoods underused as an explicit reasoning space. Explicit reasoning-enhanced generative methods often produce a natural-language rationale before the item identifier, but this rationale is only weakly coupled with the discrete SID space in which the fi-nal prediction is made. We propose CogRec, a structure-cognitive fast-and-slow reasoning framework that grounds intermediate rea-soning in the same SID topology used for target generation. CogRec  
+
+> ∗Corresponding author. Permission to make digital or hard copies of all or part of this work for personal or classroom use is granted without fee provided that copies are not made or distributed for profit or commercial advantage and that copies bear this notice and the full citation on the first page. Copyrights for components of this work owned by others than the author(s) must be honored. Abstracting with credit is permitted. To copy otherwise, or republish, to post on servers or to redistribute to lists, requires prior specific permission and/or a fee. Request permissions from permissions@acm.org.
+> Conference acronym ’XX, Woodstock, NY
+> ©2018 Copyright held by the owner/author(s). Publication rights licensed to ACM. ACM ISBN 978-1-4503-XXXX-X/2018/06 https://doi.org/XXXXXXX.XXXXXXX
+
+augments the vertical SID hierarchy with intra-layer semantic graphs and item-level neighborhoods, and introduces SID Rout-ing to represent recommendation reasoning through layer-wise 
+
+Match , LateralJump , and Explore operations. Exact matching im-plements fast semantic localization, whereas lateral and exploratory operations instantiate slower structural navigation. A supervised multi-stage pipeline aligns the newly introduced SID tokens, es-tablishes direct SID generation, and trains natural-language and SID-routing reasoning branches from a shared checkpoint under the same trie-constrained output space. Experiments on three pub-lic sequential-recommendation benchmarks show that SID Rout-ing improves its corresponding direct-generation, indicate that structure-grounded reasoning is most useful when prefix matching is insufficient but learnable SID-space transitions remain avail-able, whereas long or weakly supported routes introduce addi-tional decoding cost and accumulated errors. Code is available at https://github.com/caskcsg/CogRec. 
+
+## CCS Concepts 
+
+• Do Not Use This Code → Generate the Correct Terms for Your Paper ; Generate the Correct Terms for Your Paper ; Generate the Correct Terms for Your Paper; Generate the Correct Terms for Your Paper. arXiv:2607.24402v1 [cs.IR] 27 Jul 2026 Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Liu et al. 
+
+## Keywords 
+
+Generative Recommendation, Semantic IDs, Structure-grounded Reasoning, Fast-and-Slow Reasoning, Constrained Decoding  
+
+> ACM Reference Format:
+> Xiang Liu, Jingsong Su, Shuqi Zhao, Pengbo Mo, Yiming Qiu, Huimu Wang, Mingming Li, Jiao Dai, Jizhong Han, and Songlin Hu. 2018. CogRec: Structure-Cognitive Fast-and-Slow Reasoning for Generative Recommendation. In
+> Proceedings of Make sure to enter the correct conference title from your rights confirmation email (Conference acronym ’XX). ACM, New York, NY, USA, 15 pages. https://doi.org/XXXXXXX.XXXXXXX
+
+## 1 Introduction 
+
+Generative recommendation has recently become an important paradigm for sequential recommendation, where the model directly generates item identifiers instead of scoring all candidate items. A representative line of work uses Semantic IDs (SIDs) to encode items as hierarchical discrete token sequences, thereby reformulat-ing next-item recommendation as language-model-style sequence generation [ 4 , 19 , 23 ]. Compared with atomic item IDs, SIDs pro-vide a structured target space and make item generation compatible with large language models. However, current SID-based generative recommendations mostly treat SIDs as target token sequences to be memorized. The hierar-chical SID structure offers coarse-to-fine semantic organization, but it is usually used only as an output format rather than as an explicit reasoning substrate. In particular, a pure SID hierarchy mainly cap-tures vertical parent-child relations, while lateral relations among semantically related codes at the same layer are rarely used dur-ing generation. As a result, the model may learn to generate valid identifiers, but the intermediate process of moving from historical items to the target item remains weakly structured. A natural way to enhance recommendation is to introduce addi-tional computation before producing the final prediction. ReaRec, proposed in Think Before Recommend, performs implicit multi-step reasoning over the hidden representation of a conventional sequen-tial recommender [ 22 ]. In the generative setting, OneRec-Think instead produces an explicit in-text rationale before generating the target item identifier [ 15 ]. These studies indicate that additional reasoning computation can be useful when user intent is difficult to resolve. However, neither latent hidden-state iteration nor a natural-language rationale directly specifies how the model should navigate the discrete SID decoding space. For explicit textual rea-soning in particular, the model reasons in language tokens but must eventually generate a valid hierarchical SID sequence, creating a mismatch between the reasoning space and the prediction space. We address the reasoning–prediction mismatch with CogRec , a fast-and-slow framework grounded in the SID space. CogRec aug-ments the vertical hierarchy with intra-layer semantic graphs and item-level nearest-neighbor relations, forming a navigable topology. It then introduces SID Routing , which relates a historical anchor to the target through layer-wise Match , LateralJump , and Explore 
+
+operations. Unlike a natural-language rationale, these operations are defined in the target-identifier space and operationalize the structural relation between the user history and target SID. CogRec uses fast-and-slow thinking as a computational lens rather than a claim of human-like cognition [ 12 ]. Fast and slow reasoning are not implemented as two independent neural mod-ules. A Match operation corresponds to fast semantic localization because the anchor and target already share the same SID code at a layer. A LateralJump follows an explicit intra-layer seman-tic relation, while an Explore operation handles a transition for which no direct graph edge is observed. The latter two operations introduce additional structural processing and are treated as slow navigation. This operationalization makes the amount of structural reasoning measurable through the number and cost of non-Match 
+
+operations. Figure 1 summarizes the complete workflow. Stage 0 constructs the SID topology, data assets, and expanded SID vocabulary. Stage 1 aligns the newly introduced SID-token embeddings with item semantics. Stage 2 trains direct target-SID generation and provides a common recommendation checkpoint. Two reasoning branches are then initialized from this same checkpoint: Stage 3a generates natural-language preference rationales, whereas Stage 3b generates structure-grounded SID Routing traces. The shared initialization, SID mapping, candidate-item space, and trie-constrained decod-ing protocol make the intermediate reasoning representation the principal controlled difference between the two branches. We evaluate CogRec on three public sequential-recommendation benchmarks. The overall comparison first separates methods that generate recommendations without additional reasoning from reasoning-enhanced methods, and further distinguishes traditional sequen-tial recommendations from generative recommendations. Five re-search questions examine overall performance, reasoning format, difficulty-stratified behavior, routing cost, and progressive design choices. Under the controlled protocol, SID Routing improves Hit@10 and NDCG@10 over its direct counterpart on two benchmarks, while direct generation remains preferable on the third. The strat-ified and behavioral analyses further indicate that the benefit of routing is concentrated in a conditional structural regime: direct prefix matching is insufficient, yet the target remains connected to the history through learnable SID-space relations. The contributions of this paper are summarized as follows: 
+
+• Structure-cognitive SID topology. We augment hierar-chical Semantic IDs with intra-layer semantic graphs and item-level nearest-neighbor relations, transforming the SID space from a pure output hierarchy into a navigable structure for recommendation reasoning. 
+
+• Operational fast-and-slow SID Routing. We formulate recommendation reasoning as layer-wise Match , Later-alJump , and Explore operations. Their step counts and structural costs provide a computable realization of fast local-ization and slower lateral or exploratory navigation without introducing separate fast and slow model modules. 
+
+• Controlled multi-stage reasoning comparison. We con-struct a supervised pipeline that aligns SID tokens, estab-lishes direct SID generation, and trains natural-language and structure-grounded reasoning branches from a shared checkpoint under the same SID mapping and constrained decoding protocol. 
+
+• Comprehensive empirical and behavioral analysis. Ex-periments on public benchmarks cover overall effectiveness, CogRec: Structure-Cognitive Fast-and-Slow Reasoning for Generative Recommendation Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Stage 1  SID 
+
+Token Alignment 
+
+Stage 2  Direct SID 
+
+Generation 
+
+Stage 3 a Natural-Language Reasoning 
+
+Stage 3 b SID Routing Reasoning 
+
+Qwen3-1.7B 
+
+> The user has purchased the
+> following items:
+> <|sid_begin|>xxx<|sid_end|>, its
+> title is "Hydrating Facial Cleanser",
+> its categories are "Beauty > Skin
+> Care > Cleansers"; <|sid_begin|>
+> xxx <|sid_end|>, its title is "Daily
+> Moisturizer", its categories are
+> "Beauty > Skin Care >
+> Moisturizers";
+
+special 
+
+token 
+
+CogRec 
+
+# ...  ... 
+
+The user has purchased the following items  <item_a_1> <item_b_1> <item_c_1>  and  <item_a_2> <item_b_2> <item_c_2> ，he will next click   
+
+> <|im_start|>system
+> You are a professional recommendation
+> expert who
+> needs to recommend the next possible
+> purchase for users based on their purchase
+> history. Please predict the most likely next
+> product that the user will
+> purchase based on the user's historical
+> purchase information. <|im_end|>
+> <|im_start|>user
+> The user has purchased the following items:
+> SID_1; SID_2; SID_3;<|im_end|>
+> <|im_start|>assistant <think> </think>
+> groundtruth ：SID_4 <|im_end|>
+
+User history 
+
+> Model visible item
+
+Target item 
+
+generation        
+
+> <|im_start|>system
+> You are a professional recommendation
+> expert xxx <|im_end|>
+> <|im_start|>assistant <think> he user is
+> likely to buy items in Beauty > Skin
+> Care > Serums category </think>
+> groundtruth ：SID_4 <|im_end|>
+> <|im_start|>system xxx
+> Express your prediction as a Semantic
+> ID by navigating the SID hierarchy.
+> <|im_end|>
+> <|im_start|>assistant <think> s_b:
+> LateralJump from cluster 45 to 78 via
+> edge (similarity=0.7234). s_c: Explore
+> from cluster 12 to 201 (no direct edge,
+> inferred from user interest
+> pattern). </think>
+> groundtruth ：SID_4 <|im_end|>
+> Lateral Jump
+> Explore
+
+<think> 
+
+Reasoning 
+
+</think> 
+
+Target Item 
+
+Text Token 
+
+Itemic Token 
+
+....... 
+
+Stage 0  SID Topology 
+
+Initialization 
+
+1 Construct hierarchical 
+
+item SIDs 
+
+2 Build intra-layer 
+
+semantic graphs 
+
+3 Index item-level 
+
+neighborhoods 
+
+LateralJump / Explore 
+
+12  201  
+
+> (Cluster 12) (Cluster 201)
+> lateral jump
+> Initialize the SID topology
+
+Input 
+
+Output 
+
+<|sid_begin|> 
+
+<|sid_end|>  
+
+> Align SID-token embeddings Train direct SID generation
+> Output:
+> Target item generation
+
+....... 
+
+Reasoning      
+
+> s_b: LateralJump from cluster 45 to 78 via edge (similarity=0.7234). s_c: Explore from
+> cluster 12 to 201 (no direct edge, inferred from user interest pattern).
+
+Figure 1: Overview of CogRec. Stage 0 constructs the structure-cognitive SID topology from hierarchical Semantic IDs, intra-layer semantic graphs, and item-level neighborhoods. Stage 1 aligns the newly introduced SID tokens with item semantics, and Stage 2 establishes direct SID generation. Starting from the same Stage 2 checkpoint, Stage 3a learns natural-language reasoning, whereas Stage 3b learns the proposed structure-grounded SID Routing traces. All variants share the same SID mapping, target-item space, and constrained SID decoding protocol. 
+
+reasoning-format comparison, structural difficulty, routing-step distribution, generated reasoning length, and a progres-sive design study. The results identify both the conditions under which SID Routing is useful and its failure modes in long or weakly supported routes. 
+
+## 2 Related Work 
+
+Sequential and graph-based recommendation. Sequential rec-ommendation models predict the next item from a user’s historical interaction sequence. Representative methods include recurrent neural recommenders such as GRU4Rec [ 10 ], self-attention based models such as SASRec [ 13 ], bidirectional sequence encoders such as BERT4Rec [ 21 ], hierarchical gating models such as HGN [ 16 ], and recent large-scale sequential transducers such as HSTU [ 37 ]. Another related line uses collaborative filtering or graph structure to model user-item relations, including BPR [ 20 ], NGCF [ 26 ], and LightGCN [ 7 ]. These methods provide strong behavior-sequence and collaborative-signal baselines, but they usually operate on atomic item identifiers or learned embeddings rather than gen-erating structured Semantic IDs. 
+
+Semantic-ID-based generative recommendation. Genera-tive retrieval and recommendation reformulate retrieval as identi-fier generation. DSI first demonstrates that retrieval can be mod-eled as direct document-identifier generation [ 23 ], while TIGER introduces hierarchical Semantic IDs into sequential recommenda-tion [ 19 ]. The construction of discrete identifiers is closely related to vector quantization and product-quantization techniques [ 11 , 24 ]. OneRec further unifies retrieval and ranking within a generative recommendation framework [4]. A broader line of language-model-based recommendation rep-resents user behaviors, items, or recommendation tasks in a uni-fied token space. Representative approaches include P5 and graph-augmented LLM recommendation [ 6, 30 ], and recent surveys sum-marize the growing intersection between large language models and recommendation [ 31 ]. Within Semantic-ID-based recommendation, Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Liu et al. 
+
+LETTER improves learnable item tokenization by combining seman-tic, collaborative, and code-diversity objectives [ 25 ], while EAGER incorporates complementary behavioral and semantic streams [ 28 ]. Recent studies further investigate how identifier construction and generative modeling should interact. GRAM incorporates hi-erarchical and collaborative item relations through semantic-to-lexical translation and multi-granular late fusion [ 14 ]; LOHRec explicitly exploits order and hierarchy in lightweight generative recommenders [ 33 ]; DIGER makes Semantic-ID learning differ-entiable with respect to the recommendation objective [ 5]; and CapsID studies soft-routed variable-length Semantic IDs [ 2]. These methods improve identifier construction, semantic alignment, or generative modeling, but generally do not formulate the existing SID topology itself as an explicit layer-wise reasoning path. 
+
+Reasoning-enhanced recommendation. Reasoning-enhanced recommendation includes both latent iterative computation in con-ventional sequential recommenders and explicit or implicit reason-ing in LLM-based generative recommenders. ReaRec, introduced in Think Before Recommend, augments sequential recommendation backbones with inference-time implicit multi-step reasoning over hidden user representations [ 22 ]. It does not generate a natural-language rationale or a Semantic ID, but provides an important non-generative reference for reasoning-time computation in rec-ommendation. For LLM-based generative recommendation, OneRec-Think gen-erates explicit reasoning before item-identifier generation [ 15 ]. PauseRec adds implicit reasoning computation without explicit rationale supervision [ 8 ]. TwiSTAR studies adaptive fast-and-slow allocation [ 1 ], while SIDReasoner strengthens SID–language align-ment and applies outcome-driven optimization [ 9 ]. CogRec instead derives deterministic, layer-wise supervision from the SID topology and represents the trace with Match , LateralJump , and Explore 
+
+operations. 
+
+Fast-and-slow reasoning and adaptive computation. Dual-process theory distinguishes fast intuitive judgment from slow deliberative reasoning [ 12 ]. In artificial intelligence, related ideas appear in chain-of-thought reasoning [ 29 ], self-consistency [ 27 ], Tree of Thoughts [ 35 ], ReAct [ 36 ], and least-to-most prompting [ 39 ]. Recent adaptive reasoning studies further explore when models should allocate more reasoning effort [ 3 , 18 ]. CogRec instantiates this perspective in the SID space: fast reasoning corresponds to vertical SID matching, while slow reasoning corresponds to lateral jumping and exploration over a structure-cognitive SID topology. 
+
+## 3 Method 
+
+CogRec grounds recommendation reasoning in the same Semantic ID (SID) space used for target generation. Given a user interaction history, the model can either directly generate the target SID or first generate a structure-grounded routing trace that describes the layer-wise relation between a historical anchor and the target. Figure 1 presents the complete multi-stage workflow, while Figure 2 illustrates the topology and routing operations. Fast and slow reasoning are not implemented as two independent model modules. Instead, they correspond to different operations in a shared SID topology. Exact vertical matching supports fast semantic localization, whereas lateral transitions and structurally unsupported transitions require additional reasoning operations. CogRec therefore operationalizes fast-and-slow reasoning through route structure and route cost rather than claiming human-like cognition or an explicit cognitive-system switch. 
+
+## 3.1 Problem Formulation 
+
+Let U and I denote the user and item sets. For each user 𝑢 ∈ U ,the historical interaction sequence is 
+
+𝐻 𝑢 = [𝑖 1, 𝑖 2, . . . , 𝑖 𝑡 ], (1) where 𝑖 𝑗 ∈ I . The next-item recommendation task is to predict the target item 𝑖 ★ = 𝑖 𝑡 +1 conditioned on 𝐻 𝑢 .In SID-based generative recommendation, each item 𝑖 is repre-sented by a hierarchical Semantic ID 
+
+𝑧 𝑖 = [𝑧 1 
+
+> 𝑖
+
+, 𝑧 2 
+
+> 𝑖
+
+, . . . , 𝑧 𝐿 𝑖 ], (2) where 𝐿 is the number of SID layers and 𝑧 𝑙 𝑖 is the discrete code assigned to item 𝑖 at layer 𝑙 . In our implementation, 𝐿 = 4 and each layer contains 256 possible codes. The SID is serialized as 
+
+⟨sid_begin ⟩⟨ s_a ⟩⟨ s_b ⟩⟨ s_c ⟩⟨ s_d ⟩⟨ sid_end ⟩. (3) CogRec considers two generation formats. Direct SID generation models 𝑝 𝜃 (𝑧 𝑖 ★ | 𝐻 𝑢 ) and predicts the target identifier without an explicit reasoning trace. SID Routing additionally generates an intermediate route 𝑅 𝑢 :
+
+𝑝 𝜃 (𝑅 𝑢 , 𝑧 𝑖 ★ | 𝐻 𝑢 ) = 𝑝 𝜃 (𝑅 𝑢 | 𝐻 𝑢 )𝑝 𝜃 (𝑧 𝑖 ★ | 𝐻 𝑢 , 𝑅 𝑢 ). (4) Both formats use the same item-to-SID mapping, candidate item space, and target-SID decoding constraint. Their main difference is therefore whether an intermediate reasoning sequence is generated before the target SID. 
+
+## 3.2 Structure-Cognitive SID Space 
+
+Standard SID-based methods mainly use hierarchical identifiers as output sequences. CogRec instead constructs a navigable SID topol-ogy that contains vertical hierarchy, intra-layer semantic relations, and fine-grained item neighborhoods. 
+
+Hierarchical Semantic IDs. Let 𝑥 𝑖 denote the metadata text of item 𝑖 , and let 
+
+𝑒 𝑖 = 𝑓 enc (𝑥 𝑖 ) (5) be its normalized semantic embedding. We apply residual K-means quantization with layer-specific codebooks C (𝑙 ) = {𝑐 (𝑙 ) 
+
+> 1
+
+, . . . , 𝑐 (𝑙 ) 
+
+> 𝐾
+
+}.Starting from 𝑟 (0) 
+
+> 𝑖
+
+= 𝑒 𝑖 , the code and residual at layer 𝑙 are obtained as 
+
+𝑧 𝑙 𝑖 = arg min    
+
+> 𝑘 ∈ { 1,...,𝐾 }
+
+𝑟 (𝑙 −1) 
+
+> 𝑖
+
+− 𝑐 (𝑙 ) 
+
+> 𝑘
+> 22
+
+, (6) 
+
+𝑟 (𝑙 ) 
+
+> 𝑖
+
+= 𝑟 (𝑙 −1) 
+
+> 𝑖
+
+− 𝑐 (𝑙 )
+
+> 𝑧 𝑙 𝑖
+
+. (7) The resulting coarse-to-fine hierarchy supports vertical localiza-tion: items sharing a longer SID prefix occupy a closer hierarchical region. 
+
+Intra-layer semantic graphs. For each layer 𝑙 , we construct a graph 
+
+𝐺 (𝑙 ) = (𝑉 (𝑙 ) , 𝐸 (𝑙 ) ), (8) CogRec: Structure-Cognitive Fast-and-Slow Reasoning for Generative Recommendation Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 0.94      
+
+> 0.43
+> 0.38
+> 0.26
+> 0.66
+> 0.80
+> 0.36
+> 0.74
+> 0.45
+> 12 201
+> No edge
+> Anchor Target
+> （45,78,12,156 ）（45,78,201,199 ）
+> Lateral Jump
+> Explore
+> Match
+> Anchor
+> （45,78,12,156 ）
+> Step 1
+> Similarity computation
+> Step 2
+> Top-𝑘 neighbor selection
+> Step 3
+> Similarity threshold filtering
+> Input: codebook centroids
+> Output: intra-layer graph
+> Structure-cognitive SID topology SID Routing Edge construction
+
+Figure 2: Structure-cognitive SID space and SID Routing. The intra-layer graph is constructed by selecting top-𝑘 centroid neighbors and filtering out candidate edges with similarity below 𝜏 = 0.15 ; equivalently, retained edges satisfy 𝑞 (𝑙 ) 
+
+> 𝑎𝑏
+
+≥ 𝜏 .Given a historical anchor and a target item during offline trace construction, SID Routing derives a layer-wise route consisting of Match , LateralJump , and Explore opera-tions. 
+
+where each node represents a codebook centroid. For centroids 𝑐 (𝑙 )
+
+> 𝑎
+
+and 𝑐 (𝑙 ) 
+
+> 𝑏
+
+, their relation score is 
+
+𝑞 (𝑙 ) 
+
+> 𝑎𝑏
+
+= ⟨𝑐 (𝑙 ) 
+
+> 𝑎
+
+, 𝑐 (𝑙 ) 
+
+> 𝑏
+
+⟩∥𝑐 (𝑙 ) 
+
+> 𝑎
+
+∥2 ∥𝑐 (𝑙 ) 
+
+> 𝑏
+
+∥2
+
+. (9) For each node 𝑎 , we first retrieve its top-𝑘 centroid neighbors and then apply a similarity threshold 𝜏 . Candidate edges with 𝑞 (𝑙 ) 
+
+> 𝑎𝑏
+
+< 𝜏 
+
+are discarded, and the retained edge set is 
+
+𝐸 (𝑙 ) =
+
+n
+
+(𝑎, 𝑏 ) 𝑏 ∈ N (𝑙 ) 
+
+> 𝑘
+
+(𝑎 ), 𝑞 (𝑙 ) 
+
+> 𝑎𝑏
+
+≥ 𝜏 
+
+o
+
+. (10) Thus, the “ < 𝜏 ” condition in the filtering step denotes the edges being removed, whereas 𝐸 (𝑙 ) contains the surviving edges. We use 𝜏 = 0.15 in all experiments. These edges preserve semantic proximity between different codes at the same abstraction level and provide explicit support for lateral transitions. 
+
+Item-level neighborhoods. Code-level graphs operate on quan-tization centroids and may lose fine-grained relations between in-dividual items. We therefore additionally construct a hierarchical navigable small-world index over item embeddings. The item-level index retains local semantic neighborhoods that complement the centroid graphs during offline topology construction and structural diagnosis. Its implementation parameters are reported separately in the experimental setup. Together, the hierarchy and the lateral relations transform the SID space from a pure output tree into a topology supporting two types of computation. Shared hierarchical codes permit fast vertical localization, whereas non-identical but semantically related codes permit slower lateral navigation. 
+
+## 3.3 Fast-and-Slow SID Routing 
+
+SID Routing converts recommendation reasoning into layer-wise operations over the SID topology. The target-dependent definitions in this subsection are used only for offline supervision construction and structural diagnostics. During inference, the model receives only the user history; the ground-truth target, anchor–target rela-tions, and reference route are not provided. 
+
+Historical anchor selection. For a historical item ℎ ∈ 𝐻 𝑢 and target item 𝑖 ★, we define their SID prefix-matching depth as 
+
+𝑚 (ℎ, 𝑖 ★) = max 𝜌 ∈ { 0, . . . , 𝐿 } 𝑧 𝑙 ℎ = 𝑧 𝑙 𝑖 ★, ∀𝑙 ≤ 𝜌 . (11) The maximum history-to-target matching depth is 
+
+𝑀 𝑢 = max 
+
+> ℎ∈𝐻 𝑢
+
+𝑚 (ℎ, 𝑖 ★), (12) and the corresponding historical item is selected as the anchor: 
+
+𝑎 𝑢 = arg max 
+
+> ℎ∈𝐻 𝑢
+
+𝑚 (ℎ, 𝑖 ★). (13) If no historical item matches the target at the first SID layer, the last item in the interaction sequence is used as a deterministic fallback anchor. This rule guarantees that every training instance has a well-defined route origin. 
+
+Layer-wise routing operations. For each layer 𝑙 , CogRec com-pares the anchor code 𝑧 𝑙 𝑎 𝑢 and the target code 𝑧 𝑙 𝑖 ★ :
+
+𝑟 𝑙 =
+
+
+
+Match , 𝑧 𝑙 𝑎 𝑢 = 𝑧 𝑙 𝑖 ★,
+
+LateralJump , (𝑧 𝑙 𝑎 𝑢 , 𝑧 𝑙 𝑖 ★ ) ∈ 𝐸 (𝑙 ) ,
+
+Explore , otherwise .
+
+(14) A Match indicates that the anchor and target already share the same code at layer 𝑙 . A LateralJump indicates an explicit intra-layer semantic edge. An Explore operation is assigned when neither exact matching nor a direct graph edge is observed. Thus, Explore 
+
+represents a structurally unsupported transition to be learned from the sequential context rather than a verified shortest path in the graph. The complete route is 
+
+𝑅 𝑢 = [𝑟 1, 𝑟 2, . . . , 𝑟 𝐿 ]. (15) For supervised training, only non-trivial operations are verbalized in the <think> segment. Match operations may be omitted because they introduce no lateral transition. If all layers are Match , the reasoning segment is empty and the model directly generates the target SID. 
+
+Operational fast-and-slow computation. We assign an auxil-iary structural cost to each operation: 
+
+𝑐 (𝑟 𝑙 ) =
+
+
+
+0, 𝑟 𝑙 = Match ,
+
+1, 𝑟 𝑙 = LateralJump ,
+
+2, 𝑟 𝑙 = Explore .
+
+(16) The total routing cost and the number of non-Match steps are 
+
+𝐶 𝑢 =
+
+> 𝐿
+
+∑︁ 
+
+> 𝑙 =1
+
+𝑐 (𝑟 𝑙 ), (17) 
+
+𝑠 𝑢 =
+
+> 𝐿
+
+∑︁ 
+
+> 𝑙 =1
+
+I[𝑟 𝑙 ≠ Match ]. (18) Because each non-Match operation has cost one or two, 
+
+𝑠 𝑢 ≤ 𝐶 𝑢 ≤ 2𝑠 𝑢 ≤ 2𝐿. (19) A route with 𝐶 𝑢 = 0 is a pure fast-localization case: every layer can be resolved through exact SID matching and no explicit reasoning Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Liu et al. 
+
+text is required. A route with 𝐶 𝑢 > 0 invokes one or more slow operations, with Explore assigned a larger structural cost than 
+
+LateralJump . The values 0, 1, and 2 define an ordinal diagnostic convention, encoding Match <LateralJump <Explore ; they are not learned costs, measured latency, or a calibrated estimate of cognitive effort. The cost does not directly enter the training loss. 
+
+## 3.4 Structural Difficulty and Routing Complexity 
+
+The same topology used to construct routing traces provides two complementary diagnostics: coarse structural difficulty and fine-grained routing complexity. 
+
+Graph-based proximity. Let 𝐺 (1) denote the graph at the first and coarsest SID layer. For each user–target pair, we define the minimum history-to-target graph distance as 
+
+𝐷 𝑢 = min 
+
+> ℎ∈𝐻 𝑢
+
+dist 𝐺 (1)
+
+ 𝑧 1
+
+> ℎ
+
+, 𝑧 1
+
+> 𝑖 ★
+
+ . (20) The breadth-first search depth is capped at 𝐷 max = 4. A pair that is not connected within this depth is assigned distance 𝐷 max + 1.
+
+Difficulty groups. Using the maximum prefix depth 𝑀 𝑢 and graph distance 𝐷 𝑢 , we define 
+
+𝛿 𝑢 =
+
+
+
+Easy , 𝑀 𝑢 ≥ 2,
+
+Medium , 𝑀 𝑢 < 2 ∧ ( 𝑀 𝑢 ≥ 1 ∨ 𝐷 𝑢 ≤ 2),
+
+Hard , otherwise .
+
+(21) Easy instances contain a historical item sharing at least the first two SID layers with the target. Medium instances lack a sufficiently long prefix but preserve either first-layer agreement or short-range graph proximity. Hard instances have neither strong prefix overlap nor short coarse-layer connectivity. These labels are used for analysis and data diagnosis rather than as recommendation targets. The difficulty label 𝛿 𝑢 describes coarse history–target proximity, whereas 𝑠 𝑢 and 𝐶 𝑢 measure the actual layer-wise complexity of the constructed route. The two notions are related but not identical: a pair may be close at the coarse layer and therefore classified as Medium, while still requiring several LateralJump or Explore op-erations at finer SID layers. This distinction supports the difficulty-stratified and routing-step analyses in Sections 4.5 and 4.6. 
+
+## 3.5 Multi-stage Training Pipeline 
+
+CogRec adopts the multi-stage pipeline shown in Figure 1. The stages progressively introduce the SID vocabulary, direct recom-mendation capability, and alternative forms of intermediate reason-ing while maintaining a shared SID output space. 
+
+Stage 0: Topology and vocabulary initialization. Stage 0 is an offline initialization stage rather than a trainable reasoning module. It constructs the four-layer SIDs, intra-layer semantic graphs, item-level neighborhood index, and sequential data splits. It also extends the base-model vocabulary with 1,024 layer-specific SID tokens and two SID boundary tokens. The resulting topology, SID mapping, and expanded vocabulary are shared by all subsequent stages. 
+
+Stage 1: SID-token alignment. The newly introduced SID to-kens are randomly initialized and are not semantically aligned with the base model. Stage 1 trains their embedding parameters using item descriptions paired with the corresponding SID sequences while freezing the remaining model parameters. The checkpoint with the lowest validation loss is merged into the base model and serves as the common initialization for recommendation training. 
+
+Stage 2: Direct SID generation. Stage 2 trains the model to predict the target SID directly from the user history. Its assistant re-sponse contains an empty <think> segment followed by the ground-truth SID. This stage establishes the direct-generation capability and produces the shared checkpoint from which both reasoning branches are initialized. 
+
+Stage 3a: Natural-language reasoning. Stage 3a reproduces the natural-language reasoning setting. Starting from the Stage 2 checkpoint, the model is trained to generate a category-level or preference-level rationale before the target SID. This branch provides a controlled reasoning baseline whose intermediate text is semantically descriptive but is not explicitly defined over the SID topology. 
+
+Stage 3b: SID Routing reasoning. Stage 3b also starts from the same Stage 2 checkpoint, but replaces natural-language rationales with the structured routing traces constructed above. Each assis-tant response contains the non-trivial LateralJump and Explore 
+
+operations followed by the target SID. The use of a common Stage 2 initialization ensures that Stage 3a and Stage 3b primarily differ in the representation of intermediate reasoning rather than in the underlying SID mapping or direct-generation starting point. This pipeline yields three controlled output formats: direct SID generation from Stage 2, natural-language reasoning from Stage 3a, and structure-grounded SID Routing from Stage 3b. The experimen-tal comparison among these variants therefore focuses on whether the form and grounding of the intermediate trace affect final SID generation. 
+
+## 3.6 Training Objective and Constrained Decoding 
+
+All trainable stages use an autoregressive language-modeling ob-jective. Given a formatted token sequence 𝑌 = [𝑦 1, . . . , 𝑦 𝑛 ], the loss is 
+
+L = −
+
+> 𝑛
+
+∑︁ 
+
+> 𝑚 =1
+
+𝛼 𝑚 log 𝑝 𝜃 (𝑦 𝑚 | 𝑦 <𝑚 ), (22) where 𝛼 𝑚 is a stage-dependent loss mask. Stage 1 computes the loss over the alignment sequence. For Stages 2, 3a, and 3b, system-prompt tokens are masked, whereas the user-history and assistant-response segments participate in training. Including the user-history segment is important because the input contains many newly introduced SID tokens. An assistant-only mask would supervise the target SID and reasoning trace but would provide weaker direct learning signals to SID tokens appearing in the historical context. The user-to-assistant mask therefore jointly trains the input-side SID representations and the output generation behavior. The alternative masking strategy is evaluated in the progressive design study. At inference time, the model receives only the user interaction history. In the direct format, it immediately generates the target SID. In a reasoning-augmented format, it first generates the intermediate reasoning segment and then generates the target SID. The target-SID portion is decoded with trie-constrained beam search, where the trie contains all valid item SID sequences. At every SID decoding step, only legal continuations of the current prefix are permitted. CogRec: Structure-Cognitive Fast-and-Slow Reasoning for Generative Recommendation Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+Table 1: Main implementation settings. Effective batch size denotes the batch size after gradient accumulation. Stage 3a and Stage 3b are initialized from the same Stage 2 checkpoint.       
+
+> Component Setting Details
+> Backbone Qwen3-1.7B Shared by direct SID generation, natural-language reasoning, and SID Routing. SID construction 4 layers; 256 codes/layer; 30 K-means iterations Item metadata is encoded by BGE into 768-dimensional normalized embeddings before residual quantization. Intra-layer graph Top-
+
+16 ; 𝜏 = 0.15 Candidate centroid edges with cosine similarity below 𝜏 are filtered out. Item neighborhood HNSW 𝑀 = 32 ; efConstruction =200 An index is built within each finest-layer cluster containing at least ten items; efSearch is not manually overridden. Reasoning decoding 5 traces; temperature 1.5; top-𝑝 0.95 Each trace conditions a separate constrained target-SID decoding process. SID decoding Beam 10; temperature 0.6; top-𝑝 1.0; max 8 SID tokens Produces at most 50 trace-conditioned SID hypotheses per instance. Stage 1: SID alignment LR 1 × 10 −4; up to 15 epochs; effective batch 64 Only the newly introduced SID-token embeddings are trainable; the checkpoint with the lowest validation loss is retained. Stage 2: direct generation LR 1 × 10 −5; 6 epochs; effective batch 16 Full-parameter fine-tuning; warmup ratio 0.1; weight decay 0.01; constant_with_warmup .Stage 3a: natural-language reasoning 2 iterative epochs Alternates rationale reconstruction and supervised training; initialized from the Stage 2 checkpoint and otherwise follows the Stage 2 optimization settings. Stage 3b: SID Routing LR 1 × 10 −5; 3 epochs; effective batch 16 Full-parameter fine-tuning; warmup ratio 0.1; weight decay 0.01; constant_with_warmup .Reported Stage 3b checkpoint Beauty: epoch 2; Sports: epoch 2; Toys: epoch 3The selected checkpoint for each dataset is fixed before test-set evaluation. Random seed 42 Used for the controlled OneRec-family reproductions and CogRec experiments. Optimizer AdamW 𝛽 1 = 0.9, 𝛽 2 = 0.999 , and 𝜖 = 10 −8.Full-test CoT history limit Beauty: 21; Sports: 20; Toys: 18; tail truncation Applied only to the separate full-test CoT commands as a memory-control setting; training, direct generation, and subset-CoT evaluation retain their original histories. Distributed training DeepSpeed ZeRO-2 Training is conducted on multiple NVIDIA A800 GPUs. 
+
+Table 2: Dataset statistics. 
+
+Dataset #Users #Items #Interactions Avg. Len. Beauty 22,363 12,101 176,139 8.87 Sports 35,598 18,357 260,739 8.32 Toys 19,412 11,924 148,185 8.63 Consequently, all compared generative variants return identifiers corresponding to existing candidate items and share the same valid output space. 
+
+## 4 Experiments 
+
+In this section, we conduct comprehensive experiments to evaluate the proposed CogRec framework. We aim to answer the following research questions: 
+
+• RQ1 : How does CogRec compare with state-of-the-art base-lines, including both traditional sequential recommenders and generative recommenders with or without reasoning enhancement? 
+
+• RQ2 : How does the intermediate reasoning format affect rec-ommendation performance when comparing direct SID gen-eration, natural-language reasoning, and structure-grounded SID Routing? 
+
+• RQ3 : How does the performance of SID Routing vary across structurally defined difficulty groups? 
+
+• RQ4 : What is the computational cost of fast-and-slow reason-ing, as reflected by routing-step distributions and generated reasoning lengths? 
+
+• RQ5 : How does the performance respond to sequential mod-ifications of key design components, including the routing trace, loss mask, and learning-rate schedule? 
+
+## 4.1 Experimental Setup 
+
+4.1.1 Datasets. We conduct experiments on three categories from the Amazon Reviews 2014 benchmark: Beauty, Sports, and Toys. Following common sequential recommendation protocols [ 13 , 19 ,21 ], user interactions are sorted chronologically. For each user, the last interacted item is used for testing, the second-to-last item is used for validation, and the remaining interactions are used for training. Each item is represented by metadata text, including title, de-scription, and category information when available. The metadata text is encoded into semantic embeddings and then quantized into four-layer Semantic IDs. All generative models use the same item-to-SID mapping and the same constrained decoding protocol. 
+
+4.1.2 Evaluation Metrics. We use Hit@ 𝐾 and NDCG@ 𝐾 to evalu-ate next-item recommendation accuracy. Hit@ 𝐾 measures whether the ground-truth next item appears among the top-𝐾 predictions, whereas NDCG@ 𝐾 additionally discounts a correct prediction ac-cording to its ranking position. The primary cross-source compari-son reports Hit@5, Hit@10, NDCG@5, and NDCG@10, because these four metrics are consistently available for the externally re-ported and third-party reproduced baselines in Table 3. For the controlled difficulty-stratified analysis in Figure 3, we addition-ally report Hit@1. This auxiliary rank-1 metric is available for the reproduced OneRec-Think Direct/CoT branches and the CogRec Direct/Routing branches because they are evaluated under the same data split, SID mapping, candidate set, and decoding protocol; it is not used for claims against external baselines. For all generative methods, predicted SID sequences are mapped to valid candidate items before the metrics are computed under the leave-one-out test protocol. 
+
+4.1.3 Decoding Protocol. All generative recommenders use trie-constrained decoding over the same candidate-item SID set. The trie is constructed from the complete set of valid four-layer item SIDs. At each SID decoding step, tokens that do not form a valid continuation of the current prefix are masked out. This guarantees that every completed SID corresponds to an existing candidate item and prevents invalid identifier sequences from entering the ranked recommendation list. Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Liu et al. 
+
+Table 3: Performance comparison across three categories of recommendation methods. Bold and underlined values indicate the best and second-best results, respectively.                                                                                                                                                                                                     
+
+> Dataset Metric Traditional Methods Generative Methods Reasoning Methods BERT4Rec HGN GRU4Rec SASRec HSTU TIGER LETTER EAGER OneRec-Think Direct CogRec Direct ReaRec PauseRec TwiSTAR OneRec-Think CogRec Routing Beauty
+> Hit@5 0.0232 0.0319 0.0395 0.0402 0.0424 0.0405 0.0371 0.0618 0.0610 0.0620 0.0450 0.0568 0.0609 0.0563 0.0616 Hit@10 0.0396 0.0536 0.0584 0.0607 0.0652 0.0623 0.0582 0.0836 0.0838 0.0842 0.0704 0.0746 0.0880 0.0791 0.0854 NDCG@5 0.0146 0.0196 0.0265 0.0254 0.0280 0.0267 0.0253 0.0451 0.0428 0.0440 0.0262 0.0401 0.0415 0.0398 0.0440 NDCG@10 0.0199 0.0266 0.0326 0.0320 0.0353 0.0337 0.0321 0.0525 0.0502 0.0512 0.0344 0.0467 0.0504 0.0471 0.0517
+> Sports
+> Hit@5 0.0102 0.0183 0.0190 0.0199 0.0268 0.0215 0.0240 0.0281 0.0301 0.0311 0.0214 0.0294 0.0324 0.0288 0.0324
+> Hit@10 0.0175 0.0313 0.0312 0.0301 0.0343 0.0347 0.0403 0.0441 0.0416 0.0427 0.0332 0.0422 0.0476 0.0412 0.0473 NDCG@5 0.0065 0.0109 0.0122 0.0106 0.0173 0.0137 0.0156 0.0184 0.0212 0.0218 0.0116 0.0203 0.0214 0.0199 0.0226
+> NDCG@10 0.0088 0.0150 0.0161 0.0141 0.0226 0.0179 0.0209 0.0236 0.0250 0.0256 0.0154 0.0245 0.0257 0.0239 0.0274 Toys
+> Hit@5 0.0215 0.0326 0.0330 0.0448 0.0366 0.0337 0.0321 0.0584 0.0623 0.0665 0.0523 0.0615 0.0594 0.0579 0.0647 Hit@10 0.0332 0.0517 0.0490 0.0626 0.0566 0.0547 0.0512 0.0714 0.0843 0.0901 0.0764 0.0838 0.0828 0.0797 0.0877 NDCG@5 0.0131 0.0192 0.0228 0.0300 0.0245 0.0209 0.0210 0.0464 0.0453 0.0476 0.0298 0.0434 0.0425 0.0412 0.0467 NDCG@10 0.0168 0.0254 0.0279 0.0358 0.0309 0.0276 0.0272 0.0505 0.0524 0.0552 0.0376 0.0509 0.0505 0.0482 0.0541
+
+We evaluate two generation formats. In direct SID generation, the model generates the target SID immediately after receiving the user history. In reasoning-augmented generation, the model first samples five intermediate reasoning traces with a temperature of 1.5 and top-𝑝 of 0.95. Conditioned on each trace, target SIDs are decoded using a beam size of 10, SID temperature of 0.6, top-
+
+𝑝 of 1.0, and at most eight newly generated SID tokens. These settings produce at most 50 trace-conditioned SID hypotheses per instance before top-𝐾 evaluation. Direct generation and reasoning-augmented generation use the same SID trie and candidate-item space. The manuscript does not introduce an additional learned candidate-fusion module. The default evaluation entry points compute No-CoT metrics on the complete test set and CoT metrics on the predefined CoT subset. Full-test CoT evaluation is run through separate commands because sampling five traces and ten beams per trace has substantially higher memory demand. For full-test CoT only, the history is tail-truncated to the approximate 95th-percentile sequence length: 21 items for Beauty, 20 for Sports, and 18 for Toys. This memory-control rule is not applied to training, direct generation, or the default subset-CoT evaluation. 
+
+4.1.4 Implementation Details. We use Qwen3-1.7B as the backbone language model [ 34 ] and BAAI/bge-base-en-v1.5 as the item-text encoder [ 32 ]. For each item, the available title, description, and category fields are concatenated as its metadata representation. The text encoder produces 768-dimensional embeddings with a maximum input length of 512 tokens and an embedding batch size of 64. All item embeddings are ℓ2-normalized before residual quantization and neighborhood construction. The Semantic ID space contains four residual-quantization layers, each with a codebook size of 256. The construction follows the general vector-quantization and product-quantization principles used to map continuous representations into discrete codes [ 11 , 24 ]. RQ-Kmeans is optimized for 30 iterations per layer. For each code centroid, we retrieve its top-16 intra-layer neighbors and retain directed edges whose cosine similarity is at least 0.15 .At the finest SID layer, an item-level hierarchical navigable small-world index is constructed separately within each cluster containing at least ten items [ 17 ]. We use FAISS IndexHNSWFlat with 𝑀 = 32 
+
+and efConstruction =200. The input embeddings are normalized before indexing; the implementation does not manually override 
+
+efSearch . HNSW preserves fine-grained item neighborhoods for topology construction and diagnosis, whereas supervised layer-wise routing labels are determined by exact SID matching and the code-centroid graphs. Stage 2 establishes direct SID generation from SID-only user histories. Stage 3a and Stage 3b use the same metadata-enriched user-history format and candidate SID space, and both start from the same Stage 2 checkpoint. Their controlled comparison changes the representation of intermediate reasoning. The system-prompt segment is excluded from the language-modeling loss, whereas the user-history and assistant-response segments participate in training. This user-to-assistant masking strategy provides direct supervision to newly introduced SID tokens appearing in the input history. All controlled reproduction and CogRec experiments use random sa eed 42. For Stage 3b, the reported checkpoints are epoch 2 for Beauty, epoch 2 for Sports, and epoch 3 for Toys; checkpoint selection is completed before test-set evaluation. 
+
+Code availability. The implementation, including data prepro-cessing, SID construction, supervised training, and evaluation scripts, is available at https://anonymous.4open.science/r/CogRec-2026. The evaluation code emits the metrics and stratified statistics used in the paper; final publication-rendering utilities are excluded be-cause they do not affect training, decoding, or metric computation. 
+
+## 4.2 Baselines 
+
+We organize the compared methods primarily by their inference behavior: methods that produce recommendations without an ad-ditional reasoning process and methods that introduce explicit, im-plicit, or adaptive reasoning computation. Within the non-reasoning group, we further distinguish traditional sequential recommenders from generative recommenders. CogRec-Direct is placed in the non-reasoning generative group, whereas CogRec-Routing is placed in the reasoning-enhanced group. 
+
+Traditional sequential recommenders without reasoning. 
+
+We include GRU4Rec [ 10 ], SASRec [ 13 ], BERT4Rec [ 21 ], HGN [ 16 ], CogRec: Structure-Cognitive Fast-and-Slow Reasoning for Generative Recommendation Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+Table 4: Effect of reasoning format within the controlled reproduction. For OneRec-Think, Direct and Reason denote the Direct and CoT reproduced branches; for CogRec, they denote CogRec-Direct and CogRec-Routing. 
+
+## Dataset Method Hit@10 Direct Hit@10 Reason NDCG@10 Direct NDCG@10 Reason 
+
+## Beauty OneRec-Think (Reprod.) 0.0838 0.0834 0.0502 0.0495 Beauty CogRec 0.0842 0.0854 0.0512 0.0517 Sports OneRec-Think (Reprod.) 0.0416 0.0392 0.0250 0.0226 Sports CogRec 0.0427 0.0473 0.0256 0.0274 Toys OneRec-Think (Reprod.) 0.0843 0.0852 0.0524 0.0535 Toys CogRec 0.0901 0.0877 0.0552 0.0541 
+
+and HSTU [ 37 ]. These methods model user interaction sequences using recurrent, self-attentive, bidirectional, hierarchical-gating, or large-scale sequential-transduction architectures. They operate primarily on atomic item identifiers or learned item embeddings and do not generate an explicit intermediate reasoning trace before recommendation. 
+
+Generative recommenders without reasoning. We include TIGER [ 19 ], LETTER [ 25 ], and EAGER [ 28 ], together with CogRec-Direct. TIGER generates hierarchical Semantic IDs for next-item recommendation. LETTER improves learnable item tokenization by jointly incorporating semantic, collaborative, and code-diversity objectives, while EAGER integrates behavioral and semantic rep-resentations within a generative recommendation framework. For LETTER, we use the standalone LETTER results reported under the Beauty, Sports, and Toys evaluation protocol of RAGR [ 38 ], rather than the review-augmented LETTER+RAGR model. CogRec-Direct uses the proposed SID construction and training pipeline but generates the target SID without an intermediate routing trace. 
+
+Reasoning-enhanced recommenders. We include ReaRec [ 22 ], PauseRec [ 8], TwiSTAR [ 1], OneRec-Think [ 15 ], and CogRec-Routing. ReaRec performs implicit multi-step inference over hidden user rep-resentations in a conventional sequential recommender. PauseRec introduces additional implicit reasoning computation without ex-plicit rationale supervision. TwiSTAR adaptively allocates fast and slow reasoning, and OneRec-Think generates an explicit textual rationale before item-identifier generation. CogRec-Routing in-stead generates layer-wise LateralJump and Explore operations grounded in the SID topology before producing the target SID. The OneRec-Think values in Table 3 are taken from the original paper rather than from our reproduced Direct and CoT branches; the latter are reserved for the controlled comparisons in Table 4 and Figure 3. 
+
+Comparison scope. Table 3 provides a broad comparison across representative method families, but the reported systems may differ in backbone, identifier construction, optimization procedure, and evaluation implementation. We therefore use it to assess overall competitiveness rather than to attribute performance differences exclusively to reasoning. The controlled effect of the reasoning representation is examined separately in Table 4 and Figure 3, where the compared branches share the same data split, SID mapping, candidate space, and constrained decoding protocol. 
+
+Open-source implementations. We provide verified public implementations for representative baselines: HSTU 1, ReaRec 2, LET-TER 3, EAGER 4, and OneRec-Think 5. These links are included for implementation reference and do not imply that all results in Table 3 were rerun under an identical protocol. 
+
+## 4.3 Overall Performance (RQ1) 
+
+Table 3 reports Hit@5, Hit@10, NDCG@5, and NDCG@10 on the three evaluation datasets. Methods are organized according to whether they use additional reasoning computation, with the non-reasoning methods further divided into traditional sequential and generative recommenders. Under this organization, CogRec-Direct is compared with non-reasoning generators, while CogRec-Routing is compared with reasoning-enhanced methods. Most baseline values follow the corresponding cited studies. The LETTER values correspond to the standalone LETTER model reported by RAGR [ 38 ], and the OneRec-Think values are taken from the original OneRec-Think paper [ 15 ]. Because the compared systems may differ in backbone, training pipeline, and identifier construction, Table 3 should be interpreted as a broad cross-method comparison. The controlled Direct-versus-Reason comparison is reported separately in Table 4 and Figure 3. CogRec remains competitive under both inference formats, but the relative advantage of reasoning is dataset dependent. CogRec-Direct achieves the best results on all four Toys metrics and the best Beauty Hit@5, indicating that an additional reasoning trace is unnecessary when the target can be sufficiently localized from the user history and SID representation. CogRec-Routing obtains the best Sports NDCG@5 and NDCG@10, ties for the best Sports Hit@5, and ranks second on Sports Hit@10. It also ranks second on Beauty Hit@10 and NDCG@10. However, EAGER and TwiSTAR remain stronger on several Beauty metrics, and CogRec-Routing is consistently below CogRec-Direct on Toys. These results do not support an unconditional advantage of reasoning; instead, they motivate the controlled and structure-stratified analyses in the following sections. 
+
+> 1https://github.com/meta-recsys/generative-recommenders
+> 2https://github.com/TangJiakai/ReaRec
+> 3https://github.com/HonghuiBao2000/LETTER
+> 4https://github.com/yewzz/EAGER
+> 5https://github.com/wangshy31/OneRec-Think
+
+Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Liu et al. Hit@1                                                                                                                                                 
+
+> Hit@5
+> Hit@10
+> NDCG@5
+> NDCG@10
+> OneRec-Think Direct
+> OneRec-Think CoT
+> CogRec-Direct
+> CogRec-Routing
+> Beauty
+> 0.1304 0.2680 0.3368 0.2009 0.2229
+> 0.1320 0.2696 0.3494 0.2041 0.2297
+> 0.1549 0.3028 0.3628 0.2317 0.2510
+> 0.1478 0.2933 0.3589 0.2249 0.2465
+> Easy
+> (a)
+> Hit@1
+> Hit@5
+> Hit@10
+> NDCG@5
+> NDCG@10
+> 0.0205 0.0551 0.0778 0.0381 0.0454
+> 0.0194 0.0543 0.0768 0.0371 0.0443
+> 0.0204 0.0541 0.0769 0.0374 0.0448
+> 0.0212 0.0545 0.0782 0.0380 0.0456
+> Medium
+> (b)
+> Hit@1
+> Hit@5
+> Hit@10
+> NDCG@5
+> NDCG@10
+> 0.0007 0.0098 0.0151 0.0052 0.0069
+> 0.0010 0.0069 0.0121 0.0040 0.0056
+> 0.0013 0.0088 0.0138 0.0049 0.0065
+> 0.0007 0.0075 0.0147 0.0041 0.0064
+> Hard
+> (c)
+> Hit@1
+> Hit@5
+> Hit@10
+> NDCG@5
+> NDCG@10
+> OneRec-Think Direct
+> OneRec-Think CoT
+> CogRec-Direct
+> CogRec-Routing
+> Sports
+> 0.0734 0.1499 0.2108 0.1127 0.1325
+> 0.0640 0.1452 0.1913 0.1058 0.1208
+> 0.0515 0.1382 0.1975 0.0957 0.1148
+> 0.0859 0.1717 0.2123 0.1283 0.1415
+> (d)
+> Hit@1
+> Hit@5
+> Hit@10
+> NDCG@5
+> NDCG@10
+> 0.0109 0.0283 0.0388 0.0198 0.0232
+> 0.0087 0.0253 0.0370 0.0171 0.0210
+> 0.0100 0.0264 0.0369 0.0182 0.0217
+> 0.0110 0.0300 0.0454 0.0206 0.0256
+> (e)
+> Hit@1
+> Hit@5
+> Hit@10
+> NDCG@5
+> NDCG@10
+> 0.0012 0.0056 0.0093 0.0036 0.0048
+> 0.0007 0.0039 0.0074 0.0024 0.0035
+> 0.0020 0.0069 0.0086 0.0045 0.0051
+> 0.0012 0.0066 0.0096 0.0042 0.0052
+> (f)
+> Hit@1
+> Hit@5
+> Hit@10
+> NDCG@5
+> NDCG@10
+> OneRec-Think Direct
+> OneRec-Think CoT
+> CogRec-Direct
+> CogRec-Routing
+> Toys
+> 0.2057 0.3670 0.4424 0.2913 0.3155
+> 0.2303 0.3932 0.4639 0.3162 0.3390
+> 0.2137 0.4091 0.4718 0.3183 0.3385
+> 0.2153 0.3987 0.4686 0.3134 0.3361
+> (g)
+> Hit@1
+> Hit@5
+> Hit@10
+> NDCG@5
+> NDCG@10
+> 0.0168 0.0474 0.0677 0.0324 0.0389
+> 0.0172 0.0454 0.0675 0.0314 0.0386
+> 0.0167 0.0489 0.0729 0.0328 0.0405
+> 0.0168 0.0474 0.0699 0.0323 0.0395
+> (h)
+> Hit@1
+> Hit@5
+> Hit@10
+> NDCG@5
+> NDCG@10
+> 0.0030 0.0053 0.0117 0.0041 0.0061
+> 0.0023 0.0060 0.0090 0.0040 0.0050
+> 0.0034 0.0071 0.0102 0.0054 0.0064
+> 0.0019 0.0071 0.0113 0.0046 0.0059
+> (i)
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> within-metric normalized score
+
+Figure 3: Difficulty-stratified performance of the reproduced OneRec-Think Direct/CoT branches and the CogRec Direct/Routing branches. Each panel corresponds to one dataset–difficulty group, rows denote generation variants, and columns report Hit@1, Hit@5, Hit@10, NDCG@5, and NDCG@10. Hit@1 is an auxiliary diagnostic available under our controlled evaluation and is not used in the cross-source overall table. Cell annotations show the original metric values, while color intensity is normalized independently within each metric and panel to emphasize relative differences under the same measure. 
+
+## 4.4 Effect of Reasoning Format (RQ2) 
+
+RQ2 examines whether the form of intermediate reasoning affects target SID generation. We compare direct SID generation, natural-language reasoning, and SID Routing under the same SID output space. This comparison separates two questions: whether explicit reasoning is useful, and whether the reasoning trace is aligned with the target identifier space. Natural-language reasoning provides flexible semantic rationales, but it does not directly constrain the next SID token; SID Routing is less linguistically flexible, but its operations are defined over the same SID topology used by the decoder. The results show that explicit reasoning does not automatically improve recommendation. Direct SID generation remains highly competitive in several cases, especially when the target can be lo-calized through strong prefix or neighborhood signals. SID Routing becomes useful when the target requires structured transitions rather than pure prefix continuation, but it also introduces longer intermediate traces and possible accumulated errors. Therefore, the reasoning-format results support a specific conclusion: reason-ing is useful when it provides operational guidance for target SID generation, not simply when it is longer or more descriptive. 
+
+## 4.5 Difficulty-Stratified Analysis (RQ3) 
+
+RQ3 examines whether the effect of SID Routing depends on the structural relation between the user history and the target item. We partition test instances into Easy, Medium, and Hard groups using the prefix-overlap and first-layer graph-distance criteria defined in Section 3.4. Figure 3 compares the reproduced OneRec-Think Direct/CoT branches and the CogRec Direct/Routing branches us-ing Hit@1, Hit@5, Hit@10, NDCG@5, and NDCG@10 for each dataset–difficulty group. Hit@1 is included here as an auxiliary diagnostic of exact rank-1 localization because every method in the figure is evaluated by us under the same protocol; it is intentionally omitted from the cross-source overall table, where most external CogRec: Structure-Cognitive Fast-and-Slow Reasoning for Generative Recommendation Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 0 steps (direct) 
+
+> 236 (1.06%)
+> 1 step
+> 325 (1.45%)
+> 2 steps
+> 1,153 (5.16%)
+> 3 steps
+> 4,637 (20.74%)
+> 4 steps (full path)
+> 16,012 (71.60%)
+> (a) Beauty
+> 0 steps (direct)
+> 232 (0.65%)
+> 1 step
+> 436 (1.22%)
+> 2 steps
+> 1,425 (4.00%)
+> 3 steps
+> 7,044 (19.79%)
+> 4 steps (full path)
+> 26,461 (74.33%)
+> (b) Sports
+> 0 steps (direct)
+> 295 (1.52%)
+> 1 step
+> 341 (1.76%)
+> 2 steps
+> 981 (5.05%)
+> 3 steps
+> 4,121 (21.23%)
+> 4 steps (full path)
+> 13,674 (70.44%)
+> (c) Toys
+
+Figure 4: Routing-step distribution across datasets. A step denotes one non-Match operation in the four-layer reference route. Zero-step instances can be resolved entirely through SID matching, whereas three- and four-step instances require lateral or exploratory operations at most layers. Percentages are computed over the complete test set of each dataset. 
+
+baselines do not report it. The grouping is used only for post-hoc analysis; neither the difficulty label nor the ground-truth route is provided to the model during inference. The difficulty-stratified results clarify when SID Routing is useful. On easy instances, direct generation or OneRec can already perform strongly because the target item is often close to the historical anchor in the SID space. On medium instances, CogRec-Routing is consistently competitive and often improves Hit@10 or NDCG@10 over natural-language reasoning, supporting the assumption that structure-grounded navigation is most useful when direct prefix matching is insufficient but reliable semantic transitions still exist. On hard instances, the absolute metric values remain low across all methods, indicating that long-range SID-space navigation remains difficult and that routing errors can accumulate across layers. These results motivate treating SID Routing as a conditional structural bias rather than a universally better reasoning format. 
+
+## 4.6 Routing Behavior and Reasoning Cost (RQ4) 
+
+RQ4 examines how much explicit structural reasoning is assigned to different test instances and what additional generation cost this introduces. Figure 4 reports the number of non-Match operations in each reference route. A zero-step instance corresponds to a fully matched fast-localization case, whereas routes containing one to four non-Match operations require progressively more lateral or exploratory processing. Figure 5 complements the structural step count with the number of tokens generated in the intermediate reasoning segment. Figure 4 shows that three- and four-step reference routes domi-nate all three datasets, accounting for 92.34% of Beauty, 94.12% of Sports, and 91.67% of Toys. This distribution indicates that most anchor–target pairs cannot be described by exact SID matching alone and require non-trivial layer-wise transitions in the offline structural analysis. It does not imply that the model always gener-ates these routes correctly. Instead, it characterizes the amount of structural supervision that the SID Routing model must learn and motivates the subsequent comparison between routing complexity, generated reasoning length, and recommendation performance. Figure 5 compares the generated reasoning lengths of natural-language CoT and SID Routing. Natural-language rationales are generally shorter and remain at the category or preference level, whereas SID Routing verbalizes multiple layer-wise operations and therefore produces substantially longer sequences. This result quan-tifies the additional inference cost of the proposed reasoning format. It also identifies a potential failure mode: every additional autore-gressive token creates another opportunity for the reasoning trace to deviate before target-SID decoding begins. Reasoning length should therefore be interpreted as a computational cost indicator rather than direct evidence of reasoning quality. 
+
+## 4.7 Progressive Design Study (RQ5) 
+
+RQ5 analyzes a cumulative configuration trajectory rather than a set of mutually independent one-factor ablations. Starting from the main SID Routing configuration, each step inherits all settings from the preceding step and changes only one additional compo-nent. The trajectory first replaces the compact raw routing trace with a semantic-enriched trace, then changes the loss mask from user-to-assistant supervision to assistant-only supervision, and finally replaces the constant learning-rate schedule with cosine decay. Consequently, later rows should be interpreted relative to the immediately preceding configuration rather than as isolated estimates of each factor. The transition from Step 0 to Step 1 shows that semantic enrich-ment has different effects on the two evaluation formats. It slightly improves direct SID generation, but sharply reduces reasoning-augmented performance. The additional category text lengthens the intermediate sequence and introduces semantic descriptions that are not required by the target SID topology. This result in-dicates that a trace can become more readable to humans while becoming less operational for constrained identifier generation. Step 2 inherits the semantic-enriched trace and further changes the loss mask to assistant-only supervision. Performance decreases in both formats. Because the user-history segment contains many newly introduced SID tokens, excluding it from the training loss Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Liu et al. Easy Medium Hard               
+
+> Difficulty
+> 0.0
+> 78.8
+> 157.7
+> 236.5
+> 315.4
+> 394.2
+> Think length (tokens)
+> (a)
+> n=1265
+> med=34.4 n=18045
+> med=23.2 n=3053
+> med=21.2
+> Beauty — OneRec-Think CoT
+> Easy Medium Hard
+> Difficulty
+> 0.0
+> 78.8
+> 157.7
+> 236.5
+> 315.4
+> 394.2
+> Think length (tokens)
+> (b)
+> n=1265
+> med=285.0
+> n=18045
+> med=293.8
+> n=3053
+> med=299.6
+> Beauty — CogRec-Routing
+> Easy Medium Hard
+> Difficulty
+> 0.0
+> 79.4
+> 158.8
+> 238.2
+> 317.6
+> 397.0
+> Think length (tokens)
+> (c)
+> n=1281
+> med=24.8
+> n=30240
+> med=24.6
+> n=4077
+> med=25.2
+> Sports — OneRec-Think CoT
+> Easy Medium Hard
+> Difficulty
+> 0.0
+> 79.4
+> 158.8
+> 238.2
+> 317.6
+> 397.0
+> Think length (tokens)
+> (d)
+> n=1281
+> med=288.0
+> n=30240
+> med=296.4
+> n=4077
+> med=296.4
+> Sports — CogRec-Routing
+> Easy Medium Hard
+> Difficulty
+> 0.0
+> 78.8
+> 157.7
+> 236.5
+> 315.4
+> 394.2
+> Think length (tokens)
+> (e)
+> n=1259
+> med=57.4 n=15494
+> med=43.8 n=2659
+> med=42.2
+> Toys — OneRec-Think CoT
+> Easy Medium Hard
+> Difficulty
+> 0.0
+> 78.8
+> 157.7
+> 236.5
+> 315.4
+> 394.2
+> Think length (tokens)
+> (f)
+> n=1259
+> med=248.2
+> n=15494
+> med=283.8
+> n=2659
+> med=287.2
+> Toys — CogRec-Routing
+
+Figure 5: Think-length distribution under natural-language reasoning and SID Routing. SID Routing produces longer traces because it explicitly verbalizes layer-wise structural transitions. The distribution quantifies the additional autoregressive decoding cost of structure-grounded reasoning but does not by itself measure route correctness. 
+
+weakens the direct learning signal received by input-side SID repre-sentations. Step 3 introduces cosine decay under the same semantic-enriched and assistant-only configuration. The schedule partially recovers the degradation caused by the preceding configuration, but the resulting reasoning performance remains substantially below the initial raw-routing setting. These results should not be interpreted as independent causal effects estimated under a common base configuration. Instead, they describe a progressive failure-and-recovery trajectory. Among the evaluated configurations, the initial combination of a compact raw routing trace, user-to-assistant supervision, and constant learning-rate scheduling provides the strongest reasoning-augmented result. CogRec: Structure-Cognitive Fast-and-Slow Reasoning for Generative Recommendation Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+Table 5: Progressive design study on Beauty. Each row inherits the preceding configuration and changes the component shown in the second column. Direct columns use direct SID generation, while Reason columns use the fixed CoT-subset evaluation protocol. Step Changed component Cumulative configuration Direct H@10/N@10 Reason H@10/N@10 
+
+0 Initial Raw trace + User mask + Constant LR 0.0842 / 0.0512 0.0895 / 0.0538 1 Trace Semantic-enriched + User mask + Constant LR 0.0881 / 0.0529 0.0367 / 0.0220 2 Loss mask Semantic-enriched + Assistant-only + Constant LR 0.0713 / 0.0414 0.0327 / 0.0155 3 LR schedule Semantic-enriched + Assistant-only + Cosine LR 0.0805 / 0.0481 0.0403 / 0.0215 
+
+Table 6: Quantitative summary of the reasoning regime. Medium denotes the proportion of test instances assigned to the Medium difficulty group. The 3–4-step column denotes the proportion of offline reference routes containing three or four non-
+
+Match operations. Δ values are computed as reasoning-augmented performance minus the corresponding direct-generation performance in Table 4. Dataset Medium (%) 3–4 steps (%) Natural-language CoT − Direct SID Routing − Direct 
+
+ΔH@10 ΔN@10 ΔH@10 ΔN@10 Beauty 80.69 92.34 −0.0004 −0.0007 +0.0012 +0.0005 
+
+Sports 84.95 94.12 −0.0024 −0.0024 +0.0046 +0.0018 
+
+Toys 79.82 91.67 +0.0009 +0.0011 −0.0024 −0.0011 
+
+This configuration is therefore adopted for the main CogRec exper-iments. 
+
+## 4.8 Quantitative Discussion and Method Comparison 
+
+The preceding experiments reveal that the effectiveness of explicit reasoning depends jointly on the structural regime of the test in-stance and the form of the intermediate trace. Table 6 summarizes three complementary signals: the proportion of Medium instances, the proportion of reference routes containing three or four non-
+
+Match operations, and the performance change introduced by natural-language reasoning or SID Routing relative to the corre-sponding direct-generation variant. 
+
+A conditional middle regime. Medium instances account for ap-proximately four-fifths of each test set, indicating that most exam-ples are neither exact repetitions of historical items nor completely disconnected transitions. At the same time, more than 90% of the offline reference routes contain three or four non-Match opera-tions. These statistics show that exact SID-prefix continuation alone is insufficient for most instances. However, they characterize the structural relations in the evaluation data rather than proving that every generated routing trace is correct. The practical question is therefore whether the model can learn useful operations from this non-trivial structure without accumulating excessive generation errors. The performance deltas demonstrate that the answer is dataset dependent. On Beauty and Sports, natural-language CoT does not improve the corresponding direct-generation model, whereas SID Routing yields positive changes in both Hit@10 and NDCG@10. The largest gain appears on Sports, where CogRec-Routing im-proves Hit@10 by 0.0046 and NDCG@10 by 0.0018 over CogRec-Direct. This result is consistent with the intended middle regime: direct matching is insufficient for many instances, but the SID topology still provides learnable transitions that can guide target generation. Toys exhibits the opposite behavior. Natural-language CoT produces a small positive change, while SID Routing decreases both metrics relative to CogRec-Direct. SID Routing should there-fore be interpreted as a conditional structural bias rather than a universally superior reasoning format. 
+
+Grounded versus descriptive reasoning. Natural-language CoT and SID Routing differ primarily in how their intermediate representa-tions are coupled with the prediction space. Natural-language CoT describes preferences through categories or semantic attributes, af-ter which the model must translate the textual rationale into a valid SID. SID Routing instead represents the intermediate process using layer-wise operations defined over the same SID topology as the final output. This tighter coupling provides operational guidance, but it also restricts the reasoning format and introduces additional decoding steps. The progressive design study further supports this distinction. Replacing the compact raw routing trace with a semantic-enriched trace makes the intermediate text more descriptive, but sharply reduces reasoning-augmented performance. Thus, increasing lin-guistic detail does not necessarily improve recommendation rea-soning. For constrained identifier generation, a shorter structural trace can be more useful than a fluent explanation when its tokens correspond directly to the target space. 
+
+Fast-and-slow behavior and its cost. Within CogRec, fast and slow reasoning are not separate neural modules. They correspond to dif-ferent SID-space operations. A route composed entirely of Match 
+
+operations represents fast localization, whereas LateralJump and 
+
+Explore introduce additional structural computation. Figure 4 shows that pure zero-step routes are rare, while Figure 5 shows that generated SID Routing traces are substantially longer than Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Liu et al. 
+
+natural-language rationales. The former describes the complexity of the offline structural relations, whereas the latter measures the additional sequence-generation cost incurred by the learned model. Longer traces can make structural transitions explicit, but they also increase latency and expose the target generation process to more autoregressive errors. 
+
+## 5 Conclusion 
+
+This paper presented CogRec, a structure-cognitive reasoning frame-work for Semantic ID based generative recommendation. CogRec augments hierarchical SIDs with intra-layer semantic graphs and item-level neighborhoods, and introduces SID Routing to express recommendation reasoning as layer-wise navigation from historical anchors to target identifiers. Experiments on three public sequential-recommendation benchmarks show that CogRec achieves compet-itive or improved performance under controlled SID-space and decoding settings, while the analyses further show that its benefit is conditional: SID Routing is most useful when direct matching is insufficient but semantic navigation remains feasible. These results suggest that reasoning in generative recommendation should not be treated as merely generating longer natural-language explanations; instead, it is more effective when grounded in the same structured space used for final target generation. 
+
+## References 
+
+[1] Shiteng Cao, Kaian Jiang, Yunlong Gong, and Zhiheng Li. 2026. TwiSTAR: Think Fast, Think Slow, Then Act, Generative Recommendation with Adaptive Reasoning. arXiv:2605.11553 [cs.IR] https://arxiv.org/abs/2605.11553 [2] Wenzhuo Cheng, Menghang Gong, Qixin Guo, Hang Zheng, Zhaobin Yang, Jianguo Lou, and Zhengwei Zheng. 2026. CapsID: Soft-Routed Variable-Length Semantic IDs for Generative Recommendation. arXiv:2605.05096 [cs.IR] https: //arxiv.org/abs/2605.05096 [3] Stephen Chung, Wenyu Du, and Jie Fu. 2025. Thinker: Learning to Think Fast and Slow. In Advances in Neural Information Process-ing Systems , Vol. 38. Curran Associates, Inc., Red Hook, NY, USA, 102812–102841. https://proceedings.neurips.cc/paper_files/paper/2025/hash/ 94dc604e115237a7f4a758b3146cd976-Abstract-Conference.html [4] Jiaxin Deng, Shiyao Wang, Kuo Cai, Lejian Ren, Qigen Hu, Weifeng Ding, Qiang Luo, and Guorui Zhou. 2025. OneRec: Unifying Retrieve and Rank with Generative Recommender and Iterative Preference Alignment. arXiv:2502.18965 [cs.IR] https://arxiv.org/abs/2502.18965 [5] Junchen Fu, Xuri Ge, Alexandros Karatzoglou, Ioannis Arapakis, Suzan Verberne, Joemon M. Jose, and Zhaochun Ren. 2026. Differentiable Semantic ID for Genera-tive Recommendation. In Proceedings of the 49th International ACM SIGIR Confer-ence on Research and Development in Information Retrieval . Association for Com-puting Machinery, New York, NY, USA, 369–379. doi:10.1145/3805712.3809641 [6] Shijie Geng, Shuchang Liu, Zuohui Fu, Yingqiang Ge, and Yongfeng Zhang. 2022. Recommendation as Language Processing (RLP): A Unified Pretrain, Personalized Prompt and Predict Paradigm (P5). In Proceedings of the 16th ACM Conference on Recommender Systems . Association for Computing Machinery, New York, NY, USA, 299–315. doi:10.1145/3523227.3546767 [7] Xiangnan He, Kuan Deng, Xiang Wang, Yan Li, Yongdong Zhang, and Meng Wang. 2020. LightGCN: Simplifying and Powering Graph Convolution Network for Recommendation. In Proceedings of the 43rd International ACM SIGIR Conference on Research and Development in Information Retrieval . Association for Computing Machinery, New York, NY, USA, 639–648. doi:10.1145/3397271.3401063 [8] Yinhan He, Liam Collins, Bhuvesh Kumar, Jundong Li, Neil Shah, and Donald Loveland. 2026. Implicit Reasoning for Large Language Model-based Generative Recommendation. arXiv:2606.14142 [cs.CL] https://arxiv.org/abs/2606.14142 [9] Yingzhi He, Yan Sun, Junfei Tan, Yuxin Chen, Xiaoyu Kong, Chunxu Shen, Xi-ang Wang, An Zhang, and Tat-Seng Chua. 2026. Reasoning over Semantic IDs Enhances Generative Recommendation. arXiv:2603.23183 [cs.IR] https: //arxiv.org/abs/2603.23183 Accepted by the 32nd ACM SIGKDD Conference on Knowledge Discovery and Data Mining. [10] Balázs Hidasi, Alexandros Karatzoglou, Linas Baltrunas, and Domonkos Tikk. 2016. Session-based Recommendations with Recurrent Neural Networks. In-ternational Conference on Learning Representations. https://openreview.net/ forum?id=yoffK5KZSgQ Published as a conference paper at ICLR 2016. [11] Hervé Jégou, Matthijs Douze, and Cordelia Schmid. 2011. Product Quantization for Nearest Neighbor Search. IEEE Transactions on Pattern Analysis and Machine Intelligence 33, 1 (2011), 117–128. doi:10.1109/TPAMI.2010.57 [12] Daniel Kahneman. 2011. Thinking, Fast and Slow . Farrar, Straus and Giroux, New York, NY, USA. [13] Wang-Cheng Kang and Julian McAuley. 2018. Self-Attentive Sequential Recom-mendation. In 2018 IEEE International Conference on Data Mining . IEEE, Piscat-away, NJ, USA, 197–206. doi:10.1109/ICDM.2018.00035 [14] Sunkyung Lee, Minjin Choi, Eunseong Choi, Hye-young Kim, and Jongwuk Lee. 2025. GRAM: Generative Recommendation via Semantic-aware Multi-granular Late Fusion. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) . Association for Computational Linguistics, Vienna, Austria, 33294–33312. doi:10.18653/v1/2025.acl-long.1596 [15] Zhanyu Liu, Shiyao Wang, Xingmei Wang, Rongzhou Zhang, Jiaxin Deng, Honghui Bao, Jinghao Zhang, Wuchao Li, PengFei Zheng, Xiangyu Wu, Yifei Hu, Qigen Hu, Xinchen Luo, Lejian Ren, Zhang Zixing, Qianqian Wang, Kuo Cai, Yunfan Wu, Hongtao Cheng, Zexuan Cheng, Lu Ren, Huanjie Wang, Yi Su, Ruiming Tang, Kun Gai, and Guorui Zhou. 2026. OneRec-Think: In-Text Reason-ing for Generative Recommendation. In Proceedings of the 64th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , Maria Liakata, Viviane P. Moreira, Jiajun Zhang, and David Jurgens (Eds.). Association for Computational Linguistics, San Diego, California, United States, 2664–2681. doi:10.18653/v1/2026.acl-long.123 [16] Chen Ma, Peng Kang, and Xue Liu. 2019. Hierarchical Gating Networks for Se-quential Recommendation. In Proceedings of the 25th ACM SIGKDD International Conference on Knowledge Discovery and Data Mining . Association for Computing Machinery, New York, NY, USA, 825–833. doi:10.1145/3292500.3330984 [17] Yu. A. Malkov and D. A. Yashunin. 2020. Efficient and Robust Approximate Nearest Neighbor Search Using Hierarchical Navigable Small World Graphs. 
+
+IEEE Transactions on Pattern Analysis and Machine Intelligence 42, 4 (2020), 824– 836. doi:10.1109/TPAMI.2018.2889473 [18] Jiabao Pan, Yan Zhang, Chen Zhang, Zuozhu Liu, Hongwei Wang, and Haizhou Li. 2024. DynaThink: Fast or Slow? A Dynamic Decision-Making Framework for Large Language Models. In Proceedings of the 2024 Conference on Empirical Meth-ods in Natural Language Processing . Association for Computational Linguistics, Miami, Florida, USA, 14686–14695. doi:10.18653/v1/2024.emnlp-main.814 [19] Shashank Rajput, Nikhil Mehta, Anima Singh, Raghunandan H. Keshavan, Trung Vu, Lukasz Heldt, Lichan Hong, Yi Tay, Vinh Q. Tran, Jonah Samost, Maciej Kula, Ed H. Chi, and Maheswaran Sathiamoorthy. 2023. Recommender Systems with Generative Retrieval. In Advances in Neural Information Processing Systems ,Vol. 36. Curran Associates, Inc., Red Hook, NY, USA, 10299–10315. [20] Steffen Rendle, Christoph Freudenthaler, Zeno Gantner, and Lars Schmidt-Thieme. 2009. BPR: Bayesian Personalized Ranking from Implicit Feedback. In Proceed-ings of the 25th Conference on Uncertainty in Artificial Intelligence . AUAI Press, Arlington, Virginia, USA, 452–461. [21] Fei Sun, Jun Liu, Jian Wu, Changhua Pei, Xiao Lin, Wenwu Ou, and Peng Jiang. 2019. BERT4Rec: Sequential Recommendation with Bidirectional Encoder Rep-resentations from Transformer. In Proceedings of the 28th ACM International Conference on Information and Knowledge Management . Association for Comput-ing Machinery, New York, NY, USA, 1441–1450. doi:10.1145/3357384.3357895 [22] Jiakai Tang, Sunhao Dai, Teng Shi, Jun Xu, Xu Chen, Wen Chen, Jian Wu, and Yuning Jiang. 2026. Think Before Recommend: Unleashing the Latent Reasoning Power for Sequential Recommendation. IEEE Transactions on Knowledge and Data Engineering, Early Access. doi:10.1109/TKDE.2026.3694421 [23] Yi Tay, Vinh Q. Tran, Mostafa Dehghani, Jianmo Ni, Dara Bahri, Harsh Mehta, Zhen Qin, Kai Hui, Zhe Zhao, Jai Gupta, Tal Schuster, William W. Cohen, and Donald Metzler. 2022. Transformer Memory as a Differentiable Search Index. In 
+
+Advances in Neural Information Processing Systems , Vol. 35. Curran Associates, Inc., Red Hook, NY, USA, 21831–21843. [24] Aaron van den Oord, Oriol Vinyals, and Koray Kavukcuoglu. 2017. Neural Discrete Representation Learning. In Advances in Neural Information Processing Systems , Vol. 30. Curran Associates, Inc., Red Hook, NY, USA, 6306–6315. [25] Wenjie Wang, Honghui Bao, Xinyu Lin, Jizhi Zhang, Yongqi Li, Fuli Feng, See-Kiong Ng, and Tat-Seng Chua. 2024. Learnable Item Tokenization for Generative Recommendation. In Proceedings of the 33rd ACM International Conference on Information and Knowledge Management . Association for Computing Machinery, New York, NY, USA, 2400–2409. doi:10.1145/3627673.3679569 [26] Xiang Wang, Xiangnan He, Meng Wang, Fuli Feng, and Tat-Seng Chua. 2019. Neural Graph Collaborative Filtering. In Proceedings of the 42nd International ACM SIGIR Conference on Research and Development in Information Retrieval .Association for Computing Machinery, New York, NY, USA, 165–174. doi:10. 1145/3331184.3331267 [27] Xuezhi Wang, Jason Wei, Dale Schuurmans, Quoc V. Le, Ed H. Chi, Sharan Narang, Aakanksha Chowdhery, and Denny Zhou. 2023. Self-Consistency Improves Chain of Thought Reasoning in Language Models. The Eleventh International Conference on Learning Representations. https://openreview.net/forum?id= 1PL1NIMMrw Published as a conference paper at ICLR 2023. CogRec: Structure-Cognitive Fast-and-Slow Reasoning for Generative Recommendation Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+[28] Ye Wang, Jiahao Xun, Minjie Hong, Jieming Zhu, Tao Jin, Wang Lin, Haoyuan Li, Linjun Li, Yan Xia, Zhou Zhao, and Zhenhua Dong. 2024. EAGER: Two-Stream Generative Recommender with Behavior-Semantic Collaboration. In 
+
+Proceedings of the 30th ACM SIGKDD Conference on Knowledge Discovery and Data Mining . Association for Computing Machinery, New York, NY, USA, 3245– 3254. doi:10.1145/3637528.3671775 [29] Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, Brian Ichter, Fei Xia, Ed H. Chi, Quoc V. Le, and Denny Zhou. 2022. Chain-of-Thought Prompting Elicits Reasoning in Large Language Models. In Advances in Neural Information Processing Systems , Vol. 35. Curran Associates, Inc., Red Hook, NY, USA, 24824– 24837. [30] Wei Wei, Xubin Ren, Jiabin Tang, Qinyong Wang, Lixin Su, Suqi Cheng, Junfeng Wang, Dawei Yin, and Chao Huang. 2024. LLMRec: Large Language Models with Graph Augmentation for Recommendation. In Proceedings of the 17th ACM Inter-national Conference on Web Search and Data Mining . Association for Computing Machinery, New York, NY, USA, 806–815. doi:10.1145/3616855.3635853 [31] Likang Wu, Zhi Zheng, Zhaopeng Qiu, Hao Wang, Hongchao Gu, Tingjia Shen, Chuan Qin, Chen Zhu, Hengshu Zhu, Qi Liu, Hui Xiong, and Enhong Chen. 2024. A Survey on Large Language Models for Recommendation. World Wide Web 27, 5, Article 60 (2024), 31 pages. doi:10.1007/s11280-024-01291-2 [32] Shitao Xiao, Zheng Liu, Peitian Zhang, Niklas Muennighoff, Defu Lian, and Jian-Yun Nie. 2024. C-Pack: Packed Resources for General Chinese Embeddings. In Proceedings of the 47th International ACM SIGIR Conference on Research and Development in Information Retrieval . Association for Computing Machinery, New York, NY, USA, 641–649. doi:10.1145/3626772.3657878 [33] Jiawen Xie, Haiyang Wu, Deyi Ji, Yuekui Yang, and Shaoping Ma. 2025. LOHRec: Leveraging Order and Hierarchy in Generative Sequential Recommendation. In 
+
+Findings of the Association for Computational Linguistics: EMNLP 2025 . Association for Computational Linguistics, Suzhou, China, 17968–17983. doi:10.18653/v1/ 2025.findings-emnlp.977 [34] An Yang, Anfeng Li, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chang Gao, Chengen Huang, Chenxu Lv, Chujie Zheng, Dayiheng Liu, Fan Zhou, Fei Huang, Feng Hu, Hao Ge, Haoran Wei, Huan Lin, Jialong Tang, Jian Yang, Jianhong Tu, Jianwei Zhang, Jianxin Yang, Jiaxi Yang, Jing Zhou, Jingren Zhou, Junyang Lin, Kai Dang, Keqin Bao, Kexin Yang, Le Yu, Lianghao Deng, Mei Li, Mingfeng Xue, Mingze Li, Pei Zhang, Peng Wang, Qin Zhu, Rui Men, Ruize Gao, Shixuan Liu, Shuang Luo, Tianhao Li, Tianyi Tang, Wenbiao Yin, Xingzhang Ren, Xinyu Wang, Xinyu Zhang, Xuancheng Ren, Yang Fan, Yang Su, Yichang Zhang, Yinger Zhang, Yu Wan, Yuqiong Liu, Zekun Wang, Zeyu Cui, Zhenru Zhang, Zhipeng Zhou, and Zihan Qiu. 2025. Qwen3 Technical Report. arXiv:2505.09388 [cs.CL] https://arxiv.org/abs/2505.09388 [35] Shunyu Yao, Dian Yu, Jeffrey Zhao, Izhak Shafran, Thomas L. Griffiths, Yuan Cao, and Karthik Narasimhan. 2023. Tree of Thoughts: Deliberate Prob-lem Solving with Large Language Models. In Advances in Neural Informa-tion Processing Systems , Vol. 36. Curran Associates, Inc., Red Hook, NY, USA, 11809–11822. https://proceedings.neurips.cc/paper_files/paper/2023/hash/ 271db9922b8d1f4dd7aaef84ed5ac703-Abstract-Conference.html [36] Shunyu Yao, Jeffrey Zhao, Dian Yu, Nan Du, Izhak Shafran, Karthik Narasimhan, and Yuan Cao. 2023. ReAct: Synergizing Reasoning and Acting in Language Models. The Eleventh International Conference on Learning Representations. https://openreview.net/forum?id=WE_vluYUL-X Published as a conference paper at ICLR 2023. [37] Jiaqi Zhai, Lucy Liao, Xing Liu, Yueming Wang, Rui Li, Xuan Cao, Leon Gao, Zhaojie Gong, Fangda Gu, Jiayuan He, Yinghai Lu, and Yu Shi. 2024. Actions Speak Louder than Words: Trillion-Parameter Sequential Transducers for Generative Recommendations. In Proceedings of the 41st International Conference on Machine Learning (Proceedings of Machine Learning Research, Vol. 235) . PMLR, Vienna, Austria, 58484–58509. https://proceedings.mlr.press/v235/zhai24a.html [38] Yingyi Zhang, Junyi Li, Yejing Wang, Wenlin Zhang, Xiaowei Qian, Sheng Zhang, Yue Feng, Yichao Wang, Yong Liu, Xiangyu Zhao, and Xianneng Li. 2026. RAGR: Review-Augmented Generative Recommendation. arXiv:2605.17267 [cs.IR] https: //arxiv.org/abs/2605.17267 [39] Denny Zhou, Nathanael Schärli, Le Hou, Jason Wei, Nathan Scales, Xuezhi Wang, Dale Schuurmans, Claire Cui, Olivier Bousquet, Quoc V. Le, and Ed H. Chi. 2023. Least-to-Most Prompting Enables Complex Reasoning in Large Language Models. The Eleventh International Conference on Learning Representations. https://openreview.net/forum?id=WZH7099tgfM Published as a conference paper at ICLR 2023. 
+
+Received 20 February 2007; revised 12 March 2009; accepted 5 June 2009

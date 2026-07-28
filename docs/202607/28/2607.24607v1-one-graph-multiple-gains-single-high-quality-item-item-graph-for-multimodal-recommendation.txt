@@ -1,0 +1,1318 @@
+Title: One Graph, Multiple Gains: Single High-Quality Item-Item Graph for Multimodal Recommendation
+
+URL Source: https://arxiv.org/pdf/2607.24607v1
+
+Published Time: Tue, 28 Jul 2026 02:13:55 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+# One Graph, Multiple Gains: Single High-Quality Item-Item Graph for Multimodal Recommendation 
+
+## Jinfeng Xu 
+
+jinfeng@connect.hku.hk The University of Hong Kong HongKong SAR, China 
+
+## Zheyu Chen 
+
+zheyu.chen@connect.polyu.hk The Hong Kong Polytechnic University HongKong SAR, China 
+
+## Ziyue Peng 
+
+pengziyue001@gmail.com The Hong Kong University of Science and Technology HongKong SAR, China 
+
+## Shuo Yang 
+
+shuoyang.ee@gmail.com The University of Hong Kong HongKong SAR, China 
+
+## Jinze Li 
+
+lijinze-hku@connect.hku.hk The University of Hong Kong HongKong SAR, China 
+
+## Zewei Liu 
+
+zewliu@eee.hku.hk The University of Hong Kong HongKong SAR, China 
+
+## Shujie Li 
+
+shujie.li@connect.hku.hk The University of Hong Kong HongKong SAR, China 
+
+## Yipeng Du 
+
+yipengdu@connect.hku.hk The University of Hong Kong HongKong SAR, China 
+
+## Edith C. H. Ngai ∗
+
+chngai@eee.hku.hk The University of Hong Kong HongKong SAR, China 
+
+## Abstract 
+
+Multimodal recommendation leverages item multimodal features alongside collaborative signals to capture user preferences. While item-item graphs have become a key building block in advanced models, existing methods typically construct them with noisy simi-larity edges and limit their role to a single function of item-item representation propagation, leaving substantial potential untapped. In this paper, we propose IIMRec, a framework that constructs a single high-quality item-item graph during preprocessing and systematically reuses it across three stages of the recommendation pipeline: representation enhancement, interaction graph enhance-ment, and optimization enhancement. The graph is built by fusing semantic and co-occurrence signals, then refined via Neighbor-hood Consistency Edge Reweighting (NCER), which applies the triadic closure principle to amplify structurally reliable edges and suppress spurious ones. Once constructed, the graph is leveraged in three complementary ways: (1) Item-item propagation with a Residual II Gate (RIG) that adaptively controls per-item absorption of semantic neighborhood signals for representation enhancement; (2) A content-guided UI graph expansion that introduces virtual user-item edges through high-confidence semantic neighbors for interaction graph enhancement; (3) II-Neighbor BPR Augmentation (INA) that treats top neighbors of positive items as discounted soft positives for optimization enhancement. All components are computed or cached during preprocessing or add negligible per-batch cost, making IIMRec both effective and efficient. We provide theoretical analysis showing that NCER  
+
+> ∗Corresponding authors
+> This work is licensed under a Creative Commons Attribution 4.0 International License.
+> MM ’26, Rio de Janeiro, Brazil
+> ©2026 Copyright held by the owner/author(s). ACM ISBN 979-8-4007-2213-4/2026/11 https://doi.org/10.1145/3767308.3836382
+
+reduces the spectral noise-to-signal ratio, RIG converges to a non-degenerate gating regime, and INA yields a tighter generalization bound. Extensive experiments on four datasets demonstrate that IIMRec consistently outperforms state-of-the-art baselines while running faster and consuming less GPU memory, with particularly strong gains under cold-start and sparse-interaction conditions. 
+
+ACM Reference Format: 
+
+Jinfeng Xu, Zheyu Chen, Ziyue Peng, Shuo Yang, Jinze Li, Zewei Liu, Shujie Li, Yipeng Du, and Edith C. H. Ngai. 2026. One Graph, Multiple Gains: Single High-Quality Item-Item Graph for Multimodal Recommendation. In 
+
+Proceedings of the 35th ACM International Conference on Multimedia (MM ’26), November 10–14, 2026, Rio de Janeiro, Brazil. ACM, New York, NY, USA, 12 pages. https://doi.org/10.1145/3767308.3836382 
+
+## 1 Introduction 
+
+Multimodal recommendation jointly exploits diverse item metadata (images, text, audio) and collaborative signals to model user prefer-ences [ 1]. Graph-based methods dominate the current landscape by propagating representations along a user-item bipartite graph and one or more item-item affinity graphs, capturing high-order collaborative patterns and modality-specific semantics simultane-ously [ 1 , 30 , 33 , 37 ]. Among these structures, the item-item homo-geneous graph has emerged as a particularly important building block, enabling items to enhance semantic information through modality-aware neighborhoods [23, 27, 32, 36]. Despite its central role, we identify two fundamental limitations. 
+
+First, graph quality is compromised. The prevailing methods construct item-item graphs via top-𝑘 cosine similarity in pretrained feature spaces [ 23 , 32 , 36 ], which is sensitive to hub effects and feature contamination [ 19 , 28 , 29 ]. Recent remedies such as co-occurrence graphs [ 23 ] or spectral filtering [ 12 ] apply uniform treatment to every edge without evaluating the structural evidence behind each connection. Second, graph utilization is narrow. 
+
+The vast majority of existing methods exploit the item-item graph exclusively for propagating item representations via a fixed aggrega-tion [ 2, 23 , 32 ], while only a handful of recent works have explored arXiv:2607.24607v1 [cs.IR] 27 Jul 2026 MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Xu et al. 
+
+using item-item affinity to augment the interaction graph [ 21 , 25 ]. Furthermore, the fixed aggregation universally adopted in these methods treats the item-item propagation signal as equally benefi-cial for every item, overlooking recent findings that graph convo-lution can harm representations of items whose modality features are noisy or inconsistent with their neighborhood [1, 24]. Our key insight is that a single high-quality item-item graph, con-structed once during preprocessing, can serve as a versatile foundation across multiple pipeline stages . Based on this insight, we propose 
+
+IIMRec , a single high-quality Item-Item Graph for Multimodal 
+
+Rec ommendation. IIMRec first refines a fused semantic-and-co-occurrence item-item graph through Neighborhood Consistency Edge Reweighting (NCER) , which amplifies edges with high shared-neighbor counts and suppresses isolated ones, provably re-ducing the spectral noise-to-signal ratio (Theorem 5.2). The refined graph is then systematically leveraged in three complementary ways. For representation enhancement , a Residual II Gate (RIG) re-places the fixed additive aggregation with a differentiable per-item gate that controls how much item-item propagation signal each item absorbs, with provably non-degenerate convergence (Theo-rem 5.3). For interaction graph enhancement , a content-guided UI ex-pansion introduces virtual user-item edges through high-confidence semantic neighbors, benefiting cold-start and sparse-interaction conditions. For optimization enhancement , II-Neighbor BPR Aug-mentation (INA) treats top-𝑘 neighbors of each positive item as discounted soft positives that push in the same direction as BPR, yielding a tighter generalization bound (Theorem 5.5). All compo-nents are pre-computed or cached at negligible per-batch cost. Our main contributions are as follows: 
+
+• We identify the dual limitations of low graph quality and narrow utilization in existing item-item graphs, and propose a " build once, leverage everywhere " paradigm that reuses a single refined graph for representation, interaction, and optimization. 
+
+• We design three complementary components (NCER, RIG, INA), each backed by theoretical guarantees on noise reduction, non-degeneracy, and generalization, respectively. 
+
+• Extensive experiments on four datasets show that IIMRec consis-tently outperforms advanced baselines with lower training time and memory consumption, achieving particularly strong gains under cold-start and sparse settings. 
+
+## 2 Related Work 
+
+Multimodal recommendation exploits diverse item multimodal metadata alongside collaborative signals to improve preference modeling. Early work [ 5, 9, 15 ] injected visual features into matrix factorization. Subsequent graph-based methods introduced bipar-tite graphs for user-item modeling [ 19 , 20 ] and item-item homoge-neous graphs for capturing modality-specific relationships [ 32 , 36 ]. More recently, SMORE [ 12 ] applied spectral filtering to behavioral modalities, HPMRec [ 2] explored hyper-complex representations, COHESION [ 23 ] combined dual-stage fusion with composite graph convolution, and several studies [ 7, 26 , 37 ] adopted self-supervised learning to alleviate data sparsity. Despite these advances, two limitations persist in how existing methods handle item-item graphs. On the construction side, graphs built from top-𝑘 cosine similarity [ 32 , 36 ] or co-occurrence counts [ 23 ] inevitably contain noisy edges caused by hub effects and fea-ture contamination [ 19 , 28 ]; remedies such as spectral filtering [ 12 ]and graph freezing [ 36 ] treat every edge uniformly without assess-ing its structural reliability. On the utilization side, the vast majority of methods exploit the item-item graph exclusively for propagating item representations via a fixed additive residual [ 2, 30 , 32 ], leaving its potential for enriching interaction structures [ 25 ] or augmenting training supervision untapped. The fixed aggregation universally adopted further treats the propagation signal as equally benefi-cial for every item, overlooking findings that graph convolution can produce harmful positive-negative pairs [ 24 ] and that node-neighbor discrepancy can degrade representations [ 1]. Multimodal alignment [ 7, 26 ] partially enriches supervision but risks conflict-ing with ranking by forcing collaborative and semantic spaces to coincide. IIMRec addresses both limitations under a unified " build once, leverage everywhere " paradigm. A single high-quality item-item graph, refined by NCER via triadic closure, is systematically reused across three pipeline stages: representation enhancement through RIG’s adaptive per-item gating, interaction graph enhancement via content-guided UI expansion, and optimization enhancement through INA’s discounted soft positives. All components are light-weight, modular, and theoretically grounded. 
+
+## 3 Preliminary 
+
+Let U and I denote the sets of users and items, respectively. The observed implicit feedback is represented by a binary interaction matrix 𝑹 ∈ { 0, 1}| U | × | I | , where 𝑹 𝑢,𝑖 = 1 indicates that user 𝑢 has interacted with item 𝑖 . We construct a user-item bipartite graph 
+
+G = (U ∪I , E) with edge set E = {( 𝑢, 𝑖 )| 𝑹 𝑢,𝑖 = 1}. Each item 𝑖 ∈ I 
+
+carries modality-specific raw features 𝒙 𝑚 𝑖 for each modality 𝑚 ∈ M 
+
+(e.g., visual, textual, and audio). These features are extracted by pre-trained encoders to obtain modality-specific feature matrices 
+
+𝑭 𝑚 ∈ R| I | × 𝑑 𝑚 , where 𝑑 𝑚 denotes the feature dimensionality of modality 𝑚 . The goal is to learn a scoring function 𝑓 (·) that predicts the preference score ˆ𝑦 𝑢,𝑖 of user 𝑢 for item 𝑖 , enabling accurate ranking of candidate items according to user preferences. 
+
+## 4 Methodology 
+
+We present IIMRec 1, a single high-quality Item-Item Graph for 
+
+Multimodal Rec ommendation. As illustrated in Figure 1, we de-tail each component below. To ensure uniformity in the seman-tic space and maintain model generalizability, we use the same hyper-parameter 𝑘 for all Top -k(·) operations and conduct a uni-fied hyper-parameter sensitivity analysis in Section 6.6. 
+
+## 4.1 Multimodal Feature Projection 
+
+To ensure dimensional consistency across heterogeneous modality features, each modality’s raw features are projected via a two-layer MLP into a unified embedding space of dimension 𝑑 :
+
+𝒆 𝑚 𝑖 = 𝑾 𝑚  
+
+> 2
+
+LeakyReLU (𝑾 𝑚  
+
+> 1
+
+𝒇 𝑚 𝑖 ), ∀𝑚 ∈ M , (1) where 𝑾 𝑚  
+
+> 1
+
+∈ R4𝑑 ×𝑑 𝑚 and 𝑾 𝑚  
+
+> 2
+
+∈ R𝑑 ×4𝑑 are learnable parameter matrices, with the intermediate dimension 4𝑑 providing sufficient 
+
+> 1Code can be found in: https://github.com/Jinfeng-Xu/IIMRec.
+
+IIMRec MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil 𝓛𝓛 = + 𝝀𝝀 𝐈𝐈𝐈𝐈𝐈𝐈 + 𝝀𝝀 𝑪𝑪𝑪𝑪 
+
+Visual 
+
+Textual 
+
+Audio 
+
+�𝑭𝑭 𝒊𝒊 𝒗𝒗 
+
+> Discrete Cosine Transform
+
+�𝑭𝑭 𝒊𝒊 𝒕𝒕 
+
+�𝑭𝑭 𝒊𝒊 𝒂𝒂 
+
+𝑭𝑭 𝒊𝒊 𝒗𝒗 
+
+𝑭𝑭 𝒊𝒊 𝒕𝒕 
+
+𝑭𝑭 𝒊𝒊 𝒂𝒂 
+
+2-layer MLP 𝑬𝑬 𝒊𝒊 𝒎𝒎 
+
+𝑆𝑆 lf 𝑚𝑚 
+
+𝑆𝑆 hf 𝑚𝑚 
+
+> [low:]
+> [:high]
+
+𝑺𝑺 𝐬𝐬𝐬𝐬𝐬𝐬𝐬𝐬𝐬𝐬𝐬𝐬𝐬𝐬𝐬𝐬 �𝑭𝑭 𝒊𝒊 
+
+𝑆𝑆 spatial 𝑣𝑣 
+
+𝑆𝑆 spatial 𝑎𝑎 
+
+𝑆𝑆 spatial 𝑡𝑡 
+
+𝑺𝑺 𝐬𝐬𝐬𝐬𝐬𝐬𝐬𝐬𝐬𝐬𝐬𝐬𝐬𝐬  𝑆𝑆 mix 
+
+Semantic Graph 
+
+Co-occurrence Graph 
+
+Graph Fusion 
+
+𝑺𝑺 𝐟𝐟𝐟𝐟 𝐬𝐬𝐬𝐬 𝐟𝐟  𝑺𝑺 𝐬𝐬𝐬𝐬𝐬𝐬 
+
+𝑺𝑺 𝐬𝐬𝐬𝐬𝐬𝐬𝐬𝐬𝐬𝐬𝐬𝐬𝐬𝐬𝐬𝐬 
+
+𝑺𝑺 𝐬𝐬𝐬𝐬𝐬𝐬𝐬𝐬𝐬𝐬𝐬𝐬𝐬𝐬 
+
+𝑺𝑺 𝒄𝒄𝒄𝒄 +
+
+> 2-hop neighbor
+
+𝑺𝑺 𝐬𝐬 𝐜𝐜 
+
+> User-Item Interaction
+
+𝑺𝑺 𝐈𝐈 𝐍𝐍𝐍𝐍𝐍𝐍 ̂ 𝑠𝑠 𝑖𝑖𝑖𝑖 = 𝑠𝑠 𝑖𝑖𝑖𝑖 fused ⋅ (1 +  𝜅𝜅  ⋅ 𝑐𝑐 𝑖𝑖𝑖𝑖 ) Neighborhood consistency score 
+
+𝑺𝑺 𝐟𝐟𝐟𝐟 𝐬𝐬𝐬𝐬 𝐟𝐟 items 
+
+𝑹𝑹 
+
+=
+
+Content-Guided UI Graph  
+
+> Top-𝑘𝑘
+> filter
+
+𝑺𝑺 𝐈𝐈 𝐍𝐍𝐍𝐍𝐍𝐍 𝑺𝑺 𝐟𝐟 𝐬𝐬𝐬𝐬𝐬𝐬𝐬𝐬𝐬𝐬𝐬𝐬 𝐟𝐟 
+
+𝑹𝑹 
+
+�𝑹𝑹 
+
+�𝑹𝑹  
+
+> 𝛾𝛾
+> (1 − 𝛾𝛾 )
+
+Residual-Weighted Propagation 
+
+�𝑹𝑹 
+
+𝑬𝑬 (𝒍𝒍 ) = diag(cos( �𝑨𝑨𝑬𝑬 𝒍𝒍−𝟏𝟏 , 𝑬𝑬 𝒍𝒍−𝟏𝟏 )) �𝑨𝑨𝑬𝑬 𝒍𝒍−𝟏𝟏 
+
+> Normalize
+
+𝑬𝑬 UI 
+
+Cross-Modal Attention Fusion 
+
+𝒆𝒆 𝒖𝒖 = �𝑚𝑚∈ 𝓜𝓜 ′𝑎𝑎𝑎𝑎𝑎𝑎𝑎𝑎𝑎𝑎𝑎𝑎𝑎𝑎𝑎𝑎𝑎𝑎 𝑤𝑤 𝑎𝑎𝑎𝑎 𝑤𝑤𝑤 𝑎𝑎  ⋅ 𝒆𝒆 𝒖𝒖 𝒎𝒎 
+
+> Determined by its agreement
+> with the other modalities
+
+𝑬𝑬 𝑼𝑼 
+
+𝑬𝑬 UI 
+
+> items
+
+𝑺𝑺 𝐈𝐈 𝐍𝐍𝐍𝐍𝐍𝐍 
+
+𝑯𝑯 
+
+> Residual II Gate
+
+User-Item Graph Propagation 
+
+Item-Item Graph Construction and Fusion  Neighbor-Consist Edge Reweighting 
+
+𝑬𝑬 𝑰𝑰 
+
+𝑬𝑬 𝑼𝑼 UI 
+
+𝑬𝑬 UI 
+
+𝑬𝑬 𝑰𝑰 UI 
+
+𝑎𝑎 𝑖𝑖 𝑈𝑈𝑈𝑈  𝑤 𝑖𝑖 
+
+concat 
+
+> MLP
+
+𝒆𝒆 𝒊𝒊  𝓛𝓛 𝐁𝐁𝐁𝐁 𝐍𝐍 𝓛𝓛 𝐈𝐈𝐈𝐈𝐈𝐈 
+
+𝑺𝑺 𝐈𝐈 𝐍𝐍𝐍𝐍𝐍𝐍 
+
+𝑬𝑬 𝑰𝑰  𝑬𝑬 𝑼𝑼 
+
+Generate additional 
+
+training supervision 
+
+Contrastive Learning 
+
+𝓛𝓛 𝐁𝐁𝐁𝐁 𝐍𝐍  𝓛𝓛 𝐈𝐈𝐈𝐈𝐈𝐈  𝓛𝓛 𝐍𝐍 𝐂𝐂 
+
+Optimization 
+
+𝑬𝑬 𝑼𝑼 𝒎𝒎  𝑬𝑬 𝑼𝑼 𝒎𝒎 ′InfoNCE  𝑬𝑬 𝑰𝑰 𝒎𝒎  𝑬𝑬 𝑰𝑰 𝒎𝒎 ′InfoNCE 
+
+𝓛𝓛 𝐍𝐍 𝐂𝐂− 𝐟𝐟  𝓛𝓛 𝐍𝐍 𝐂𝐂− 𝐬𝐬 
+
+𝓛𝓛 𝐍𝐍 𝐂𝐂 
+
+Preprocessing 
+
+(one -time) 
+
+Final Loss 
+
+Item-Item Graph Propagation II-Neighbor BPR 
+
+Augmentation 
+
+> Item-Item
+> Graph
+
+Figure 1: The overall structure of IIMRec. 
+
+capacity for cross-dimensional mapping. Since users lack multi-modal raw features, user embeddings 𝑬 𝑚 𝑢 ∈ R| U | × 𝑑 are randomly initialized for each modality 𝑚 .Beyond the spatial (original) features, we extract spectral features 
+
+via the Discrete Cosine Transform (DCT) to capture frequency-domain patterns that are complementary to spatial representations: 
+
+˜𝒇 𝑖 = Concat (DCT (𝒇 𝑚 𝑖 )| 𝑚 ∈ M) , (2) where Concat (·|·) denotes concatenation across all modalities and DCT (·) applies the orthonormal Discrete Cosine Transform. The resulting spectral features ˜𝒇 𝑖 ∈ RÍ𝑚 𝑑 𝑚 encode global structure (in low-frequency components) and fine-grained local patterns (in high-frequency components). These spectral features are projected through a separate two-layer MLP with input dimension Í𝑚 𝑑 𝑚 
+
+and identical hidden/output dimensions as in Eq. (1) , yielding spec-tral embeddings 𝒆 𝑠 𝑖 ∈ R𝑑 . For users, a separate learnable spectral preference embedding 𝒆 𝑠 𝑢 ∈ R𝑑 is maintained. The initial node embedding matrix 𝑬 (0) ∈ R( | U |+| I | ) × ( ( | M |+ 1)𝑑 )
+
+is formed by concatenating the per-modality node embeddings along the feature dimension. For each node 𝑛 ∈ U ∪ I :
+
+𝒆 (0)
+
+𝑛 = Concat (Norm (𝒆 𝑠 𝑛 ), Norm (𝒆 𝑚 𝑛 )| 𝑚 ∈ M) , (3) where Norm (·) denotes ℓ2 normalization, which ensures that all modality channels contribute equally to the initial representation regardless of their raw feature magnitudes. Here, 𝒆 𝑚 𝑛 denotes the projected item embedding from Eq. (1) if 𝑛 ∈ I , or the learnable user preference embedding 𝒆 𝑚 𝑛 if 𝑛 ∈ U .
+
+## 4.2 Item-Item Graph Construction and Fusion 
+
+The item-item affinity graph serves as the second propagation channel and is constructed by fusing two complementary sources that capture different aspects of item relatedness. Note that the item–item graph is constructed before training and incurs no com-putational overhead during the training phase. 
+
+Semantic Graph. The semantic graph 𝑺 sem captures modality-level feature similarity and is itself a blend of spatial and spectral components. For the spatial component, we construct a KNN graph separately for each modality by computing pairwise cosine simi-larity among all item pairs and retaining the top-𝑘 neighbors per item: 
+
+𝑺 𝑚 
+
+spatial = RowNorm 
+
+
+
+Top -k
+
+ 𝑭 𝑚 (𝑭 𝑚 )⊤
+
+∥𝑭 𝑚 ∥row ∥𝑭 𝑚 ∥⊤
+
+row 
+
+ 
+
+, ∀𝑚 ∈ M , (4) where Top -k(·) zeros out all entries except the 𝑘 largest per row, and RowNorm (·) normalizes each row to sum to one. The modality-specific spatial graphs are then fused: 𝑺 spatial = Í𝑚 ∈ M 𝑺 𝑚 
+
+spatial .For each modality 𝑚 , we compute ˜𝑭 𝑚 = DCT (𝑭 𝑚 ) and par-tition its columns into low-frequency ( ˜𝑭 𝑚 
+
+lf , first ⌊𝜌 · 𝑑 𝑚 ⌋ coeffi-cients) and high-frequency ( ˜𝑭 𝑚 
+
+hf , remainder) bands with 𝜌 = 0.5.From each band of each modality, we construct a KNN graph as in Eq. (4) , yielding 𝑺 𝑚 
+
+lf and 𝑺 𝑚 
+
+hf . We additionally build a cross-modal mixed-frequency graph 𝑺 mix from concatenated DCT fea-tures ˜𝑭 all = Concat ( ˜𝑭 𝑚 |𝑚 ∈ M) . The spectral semantic graph is 
+
+𝑺 spectral = Í𝑚 𝑺 𝑚 
+
+lf + Í𝑚 𝑺 𝑚 
+
+hf + 𝑺 mix , and the complete semantic graph is 𝑺 sem = 𝑺 spatial + 𝑺 spectral .
+
+Co-occurrence Graph. The co-occurrence graph 𝑺 co captures behavioral proximity from shared user interactions, providing col-laborative evidence that is complementary to the content-based se-mantic graph. We compute the item co-occurrence matrix 𝑪 = 𝑹 ⊤ 𝑹 ,where 𝐶 𝑖 𝑗 counts the number of users who interacted with both items 𝑖 and 𝑗 . To control density, we set the diagonal to zero and apply Top -k(·) filtering per item. The filtered co-occurrence counts are then normalized via softmax to produce probability-like edge weights: 
+
+𝑠 co 
+
+𝑖 𝑗 = exp (𝐶 𝑖 𝑗 )
+
+Í𝑗 ′ ∈Top -k(𝑖 ) exp (𝐶 𝑖 𝑗 ′ ) . (5) Therefore, we obtain the co-occurrence graph 𝑺 co .MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Xu et al. 
+
+Graph Fusion. The semantic and co-occurrence graphs are fused: 
+
+𝑺 fused = 𝑺 co + 𝑺 sem , (6) This fused graph then serves as the input to the NCER reweighting. 
+
+## 4.3 Neighborhood Consistency Edge Reweighting (NCER) 
+
+The fused item-item graph 𝑺 fused inevitably contains noisy edges arising from spurious feature similarities or co-occurrence artifacts. We propose NCER, which leverages the principle of triadic closure 
+
+to upweight structurally reliable edges and suppress noisy ones. 
+
+Motivation. In social network theory, an edge between two nodes is considered more trustworthy if the nodes share many common neighbors [ 3 ]. Applied to item-item graphs: if items 𝑖 and 
+
+𝑗 are both similar to a large overlapping set of other items, the edge (𝑖, 𝑗 ) is supported by multiple independent paths of evidence. Conversely, if 𝑖 and 𝑗 share no neighbors, the edge is an isolated connection more likely to be a noise artifact. 
+
+Mechanism. We first convert the fused graph into a binary adjacency matrix 𝑩 ∈ { 0, 1}| I | × | I | where 𝑩 𝑖 𝑗 = I[𝑠 fused  
+
+> 𝑖 𝑗
+
+> 0]. The shared neighbor count for each edge is then efficiently computed via matrix multiplication: (𝑩𝑩 ⊤)𝑖 𝑗 = |N ( 𝑖 ) ∩ N ( 𝑗 )| , where N ( 𝑖 )
+
+denotes the neighbor set of item 𝑖 . We normalize this to obtain the consistency score: 
+
+𝑐 𝑖 𝑗 = |N ( 𝑖 ) ∩ N ( 𝑗 )| 
+
+𝑘 = (𝑩𝑩 ⊤)𝑖 𝑗 
+
+𝑘 , (7) where 𝑘 is the KNN parameter and 𝑐 𝑖 𝑗 ∈ [ 0, 1] quantifies the fraction of shared neighbors. Each edge is then reweighted proportionally to its consistency: 
+
+ˆ𝑠 𝑖 𝑗 = 𝑠 fused  
+
+> 𝑖 𝑗
+
+· ( 1 + 𝜅 · 𝑐 𝑖 𝑗 ), (8) where 𝜅 > 0 controls the reweighting strength. The reweighted graph is row-normalized to obtain the final II adjacency 𝑺 NCER via 
+
+ˆ𝑠 𝑖 𝑗 . Notably, NCER is computed once during preprocessing and adds no cost during training or inference. 
+
+Connection to Graph Laplacian. The reweighting in Eq. (8) can be interpreted as preferentially preserving the low-rank com-ponent of the adjacency matrix. In Section 5, we formalize this by showing that NCER reduces the spectral norm of the noise com-ponent 𝑵 in the decomposition 𝑺 = 𝑺 ∗ + 𝑵 , where 𝑺 ∗ is the ideal (clean) graph. 
+
+## 4.4 User-Item Graph Propagation 
+
+To capture high-order collaborative signals, we propagate node representations on the user-item bipartite graph. We adopt Light-GCN [ 6] as the message-passing backbone, which removes fea-ture transformation and nonlinear activation from standard GCNs. Specifically, we compute the symmetric normalized adjacency ma-trix ˜𝑨 = 𝑫 −1/2𝑨𝑫 −1/2 from the bipartite adjacency 𝑨 ∈ R( | U |+| I | ) × ( | U |+| I | ) ,where 𝑫 is the diagonal degree matrix. 
+
+Content-Guided UI Graph. We expand the interaction struc-ture using the NCER-refined graph. Applying a joint Top-𝑘 filter to 
+
+𝑺 NCER yields a sparse subgraph 𝑺 filtered . The expanded interaction matrix ˜𝑹 = 𝑹𝑺 filtered creates virtual user-item edges through high-confidence semantic neighbors, and is blended with the original: 
+
+¯𝑹 = 𝛾 𝑹 + ( 1 − 𝛾 ) ˜𝑹 . The symmetric normalized adjacency ¯𝑨 of ¯𝑹 
+
+replaces ˜𝑨 during training. 
+
+Residual-Weighted Propagation. Multi-layer propagation en-riches representations with high-order collaborative signals, but deeper layers also risk injecting noise from distant and less relevant neighbors [ 1]. To address this, we employ a residual weighting scheme that adaptively attenuates each propagation layer based on its agreement with the previous-layer representation: 
+
+𝑬 (𝑙 ) = diag 
+
+
+
+cos ( ¯𝑨𝑬 (𝑙 −1) , 𝑬 (𝑙 −1) )
+
+ ¯𝑨𝑬 (𝑙 −1) , (9) where cos (· , ·) computes the row-wise cosine similarity between the propagated output and the input from the previous layer, and 
+
+diag (·) constructs a diagonal matrix from these per-node similarity scores. This mechanism rescales the propagated embedding of each node by how much it agrees with the node’s current representation: nodes whose neighborhoods reinforce the existing signal receive full propagation strength, while nodes whose neighborhoods intro-duce divergent information are attenuated. The final UI-propagated representation aggregates across all layers: 𝑬 UI = Í𝐿 𝑙 =0 𝑬 (𝑙 ) , where 
+
+𝐿 is the number of propagation layers. The item representations 
+
+𝒆 UI  
+
+> 𝑖
+
+and the per-modality user representations are then extracted from the corresponding rows of 𝑬 UI .
+
+Cross-Modal Attention Fusion. After UI-graph propagation, the user portion of 𝑬 UI contains |M| + 1 modality channels that must be fused into a unified user embedding. Rather than using a fixed or heuristic fusion strategy [ 21 , 22 , 36 ], we adopt a cross-modal attention mechanism where the weight of each modality is determined by its agreement with the other modalities. Each modality’s user representation is first projected and ℓ2-normalized via a modality-specific linear transformation: 𝒛 𝑚 𝑢 = Norm (𝑾 𝑚 
+
+> proj
+
+𝒆 𝑚 𝑢 ),where 𝑾 𝑚  
+
+> proj
+
+∈ R𝑑 ×𝑑 is a learnable projection. The attention weight for modality 𝑚 is computed as: 
+
+𝒆 𝑢 =∑︁ 
+
+> 𝑚 ∈ M ′
+
+exp 
+
+Í𝑚 ′≠𝑚 sim (𝒛 𝑚 𝑢 , 𝒛 𝑚 ′ 
+
+> 𝑢
+
+)/ 𝜏 
+
+Í𝑚 ′′ ∈ M ′ exp  Í 𝑚 ′≠𝑚 ′′ sim (𝒛 𝑚 ′′  
+
+> 𝑢
+
+, 𝒛 𝑚 ′ 
+
+> 𝑢
+
+)/ 𝜏  𝒆 𝑚 𝑢 , (10) where M′ = {𝑠 } ∪ M denotes the set of modality channels, sim (· , ·) 
+
+denotes cosine similarity, and 𝜏 is a temperature parameter (We fixed 𝜏 = 0.2 in practice). The intuition is that a modality which agrees well with the other modalities is more likely to carry reliable preference information and should receive higher weight. 
+
+## 4.5 Item-Item Graph Propagation via Residual II Gate (RIG) 
+
+Given the NCER-refined item-item adjacency 𝑺 NCER , we propagate item representations through a single layer of message passing on the item-item graph to enrich each item’s representation with semantic neighborhood information: 
+
+𝑯 = 𝑺 NCER 𝑬 UI  
+
+> I
+
+, (11) where 𝑬 UI  
+
+> I
+
+∈ R| I | × ( | M |+ 1)𝑑 denotes the item portion of the UI-propagated representations. The propagated output 𝒉 𝑖 for each item 𝑖 encodes aggregated semantic signals from its neighborhood in the item-item graph. IIMRec MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil 
+
+Residual II Gate (RIG). The standard approach adds 𝒉 𝑖 to 𝒆 UI 
+
+> 𝑖
+
+via a fixed residual: 𝒆 𝑖 = 𝒆 UI  
+
+> 𝑖
+
++ 𝒉 𝑖 . This uniform treatment is subopti-mal: for items with reliable modality features, 𝒉 𝑖 provides valuable semantic enrichment, while for items with noisy or contradictory features, 𝒉 𝑖 may corrupt the collaborative signal learned from UI propagation. We therefore replace the fixed residual with a learned per-item gate that adaptively controls each item’s II contribution: 
+
+𝒆 𝑖 = 𝒆 UI  
+
+> 𝑖
+
++ 𝜎 
+
+
+
+𝑾 2 · ReLU (𝑾 1 · Concat (𝒆 UI  
+
+> 𝑖
+
+, 𝒉 𝑖 )) 
+
+
+
+𝒉 𝑖 , (12) where 𝑾 1 ∈ R( | M |+ 1)𝑑 ×2( | M |+ 1)𝑑 and 𝑾 2 ∈ R1× ( | M |+ 1)𝑑 are learn-able parameters matrices, Concat (· , ·) denotes concatenation, and 
+
+𝜎 denotes the sigmoid function. The gate takes as input both the UI-derived representation (encoding collaborative signals) and the II-propagated output (encoding semantic neighborhood signals), and produces a scalar in [0, 1] that controls the II contribution for each item individually. Because the gate parameters are optimized end-to-end through the BPR loss, the model naturally learns to assign high gate values to items whose II-propagated signals improve recommendation quality (i.e., items with consistent, high-quality modality features where II propagation aggregates coherent signals from genuine semantic neighbors) and low gate values to items whose II signals would degrade it (i.e., items with noisy features where II propagation mixes contradictory or irrelevant signals). 
+
+Design Rationale. Unlike attention-based modality selection [ 8 ], which operates across modalities for a fixed item, RIG operates 
+
+across items for a fixed propagation path. The gate addresses the question of how much the II-propagated semantic signal should contribute to each specific item’s final representation. 
+
+## 4.6 II-Neighbor BPR Augmentation (INA) 
+
+Standard BPR [ 14 ] training constructs each training triplet (𝑢, 𝑝, 𝑛 )
+
+by sampling a positive item 𝑝 that user 𝑢 has interacted with and a negative item 𝑛 randomly drawn from the set of non-interacted items. The supervision signal comes exclusively from the interac-tion matrix, which is sparse in practice. We propose to enrich this signal by leveraging the II graph to generate additional training supervision. 
+
+Motivation. If item 𝑗 is a top neighbor of positive item 𝑝 in the II graph, 𝑗 shares strong semantic similarity with a user-preferred item and can serve as a soft positive , i.e., an item the user likely prefers over a random negative but with lower confidence than the observed interaction. This is empirically supported by [ 25 ], which shows that modality-similar items of interacted items overlap significantly more with true preferences than random items. 
+
+Mechanism. For each item 𝑖 , we pre-compute its top-𝑘 neigh-bors from the NCER-refined II graph by selecting the 𝑘 neighbors with the highest edge weights in 𝑺 NCER . These are stored in a lookup table 𝑻 ∈ R| I | × 𝑘 , where 𝑇 𝑖,𝑘 is the index of the 𝑘 -th nearest neigh-bor. During training, for each positive item 𝑝 in a mini-batch, we randomly sample one valid neighbor 𝑗 from 𝑻 𝑝 and independently sample a fresh random negative 𝑛 ′, then compute a discounted BPR loss: 
+
+LINA = −𝛿 
+
+|B valid |∑︁ (𝑢,𝑝,𝑛 ′ ) ∈ B valid 
+
+log 𝜎 (𝒆 ⊤ 
+
+> 𝑢
+
+𝒆 𝑗 − 𝒆 ⊤ 
+
+> 𝑢
+
+𝒆 𝑛 ′ ), (13) where 𝛿 ∈ ( 0, 1) is a discount factor reflecting the reduced con-fidence of soft positives compared to observed interactions, and 
+
+Bvalid denotes the subset of the mini-batch where the positive item has at least one valid II-graph neighbor. The loss is computed only over this valid subset to avoid corrupting the gradient with items that lack meaningful semantic neighbors. 
+
+Compatibility with BPR. A critical distinction from cross-graph alignment approaches [ 18 , 26 , 37 ] (which force UI-propagated and II-propagated representations to align via contrastive loss) is that INA pushes in the same direction as BPR: both aim to make the user embedding closer to desirable items than to random negatives. Cross-graph alignment, by contrast, can conflict with BPR because UI representations encode collaborative filtering signals while II representations encode semantic similarity; forcing alignment be-tween these can destroy the CF signal that drives recommendation quality. 
+
+## 4.7 Training Objective and Complexity 
+
+BPR Loss. The primary recommendation objective is the Bayesian Personalized Ranking (BPR) loss [ 14 ], which encourages the model to rank positive items above negative items for each user: 
+
+LBPR =∑︁ 
+
+> (𝑢,𝑝,𝑛 ) ∈ D
+
+− log 𝜎  𝒆 ⊤ 
+
+> 𝑢
+
+𝒆 𝑝 − 𝒆 ⊤ 
+
+> 𝑢
+
+𝒆 𝑛 
+
+ , (14) where D is the set of training triplets, 𝒆 𝑢 is the fused user representa-tion from Eq. (10) , and 𝒆 𝑝 , 𝒆 𝑛 are the RIG-gated item representations from Eq. (12). 
+
+Contrastive Learning Losses. We employ two contrastive learning objectives to encourage cross-modal alignment. The user-level contrastive loss aligns projected user representations across modality pairs using the InfoNCE [13] formulation: 
+
+LCL-u =∑︁  
+
+> 𝑚,𝑚 ′∈ M
+
+−1
+
+|B| ∑︁ 𝑢 ∈ B 
+
+log exp (𝒛 𝑚 𝑢 · 𝒛 𝑚 ′ 
+
+> 𝑢
+
+/𝜏 cl )
+
+Í𝑢 ′ exp (𝒛 𝑚 𝑢 · 𝒛 𝑚 ′ 
+
+> 𝑢 ′
+
+/𝜏 cl ) , (15) where 𝒛 𝑚 𝑢 is the projected and normalized user representation (Eq. 10), B is the current mini-batch, and 𝜏 cl is a contrastive tem-perature (We fixed 𝜏 cl = 0.2 in practice). The item-level contrastive loss LCL-i is defined analogously over the modality-specific item representations after UI propagation, using the same modality pairs and temperature. We obtain the LCL = LCL-u + L CL-i .
+
+Total Loss. The complete training loss combines all losses: 
+
+L = LBPR + 𝜆 INA LINA + 𝜆 CL LCL , (16) where 𝜆 INA and 𝜆 CL are the respective loss weights. 
+
+Prediction. At inference time, the predicted preference score for user 𝑢 on item 𝑖 is computed as the inner product of their final representations: ˆ𝑦 𝑢,𝑖 = 𝒆 ⊤ 
+
+> 𝑢
+
+𝒆 𝑖 . All items are then ranked by their predicted scores for each user to get the top-𝑁 recommendation list. The complete training procedure is summarized in Algorithm 1 in Appendix E. 
+
+Complexity Analysis. NCER adds 𝑂 (|I| · 𝑘 2) preprocessing cost for computing shared neighbor counts via 𝑩𝑩 ⊤ (where 𝑘 is the KNN parameter), which is negligible relative to KNN graph construction. RIG adds 𝑂 (( 𝑑 (|M| + 1)2) parameters for the two-layer MLP gate, with per-batch forward cost 𝑂 (𝐵 · ( 𝑑 (|M| + 1)) 
+
+where 𝐵 is the batch size. INA adds 𝑂 (𝐵 ) per-batch cost for neighbor MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Xu et al. 
+
+sampling and a discounted BPR computation. All three innovations are lightweight relative to the GCN propagation 𝑂 (|E| · ( 𝑑 (|M| + 
+
+1)) that dominates the overall training cost. Notably, NCER and the INA neighbor lookup table are both computed once during preprocessing and cached to disk, incurring zero additional cost during training. We provide an empirical efficiency analysis (See Section 6.5) demonstrating that IIMRec significantly outperforms existing advanced multimodal recommendation models in terms of efficiency. 
+
+## 5 Theoretical Analysis 
+
+We provide theoretical guarantees for IIMRec’s three innovations. 
+
+## 5.1 NCER Reduces Graph Spectral Noise 
+
+Assumption 5.1 (Noisy Graph Model). The observed item-item similarity matrix decomposes as 𝑺 = 𝑺 ∗ + 𝑵 , where 𝑺 ∗ is the ideal (clean) graph encoding true semantic relationships and 𝑵 is a noise matrix with ∥𝑵 ∥2 ≤ 𝜖 . We assume 𝑺 ∗ exhibits community structure such that true edges have high neighborhood overlap while noise edges have low overlap. 
+
+Theorem 5.2 (NCER Noise Reduction). Under Assumption 5.1, let ˆ𝑺 = 𝑺 ◦𝑾 denote the NCER-reweighted graph where 𝑊 𝑖 𝑗 = 1+𝜅 ·𝑐 𝑖 𝑗 
+
+and ◦ denotes element-wise multiplication. Decompose ˆ𝑺 = ˆ𝑺 ∗ + ˆ𝑵 
+
+correspondingly. Then: 
+
+∥ ˆ𝑵 ∥𝐹 
+
+∥ ˆ𝑺 ∥𝐹 
+
+≤ ∥𝑵 ∥𝐹 
+
+∥𝑺 ∥𝐹 
+
+· 1 + 𝜅 ¯𝑐 𝑁 
+
+1 + 𝜅 ¯𝑐 𝑆 ∗
+
+, (17) 
+
+where ¯𝑐 𝑁 and ¯𝑐 𝑆 ∗ are the average neighborhood consistency scores of noise edges and clean edges, respectively. When ¯𝑐 𝑆 ∗ > ¯𝑐 𝑁 (true edges have higher overlap than noise edges), NCER strictly reduces the noise-to-signal ratio: ∥ ˆ𝑵 ∥𝐹 /∥ ˆ𝑺 ∥𝐹 < ∥𝑵 ∥𝐹 /∥ 𝑺 ∥𝐹 .
+
+The proof (Appendix A) follows from the observation that NCER multiplicatively amplifies edges proportionally to their consistency scores, and under the community structure assumption, clean edges systematically have higher scores than noise edges. 
+
+## 5.2 RIG Convergence and Non-Degeneracy 
+
+A potential concern with learned gates is collapse: all gates con-verging to 0 (ignoring II) or 1 (ignoring UI). 
+
+Theorem 5.3 (RIG Non-Degeneracy). Consider the BPR loss 
+
+L = − Í(𝑢,𝑝,𝑛 ) log 𝜎 (𝒆 ⊤ 
+
+> 𝑢
+
+𝒆 𝑝 − 𝒆 ⊤ 
+
+> 𝑢
+
+𝒆 𝑛 ) with RIG-gated item represen-tations 𝒆 𝑖 = 𝒆 UI  
+
+> 𝑖
+
++ 𝑔 𝑖 · 𝒉 𝑖 . Let 𝜃 𝑔 denote the gate parameters. Under standard regularity conditions (bounded embeddings, non-degenerate initialization), the gradient of L with respect to the gate output 𝑔 𝑖 
+
+satisfies: 
+
+𝜕 L
+
+𝜕𝑔 𝑖 
+
+= −∑︁ 
+
+> 𝑢 :(𝑢,𝑖, ·) ∈ D
+
+𝑤 𝑢,𝑖 · 𝒆 ⊤ 
+
+> 𝑢
+
+𝒉 𝑖 +∑︁  
+
+> 𝑢 :(𝑢, ·,𝑖 ) ∈ D
+
+𝑤 ′ 
+
+> 𝑢,𝑖
+
+· 𝒆 ⊤ 
+
+> 𝑢
+
+𝒉 𝑖 , (18) 
+
+where 𝑤 𝑢,𝑖 , 𝑤 ′ 
+
+> 𝑢,𝑖
+
+> 0 are instance-dependent weights. When item 𝑖 is a positive item and 𝒆 ⊤ 
+
+> 𝑢
+
+𝒉 𝑖 > 0 (II signal is helpful), the gradient pushes 
+
+𝑔 𝑖 upward. When 𝒆 ⊤ 
+
+> 𝑢
+
+𝒉 𝑖 < 0 (II signal is harmful), the gradient pushes 
+
+𝑔 𝑖 downward. Therefore, at any stationary point, 𝑔 𝑖 ∈ ( 0, 1) for items that appear as both positives and negatives. 
+
+Corollary 5.4. If there exist items 𝑖, 𝑗 such that the II signal is helpful for 𝑖 (E[𝒆 ⊤ 
+
+> 𝑢
+
+𝒉 𝑖 ] > 0) and harmful for 𝑗 (E[𝒆 ⊤ 
+
+> 𝑢
+
+𝒉 𝑗 ] < 0), then at any local minimum, 𝑔 𝑖 > 𝑔 𝑗 , confirming that the gate differentiates between items based on II signal quality. 
+
+## 5.3 INA Tightens Generalization 
+
+Theorem 5.5 (INA Generalization Bound). Let LBPR and LINA 
+
+be the standard and augmented BPR losses, with 𝑛 observed inter-actions and 𝑛 aug augmented soft-positive interactions. Under a PAC-Bayes framework with hypothesis class H of bounded-norm embed-dings, the expected risk satisfies: 
+
+𝑅 ( ˆ𝑓 ) ≤ ˆ𝑅 𝑛 +𝑛 aug ( ˆ𝑓 ) + 𝑂 ©«√︄ 
+
+KL ( ˆ𝑓 ∥𝜋 ) + log (1/𝛿 )
+
+𝑛 + 𝛿 eff · 𝑛 aug 
+
+ª®¬
+
+, (19) 
+
+where 𝛿 eff = 𝛿 2 · P[ 𝑗 ∈ N II (𝑝 ) ⇒ user prefers 𝑗 ] captures the effective quality of the augmented signal, and ˆ𝑅 𝑛 +𝑛 aug is the empirical risk over all training pairs. When the II graph has positive predictive value (𝛿 eff > 0), the bound is strictly tighter than the standard BPR bound (which has denominator 𝑛 only). 
+
+The proof (Appendix C) adapts the standard PAC-Bayes bound to account for the augmented training set, with the discount factor 
+
+𝛿 appropriately scaling the contribution of soft positives. 
+
+Table 1: Statistics of all datasets with multimodal item con-tents. Dataset Modalities (Dim.) #Users #Items #Interactions Sparsity                     
+
+> Baby V(4096), T(384) 19,445 7,050 160,792 99.88% Sports V(4096), T(384) 35,598 18,357 296,337 99.95% Clothing V(4096), T(384) 39,387 23,033 278,677 99.97% TikTok V(128), T(768), A(128) 9,319 6,710 59,541 99.90%
+
+## 6 Experiment 6.1 Settings 
+
+6.1.1 Evaluation Datasets. We conduct experiments on four real-world datasets spanning multiple modalities. The Baby, Sports, and Clothing subsets are derived from the Amazon dataset [ 10 ], where each item is accompanied by both textual descriptions and images. To ensure a fair comparison, we adopt the data preprocessing strat-egy from MMRec [ 34 ] for these three datasets. Additionally, we incorporate the TikTok dataset [ 7], which consists of user inter-action logs with short videos and encompasses more than two modalities, enabling us to evaluate IIMRec under richer multimodal conditions. The preprocessing of TikTok follows the protocols es-tablished in prior works [7, 18]. Dataset statistics are presented in Table 1. 
+
+6.1.2 Evaluation Baselines. To evaluate the effectiveness of IIM-Rec, we compare it with advanced models. Based on whether mul-timodal features are used, these methods fall into two categories: general recommendation ( LightGCN [ 6 ], SimGCL [ 31 ], Lay-erGCN [ 35 ], and NLGCL [ 28 ]) and multimodal recommendation (MMGCN [ 20 ], DualGNN [ 17 ], LATTICE [ 32 ], SLMRec [ 16 ], BM3 [ 37 ], MMSSL [ 18 ], FREEDOM [ 36 ], LGMRec [ 4 ], DiffMM [ 7 ], SMORE [ 12 ], HPMRec [ 2], MENTOR [ 26 ], and COHE-SION [ 23 ]). Detailed descriptions of these baselines are provided in Appendix D. IIMRec MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil 
+
+Table 2: Recommendation performance comparison of different models. The best and the second-best performances are marked with bold and underline , respectively. ∗ indicates that the t-tests validate the significance of improvements with 𝑝 -value < 0.05. Datasets Baby Sports Clothing TikTok Metrics R@10 R@20 N@10 N@20 R@10 R@20 N@10 N@20 R@10 R@20 N@10 N@20 R@10 R@20 N@10 N@20 
+
+LightGCN 0.0479 0.0754 0.0257 0.0328 0.0569 0.0864 0.0311 0.0387 0.0340 0.0526 0.0188 0.0236 0.0482 0.0801 0.0218 0.0306 
+
+SimGCL 0.0513 0.0804 0.0273 0.0350 0.0601 0.0919 0.0327 0.0414 0.0356 0.0549 0.0195 0.0244 0.0508 0.0852 0.0260 0.0331 
+
+LayerGCN 0.0529 0.0820 0.0281 0.0355 0.0594 0.0916 0.0323 0.0406 0.0371 0.0566 0.0200 0.0247 0.0522 0.0866 0.0270 0.0346 
+
+NLGCL 0.0588 0.0902 0.0307 0.0396 0.0650 0.0971 0.0342 0.0432 0.0430 0.0628 0.0235 0.0289 0.0568 0.0923 0.0305 0.0387 
+
+MMGCN 0.0378 0.0615 0.0200 0.0261 0.0370 0.0605 0.0193 0.0254 0.0218 0.0345 0.0110 0.0142 0.0485 0.0862 0.0200 0.0298 
+
+DualGNN 0.0448 0.0716 0.0240 0.0309 0.0568 0.0859 0.0310 0.0385 0.0454 0.0683 0.0241 0.0299 0.0529 0.0892 0.0234 0.0343 
+
+LATTICE 0.0547 0.0850 0.0292 0.0370 0.0620 0.0953 0.0335 0.0421 0.0492 0.0733 0.0268 0.0330 0.0559 0.0904 0.0303 0.0388 
+
+SLMRec 0.0529 0.0775 0.0290 0.0353 0.0663 0.0990 0.0365 0.0450 0.0452 0.0675 0.0247 0.0303 0.0533 0.0870 0.0258 0.0340 
+
+BM3 0.0564 0.0883 0.0301 0.0383 0.0656 0.0980 0.0355 0.0438 0.0422 0.0621 0.0231 0.0281 0.0510 0.0882 0.0221 0.0329 
+
+MMSSL 0.0613 0.0971 0.0326 0.0420 0.0693 0.1013 0.0369 0.0474 0.0531 0.0797 0.0291 0.0359 0.0540 0.0891 0.0271 0.0355 
+
+FREEDOM 0.0627 0.0992 0.0330 0.0424 0.0717 0.1089 0.0385 0.0481 0.0629 0.0941 0.0341 0.0420 0.0575 0.0900 0.0316 0.0398 
+
+LGMRec 0.0639 0.0989 0.0337 0.0430 0.0719 0.1068 0.0387 0.0477 0.0555 0.0828 0.0302 0.0371 0.0588 0.0923 0.0312 0.0400 
+
+DiffMM 0.0623 0.0975 0.0328 0.0411 0.0671 0.1017 0.0377 0.0458 0.0531 0.0797 0.0291 0.0359 0.0551 0.0868 0.0301 0.0377 
+
+SMORE 0.0680 0.1035 0.0365 0.0457 0.0762 0.1142 0.0408 0.0506 0.0659 0.0987 0.0360 0.0443 0.0623 0.0992 0.0328 0.0417 
+
+HPMRec 0.0667 0.1033 0.0357 0.0451 0.0751 0.1129 0.0410 0.0507 0.0658 0.0963 0.0351 0.0429 0.0620 0.0985 0.0320 0.0408 
+
+MENTOR 0.0678 0.1048 0.0362 0.0450 0.0763 0.1139 0.0409 0.0511 0.0668 0.0989 0.0360 0.0441 0.0634 0.1011 0.0334 0.0426 
+
+COHESION 0.0680 0.1052 0.0354 0.0454 0.0752 0.1137 0.0409 0.0503 0.0665 0.0983 0.0358 0.0438 0.0630 0.1008 0.0337 0.0431 
+
+IIMRec 0.0709 ∗ 0.1094 ∗ 0.0387 ∗ 0.0485 ∗ 0.0793 ∗ 0.1184 ∗ 0.0431 ∗ 0.0537 ∗ 0.0702 ∗ 0.1032 ∗ 0.0379 ∗ 0.0469 ∗ 0.0669 ∗ 0.1053 ∗ 0.0353 ∗ 0.0455 ∗
+
+6.1.3 Evaluation Protocols. To ensure a fair comparison, we adopt the evaluation protocol established in prior studies [ 30 , 36 , 37 ]. Specifically, the optimal model is chosen according to the highest Recall@20 achieved on the validation set. The average performance across all users in the test set is evaluated using Recall@10, Re-call@20, NDCG@10, and NDCG@20. 
+
+6.1.4 Implementation Details. To be fair, we set both the user and item embedding dimensions to 64 and the training batch size to 2,048 to optimize all models. We search for optimal parameter ranges in the validation set as reported by their original baseline models for all models, and report the corresponding test set results. For our IIMRec, we conduct a grid search over the hyper-parameters, specifically 𝑘 ∈ {5, 10 , 15 , 20 } for all Top -k(·) operations, 𝜅 ∈{0.2, 0.4, 0.6, 0.8}, 𝛾 ∈ { 0.2, 0.4, 0.6, 0.8}, 𝛿 ∈ { 0.2, 0.4, 0.6, 0.8}, 𝜆 INA ∈{0.2, 0.4, 0.6, 0.8}, and 𝜆 CL ∈ { 1e −5, 1e −4, 1e −3 }. We fix 𝜏 = 0.2 for all softmax operations to reduce the hyper-parameter tuning cost. An NVIDIA RTX 4090 GPU was used for all experiments. 
+
+## 6.2 Overall Performance Comparison 
+
+We evaluate the effectiveness of IIMRec on multiple real-world datasets in multimodal recommendation scenarios. The optimal results are highlighted in bold, while the suboptimal ones are un-derlined. From Table 2, we derive the following observations: 
+
+• IIMRec achieves the best performance across all four datasets on every evaluation metric, with statistically significant improve-ments over the strongest baselines. The gains hold across datasets of different domains, interaction densities, and modality con-figurations, confirming that our high-quality item-item graph generalizes beyond any existing graph structure. In particular, the improvements are most evident under sparse-interaction conditions, where the item-item graph is most susceptible to noisy edges and where fixed aggregation lacks the flexibility to suppress corrupted propagation signals. 
+
+• Among multimodal baselines, models incorporating item-item homogeneous graphs (SMORE, HPMRec, MENTOR, COHESION) Baby Sports Clothing TikTok Dataset 0.09 0.10 0.11 0.12 Recall@20 
+
+> .1023 .1120 .0956 .0980 .1058 .1142 .0983 .1001 .1060 .1145 .0985 .0997 .1070 .1166 .1014 .1036 .1070 .1153 .1009 .1037 .1074 .1164 .1014 .1037 .1079 .1172 .1019 .1043 .1080 .1174 .1019 .1045 .1079 .1171 .1019 .1040 .1094 .1184 .1032 .1053
+> w/o II-Graph w/o NCER w/o CG+RW w/o CG-UI w/o INA w/o RIG w/o RW w/o CMA w/o CL IIMRec
+
+Figure 2: Ablation study (Recall@20) on four datasets. 
+
+consistently outperform those relying solely on user-item bi-partite propagation (MMGCN, DualGNN, BM3), confirming the value of item-level semantic affinity as a complementary channel. However, the gap between these models and IIMRec reveals that graph construction quality and signal integration strategy matter as much as the presence of such graphs. Notably, general base-lines with advanced contrastive learning sometimes rival earlier multimodal models, suggesting that naively injecting modality features through noisy item-item graphs can offset the benefit of multimodal information. 
+
+## 6.3 Ablation Study 
+
+To verify the contribution of each component, we systematically re-move individual modules from IIMRec and report Recall@20 on all four datasets. The variants include: removing the entire item-item graph ( w/o II-Graph ), NCER reweighting ( w/o NCER ), the content-guided UI graph ( w/o CG-UI ), residual-weighted propagation ( w/o RW ), both CG-UI and RW jointly ( w/o CG+RW ), cross-modal atten-tion fusion ( w/o CMA ), INA augmentation ( w/o INA ), the residual II gate ( w/o RIG ), and contrastive learning ( w/o CL ). As shown in Figure 2, removing the item-item graph entirely leads to the largest degradation across all datasets, underscoring MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Xu et al. (0-5] (5-10] (10-15] (15-20] (20-25]              
+
+> 0.095
+> 0.100
+> 0.105
+> 0.110 Recall@20
+> Baby
+> (0-5] (5-10] (10-15] (15-20] (20-25]
+> 0.100
+> 0.105
+> 0.110
+> 0.115
+> 0.120
+> Sports
+> (0-5] (5-10] (10-15] (15-20] (20-25]
+> 0.080
+> 0.090
+> 0.100
+> 0.110 Recall@20
+> Clothing
+> (0-5] (5-10] (10-15] (15-20] (20-25]
+> 0.085
+> 0.090
+> 0.095
+> 0.100
+> 0.105
+> 0.110 TikTok
+> LGMRec SMORE HPMRec MENTOR COHESION IIMRec
+
+Figure 3: Sparsity analysis for IIMRec across all datasets. Table 3: Cold-start analysis across all datasets. Method Baby Sports Clothing TikTok                                                                                                                        
+
+> R@20 N@20 R@20 N@20 R@20 N@20 R@20 N@20 MMGCN 0.0186 0.0098 0.0178 0.0094 0.0101 0.0050 0.0178 0.0104 DualGNN 0.0200 0.0110 0.0242 0.0132 0.0198 0.0113 0.0224 0.0121 LATTICE 0.0256 0.0138 0.0340 0.0189 0.0249 0.0135 0.0233 0.0127 SLMRec 0.0259 0.0140 0.0354 0.0194 0.0208 0.0118 0.0243 0.0131 BM3 0.0262 0.0133 0.0294 0.0180 0.0189 0.0104 0.0249 0.0139 MMSSL 0.0351 0.0192 0.0370 0.0203 0.0294 0.0157 0.0345 0.0206 FREEDOM 0.0588 0.0257 0.0640 0.0289 0.0585 0.0252 0.0570 0.0239 LGMRec 0.0592 0.0261 0.0629 0.0281 0.0551 0.0235 0.0578 0.0243 DiffMM 0.0552 0.0238 0.0589 0.0254 0.0510 0.0221 0.0519 0.0230 SMORE 0.0595 0.0251 0.0661 0.0302 0.0602 0.0259 0.0613 0.0255 HPMRec 0.0603 0.0256 0.0653 0.0292 0.0600 0.0255 0.0609 0.0252 MENTOR 0.0628 0.0268 0.0661 0.0297 0.0610 0.0264 0.0618 0.0262 COHESION 0.0631 0.0263 0.0665 0.0300 0.0611 0.0256 0.0622 0.0264
+> IIMRec 0.0663 0.0279 0.0711 0.0318 0.0638 0.0270 0.0664 0.0283
+
+that item-item propagation provides essential semantic informa-tion beyond user-item collaborative signals. NCER contributes the second-largest individual effect, indicating that the raw fused graph carries substantial noise that triadic-closure-based reweighting ef-fectively suppresses. Among all core innovations, RIG and INA each produce consistent drops when removed, validating that item-adaptive gating and soft-positive augmentation address complemen-tary weaknesses in the standard pipeline. Notably, removing CG-UI and RW simultaneously leads to a larger drop than either abla-tion alone, suggesting a synergistic interaction: the content-guided graph introduces virtual interactions while residual-weighted prop-agation prevents deeper layers from amplifying noise through these expanded connections. Cross-modal attention and contrastive learn-ing show smaller but stable contributions as supplementary align-ment mechanisms. 
+
+## 6.4 Sparsity and Cold-Start Analysis 
+
+For sparsity analysis, we group users by their number of training in-teractions and compare IIMRec against five advanced baselines. As shown in Figure 3, IIMRec consistently leads across all datasets and sparsity levels, with the largest margins in the sparsest groups (0-5]
+
+and (5-10 ]. This confirms that NCER effectively filters unreliable edges when interaction evidence is scarce, while RIG prevents noisy item-item propagation from overwhelming the limited collaborative signal of low-activity users. For cold-start analysis, we follow prior setting [ 22 ]: 20% of items are removed from training, split evenly 
+
+Table 4: Efficiency analysis across all datasets. Time: seconds per epoch; Mem.: GPU memory in GB. 
+
+Baby Sports Clothing TikTok Method Time Mem. Time Mem. Time Mem. Time Mem. LGMRec 5.93 2.41 8.98 3.67 10.02 4.81 1.90 1.08 SMORE 6.55 3.31 9.29 5.02 11.05 6.89 2.09 1.39 HPMRec 21.03 8.58 30.85 10.19 40.23 14.95 6.69 2.60 MENTOR 7.03 7.12 9.62 8.44 11.90 12.99 2.18 2.33 COHESION 4.47 2.89 7.91 4.20 9.05 5.73 1.59 1.31 IIMRec 3.18 1.08 6.02 2.12 6.89 2.69 0.75 0.77 
+
+into validation and test sets. As shown in Table 3, IIMRec achieves the best performance across all datasets. The gains stem from the synergy of all components: NCER provides high-quality seman-tic neighbors for cold-start items, RIG controls their contribution to avoid noise from uncertain modality features, and INA propa-gates supervision to items with few or no observed interactions via discounted soft positives. 
+
+## 6.5 Efficiency Study 
+
+Table 4 reports the per-epoch training time and GPU memory usage of IIMRec and five competitive baselines. Although IIMRec involves a comprehensive graph construction, the high-quality item-item graph is precomputed from multimodal raw features and historical interactions before training and cached to disk, introducing zero overhead during training. As a result, IIMRec not only achieves consistent performance gains over LGMRec, SMORE, HPMRec, MENTOR, and COHESION, but also runs faster and consumes less GPU memory than every compared method across all four datasets, making it well-suited for real-world deployment. 
+
+## 6.6 Hyper-parameter Analysis 
+
+We investigate the sensitivity of IIMRec to six key hyper-parameters by varying each while fixing the others at their optimal values, and report Recall@20 across all four datasets in Figure 4 in Appendix E.1. 
+
+## 7 Conclusion 
+
+This work presents IIMRec, a framework that constructs a single high-quality item-item graph and systematically reuses it across three stages of the multimodal recommendation. NCER refines the graph by reweighting edges according to neighborhood over-lap grounded in triadic closure, amplifying structurally reliable connections while suppressing spurious ones. RIG introduces a learned per-item gate that adaptively controls how much item-item propagation signal each item absorbs, replacing the uniform fixed aggregation universally adopted in prior work. INA enriches BPR training by treating top neighbors of positive items as dis-counted soft positives, providing additional supervision that pushes in the same direction as preference learning. Together with content-guided UI graph expansion, these components realize a " build once, leverage everywhere " paradigm that is lightweight, modular, and theoretically grounded. Experiments on four dataset demonstrate consistent state-of-the-art performance with lower computational cost, and particularly strong improvements under cold-start and sparse-interaction conditions. IIMRec MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil 
+
+## Acknowledgments 
+
+This work was supported by the UGC General Research Fund no. 17209822 and the Innovation and Technology Commission Fund no. ITS/383/23FP from Hong Kong. 
+
+## References 
+
+[1] Zheyu Chen, Jinfeng Xu, and Haibo Hu. 2025. Don’t Lose Yourself: Boosting Multimodal Recommendation via Reducing Node-neighbor Discrepancy in Graph Convolutional Network. In ICASSP 2025-2025 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) . IEEE, 1–5. [2] Zheyu Chen, Jinfeng Xu, Hewei Wang, Shuo Yang, Zitong Wan, and Haibo Hu. 2025. Hypercomplex Prompt-aware Multimodal Recommendation. In Proceed-ings of the 34th ACM International Conference on Information and Knowledge Management . 403–414. [3] David Easley, Jon Kleinberg, et al . 2010. Networks, crowds, and markets: Reasoning about a highly connected world . Vol. 1. Cambridge university press Cambridge. [4] Zhiqiang Guo, Jianjun Li, Guohui Li, Chaoyang Wang, Si Shi, and Bin Ruan. 2024. LGMRec: Local and Global Graph Learning for Multimodal Recommendation. In 
+
+Proceedings of the AAAI Conference on Artificial Intelligence , Vol. 38. 8454–8462. [5] Ruining He and Julian McAuley. 2016. VBPR: visual bayesian personalized ranking from implicit feedback. In Proceedings of the AAAI conference on artificial intelligence , Vol. 30. [6] Xiangnan He, Kuan Deng, Xiang Wang, Yan Li, Yongdong Zhang, and Meng Wang. 2020. Lightgcn: Simplifying and powering graph convolution network for recommendation. In Proceedings of the 43rd International ACM SIGIR conference on research and development in Information Retrieval . 639–648. [7] Yangqin Jiang, Lianghao Xia, Wei Wei, Da Luo, Kangyi Lin, and Chao Huang. 2024. DiffMM: Multi-Modal Diffusion Model for Recommendation. (2024). [8] Yungi Kim, Taeri Kim, Won-Yong Shin, and Sang-Wook Kim. 2024. MONET: Modality-Embracing Graph Convolutional Network and Target-Aware Attention for Multimedia Recommendation. In Proceedings of the 17th ACM International Conference on Web Search and Data Mining . 332–340. [9] Yijie Li, Hewei Wang, Jinfeng Xu, Puzhen Wu, Yunzhong Xiao, Shaofan Wang, and Soumyabrata Dev. 2025. Ddunet: Dual dynamic u-net for highly-efficient cloud segmentation. In IGARSS 2025-2025 IEEE International Geoscience and Remote Sensing Symposium . IEEE, 4705–4711. [10] Julian McAuley, Christopher Targett, Qinfeng Shi, and Anton Van Den Hengel. 2015. Image-based recommendations on styles and substitutes. In Proceedings of the 38th international ACM SIGIR conference on research and development in information retrieval . 43–52. [11] Nagarajan Natarajan, Inderjit S Dhillon, Pradeep K Ravikumar, and Ambuj Tewari. 2013. Learning with noisy labels. Advances in neural information processing systems 26 (2013). [12] Rongqing Kenneth Ong and Andy WH Khong. 2025. Spectrum-based modality representation fusion graph convolutional network for multimodal recommen-dation. In Proceedings of the Eighteenth ACM International Conference on Web Search and Data Mining . 773–781. [13] Aaron van den Oord, Yazhe Li, and Oriol Vinyals. 2018. Representation learning with contrastive predictive coding. arXiv preprint arXiv:1807.03748 (2018). [14] Steffen Rendle, Christoph Freudenthaler, Zeno Gantner, and Lars Schmidt-Thieme. 2012. BPR: Bayesian personalized ranking from implicit feedback. arXiv preprint arXiv:1205.2618 (2012). [15] Jinhui Tang, Xiaoyu Du, Xiangnan He, Fajie Yuan, Qi Tian, and Tat-Seng Chua. 2019. Adversarial training towards robust multimedia recommender system. 
+
+IEEE Transactions on Knowledge and Data Engineering 32, 5 (2019), 855–867. [16] Zhulin Tao, Xiaohao Liu, Yewei Xia, Xiang Wang, Lifang Yang, Xianglin Huang, and Tat-Seng Chua. 2022. Self-supervised learning for multimedia recommenda-tion. IEEE Transactions on Multimedia (2022). [17] Qifan Wang, Yinwei Wei, Jianhua Yin, Jianlong Wu, Xuemeng Song, and Liqiang Nie. 2021. Dualgnn: Dual graph neural network for multimedia recommendation. 
+
+IEEE Transactions on Multimedia (2021). [18] Wei Wei, Chao Huang, Lianghao Xia, and Chuxu Zhang. 2023. Multi-Modal Self-Supervised Learning for Recommendation. In Proceedings of the ACM Web Conference 2023 . 790–800. [19] Yinwei Wei, Xiang Wang, Liqiang Nie, Xiangnan He, and Tat-Seng Chua. 2020. Graph-refined convolutional network for multimedia recommendation with implicit feedback. In Proceedings of the 28th ACM international conference on multimedia . 3541–3549. [20] Yinwei Wei, Xiang Wang, Liqiang Nie, Xiangnan He, Richang Hong, and Tat-Seng Chua. 2019. MMGCN: Multi-modal graph convolution network for personalized recommendation of micro-video. In Proceedings of the 27th ACM international conference on multimedia . 1437–1445. [21] Jinfeng Xu, Zheyu Chen, Jinze Li, Shuo Yang, Hewei Wang, Yijie Li, Mengran Li, Puzhen Wu, and Edith CH Ngai. 2025. Mdvt: Enhancing multimodal recommen-dation with model-agnostic multimodal-driven virtual triplets. In Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining V. 2 .3378–3389. [22] Jinfeng Xu, Zheyu Chen, Jinze Li, Shuo Yang, Wei Wang, Xiping Hu, Raymond Chi-Wing Wong, and Edith CH Ngai. 2025. Enhancing Robustness and General-ization Capability for Multimodal Recommender Systems via Sharpness-Aware Minimization. IEEE Transactions on Knowledge and Data Engineering (2025). [23] Jinfeng Xu, Zheyu Chen, Wei Wang, Xiping Hu, Sang-Wook Kim, and Edith CH Ngai. 2025. COHESION: Composite Graph Convolutional Network with Dual-Stage Fusion for Multimodal Recommendation. In Proceedings of the 48th In-ternational ACM SIGIR Conference on Research and Development in Information Retrieval . 1830–1839. [24] Jinfeng Xu, Zheyu Chen, Shuo Yang, Jinze Li, and Edith CH Ngai. 2025. The Best is Yet to Come: Graph Convolution in the Testing Phase for Multimodal Recommendation. In Proceedings of the 33rd ACM International Conference on Multimedia . 6325–6334. [25] Jinfeng Xu, Zheyu Chen, Shuo Yang, Jinze Li, Zitong Wan, Hewei Wang, Weijie Liu, Yijie Li, and Edith CH Ngai. 2025. VI-MMRec: Similarity-Aware Training Cost-free Virtual User-Item Interactions for Multimodal Recommendation. arXiv preprint arXiv:2512.08702 (2025). [26] Jinfeng Xu, Zheyu Chen, Shuo Yang, Jinze Li, Hewei Wang, and Edith CH Ngai. 2025. Mentor: multi-level self-supervised learning for multimodal recommen-dation. In Proceedings of the AAAI Conference on Artificial Intelligence , Vol. 39. 12908–12917. [27] Jinfeng Xu, Zheyu Chen, Shuo Yang, Jinze Li, Hewei Wang, Jianheng Tang, Wei Wang, Xiping Hu, and Edith CH Ngai. 2026. Well Begun is Half Done: Training-Free and Model-Agnostic Semantically Guaranteed User Representa-tion Initialization for Multimodal Recommendation. In Proceedings of the 49th International ACM SIGIR Conference on Research and Development in Information Retrieval . 2096–2106. [28] Jinfeng Xu, Zheyu Chen, Shuo Yang, Jinze Li, Hewei Wang, Wei Wang, Xiping Hu, and Edith Ngai. 2025. NLGCL: Naturally Existing Neighbor Layers Graph Contrastive Learning for Recommendation. In Proceedings of the Nineteenth ACM Conference on Recommender Systems . 319–329. [29] Jinfeng Xu, Zheyu Chen, Shuo Yang, Jinze Li, Hewei Wang, Wei Wang, Xip-ing Hu, and Edith Ngai. 2026. NLGCL+: Naturally Existing Neighbour Layers Graph Contrastive Learning with Adaptive Sample Weighting for Multimodal Recommendation. ACM Transactions on Recommender Systems (2026). [30] Jinfeng Xu, Zheyu Chen, Shuo Yang, Jinze Li, Wei Wang, Xiping Hu, Steven Hoi, and Edith Ngai. 2026. A survey on multimodal recommender systems: Recent advances and future directions. IEEE Transactions on Multimedia (2026). [31] Junliang Yu, Hongzhi Yin, Xin Xia, Tong Chen, Lizhen Cui, and Quoc Viet Hung Nguyen. 2022. Are graph augmentations necessary? simple graph contrastive learning for recommendation. In Proceedings of the 45th international ACM SIGIR conference on research and development in information retrieval . 1294–1303. [32] Jinghao Zhang, Yanqiao Zhu, Qiang Liu, Shu Wu, Shuhui Wang, and Liang Wang. 2021. Mining latent structures for multimedia recommendation. In Proceedings of the 29th ACM International Conference on Multimedia . 3872–3880. [33] Hongyu Zhou, Xin Zhou, Zhiwei Zeng, Lingzi Zhang, and Zhiqi Shen. 2023. A comprehensive survey on multimodal recommender systems: Taxonomy, evalua-tion, and future directions. arXiv preprint arXiv:2302.04473 (2023). [34] Xin Zhou. 2023. MMRec: Simplifying Multimodal Recommendation. arXiv preprint arXiv:2302.03497 (2023). [35] Xin Zhou, Donghui Lin, Yong Liu, and Chunyan Miao. 2023. Layer-refined graph convolutional networks for recommendation. In 2023 IEEE 39th International Conference on Data Engineering (ICDE) . IEEE, 1247–1259. [36] Xin Zhou and Zhiqi Shen. 2023. A tale of two graphs: Freezing and denoising graph structures for multimodal recommendation. In Proceedings of the 31st ACM International Conference on Multimedia . 935–943. [37] Xin Zhou, Hongyu Zhou, Yong Liu, Zhiwei Zeng, Chunyan Miao, Pengwei Wang, Yuan You, and Feijun Jiang. 2023. Bootstrap latent representations for multi-modal recommendation. In Proceedings of the ACM Web Conference 2023 . 845–854. MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Xu et al. 
+
+## A Proof of Theorem 5.2 (NCER Noise Reduction) 
+
+Proof. Decompose the observed graph as 𝑺 = 𝑺 ∗ + 𝑵 . The NCER reweighting applies element-wise multiplication with 𝑾 
+
+where 𝑊 𝑖 𝑗 = 1 + 𝜅 · 𝑐 𝑖 𝑗 :
+
+ˆ𝑺 = 𝑺 ◦ 𝑾 = (𝑺 ∗ + 𝑵 ) ◦ 𝑾 (20) 
+
+= 𝑺 ∗ ◦ 𝑾 + 𝑵 ◦ 𝑾 = ˆ𝑺 ∗ + ˆ𝑵 . (21) Consider the Frobenius norms. For any matrix 𝑴 with element-wise reweighting: 
+
+∥𝑴 ◦ 𝑾 ∥2 
+
+> 𝐹
+
+=∑︁   
+
+> (𝑖,𝑗 ):𝑀 𝑖 𝑗 ≠0
+
+𝑀 2 
+
+> 𝑖 𝑗
+
+(1 + 𝜅𝑐 𝑖 𝑗 )2. (22) For the noise component, define the average consistency on noise edges: 
+
+¯𝑐 𝑁 =
+
+Í(𝑖,𝑗 ) ∈ supp (𝑵 ) 𝑁 2 
+
+> 𝑖 𝑗
+
+𝑐 𝑖 𝑗 
+
+Í(𝑖,𝑗 ) ∈ supp (𝑵 ) 𝑁 2
+
+> 𝑖 𝑗
+
+. (23) By the Cauchy-Schwarz inequality applied to the weighted sum: 
+
+∥ ˆ𝑵 ∥2 
+
+> 𝐹
+
+≤ ∥ 𝑵 ∥2 
+
+> 𝐹
+
+· ( 1 + 𝜅 ¯𝑐 𝑁 )2 + 𝑂 (𝜅 2Var (𝑐 𝑁 )) , (24) where the second-order term accounts for variance in consistency scores. Similarly for the signal: 
+
+∥ ˆ𝑺 ∗ ∥2 
+
+> 𝐹
+
+≥ ∥ 𝑺 ∗ ∥2 
+
+> 𝐹
+
+· ( 1 + 𝜅 ¯𝑐 𝑆 ∗ )2. (25) Therefore, the noise-to-signal ratio satisfies: 
+
+∥ ˆ𝑵 ∥𝐹 
+
+∥ ˆ𝑺 ∗ ∥𝐹 
+
+≤ ∥𝑵 ∥𝐹 
+
+∥𝑺 ∗ ∥𝐹 
+
+· 1 + 𝜅 ¯𝑐 𝑁 
+
+1 + 𝜅 ¯𝑐 𝑆 ∗
+
++ 𝑂 (𝜅 2). (26) Under the community structure assumption (Assumption 5.1), clean edges connect items within the same semantic community and thus share many neighbors ( ¯𝑐 𝑆 ∗ is large), while noise edges connect items across communities with few shared neighbors ( ¯𝑐 𝑁 
+
+is small). Therefore ¯𝑐 𝑆 ∗ > ¯𝑐 𝑁 , and the multiplicative factor (1 +
+
+𝜅 ¯𝑐 𝑁 )/( 1 + 𝜅 ¯𝑐 𝑆 ∗ ) < 1 for all 𝜅 > 0.Extending from 𝑺 ∗ to 𝑺 in the denominator introduces an addi-tional multiplicative correction bounded by (1 + 𝜖 /∥ 𝑺 ∗ ∥𝐹 )−1, yield-ing the stated bound. □
+
+## B Proof of Theorem 5.3 (RIG Non-Degeneracy) 
+
+Proof. The BPR loss for a triplet (𝑢, 𝑝, 𝑛 ) is: 
+
+L𝑢,𝑝,𝑛 = − log 𝜎 (𝒆 ⊤ 
+
+> 𝑢
+
+𝒆 𝑝 − 𝒆 ⊤ 
+
+> 𝑢
+
+𝒆 𝑛 ). (27) With RIG, 𝒆 𝑖 = 𝒆 UI  
+
+> 𝑖
+
++ 𝑔 𝑖 · 𝒉 𝑖 . Taking the derivative with respect to 𝑔 𝑝 (gate of positive item): 
+
+𝜕 L𝑢,𝑝,𝑛 
+
+𝜕𝑔 𝑝 
+
+= −𝜎 (− Δ𝑢,𝑝,𝑛 ) · 𝒆 ⊤
+
+> 𝑢
+
+𝜕 𝒆 𝑝 
+
+𝜕𝑔 𝑝 
+
+(28) 
+
+= −𝜎 (− Δ𝑢,𝑝,𝑛 ) · 𝒆 ⊤ 
+
+> 𝑢
+
+𝒉 𝑝 , (29) where Δ𝑢,𝑝,𝑛 = 𝒆 ⊤ 
+
+> 𝑢
+
+𝒆 𝑝 − 𝒆 ⊤ 
+
+> 𝑢
+
+𝒆 𝑛 and 𝜎 (− Δ) = 1 − 𝜎 (Δ) ∈ ( 0, 1).Define 𝑤 𝑢,𝑝 = 𝜎 (− Δ𝑢,𝑝,𝑛 ) > 0. Aggregating over all triplets where 𝑖 appears as positive: 
+
+𝜕 L
+
+𝜕𝑔 𝑖 positive 
+
+= −∑︁ 
+
+> 𝑢 :(𝑢,𝑖, ·) ∈ D
+
+𝑤 𝑢,𝑖 · 𝒆 ⊤ 
+
+> 𝑢
+
+𝒉 𝑖 . (30) Similarly, when 𝑖 appears as a negative item in triplet (𝑢, 𝑝, 𝑖 ):
+
+𝜕 L𝑢,𝑝,𝑖 
+
+𝜕𝑔 𝑖 
+
+= −𝜎 (− Δ𝑢,𝑝,𝑖 ) · 𝒆 ⊤
+
+> 𝑢
+
+
+
+− 𝜕 𝒆 𝑖 
+
+𝜕𝑔 𝑖 
+
+
+
+(31) 
+
+= 𝜎 (− Δ𝑢,𝑝,𝑖 ) · 𝒆 ⊤ 
+
+> 𝑢
+
+𝒉 𝑖 . (32) Define 𝑤 ′ 
+
+> 𝑢,𝑖
+
+= 𝜎 (− Δ𝑢,𝑝,𝑖 ) > 0. Aggregating: 
+
+𝜕 L
+
+𝜕𝑔 𝑖 negative 
+
+=∑︁  
+
+> 𝑢 :(𝑢, ·,𝑖 ) ∈ D
+
+𝑤 ′ 
+
+> 𝑢,𝑖
+
+· 𝒆 ⊤ 
+
+> 𝑢
+
+𝒉 𝑖 . (33) At a stationary point, 𝜕 L/ 𝜕𝑔 𝑖 = 0, which requires: ∑︁  
+
+> 𝑢 ∈pos
+
+𝑤 𝑢,𝑖 · 𝒆 ⊤ 
+
+> 𝑢
+
+𝒉 𝑖 =∑︁  
+
+> 𝑢 ∈neg
+
+𝑤 ′ 
+
+> 𝑢,𝑖
+
+· 𝒆 ⊤ 
+
+> 𝑢
+
+𝒉 𝑖 . (34) 
+
+Case 1: 𝒆 ⊤ 
+
+> 𝑢
+
+𝒉 𝑖 > 0 on average (helpful II signal). The positive-side gradient pushes 𝑔 𝑖 upward (increasing 𝑔 𝑖 reduces L), while the negative-side gradient pushes 𝑔 𝑖 upward as well (increasing 
+
+𝑔 𝑖 increases the negative item’s score, which increases L). The balance is achieved at an interior point because the BPR weights 
+
+𝑤, 𝑤 ′ depend on the margin: as 𝑔 𝑖 increases, the margins change, adjusting the weights until equilibrium. 
+
+Case 2: 𝒆 ⊤ 
+
+> 𝑢
+
+𝒉 𝑖 < 0 on average (harmful II signal). The roles reverse, and the equilibrium 𝑔 𝑖 is pushed toward lower values. Since the sigmoid output of the gate MLP is continuous and strictly bounded in (0, 1) (assuming bounded inputs and non-degenerate initialization), gradient descent converges to 𝑔 ∗ 
+
+> 𝑖
+
+∈ ( 0, 1) that bal-ances the positive and negative contributions. Furthermore, if there exist items 𝑖, 𝑗 with E[𝒆 ⊤ 
+
+> 𝑢
+
+𝒉 𝑖 ] > 0 > E[𝒆 ⊤ 
+
+> 𝑢
+
+𝒉 𝑗 ], the equilibrium con-ditions require 𝑔 ∗ 
+
+> 𝑖
+
+> 𝑔 ∗ 
+
+> 𝑗
+
+. □
+
+## C Proof of Theorem 5.5 (INA Generalization Bound) 
+
+Proof. The standard PAC-Bayes bound for BPR with 𝑛 observed interactions states: 
+
+𝑅 (𝑓 ) ≤ ˆ𝑅 𝑛 (𝑓 ) + √︄ KL (𝑓 ∥𝜋 ) + log (2√𝑛 /𝛿 )
+
+2𝑛 , (35) with probability at least 1 − 𝛿 over the draw of the training set. INA augments the training set with 𝑛 aug = 𝑛 · 1 additional soft-positive triplets (one per observed interaction). Each augmented triplet (𝑢, 𝑗, 𝑛 ′) satisfies 𝑗 ∈ N II (𝑝 ) where (𝑢, 𝑝 ) is a true interaction. The key question is the effective sample size contributed by aug-mented samples. Define the soft label quality :
+
+𝑞 = P[user 𝑢 prefers 𝑗 over random 𝑛 ′ | 𝑗 ∈ N II (𝑝 ), (𝑢, 𝑝 ) ∈ 𝑹 +].
+
+(36) This is the probability that a neighbor of a positive item is itself a relevant item. The discount factor 𝛿 in INA accounts for this un-certainty. Following the analysis of learning with noisy labels [ 11 ], each augmented sample contributes an effective fraction 𝛿 eff = 𝛿 2 ·𝑞 
+
+to the sample size. This arises because the discount 𝛿 reduces both the gradient magnitude (linear in 𝛿 ) and the effective signal strength (linear in 𝛿 · 𝑞 ). Substituting the effective sample size 𝑛 + 𝛿 eff · 𝑛 aug into the PAC-Bayes bound: 
+
+𝑅 (𝑓 ) ≤ ˆ𝑅 𝑛 +𝑛 aug (𝑓 ) + √︄ KL (𝑓 ∥𝜋 ) + log (2√︁ 𝑛 + 𝛿 eff 𝑛 aug /𝛿 )
+
+2(𝑛 + 𝛿 eff 𝑛 aug ) . (37) When the II graph has positive predictive value ( 𝑞 > 0) and the discount is positive ( 𝛿 > 0), we have 𝛿 eff > 0 and thus 𝑛 + 𝛿 eff 𝑛 aug >
+
+𝑛 , yielding a strictly tighter bound than standard BPR. □IIMRec MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil 
+
+Algorithm 1: IIMRec Training Procedure 
+
+Require: Interaction matrix 𝑹 , multimodal features {𝑭 𝑚 } 
+
+> 1:
+
+Preprocessing (one-time):  
+
+> 2:
+
+Construct semantic graph 𝑺 sem (spatial + spectral KNN)  
+
+> 3:
+
+Construct co-occurrence graph 𝑺 co from 𝑹 ⊤ 𝑹  
+
+> 4:
+
+Fuse: 𝑺 fused = 𝑺 co + 𝑺 sem  
+
+> 5:
+
+Apply NCER reweighting (Eq. (8)) → 𝑺 NCER  
+
+> 6:
+
+Build content-guided UI graph ˜𝑨  
+
+> 7:
+
+Pre-compute INA neighbor table from 𝑺 NCER  
+
+> 8:
+
+for epoch = 1 to max_epochs do  
+
+> 9:
+
+for each mini-batch (𝑢, 𝑝, 𝑛 ) ∈ D do  
+
+> 10:
+
+Project modality features (Eq. (1))  
+
+> 11:
+
+Propagate on UI graph (Eq. (9))  
+
+> 12:
+
+Fuse user modality representations (Eq. (10))  
+
+> 13:
+
+Propagate item representations on II graph  
+
+> 14:
+
+Apply RIG gating (Eq. (12))  
+
+> 15:
+
+Calculate contrastive learning losses (Eq. (15))  
+
+> 16:
+
+Compute LBPR + 𝜆 INA LINA + 𝜆 CL LCL  
+
+> 17:
+
+Update parameters via backpropagation  
+
+> 18:
+
+end for  
+
+> 19:
+
+end for 5 10 15 20                       
+
+> (a) k
+> 0.100
+> 0.105
+> 0.110
+> 0.115
+> 0.120
+> Recall@20
+> 0.2 0.4 0.6 0.8
+> (b)
+> 0.100
+> 0.105
+> 0.110
+> 0.115
+> 0.120
+> 0.2 0.4 0.6 0.8
+> (c) γ
+> 0.100
+> 0.105
+> 0.110
+> 0.115
+> 0.120
+> 0.2 0.4 0.6 0.8
+> (d) δ
+> 0.100
+> 0.105
+> 0.110
+> 0.115
+> 0.120
+> Recall@20
+> 0.2 0.4 0.6 0.8
+> (e) λINA
+> 0.100
+> 0.105
+> 0.110
+> 0.115
+> 0.120
+> 10 −510 −410 −3
+> (f) λCL
+> 0.100
+> 0.105
+> 0.110
+> 0.115
+> 0.120
+> Baby Sports Clothing TikTok
+
+Figure 4: Hyper-parameter analysis for IIMRec across all datasets in terms of Recall@20. 
+
+## D Baselines 
+
+We compare IIMRec against a diverse set of representative baselines, categorized into two groups. 1) General recommendation models: 
+
+• LightGCN [ 6] simplifies graph convolutional network (GCN)-based collaborative filtering by eliminating redundant compo-nents such as feature transformation and nonlinear activation. 
+
+• SimGCL [ 31 ] performs graph contrastive learning by injecting random noise directly into the representation space instead of augmenting the graph structure. 
+
+• LayerGCN [ 35 ] introduces residual connections into GCN layers to mitigate the over-smoothing problem in LightGCN. 
+
+• NLGCL [ 28 ] leverages naturally occurring high-quality con-trastive signals on graphs to enhance recommendation accuracy. 2) Multimodal recommendation models: 
+
+• MMGCN [ 20 ] employs separate GCNs to process and integrate information from different modalities. 
+
+• DualGNN [17 ] constructs an auxiliary user-user graph to capture user preference correlations alongside multimodal item features. 
+
+• LATTICE [ 32 ] builds item-item semantic graphs from multi-modal features to capture latent correlative signals among items. 
+
+• SLMRec [ 16 ] applies self-supervised learning to multimodal recommendation via feature-level noise perturbation and cross-modal pattern discovery. 
+
+• BM3 [ 37 ] simplifies self-supervised multimodal recommendation by generating contrastive views through dropout-based pertur-bation. 
+
+• MMSSL [18 ] employs modality-aware adversarial perturbations for interactive structure learning and combines cross-modal con-trastive learning to disentangle shared and modality-specific features. 
+
+• FREEDOM [ 36 ] denoises the user-item interaction graph and constructs a frozen item-item graph from raw modality features. 
+
+• LGMRec [4] utilizes hypergraph structures to capture both local topological information and global collaborative embeddings. 
+
+• DiffMM [ 7 ] integrates a modality-aware graph diffusion model with cross-modal contrastive learning to improve user represen-tation learning. 
+
+• SMORE [12 ] mitigates modality noise by leveraging discrimina-tive spectral properties in the frequency domain. 
+
+• HPMRec [2] enriches feature diversity and bridges semantic gaps across modalities through hypercomplex representations. 
+
+• MENTOR [26 ] designs multi-level cross-modal alignment tasks to enhance the quality of learned representations. 
+
+• COHESION [ 23 ] introduces a dual-stage fusion mechanism to fully exploit composite graph structures. 
+
+## E Algorithm 
+
+The complete training procedure is summarized in Algorithm 1. 
+
+## E.1 Hyper-parameter Analysis 
+
+We investigate the sensitivity of IIMRec to six key hyper-parameters by varying each while fixing the others at their optimal values, and report Recall@20 across all four datasets in Figure 4. 
+
+KNN neighbor count 𝑘 . Performance peaks at 𝑘 =10 across all datasets and degrades at both extremes: too few neighbors limit the semantic coverage of the item-item graph, while too many introduce noisy edges that dilute the propagated signal. 
+
+NCER reweighting strength 𝜅 . A moderate 𝜅 =0.4 yields the best results on three datasets, with TikTok favoring 𝜅 =0.6. Larger val-ues over-amplify high-overlap edges at the expense of useful but structurally weaker connections. 
+
+Content-guided UI balance 𝛾 . All datasets favor 𝛾 ∈ { 0.2, 0.4},indicating that a modest injection of virtual interactions benefits collaborative propagation, but excessive reliance on the content-guided graph introduces noise. 
+
+INA discount factor 𝛿 . Performance is relatively stable across 𝛿 ∈[0.2, 0.6] and declines at 𝛿 =0.8, confirming that soft positives should be discounted to avoid over-weighting uncertain supervision. 
+
+INA loss weight 𝜆 INA . The optimal value is 𝜆 INA =0.6 across all datasets. Too small a weight under-utilizes the augmented signal, MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Xu et al. 
+
+while too large a weight lets soft-positive gradients dominate the primary BPR objective. 
+
+Contrastive loss weight 𝜆 CL . 𝜆 CL =10 −4 is consistently optimal. A larger weight ( 10 −3) forces excessive cross-modal alignment that conflicts with the collaborative filtering signal.

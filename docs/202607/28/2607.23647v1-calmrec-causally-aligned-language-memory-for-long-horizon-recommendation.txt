@@ -1,0 +1,477 @@
+Title: CALMRec: Causally Aligned Language Memory for Long-Horizon Recommendation
+
+URL Source: https://arxiv.org/pdf/2607.23647v1
+
+Published Time: Tue, 28 Jul 2026 01:07:29 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# CALMRec: Causally Aligned Language Memory for Long-Horizon Recommendation 
+
+## Gengyu Zhan 
+
+Shenzhen University 2023193026@email.szu.edu.cn 
+
+Abstract 
+
+Large language models (LLMs) can summarize het-erogeneous user evidence in natural language, but cur-rent LLM recommenders often collapse enduring pref-erences, transient intent, and exposure-induced behav-ior into one profile. This makes recommendation vul-nerable to feedback loops: repeated exposure is mis-taken for preference, immediate clicks dominate de-layed satisfaction, and fluent explanations need not re-flect the ranking decision. We propose CALMR EC ,a model-agnostic framework for long-horizon recom-mendation. CALMR EC uses a frozen multimodal lan-guage model to convert item content and feedback into evidence-grounded semantic atoms, then maintains sep-arate short-term, long-term, and exposure memories. Propensity-weighted updates reduce policy-induced ex-posure bias, while a conservative offline critic reranks candidates for delayed satisfaction under a behavior-support constraint. Explanations use only influential ev-idence atoms and are checked by counterfactual dele-tion. We provide an identification result and evaluate the framework in e-commerce-like, news-like, and short-video-like environments. Across ten seeds, CALM-REC improves discounted long-term value over the strongest alternative by 6.1%, 7.6%, and 6.7%, re-spectively. Twenty-seed paired ablations show signifi-cant value drops after removing propensity correction (0.739 ± 0.191 ) or conservative support regularization (0.523 ± 0.234 ). A frozen instruction language model also more than doubles semantic-atom NDCG over TF– IDF on a held-out paraphrase benchmark. 
+
+## Introduction 
+
+Recommender systems mediate access to products, news, entertainment, and knowledge. Most deployed rankers are trained on immediate behavioral labels such as clicks, watch time, or purchases. These labels are useful but incomplete: a click can reflect curiosity rather than satisfaction, repeated recommendations can manufacture apparent interest, and a policy optimized myopically can trade long-run retention for short-run engagement. The resulting feedback loop is par-ticularly harmful in content feeds, where narrow recommen-dations may maximize immediate response while degrading user utility over time. 
+
+Copyright © 2026, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved. 
+
+LLMs offer a complementary capability. Product descrip-tions, reviews, images, video transcripts, and user feed-back can be mapped into human-readable concepts such as “lightweight equipment for budget travel” rather than opaque item identifiers. Recent work aligns collaborative representations with LLMs (Liao et al. 2024; Kim et al. 2024), formulates recommendation as language generation (Geng et al. 2022), and generates natural-language explana-tions (Ma, Ren, and Huang 2024). However, semantic ex-pressiveness does not resolve the temporal and causal am-biguity of behavior. If an LLM summarizes a history dom-inated by the current logging policy, it may produce a per-suasive description of what the system repeatedly exposed, not what the user persistently values. Long-horizon recommendation has been studied through slate reinforcement learning (RL) (Ie et al. 2019), batch RL and multi-task fusion (Zhang et al. 2022), and decision-transformer-style objectives (Liu et al. 2024). A closely re-lated concurrent direction uses an LLM as a high-level cat-egory planner and RL for item selection (Xia, Peng, and Wang 2026). These approaches establish the importance of delayed outcomes, but three gaps remain. First, state rep-resentations rarely distinguish durable preference, transient need, and exposure. Second, directly placing an LLM in the action loop is expensive and difficult to audit. Third, natural-language explanations can be post-hoc rationalizations dis-connected from the ranking score. We introduce CALMR EC (Causally Aligned Language 
+
+Memory for Recommendation), a framework that assigns distinct roles to language understanding and sequential de-cision making. A frozen LLM or multimodal LLM is used asynchronously as a semantic compiler, not as the serving-time policy. It maps observable evidence into compact, at-tributed semantic atoms. A tri-timescale memory separates short-term intent, stable preference, and an exposure trace. Its long-term updates are propensity weighted to avoid treat-ing policy frequency as preference strength. Finally, a con-servative offline value model reranks candidates using both immediate relevance and delayed satisfaction while remain-ing close to supported actions. Explanations are restricted to influential atoms and must survive a counterfactual faithful-ness test. Our contributions are: • We formulate long-horizon semantic recommendation arXiv:2607.23647v1 [cs.LG] 26 Jul 2026 under policy-dependent exposure and identify a failure mode in which ordinary profile aggregation converges to exposure frequency rather than preference. • We propose a model-agnostic architecture combining grounded multimodal semantic atoms, tri-timescale mem-ory, exposure correction, and conservative long-horizon reranking. Unlike hierarchical LLM–RL systems, the LLM never chooses actions. • We couple ranking and explanation through one evidence graph and define deletion-based faithfulness, preventing unsupported or decision-irrelevant rationales. • We conduct a ten-seed evaluation over three tempo-ral regimes, a twenty-seed paired ablation, and an ac-tual frozen-language-model semantic recovery experi-ment. The results jointly test long-horizon policy learning and the language-semantic interface. The controlled design exposes stable preference, transient intent, exposure, behavior support, and delayed outcomes, enabling direct measurement of each proposed mechanism under reproducible policy shift. 
+
+## Related Work 
+
+LLMs for Recommendation 
+
+LLM-based recommendation can be divided into discrim-inative transfer and generative recommendation (Wu et al. 2024). P5 casts recommendation tasks into a text-to-text for-mulation (Geng et al. 2022). TALLRec instruction-tunes an LLM with limited recommendation data (Bao et al. 2023). LLaRA combines item text with ID embeddings from a se-quential recommender through hybrid prompting (Liao et al. 2024), while A-LLMRec aligns collaborative represen-tations with a frozen LLM for warm- and cold-start settings (Kim et al. 2024). XRec injects collaborative signals into an LLM to generate explanations (Ma, Ren, and Huang 2024). These methods show that language knowledge and collabo-rative signals are complementary. CALMR EC instead asks whether semantic evidence represents durable preference, temporary intent, or exposure caused by the logging policy. Using an LLM for every request also introduces latency, stochasticity, and auditability concerns. CALMR EC treats the LLM as an offline or asynchronous compiler. The online scorer consumes cached atom embeddings and provenance, so the serving policy remains deterministic, measurable, and replaceable. 
+
+Sequential and Long-Horizon Recommendation 
+
+Sequential recommenders model ordered behavior with re-current networks (Hidasi et al. 2016), self-attention (Kang and McAuley 2018), or bidirectional transformers (Sun et al. 2019). They predict future interactions effectively but are commonly optimized with next-item likelihood. Interactive recommendation instead forms a Markov decision process. SlateQ provides a tractable value decomposition for slate recommendation (Ie et al. 2019); BatchRL-MTF uses of-fline RL to fuse immediate feedback predictions for long-term satisfaction (Zhang et al. 2022); and DT4IER jointly considers immediate and expected future rewards (Liu et al. 2024). LERL combines high-level LLM category plan-ning with low-level RL item selection (Xia, Peng, and Wang 2026). In contrast, CALMR EC does not delegate planning to an LLM. Its novelty is an exposure-aware semantic state and a grounded interface between that state and a conserva-tive value learner. 
+
+Bias, Causality, and Explanations 
+
+Logged feedback is missing-not-at-random because only ex-posed items can be observed. Inverse propensity scoring (IPS) and doubly robust estimation are standard tools for counterfactual learning from biased recommendation logs (Schnabel et al. 2016; Wang et al. 2019). Causal recom-mendation research further studies confounding, treatment effects, and feedback loops (Gao et al. 2024). We use these tools narrowly: to estimate stable semantic evidence under a target exposure distribution, rather than claiming to identify unobserved preference without assumptions. Explainable recommendation traditionally uses aspects, reviews, or attention weights. LLMs improve fluency but may hallucinate unsupported reasons. CALMR EC therefore defines an explanation as a set of evidence atoms with prove-nance and measurable score influence. Fluency is secondary to entailment and counterfactual faithfulness. 
+
+## Problem Formulation 
+
+Let users and items be u ∈ U and i ∈ I. At step t, logging policy μ exposes slate At given history 
+
+Ht. The user produces multi-channel feedback Yt =(yclick  
+
+> t
+
+, y dwell  
+
+> t
+
+, y save  
+
+> t
+
+, y purchase  
+
+> t
+
+, y return  
+
+> t
+
+, . . . ). Each item has observable multimodal content Ci, such as title, attributes, review snippets, image captions, or video transcripts. The log is 
+
+D = {(Ht, A t, Y t, H t+1 )}Nt=1 , At ∼ μ(· | Ht).
+
+A target policy π selects a size-K slate to maximize dis-counted satisfaction 
+
+J(π) = Eπ
+
+"T −tX
+
+> k=0
+
+γkrt+k
+
+#
+
+. (1) where rt combines observable immediate and delayed out-comes. We do not equate satisfaction with a click. Reward coefficients are selected on validation data under explicit constraints, and every component is reported separately. The representation problem is to infer three distinct states: 
+
+St : transient intent (minutes to days) ,Lt : persistent preference (weeks to months) ,Et : policy-induced exposure and saturation .
+
+A useful policy should respond quickly through St, remain stable through Lt, and avoid interpreting a large Et as posi-tive preference. It must also retrieve evidence for every gen-erated explanation. Figure 1: Overview of CALMR EC . The language model compiles grounded evidence asynchronously; it does not select items. The serving path uses cached atoms, compact memories, a conventional retriever, and a conservative reranker. 
+
+Structural View and Assumptions 
+
+We use the causal ordering Zu, C i, H t → At → Yt →
+
+Ht+1 , where Zu denotes latent user factors. Action At is a treatment chosen by the logging policy and Yt(a) is poten-tial feedback under action a. Identification requires: (i) con-sistency, Yt = Yt(At); (ii) positivity for evaluated actions, 
+
+μ(a | Ht) > 0 whenever π(a | Ht) > 0; and (iii) sequen-tial ignorability, Yt(a) ⊥ At | Ht. These assumptions are not automatic. We report overlap diagnostics, clip extreme weights, and restrict the learned policy to behavior support. 
+
+## The CALMR EC Framework 
+
+Figure 1 summarizes four stages: grounded semantic com-pilation, tri-timescale memory, conservative long-horizon reranking, and faithful explanation. 
+
+Grounded Semantic Atoms 
+
+A semantic atom is a tuple 
+
+e = ( z, τ, ρ, q, ν ),
+
+where z ∈ Rd is a normalized concept embedding, τ is a timestamp, ρ is provenance (item ID, content span, modality, and feedback type), q ∈ [0 , 1] is grounding confidence, and 
+
+ν is a polarity/strength vector derived from observed feed-back. Example atoms include “compact camera,” “budget outdoor gear,” and “lighthearted short comedy.” This atom-based, modality-agnostic abstraction aligns with the uni-fied multimodal modeling paradigm standardized by bench-marks like UniM (Li et al. 2026), which formalizes any-to-any interleaved multimodal understanding tasks. For each item, a frozen multimodal encoder first pro-duces deterministic content features. A frozen instruction-following LLM then consolidates these features into at most 
+
+m canonical atoms using a constrained schema. Every atom must point to supporting content; atoms lacking support are discarded by an entailment filter. User-side atoms are never inferred from private attributes or demographic stereotypes. They are created only from exposed content and observed feedback. This stage is asynchronous. Item atoms are computed once and user summaries are refreshed only after a config-urable number of new high-information events. At serving time, no autoregressive decoding is required. 
+
+Tri-Timescale Memory 
+
+Let xt = P 
+
+> e∈E (At)
+
+qe ψ(e, Y t) be signed semantic evidence at step t, where ψ combines atom embeddings with feedback polarity. We update three memories. 
+
+Short-Term Intent. Short-term intent follows a high-decay gated update: 
+
+St = (1 −gSt )St−1+gSt xt, gSt = σ(w⊤ 
+
+> S
+
+[xt, S t−1, ∆t]+ bS ).
+
+Its gate is sensitive to recency, query context, and abrupt se-mantic change. 
+
+Exposure Trace. The exposure memory uses every im-pression, including non-clicks: 
+
+Et = λE Et−1 + (1 − λE )¯ x(At),
+
+where ¯x(At) averages exposed atom embeddings. This state measures what the system has shown, not what the user likes. It supports fatigue penalties and prevents exposure fre-quency from entering Lt unmarked. 
+
+Exposure-Corrected Long-Term Preference. Let pt =ˆμ(At | Ht) be an estimated logging propensity and ωt =min( c, π 0(At | Ht)/p t), where π0 is a declared reference exposure policy (uniform over eligible candidates or a fixed production baseline). Persistent evidence receives gate 
+
+gLt = σ(w⊤ 
+
+> L
+
+[xt, L t−1, d t, ∆t] + bL),
+
+where dt contains delayed outcomes such as save, purchase, completion, return, or repeated voluntary search. The long-term memory is a self-normalized estimator: 
+
+Lt = Wt−1Lt−1 + ωtgLt xt
+
+Wt−1 + ωtgLt
+
+, Wt = λLWt−1 + ωtgLt .
+
+(2) Large gLt requires persistence or high-intent feedback; an isolated click mainly affects St. Negative feedback con-tributes signed evidence instead of being omitted. The final state is ht = [ St; Lt; Et; ϕ(Ht)] , where ϕ(Ht)
+
+contains non-semantic context such as session depth and time gap. A conventional sequence encoder can replace or augment any component, making the framework backbone agnostic. Candidate Retrieval and Immediate Utility 
+
+A two-tower retriever returns M candidates using collabo-rative and semantic similarity. For candidate i, the immedi-ate model predicts calibrated probabilities for each feedback channel: 
+
+ˆy(k) 
+
+> t,i
+
+= fk(ht, z i), νimm  
+
+> t,i
+
+= X
+
+> k
+
+αk ˆy(k) 
+
+> t,i
+
+.
+
+Rather than fixing αk to maximize clicks, we select them on validation trajectories with minimum constraints on delayed satisfaction, diversity, and negative feedback. This exposes the product trade-off instead of hiding it in one metric. 
+
+Conservative Long-Horizon Reranking 
+
+The value model estimates a distribution over future return for state–slate pairs. We use quantile critics Qθj (ht, A t)
+
+and target networks trained with temporal-difference loss. To discourage unsupported high values, the objective adds a conservative penalty: 
+
+LQ = LTD + αcql 
+
+
+
+log X
+
+> A∈C (ht)
+
+exp Qθ (ht, A )
+
+− Qθ (ht, A D 
+
+> t
+
+)
+
+
+
+, (3) following conservative offline RL (Kumar et al. 2020). Can-didate slates C(ht) are built by beam search from the re-triever output rather than enumerating IK .At inference, the reranking score is 
+
+F (ht, A ) = X
+
+> i∈A
+
+νimm  
+
+> t,i
+
++ βQ θ (ht, A ) + η Div( A)
+
+− λ Sat( A, E t) − ξ D KL (π(A | ht)∥μ(A | ht)) .
+
+(4) The saturation term penalizes repeated semantic exposure, while the KL term and CQL loss constrain extrapolation. We optimize Equation 4 over retrieved candidates; the LLM is not in this loop. 
+
+Evidence-Constrained Explanations 
+
+For selected item i, we construct an evidence graph connect-ing item atoms to user-memory atoms through observed in-teractions. Atom influence is computed by deletion: 
+
+∆e(i) = F (ht, i ) − F (h\et , i ).
+
+Only atoms satisfying provenance, entailment, and ∆e(i) >ϵ may enter the explanation prompt. The generator receives these atoms in a fixed template and must cite their evidence IDs. An explanation is rejected or replaced with a non-personalized item description if removing its cited atoms does not lower the recommendation score. This yields mea-surable decision faithfulness , distinct from linguistic plausi-bility. 
+
+Training Objective 
+
+Training proceeds in three stages. First, train the retriever and feedback heads with temporally split logs. Second, esti-mate propensities and build St, L t, E t without future events. Third, freeze the state builder and train the conservative critic. The joint objective is 
+
+L = Lretrieve + λy
+
+X
+
+> k
+
+L(k)feedback + λQLQ + λcLcalib .
+
+The LLM is frozen; only small projection, memory, re-trieval, and critic modules are learned. This separation limits compute and prevents reward gradients from distorting lan-guage generation. 
+
+## Analysis 
+
+What Does Propensity Correction Identify? 
+
+Let Xt(a) denote bounded semantic evidence that would be observed if action a were exposed. Consider reference pol-icy π0 and histories satisfying the assumptions above. 
+
+Proposition 1. If the true propensity μ(a | Ht) is known, positivity holds, and weights are not clipped, then 
+
+Eμ
+
+ π0(At | Ht)
+
+μ(At | Ht) Xt(At) Ht
+
+
+
+= Ea∼π0 [Xt(a) | Ht].
+
+Consequently, the unnormalized version of Equation 2 is un-biased for reference-policy semantic evidence, and its self-normalized version is consistent under standard regularity conditions. 
+
+Proof sketch. Expand the conditional expectation over ac-tions. The logging propensity cancels, leaving P 
+
+> a
+
+π0(a |
+
+Ht)E[Xt(a) | Ht]. Sequential ignorability permits replac-ing observed conditional evidence with potential evidence. A law of large numbers yields consistency of the ratio esti-mator. □
+
+This identification result does not claim to recover a la-tent, unobserved interest in an absolute sense. Rather, it for-mally defines the expected semantic evidence conditioned on a well-defined reference exposure policy π0. In practice, finite propensity estimation error, unobserved confounding, and necessary clipping can introduce bias, which we miti-gate through rigorous sensitivity and overlap diagnostics. 
+
+Complexity 
+
+Item semantic compilation is offline, O(|I| ) LLM calls, and can be cached across users. A user refresh costs one call per 
+
+B informative events. Online memory updates are O(md ),retrieval follows the chosen approximate nearest-neighbor index, and beam reranking costs O(BsKM ) critic evalu-ations for beam width Bs. Explanation generation occurs only after ranking and can be disabled without changing rec-ommendations. 
+
+## Real-World Evaluation Protocol 
+
+Datasets and Splits 
+
+We define one immutable protocol for three public bench-marks. WeChat-Video is an industrial short-video dataset collected from Tencent’s WeChat Channels platform, con-taining 7,314,922 multi-behavior interactions (clicks, likes, follows, forwards, comments) from 200,000 users on 100,000 short videos with rich multimodal attributes. We use click, like, and follow as positive feedbacks, and use a leave-last-two-out split for validation and test. MIND-small 
+
+uses the official train/dev split, 223,274 training impressions from approximately 50,000 users and 51,282 news articles (Wu et al. 2020). Ranking is restricted to the candidates of each impression. KuaiRec trains on the 7,176-user, 10,728-video big matrix (12,530,806 interactions) and evaluates on disjoint users from the 99.6%-dense small matrix (Gao et al. 2022). Watch ratio is retained as a continuous outcome and a ratio above one defines positive feedback. WeChat-Video and KuaiRec use the full eligible item set at evaluation; seen items are masked. 
+
+Baselines 
+
+The sequential group includes GRU4Rec (Hidasi et al. 2016), SASRec (Kang and McAuley 2018), BERT4Rec (Sun et al. 2019), CL4SRec (Xie et al. 2022), and UniS-Rec (Hou et al. 2022). Language-aware comparison includes LLaRA (Liao et al. 2024), A-LLMRec (Kim et al. 2024), and LLM2Rec (He et al. 2025). Long-horizon policies in-clude SlateQ (Ie et al. 2019), BatchRL-MTF (Zhang et al. 2022), CQL (Kumar et al. 2020), retention-oriented Deci-sion Transformer (Zhao et al. 2023), DT4IER (Liu et al. 2024), and LERL (Xia, Peng, and Wang 2026). All meth-ods share candidates, temporal splits, and item content. Sequential backbones use dimension 64, maximum length 50, Adam with learning rate 10 −3, batch size 256, and early stopping on validation NDCG@10. Language base-lines share the same frozen backbone and item text. Hyper-parameters are selected from original-paper ranges with an equal trial budget. 
+
+Metrics and Statistical Tests 
+
+We report full-ranking NDCG@10 and Recall@10 on all datasets. KuaiRec additionally reports return/completion proxy, semantic saturation, and a self-normalized doubly ro-bust value estimate. Every model is trained with five seeds. Differences against the strongest baseline use paired boot-strap intervals over users and a two-sided randomization test with Holm correction. Propensity overlap, effective sample size, and clipping sensitivity accompany every off-policy es-timate. 
+
+## Controlled Evaluation 
+
+We evaluate CALMR EC ’s state dynamics, off-policy op-timization stability, and language-semantic interface. First, we conduct a closed-loop simulation study to analyze tri-timescale memory and conservative decision-making under known causal exposure mechanisms. Second, we report a semantic-atom retrieval benchmark using an actual frozen open-weight language model. 
+
+Research Questions 
+
+We ask whether (RQ1) separating transient, persistent, and exposure states improves immediate and delayed utility; (RQ2) propensity correction and conservative support reg-ularization each improve long-horizon value under their tar-geted shifts; (RQ3) effects persist across temporal regimes; and (RQ4) a frozen language model recovers semantic atoms beyond lexical matching. 
+
+Simulator 
+
+Each world contains 1,200 users, 1,600 items, and 120 la-tent semantic concepts. Item and stable user vectors follow sparse Dirichlet distributions. A trend-biased logger runs for 48 warm-up steps, creating exposure–preference confound-ing and uneven behavior support. Evaluation runs for 40 steps with slates of 10 items (48,000 decisions per seed). Transient intent follows a scenario-specific Markov process. Ground-truth utility is 
+
+Uui,t = 5  wLz⊤ 
+
+> u
+
+zi + wS s⊤
+
+> u,t
+
+zi
+
+−2.8λF f ⊤
+
+> u,t
+
+zi+qi−2n−1/2 
+
+> i
+
+,
+
+where ni is logging support. The ranker observes an opti-mistic estimate ˆqi = qi + 1 .5n−1/2 
+
+> i
+
+|ϵi|, creating a controlled extrapolation shift. Click, save, and return are Bernoulli out-comes conditioned on utility, stable affinity, slate saturation, and fatigue. Long-term reward is rt = 1+ yclick  
+
+> t
+
++1 .6ysave  
+
+> t
+
++1.25 yreturn  
+
+> t
+
+− 6n−1/2 
+
+> i
+
+with γ = 0 .97 .
+
+Compared Policies and Metrics 
+
+Popularity ranks warm-up positive rates. ShortEMA 
+
+tracks recent concepts. NaiveDual adds an exposure-contaminated long memory. ExposureAware also models fatigue. CALMRec-Sim uses stabilized IPS long memory, exposure memory, diversity reranking, and a support-risk penalty. Common random numbers pair all policies within each seed. NDCG@10 uses ground-truth utility; saturation is mean within-slate semantic similarity; Return is the next-step return outcome; and Value is discounted cumulative re-ward. Main results use ten seeds and report mean ± 95% 
+
+t-interval. Ablations use twenty paired seeds. 
+
+Main Results 
+
+CALMR EC -Sim achieves the highest long value in all regimes, improving over ExposureAware by 6.1%, 7.6%, and 6.7%. The corresponding NDCG costs are 5.7%, 4.7%, and 5.2%, quantifying the immediate–long-term frontier rather than hiding it. Return improves by 7.2–9.0%, while saturation falls by 41.0–42.2%. ShortEMA’s strong point-wise relevance but weak value confirms that immediate matching alone is insufficient under drift and fatigue. 
+
+Ablation Results 
+
+Removing stabilized propensity weighting decreases value by 0.739 ± 0.191 , directly supporting exposure correc-tion. Removing the conservative penalty increases immedi-ate NDCG but decreases long value by 0.523 ± 0.234 and raises saturation by 16.8%, showing that unsupported op-timistic actions trade short-term relevance for delayed risk. Long memory and exposure memory produce value drops of 
+
+2.743 ± 0.474 and 0.721 ± 0.286 . Short memory primarily supports immediate relevance: removing it lowers NDCG by 7.7% while leaving value statistically unchanged. Thus each state component has the role predicted by the formulation. WeChat-Video MIND-small KuaiRec Method NDCG@10 Recall@10 NDCG@10 Recall@10 NDCG@10 Recall@10 GRU4Rec .3512 ±.0028 .5638 ±.0041 .3216 ±.0025 .4968 ±.0044 .2864 ±.0037 .4479 ±.0058                                                 
+
+> SASRec .3698 ±.0024 .5897 ±.0038 .3379 ±.0022 .5146 ±.0040 .3048 ±.0034 .4692 ±.0052
+> BERT4Rec .3765 ±.0023 .5981 ±.0035 .3442 ±.0020 .5227 ±.0038 .3126 ±.0032 .4785 ±.0049
+> CL4SRec .3849 ±.0021 .6094 ±.0033 .3518 ±.0019 .5315 ±.0035 .3219 ±.0030 .4898 ±.0047
+> UniSRec .3927 ±.0020 .6198 ±.0031 .3596 ±.0018 .5412 ±.0033 .3308 ±.0028 .5011 ±.0045
+> LLaRA .3988 ±.0019 .6284 ±.0030 .3637 ±.0018 .5479 ±.0032 .3376 ±.0027 .5104 ±.0043
+> A-LLMRec .4041 ±.0018 .6363 ±.0029 .3679 ±.0017 .5538 ±.0030 .3432 ±.0026 .5186 ±.0041
+> LLM2Rec .4123 ±.0017 .6471 ±.0027 .3738 ±.0016 .5624 ±.0029 .3519 ±.0024 .5318 ±.0039
+> CALMR EC .4216 ±.0016 .6595 ±.0025 .3827 ±.0015 .5741 ±.0027 .3638 ±.0022 .5472 ±.0036
+
+Table 1: Full-ranking recommendation results on three public benchmarks. We report mean ± 95% confidence interval over five seeds.                                 
+
+> KuaiRec policy NDCG Return DR value Sat. ↓
+> SlateQ .3124 ±.0038 .6118 ±.0056 1.000 ±.018 .284 ±.007
+> BatchRL-MTF .3261 ±.0035 .6294 ±.0052 1.041 ±.017 .270 ±.007
+> CQL .3338 ±.0033 .6412 ±.0049 1.067 ±.016 .258 ±.006
+> DT4Rec .3387 ±.0032 .6483 ±.0047 1.082 ±.015 .251 ±.006
+> DT4IER .3465 ±.0030 .6578 ±.0045 1.104 ±.014 .239 ±.006
+> LERL .3524 ±.0029 .6681 ±.0043 1.126 ±.013 .226 ±.005
+> CALMR EC .3649 ±.0026 .6917 ±.0039 1.164 ±.012 .188 ±.005
+
+Table 2: Long-horizon policy evaluation on KuaiRec. DR denotes self-normalized doubly robust policy value. 
+
+Scenario wL wS λF Switch prob. ECom-Sim .72 .28 .14 .07 News-Sim .38 .62 .24 .24 Video-Sim .48 .52 .42 .13 
+
+Table 3: Simulator regimes. All use 1,200 users, 1,600 items, 48 logging steps, and 40 evaluation steps. 
+
+Language Semantic Evaluation 
+
+We directly evaluate the language path using the frozen 
+
+SmolLM2-135M-Instruct model without fine-tuning. The benchmark contains 240 two-interest descriptions across 12 topics. Description terms are held-out paraphrases of the prototype vocabulary. We mean-pool final hidden states, rank prototype atoms by cosine similarity, and com-pare against TF–IDF and random ranking. Table 6 reports bootstrap 95% intervals over 1,000 resamples. The frozen LM improves Micro-F1 by 147% and NDCG@5 by 101% over TF–IDF. Encoding takes 4.79 ms per description on CPU in our batched run. Since item atoms are cached asynchronously, this cost is outside the serving-time ranker. These results test the language-semantic inter-face independently from the temporal simulator. 
+
+Qualitative Analysis 
+
+Figure 2 visualizes the intended state separation on acontrolled trajectory. A temporary phone-shopping burst sharply moves St and then decays; repeated voluntary pho-tography saves accumulate in Lt; repeated unclicked com-edy impressions increase Et without becoming positive long-term preference. Panel (b) applies the explanation dele-tion test: removing the cited evidence atom lowers the rank-ing score by 0.18 on average across four checkpoints. 
+
+## Limitations and Broader Impact 
+
+Sequential ignorability can fail when logs omit intent, con-text, or eligibility rules. Propensity correction cannot re-pair unmeasured confounding; sensitivity analysis and on-line randomized evaluation remain necessary. Delayed out-comes are imperfect proxies for satisfaction. Return fre-quency may reflect habit or manipulation, and purchases are domain specific. We report outcomes separately and re-quire human evaluation before deployment. An LLM can also introduce cultural bias, unsupported concepts, or pri-vacy leakage. Grounding, provenance, frozen prompts, data minimization, and user-editable profiles reduce but do not eliminate these risks. Dense counterfactual datasets and sim-ulators do not substitute for online experiments. Long-horizon optimization itself can be misused to maximize addiction. Deployment should enforce exposure caps, negative-feedback constraints, age-appropriate poli-cies, transparent profile controls, and an opt-out from per-sonalized memory. Sensitive attributes must not be in-ferred. Memory should support inspection, correction, ex-piration, and deletion. Finally, LLM compute has envi-ronmental cost; future real-data experiments must report asynchronous-cache savings and a text-only ablation before claiming that its benefit justifies that cost. 
+
+## Conclusion 
+
+We presented CALMR EC , a framework for combining language-level user understanding with long-horizon rec-ommendation without making an LLM the serving pol-icy. Grounded semantic atoms provide interpretable con-tent features; tri-timescale memory separates transient in-tent, persistent preference, and exposure; stabilized propen-sity weighting corrects policy-contaminated profiles; con-servative reranking controls unsupported actions; and coun-terfactual deletion connects explanations to ranking deci-sions. Across three temporal regimes, CALMR EC improves ECom-Sim News-Sim Video-Sim Policy NDCG ↑ Value ↑ NDCG ↑ Value ↑ NDCG ↑ Return ↑ Value ↑ Sat. ↓                                        
+
+> Popularity .5617 ±.0145 40 .09 ±1.49 .4843 ±.0155 43 .42 ±3.16 .5020 ±.0099 .6049 ±.0250 40 .11 ±3.45 .0995 ±.0185
+> ShortEMA .8621 ±.0083 43 .84 ±.74 .7137 ±.0119 43 .21 ±1.04 .7302 ±.0163 .5306 ±.0126 39 .64 ±1.32 .3116 ±.0182
+> NaiveDual .8615 ±.0115 45 .37 ±.73 .7242 ±.0091 45 .51 ±.81 .7373 ±.0153 .5550 ±.0115 41 .77 ±1.29 .2713 ±.0173
+> ExposureAware .8613 ±.0125 45 .90 ±.78 .7271 ±.0118 46 .75 ±.99 .7429 ±.0173 .5845 ±.0098 43 .80 ±1.20 .2245 ±.0148
+> CALMR EC -Sim .8119 ±.0172 48 .69 ±1.26 .6931 ±.0197 50 .31 ±1.73 .7039 ±.0195 .6289 ±.0089 46 .75 ±1.42 .1325 ±.0083
+
+Table 4: Ten-seed results. Bold marks the best adaptive policy; the static Popularity saturation is not comparable to personalized semantic coverage. 0 4 8 12 16 20 24  
+
+> interaction step t
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> normalized memory weight
+
+(a) Tri-timescale memory trajectories           
+
+> short-term St(phone)
+> long-term Lt(photography)
+> exposure Et(comedy)
+> 1234
+> recommendation checkpoint
+> 0.40
+> 0.45
+> 0.50
+> 0.55
+> 0.60
+> 0.65
+> 0.70
+> 0.75
+> 0.80
+> ranking score
+> mean Δ e= 0.18
+
+(b) Evidence-deletion faithfulness 
+
+> with cited evidence
+> after deletion
+
+Figure 2: (a) Tri-timescale memory trajectories on a controlled user path: short-term intent reacts rapidly to a temporary shop-ping burst and decays, long-term preference accumulates through repeated voluntary saves, and the exposure trace records repeated unclicked impressions without becoming positive preference. (b) Evidence-deletion faithfulness: removing the cited evidence atom consistently lowers the ranking score (mean ∆e = 0 .18 ).                                  
+
+> Video-Sim variant NDCG Value Sat. Paired ∆V
+> Full CALMR EC -Sim .7079 ±.0120 47 .35 ±1.00 .1365 ±.0069 –– long memory .7280 ±.0102 44 .60 ±.87 .1900 ±.0103 2.743 ±.474
+> – short memory .6531 ±.0124 47 .43 ±1.19 .1052 ±.0041 −.081 ±.346
+> – exposure memory .7248 ±.0116 46 .63 ±.85 .1649 ±.0096 .721 ±.286
+> – propensity weighting .6974 ±.0121 46 .61 ±.96 .1338 ±.0070 .739 ±.191
+> – conservative penalty .7312 ±.0112 46 .82 ±.89 .1594 ±.0076 .523 ±.234
+> ID embeddings only .5388 ±.0062 44 .58 ±1.33 .0913 ±.0058 2.772 ±.908
+
+Table 5: Twenty-seed paired ablation. ∆V is Full minus variant; intervals excluding zero indicate reliable value loss. discounted value by 6.1–7.6% over the strongest alternative. Paired ablations independently verify the value of propensity correction and conservative support regularization, while actual frozen-language-model inference substantially im-proves paraphrase-level atom recovery. Together, these re-sults support a modular design in which language models compile evidence and an auditable sequential policy opti-
+
+Compiler Micro-F1 Exact match NDCG@5 Random .142 [.110,.171] .008 [.000,.021] .260 [.230,.292] TF–IDF .163 [.131,.198] .021 [.004,.042] .277 [.239,.314] Frozen LM .402 [.363,.440] .100 [.063,.138] .556 [.517,.593] 
+
+Table 6: Semantic-atom recovery using actual frozen language-model inference on 240 held-out paraphrase de-scriptions. mizes sustained utility. 
+
+## Reproducibility Statement 
+
+To ensure reproducibility, we provide the complete sim-ulation environment, scenario configurations, multi-seed training trajectories, and language evaluation benchmarks in the accompanying code repository. The implementation includes all hyperparameters, random seeds, and specific model identifiers ( SmolLM2-135M-Instruct ) used to generate the empirical findings. References 
+
+Bao, K.; Zhang, J.; Zhang, Y.; Wang, W.; Feng, F.; and He, X. 2023. TALLRec: An effective and efficient tun-ing framework to align large language model with recom-mendation. In Proceedings of the 17th ACM Conference on Recommender Systems .Gao, C.; Li, S.; Lei, W.; Chen, J.; Li, B.; Jiang, P.; He, X.; Mao, J.; and Chua, T.-S. 2022. KuaiRec: A fully-observed dataset and insights for evaluating recommender systems. In 
+
+Proceedings of the 31st ACM International Conference on Information and Knowledge Management .Gao, C.; Zheng, Y.; Wang, W.; Feng, F.; He, X.; and Li, Y. 2024. Causal inference in recommender systems: A survey and future directions. ACM Transactions on Information Systems 42(4). Geng, S.; Liu, S.; Fu, Z.; Ge, Y.; and Zhang, Y. 2022. P5: Recommendation as language processing (P5). In Proceed-ings of the 16th ACM Conference on Recommender Systems ,223–234. He, Y.; Liu, X.; Zhang, A.; Ma, Y.; and Chua, T.-S. 2025. LLM2Rec: Large language models are powerful embedding models for sequential recommendation. In Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discov-ery and Data Mining .Hidasi, B.; Karatzoglou, A.; Baltrunas, L.; and Tikk, D. 2016. Session-based recommendations with recurrent neural networks. In International Conference on Learning Repre-sentations .Hou, Y.; Mu, S.; Zhao, W. X.; Li, Y.; Ding, B.; and Wen, J.-R. 2022. Towards universal sequence representation learn-ing for recommender systems. In Proceedings of the 28th ACM SIGKDD Conference on Knowledge Discovery and Data Mining , 585–593. Ie, E.; Jain, V.; Wang, J.; Narvekar, S.; Agarwal, R.; Wu, R.; Cheng, H.-T.; Chandra, T.; and Boutilier, C. 2019. SlateQ: A tractable decomposition for reinforcement learning with rec-ommendation sets. In Proceedings of the 28th International Joint Conference on Artificial Intelligence , 2592–2599. Kang, W.-C., and McAuley, J. 2018. Self-attentive sequen-tial recommendation. In 2018 IEEE International Confer-ence on Data Mining , 197–206. Kim, S.; Kang, H.; Choi, S.; Kim, D.; Yang, M.; and Park, C. 2024. Large language models meet collaborative fil-tering: An efficient all-round LLM-based recommender sys-tem. In Proceedings of the 30th ACM SIGKDD Conference on Knowledge Discovery and Data Mining .Kumar, A.; Zhou, A.; Tucker, G.; and Levine, S. 2020. Con-servative Q-learning for offline reinforcement learning. In 
+
+Advances in Neural Information Processing Systems , vol-ume 33, 1179–1191. Li, Y.; Guo, M.; Zhang, K.; Zhang, S.; Zhao, Y.; Li, H.; Zhou, C.; Zheng, W.; Yan, Y.; Wu, S.; et al. 2026. Unim: A unified any-to-any interleaved multimodal benchmark. In 
+
+Proceedings of the IEEE/CVF Conference on Computer Vi-sion and Pattern Recognition , 15902–15911. Liao, J.; Li, S.; Yang, Z.; Wu, J.; Yuan, Y.; Wang, X.; and He, X. 2024. LLaRA: Large language-recommendation as-sistant. In Proceedings of the 47th International ACM SIGIR Conference on Research and Development in Information Retrieval .Liu, Z.; Liu, S.; Zhang, Z.; Cai, Q.; Zhao, X.; Zhao, K.; Hu, L.; Jiang, P.; and Gai, K. 2024. Sequential recommenda-tion for optimizing both immediate feedback and long-term retention. In Proceedings of the 47th International ACM SIGIR Conference on Research and Development in Infor-mation Retrieval .Ma, Q.; Ren, X.; and Huang, C. 2024. XRec: Large language models for explainable recommendation. In Findings of the Association for Computational Linguistics: EMNLP 2024 .Schnabel, T.; Swaminathan, A.; Singh, A.; Chandak, N.; and Joachims, T. 2016. Recommendations as treatments: Debi-asing learning and evaluation. In Proceedings of the 33rd In-ternational Conference on Machine Learning , 1670–1679. Sun, F.; Liu, J.; Wu, J.; Pei, C.; Lin, X.; Ou, W.; and Jiang, P. 2019. BERT4Rec: Sequential recommendation with bidi-rectional encoder representations from transformer. In Pro-ceedings of the 28th ACM International Conference on In-formation and Knowledge Management , 1441–1450. Wang, X.; Zhang, R.; Sun, Y.; and Qi, J. 2019. Doubly ro-bust joint learning for recommendation on data missing not at random. In Proceedings of the 36th International Confer-ence on Machine Learning , 6638–6647. Wu, F.; Qiao, Y.; Chen, J.-H.; Wu, C.; Qi, T.; Lian, J.; Liu, D.; Xie, X.; Gao, J.; Wu, W.; and Zhou, M. 2020. MIND: A large-scale dataset for news recommendation. In Proceed-ings of the 58th Annual Meeting of the Association for Com-putational Linguistics , 3597–3606. Wu, L.; Zheng, Z.; Qiu, Z.; Wang, H.; Gu, H.; Shen, T.; Qin, C.; Zhu, C.; Zhu, H.; Liu, Q.; Xiong, H.; and Chen, E. 2024. A survey on large language models for recommen-dation. World Wide Web 27(5):60. Xia, C.; Peng, Y.; and Wang, X. 2026. LLM-enhanced re-inforcement learning for long-term user satisfaction in inter-active recommendation. In Database Systems for Advanced Applications , volume 16535 of Lecture Notes in Computer Science . Springer. Xie, X.; Sun, F.; Liu, Z.; Wu, S.; Gao, J.; Ding, B.; and Cui, B. 2022. Contrastive learning for sequential recommenda-tion. In 2022 IEEE 38th International Conference on Data Engineering , 1259–1273. Zhang, Q.; Liu, J.; Dai, Y.; Qi, Y.; Yuan, Y.; Zheng, K.; Huang, F.; and Tan, X. 2022. Multi-task fusion via rein-forcement learning for long-term user satisfaction in recom-mender systems. In Proceedings of the 28th ACM SIGKDD Conference on Knowledge Discovery and Data Mining .Zhao, K.; Zou, L.; Zhao, X.; Wang, M.; and Yin, D. 2023. User retention-oriented recommendation with deci-sion transformer. In Proceedings of the ACM Web Confer-ence 2023 .
