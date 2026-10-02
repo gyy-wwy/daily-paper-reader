@@ -1,0 +1,526 @@
+Title: Learning Better Reasoning for Generative Recommendation with Semantic IDs
+
+URL Source: https://arxiv.org/pdf/2609.29973v1
+
+Published Time: Fri, 25 Sep 2026 01:25:29 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# Learning Better Reasoning for Generative Recommendation with Semantic IDs 
+
+# Mengdan Zhu 
+
+Emory University Atlanta, GA, USA mengdan.zhu@emory.edu 
+
+# Yufan Zhao 
+
+Microsoft Redmond, WA, USA yufzhao@microsoft.com 
+
+# Sophie Di 
+
+Cornell University Ithaca, NY, USA szd5@cornell.edu 
+
+# Yao Zhao 
+
+Microsoft Redmond, WA, USA yaozhao2@microsoft.com 
+
+# Tao Di 
+
+Microsoft Redmond, WA, USA taodi@microsoft.com 
+
+# Yulan Yan 
+
+Microsoft Redmond, WA, USA yulanyan@microsoft.com 
+
+# Sridhar Iyer 
+
+Microsoft Redmond, WA, USA sridhariyer@microsoft.com 
+
+# Liang Zhao 
+
+Emory University Atlanta, GA, USA liang.zhao@emory.edu 
+
+## Abstract 
+
+Generative recommendation reformulates item retrieval as sequence generation, allowing a unified model to directly generate the next item from a user’s interaction history. Semantic IDs further make this paradigm effective and scalable by representing each item as discrete codes, enabling knowledge sharing among semantically related items. Recent studies introduce explicit reasoning before Semantic-ID generation, helping models summarize user interests and infer possible preference transitions. However, reasoning is not inherently beneficial: Inaccurate or uninformative reasoning may mislead subsequent item generation and ultimately degrade recommendation performance. This raises a central challenge: how can a recommender select and learn effective reasoning traces and progressively evolve toward better reasoning from its own genera-tions? In this work, we propose Evo-Rec, a three-stage framework for learning better reasoning and further enhancing it through rein-forcement learning. First, we align Semantic IDs with their textual and behavioral contexts, enabling the model to understand and generate item identifiers. Second, we sample multiple candidate reasoning traces and retain those that improve the prediction of the ground-truth item, providing a stronger reasoning initializa-tion through supervised fine-tuning. Third, we further optimize the reasoning policy through reinforcement learning with catalog-constrained item generation and ranking-aware recommendation feedback. Experiments on three Amazon Review benchmarks show that Evo-Rec consistently outperforms discriminative, generative, and reasoning-enhanced recommenders across all evaluation met-rics. On the challenging Video Games dataset, Evo-Rec improves Recall@5 from 0 .0710 to 0 .0847 and NDCG@10 from 0 .0563 to 0.0746 over the strongest baseline, corresponding to relative gains of 19 .3% and 32 .5%, respectively. These results demonstrate the effectiveness of our framework in learning better reasoning for SID-based generative recommendation. 1
+
+> 1Our code is available at https://github.com/mengdanzhu/evo-rec.
+
+## CCS Concepts 
+
+• Information systems → Recommender systems .
+
+## Keywords 
+
+Generative Recommendation; Semantic IDs; Reasoning; Reinforce-ment Learning; Large Language Models 
+
+## 1 Introduction 
+
+Sequential recommendation aims to predict the next item given a user’s chronologically ordered interaction history. For a decade the dominant formulation has been discriminative: encode the history into a user vector and score it against a table of item embeddings [4, 7, 15]. Because every item is mutually independent index in this formulation, the embedding table grows with the item catalog, nothing is shared between semantically related items, and cold items are hard to place. Generative recommendation provides an alternative formulation by casting recommendation as autoregressive sequence genera-tion [2, 13, 23]. In particular, Semantic-ID (SID) based methods quantize item semantics into short sequences of discrete codes, allowing the recommender to generate the identifier of the next item token by token [5, 13] so that related items share code prefixes and generalization no longer depends on interaction counts. Sub-sequent work has sharpened both ends of this pipeline, learning tokenizers that inject collaborative signal into the codes [16, 18, 20], adapting large language models to the code vocabulary through SID–language alignment tasks [6, 25], and scaling end-to-end gen-erative recommenders in industrial and open settings [1, 9]. Once retrieval is posed as sequence generation over a language model, recommendation inherits the machinery of language models, and most notably their capacity to reason before they answer [19]. This observation has produced a fast-growing line of reasoning-enhanced recommenders. One branch reasons in a latent space, deepening the computation applied to a history without emitting any text [14, 24]; another reasons explicitly in natural language, jointly learning to deliberate and to recommend [8, 21], optimizing a arXiv:2609.29973v1 [cs.IR] 24 Sep 2026 Zhu et al. 
+
+reasoning model against a frozen downstream retriever [12], or ver-balizing user interests directly over Semantic IDs [3]. Despite this progress, existing reasoning-enhanced recommenders largely focus on enabling reasoning, while paying less attention to the quality of the reasoning trajectories. This distinction is important because reasoning is not inherently beneficial for recommendation. For the same interaction history, different reasoning traces may summarize different aspects of user preference, infer different transitions, or even lead to conflicting recommendation decisions. A reasoning trace can therefore be semantically plausible while being mislead-ing for next-item prediction. Training indiscriminately on such traces may not only introduce noisy supervision, but also reinforce spurious reasoning patterns that misguide subsequent reinforce-ment learning. Similar observations in general LLM reasoning have motivated selection, verification, and self-refinement of reasoning trajectories [11, 17, 22], yet how to identify and improve useful reasoning remains underexplored in generative recommendation. This limitation persists during reinforcement learning. Existing approaches typically optimize reasoning through feedback derived from the final outcome, such as exact SID matching. Such out-come signals verify whether a prediction is correct, but provide only limited information for improving recommendation rank. In a full-catalog ranking problem, for example, reasoning that moves the ground-truth item from rank 100 to rank 2 is substantially more useful than reasoning that leaves it outside the retrieved set, even though a top-1 exact-match reward assigns both the same reward. Moreover, when reasoning and item generation are op-timized as a single trajectory, the quality of the reasoning itself becomes entangled with stochasticity in SID generation. Conse-quently, the central problem remains underexplored: how can a generative recommender identify better reasoning trajecto-ries and continuously improve its reasoning policy from its own generation? 
+
+We approach this problem from the perspective that reasoning can progressively self-evolve through feedback from the recommen-dation distribution it induces. Given a history h and a candidate reasoning trace z, useful reasoning should increase the likelihood of the ground-truth item relative to predicting from the history alone, and ultimately move that item toward the top of the catalog ranking. This perspective provides two complementary forms of supervi-sion. Before reinforcement learning, multiple candidate reasoning traces can be compared according to their predictive utility , allow-ing the model to learn from stronger reasoning examples rather than arbitrary teacher generations. During reinforcement learning, the model can generate its own reasoning trajectories and receive ranking-aware feedback according to how each trajectory reorga-nizes the downstream item ranking. Together, these two mecha-nisms allow recommendation reasoning to progressively evolve from selected supervision toward task-aligned self-improvement. Based on this insight, we propose Evo-Rec , a three-stage frame-work for learning and evolving reasoning in Semantic-ID based generative recommendation. In the first stage, we align newly intro-duced SID tokens with item semantics and user behavior through multi-task SID–language alignment, providing the representation foundation required for reasoning over itemic tokens. In the sec-ond stage, we introduce Best-of-𝑁 Rejection Sampling SFT . For each interaction history, we sample multiple candidate reasoning traces and measure the incremental predictive utility of each trace by the change in the ground-truth SID likelihood relative to history-only prediction. We retain the highest-utility trace only when it provides a positive improvement and use the selected trajectories to warm up the reasoning policy. Unlike standard reasoning SFT that treats generated rationales as equally useful, this stage directly optimizes which reasoning trajectories the model learns from . The third stage enables the reasoning policy to further evolve from its own generations. For each history, Evo-Rec samples multiple reasoning trajectories from the current policy and, conditioned on each trajectory, performs trie-constrained beam search over the item catalog. We use the rank of the ground-truth SID in the result-ing beam to construct an NDCG-based reward and optimize the reasoning policy with GRPO. Extensive experiments on three Amazon Review benchmarks demonstrate the effectiveness of Evo-Rec. It consistently outper-forms discriminative, generative, and reasoning-enhanced recom-mendation baselines across all datasets and evaluation metrics. The gains are particularly pronounced on the more challenging Games dataset, where Evo-Rec improves Recall@5 from 0 .0710 to 0 .0847 and NDCG@10 from 0 .0563 to 0 .0746 over the strongest baseline, corresponding to relative improvements of 19 .3% and 32 .5%, respec-tively. Ablation studies further show that the gains arise primarily from ranking reasoning candidates by predictive utility rather than merely rejecting negative candidates, while ranking-aware NDCG feedback substantially outperforms coarse outcome rewards during reinforcement learning. Our main contributions are summarized as follows: 
+
+• We identify reasoning quality as a central bottleneck in reasoning-enhanced generative recommendation and propose Best-of-𝑁 
+
+Rejection Sampling SFT in terms of its predictive utility for the ground-truth item. This allows the model to learn from better rea-soning supervision rather than treating all generated rationales as equally useful. 
+
+• We propose Evo-Rec , a progressive reasoning optimization frame-work that combines predictive-utility selection with ranking-aware reinforcement learning. The former provides a stronger reasoning initialization by selecting useful reasoning supervision, while the latter allows the model to further evolve its reasoning policy from self-generated trajectories. 
+
+• We introduce a catalog-constrained, ranking-aware RL ob-jective that evaluates each reasoning trajectory through the full recommendation ranking it induces and directly optimizes the reasoning tokens. Extensive experiments and analyses across three domains demonstrate consistent improvements over exist-ing methods and reveal how reasoning selection and ranking-aware feedback contribute to better recommendation. 
+
+## 2 Related Work 2.1 From Discriminative to Generative Recommendation 
+
+Sequential recommendation predicts the next item from a chrono-logically ordered interaction history. Early approaches are discrim-inative: they compress the history into a single user representation and score it against an item embedding table. GRU4Rec models ses-sion sequences with recurrent networks and a ranking loss tailored Learning Better Reasoning for Generative Recommendation with Semantic IDs 
+
+to top-𝑘 gains [4]; Caser applies horizontal and vertical convo-lutional filters over the embedding matrix of recent interactions to capture point-level and union-level patterns [15]; and SASRec replaces recurrence with self-attention so that the relevance of ev-ery past interaction is weighted adaptively [7]. These models are strong and efficient, but they treat items as mutually independent identifiers. Consequently, the parameter count of the embedding table grows linearly with the catalog, no representation is shared between semantically related items, and items with few or no inter-actions are difficult to place in the embedding space, which limits generalization to the long tail. Generative recommendation reformulates the task as sequence generation and removes the dependence on an explicit item embed-ding table. HSTU treats user behavior as a sequential transduction problem and demonstrates that generative recommenders follow favorable scaling behavior at trillion-parameter scale [23]. TIGER makes the item vocabulary itself semantic: it quantizes content embeddings with RQ-VAE into a SID, a short sequence of discrete codes, and autoregressively generates the SID of the next item, so that semantically similar items share code prefixes and generaliza-tion to unseen items becomes possible [13]. Later work targets the two weak points of this pipeline. On the tokenizer side, LETTER regularizes item tokenization with collaborative signals and a di-versity term, addressing the mismatch between a tokenizer trained for content reconstruction and a recommender trained for pref-erence prediction [16]. On the model side, LC-Rec adapts a large language model to the SID vocabulary through a series of alignment tasks that integrate collaborative semantics into the code space [25], and complementary studies benchmark how well LLMs serve as semantic encoders for item representation [6]. Beyond individual components, OneRec [1] and MiniOneRec [9] study end-to-end generative recommenders and the scaling behavior of SID-based generation in industrial and open settings. 
+
+## 2.2 Reasoning-Enhanced Recommendation 
+
+Chain-of-thought prompting shows that generating intermediate steps before an answer substantially improves reasoning in large language models [19], and recommendation research has adopted this idea along a clear trajectory [27]. A group reasons in a latent space: ReaRec performs multi-step latent reasoning inside a sequen-tial recommender at inference time, deepening the computation applied to a history without emitting any text [14]. Latent rea-soning is efficient [10, 26], but its intermediate states are neither inspectable nor verifiable, so the quality of the reasoning itself can-not be measured or supervised. A second group therefore reasons explicitly in natural language. R 2ec learns a unified architecture in which reasoning and recommendation are optimized together [21], Rec-R1 optimizes an LLM against feedback from a fixed down-stream recommender [12], and SIDReasoner reasons explicitly over Semantic IDs and shows that reasoning transfers to generative recommendation [3]. However, these approaches fail to identify which reasoning trajectories are truly beneficial for downstream recommendation. To address this limitation, our Evo-Rec selects high-utility reasoning trajectories for supervised learning and fur-ther refines the policy with ranking-aware reinforcement learning, enabling progressively better recommendation reasoning. 
+
+## 3 Methodology 
+
+In this section, we present our Evo-Rec framework for progressively learning better reasoning for Semantic-ID based generative recom-mendation, as illustrated in Figure 1. We first formulate reasoning-enhanced next-item generation and describe how Semantic IDs are grounded in language semantics and user behavior. We then intro-duce Best-of-𝑁 Rejection Sampling SFT, which selects reasoning trajectories according to their predictive utility for the target item. Finally, we present ranking-aware reinforcement learning, where self-generated reasoning trajectories are evaluated by the catalog rankings they induce and optimized with NDCG-based feedback, enabling the reasoning policy to progressively evolve toward more effective recommendation reasoning. 
+
+## 3.1 Problem Formulation 
+
+Let I denote an item catalog. A user interaction trajectory is a temporally ordered sequence 𝑆 = (𝑖 1, . . . , 𝑖 𝑇 , 𝑖 𝑇 +1), 𝑖 𝑡 ∈ I . Given the history 𝐻 = (𝑖 1, . . . , 𝑖 𝑇 ), the goal of sequential recommen-dation is to predict the next item 𝑖 𝑇 +1. We cast this task as au-toregressive generation by representing every item with a fixed-length Semantic ID. Formally, an item tokenizer defines a mapping 
+
+𝜙 : I → C 𝐿 , 𝜙 (𝑖 ) = (𝑐 1 
+
+> 𝑖
+
+, . . . , 𝑐 𝐿 𝑖 ), where C is a discrete code vocab-ulary and 𝐿 is the number of code levels. Accordingly, we have the interaction history h = [𝜙 (𝑖 1); . . . ; 𝜙 (𝑖 𝑇 )] , and the target SID 
+
+y = 𝜙 (𝑖 𝑇 +1). Instead of directly modeling 𝑝 𝜃 (y | h), we introduce an intermediate reasoning sequence z = (𝑧 1, . . . , 𝑧 𝑀 ). We model the joint conditional distribution of the reasoning sequence and the target SID as 𝑝 𝜃 (z, y | h) = 𝑝 𝜃 (z | h)𝑝 𝜃 (y | h, z). Thus, we aim to optimize the conditional marginal likelihood of the target SID: 
+
+𝑝 𝜃 (y | h) =∑︁ 
+
+> z
+
+𝑝 𝜃 (z | h)𝑝 𝜃 (y | h, z).
+
+## 3.2 Aligning Language and Semantic IDs in LLMs 
+
+Semantic IDs are newly introduced item tokens and therefore have no inherent meaning to a pretrained language model. Following prior SID–language alignment approaches [3, 25], we first align these itemic tokens with natural-language semantics and recom-mendation behavior before introducing explicit reasoning. For each item 𝑖 , we encode its textual metadata into a continuous represen-tation and apply a residual-quantization VAE (RQ-VAE) [13] with 
+
+𝐿 codebooks to obtain 𝜙 (𝑖 ) = (𝑐 1 
+
+> 𝑖
+
+, . . . , 𝑐 𝐿 𝑖 ). The resulting SID tokens are appended to the LLM vocabulary with randomly initialized embeddings and fine-tune the LLM backbone on a mixture of SID– language tasks. This stage provides the semantic and behavioral grounding required by the subsequent reasoning stages. The first component consists of next-item prediction tasks un-der different representations of the interaction history and target. Specifically, we include SID history → SID, SID history → title, title history → title, and title history → SID. These complemen-tary views expose the model to the same behavioral transition through both natural-language and itemic representations, encour-aging knowledge learned in the language space to transfer to the SID space. We further include bidirectional title–SID translation. Beyond these structured prediction tasks, we enrich SID ground-ing with teacher-generated SID–text interleaved data. At the item Zhu et al. Stage 1: SID-Language Alignment   
+
+> 1. SID History → SID 2. SID History → Title
+> “Madden NFL 16 – Xbox One” “FIFA 17 – PlayStation 4”
+> 3. Title History → SID
+> “Madden NFL 16 – Xbox One”
+> 5. SID <-> Title
+> “NBA 2K16 – Xbox One” “FIFA 17 – PlayStation 4”
+> 4. Title History → Title
+> “NBA 2K16 – Xbox One” “Madden NFL 16 – Xbox One”
+> 6. Item narrative w/ SID 7. User-sequence narrative w/ SID
+> “The user’s interaction with shows interest in sports …”
+> 8. General Reasoning
+> “is an American football video gam. It features real NFL teams and players …” “We are going to use BFS (Breadth-First Search) to find the minimum number of moves.…”
+
+Stage 2: Best-of-N Rejection Sampling SFT    
+
+> Teacher LLM Training instance History h!Target y!∗
+
+𝑧 !,# 
+
+𝑧 !,$ 
+
+…  
+
+> Sampling 𝐾 candidate reasoning trajectories Predictive utility scoring
+
+∆!,# 
+
+∆!,$ 
+
+∆!,% 
+
+… …
+
+> High-utility reasoning SFT data
+
+𝑧 !"#$ = 𝑎𝑟𝑔𝑚𝑎𝑥 %∆&,% 
+
+ℒ&'( (𝜃)   
+
+> Keep 𝑧 #$%&
+> if ∆!,( > 0
+> Reject if
+> ∆!,( ≤ 0
+
+Stage 3: Ranking-aware RL 
+
+𝑧 !,) 
+
+Generate reasoning trajectory 𝑧 !,# 
+
+Generate next-item SIDs (trie-constrained beam search) Candidate SID sequences    
+
+> ………………
+
+Rank 
+
+123…
+
+𝐵 
+
+NDCG Reward 
+
+𝑅 $%&' = 𝕝[𝑟 !,# ≤ 10] 𝑙𝑜𝑔 ((𝑟 !,# + 1) 
+
+GRPO Update 
+
+𝑧 !,% 
+
+Figure 1: The overview of our proposed Evo-Rec framework. 
+
+level, SID tokens are embedded in natural-language descriptions. At the sequence level, SID interaction histories are interleaved with descriptions of the corresponding user interests and behavioral tran-sitions. These examples expose SID tokens to substantially richer linguistic contexts to help the model associate itemic tokens with semantic concepts useful for subsequent reasoning. In addition, we mix general-domain reasoning examples into the alignment corpus to preserve the pretrained model’s general language and reasoning capabilities during recommendation adaptation. All data are optimized under a unified autoregressive objective: 
+
+Lalign = −Ex∼D align 
+
+" |x|∑︁ 
+
+𝑡 =1
+
+𝑚 𝑡 (x) log 𝑝 𝜃 (𝑥 𝑡 | x<𝑡 )
+
+#
+
+, (1) where 𝑚 𝑡 (x) ∈ { 0, 1} specifies whether token 𝑥 𝑡 contributes to the loss. For recommendation prediction, translation, and general-reasoning examples, we mask the prompt and optimize only the response tokens. For SID–text interleaved examples, we instead apply full-sequence language modeling, i.e., 𝑚 𝑡 (x) = 1 for all non-padding tokens, allowing SID embeddings to be learned from every surrounding linguistic context. After this stage, the model is able to interpret and generate SIDs in both semantic and behavioral contexts, providing the representation foundation required for rec-ommendation reasoning. Importantly, Stage 1 does not optimize a particular chain-of-thought trajectory. Rather, it establishes the SID–language grounding on top of which Stage 2 can activate rea-soning and learn from selected better reasoning trajectories. 
+
+## 3.3 Best-of-𝑁 Rejection Sampling Supervised Fine-Tuning 
+
+The quality of the CoT reasoning trajectories learned during super-vised fine-tuning is critical for subsequent reinforcement learning. The quality of sampled CoTs can vary substantially: a rationale may be plausible in language yet provide little evidence for the correct recommendation. Directly fine-tuning on such rationales intro-duces noisy supervision. We therefore propose Best-of-𝑁 Rejection Sampling SFT, which selects CoTs according to their predictive utility for the target SID and rejects candidates that do not improve upon direct history-based prediction. 
+
+Predictive-utility scoring. For each training instance (h𝑛 , y∗
+
+𝑛 ), we sample 𝐾 explicit CoTs Z𝑛 = {z𝑛,𝑘 }𝐾 𝑘 =1 from a teacher LLM. We then use a frozen phase-2 model 𝑝 ¯𝜃 finetuned on a single-sample CoT corpus as a scorer to measure the contribution of each candidate to target prediction: 
+
+Δ𝑛,𝑘 = log 𝑝 ¯𝜃 (y∗
+
+𝑛 | h𝑛 , z𝑛,𝑘 ) − log 𝑝 ¯𝜃 (y∗
+
+𝑛 | h𝑛 ). (2) Both terms score only the target SID tokens under the same interac-tion context and differ solely by the presence of z𝑛,𝑘 . Consequently, 
+
+Δ𝑛,𝑘 isolates the incremental predictive utility of the candidate CoT. 
+
+Best-of-𝑁 selection and rejection. We retain the highest-utility candidate only if the predictive utility is positive: 
+
+𝑘 ∗
+
+𝑛 = arg max 
+
+1≤𝑘 ≤𝐾 Δ𝑛,𝑘 , bz𝑛 = z𝑛,𝑘 ∗ 
+
+> 𝑛
+
+if Δ𝑛,𝑘 ∗ 
+
+> 𝑛
+
+> 0. (3) Since the history-only term in Eq. (2) is shared by all candidates, this selection is equivalent to maximizing the rationale-conditioned likelihood of the target SID. 
+
+Supervised fine-tuning. Let A = {𝑛 : Δ𝑛,𝑘 ∗ 
+
+> 𝑛
+
+> 0} denote the ac-cepted instances. We fine-tune the model on the selected reasoning– target pairs using the joint autoregressive objective: 
+
+LBoN (𝜃 ) = − 1
+
+|A| ∑︁ 𝑛 ∈ A 
+
+log 𝑝 𝜃 (bz𝑛 | h𝑛 ) + log 𝑝 𝜃 (y∗
+
+𝑛 | h𝑛 ,bz𝑛 ) . (4) This objective trains the model to generate an outcome-supporting CoT from the interaction history and subsequently predict the target SID conditioned on that reasoning. Learning Better Reasoning for Generative Recommendation with Semantic IDs 
+
+## 3.4 Reasoning Optimization with Constrained SID Ranking 
+
+For each history h𝑛 , the current policy samples a group of 𝐺 rea-soning trajectories {z𝑛,𝑔 }𝐺 𝑔 =1. Conditioned on each trajectory, we construct a ranked list of valid items with trie-constrained beam search and use the position of the target SID to score the trajectory. 
+
+Constrained beam search. Since a valid recommendation must correspond to an item in the catalog, unconstrained decoding wastes probability mass on invalid SID sequences. We build a prefix trie from all catalog SIDs and restrict each decoding step to valid contin-uations of the current prefix. Conditioned on a reasoning trajectory 
+
+z𝑛,𝑔 , the score of a complete SID y = (𝑦 1, . . . , 𝑦 𝐿 ) is 
+
+𝑠 𝜃 (y | h𝑛 , z𝑛,𝑔 ) =
+
+> 𝐿
+
+∑︁ 
+
+> ℓ=1
+
+log e𝑝 𝜃 (𝑦 ℓ | h𝑛 , z𝑛,𝑔 , y<ℓ ), (5) where e𝑝 𝜃 is the model distribution after masking and renormalizing over legal trie children. At every level, beam search keeps the 𝐵 
+
+highest-scoring prefixes. The resulting beam R𝑛,𝑔 = (by(1) 
+
+> 𝑛,𝑔
+
+, . . . , by(𝐵 ) 
+
+> 𝑛,𝑔
+
+)
+
+is an ordered list of distinct and catalog-valid items. 
+
+Exact-match and NDCG reward. Let 𝑟 𝑛,𝑔 denote the rank of the ground-truth SID y∗ 
+
+> 𝑛
+
+in R𝑛,𝑔 , with 𝑟 𝑛,𝑔 = ∞ if it is absent. The top-1 exact-match reward and the ranking-aware reward are 
+
+𝑅 EM  
+
+> 𝑛,𝑔
+
+= I[𝑟 𝑛,𝑔 = 1], 𝑅 NDCG = I[𝑟 𝑛,𝑔 ≤ 10 ]
+
+| {z }
+
+> retrieval
+
+· 1log 2 (𝑟 𝑛,𝑔 + 1)
+
+| {z }
+
+> ranking
+
+. (6) Exact match provides a verifiable but sparse signal: it treats a target ranked second the same as a target absent from the beam. NDCG preserves the exact-match reward of one at rank 1 while assigning progressively smaller credit to lower ranks. We therefore use NDCG@10 as the scalar training reward. For each history, rewards are normalized across the 𝐺 trajectories and optimized with GRPO. Consequently, the model learns to favor reasoning paths that rank the ground-truth item more highly. 
+
+## 4 Experiments 4.1 Experimental Setup 
+
+4.1.1 Datasets and Evaluation. We evaluate our framework on three public benchmark datasets: Video Games (Games), Office Products (Office), and Industrial and Scientific (Industrial) from the Amazon Review [6]. We apply 5-core filtering and sort each user’s interactions chronologically. We truncate each user’s histori-cal interaction sequence with a sliding window whose maximum history length is 10. For each user, we adopt the timestamp split: the earliest 80% of interactions are used for training, the subsequent 10% for validation, and the latest 10% for testing. This temporal protocol prevents future interactions from entering the training history. Dataset statistics are summarized in Table 1. For evaluation, we utilize two widely used metrics: Recall@K (R@K) and NDCG@K (N@K) with cutoff K set to 5 and 10. We follow the full-item ranking setting, where the ground-truth next item is ranked against the entire item catalog rather than a sampled subset of negative items. 
+
+Table 1: Dataset statistics after preprocessing. 
+
+Dataset #Items #Train #Val. #Test Games 3,858 49,133 6,142 6,142 Office 3,459 38,924 4,866 4,866 Industrial 3,686 36,259 4,533 4,533 
+
+4.1.2 Baselines. We compare against three families of methods: (1) Traditional discriminative sequential recommenders include GRU4Rec [4], Caser [15], and SASRec [7]. (2) Classic generative rec-ommenders include TIGER [13], HSTU [23], LETTER [16], and LC-Rec [25]. (3) Reasoning-enhanced recommenders include ReaRec [14], R 2ec [21], and SIDReasoner [3]. Baseline results are quoted from [3], while our method is evaluated using the same data split and evaluation protocol. 
+
+4.1.3 Implementation Details. We use Qwen3-1.7B as our LLM backbone and perform full fine-tuning throughout all stages. Every item is encoded by 𝐿 = 3 semantic tokens, and the corresponding SID tokens are appended to the tokenizer vocabulary with randomly initialized embeddings. Since the three datasets have independent SID codebooks, one model is trained per dataset and no parameter is shared across domains. All stages are optimized with AdamW on 80GB A100 GPUs. In Stage-1, the backbone is aligned to the SID vocabulary by fine-tuning on a mixture of SID–language tasks. We use a learning rate of 2 × 10 −5, for up to 5 epochs. For Best-of-𝑁 
+
+rejection sampling SFT, we synthesize 𝑁 = 5 candidate CoTs per training instance by querying the teacher LLM (GPT-5.4) five times independently with the same prompt. The selected instances are then trained for a single epoch with a learning rate of 1 × 10 −5
+
+with linear decay and 10 warm-up steps, a batch size of 72. The reinforcement learning stage implements GRPO on verl with a vLLM rollout engine over 8*A100 GPUs with batch size of 256. Each history samples 𝐺 = 16 reasoning trajectories. Conditioned on each trajectory, the SID prefix trie built from the catalog restricts every decoding step, and beam search with 𝐵 = 10 returns an ordered list of ten valid items whose target rank defines the NDCG@10 reward of Eq. (6). We set the learning rate to 7 × 10 −7 and training runs for at most 15 epochs. At inference time, the model first decodes its rea-soning, and the SID is then produced by the same trie-constrained beam search with beam size 10 over the full item catalog. 
+
+## 4.2 Main Results 
+
+Table 2 reports the overall performance on the three Amazon Re-view datasets. Our method consistently outperforms all baselines across every evaluation metric and dataset. These results demon-strate that improving the quality of reasoning trajectories can con-sistently benefit semantic-ID based generative recommendation across domains. Notably, the improvements are generally more pronounced on NDCG than on Recall. For example, on Games, compared with the strongest baseline, N@5 and N@10 improve by 41 .1% and 32 .5%, while R@5 and R@10 improve by 19 .3% and 11 .4%. This indicates that our method does not merely increase the probability that the target item appears in the retrieved set, but more effectively promotes it toward higher positions in the ranking. Zhu et al. 
+
+Table 2: The overall performance of different methods on the three datasets. The best results are highlighted in Bold. Models Games Office Industrial 
+
+R@5 N@5 R@10 N@10 R@5 N@5 R@10 N@10 R@5 N@5 R@10 N@10 
+
+Traditional discriminative sequential recommenders 
+
+Caser 0.0376 0.0241 0.0659 0.0332 0.0880 0.0663 0.1114 0.0738 0.0664 0.0528 0.0852 0.0588 GRU4Rec 0.0329 0.0219 0.0599 0.0305 0.0682 0.0480 0.0974 0.0574 0.0788 0.0578 0.1030 0.0649 SASRec 0.0501 0.0345 0.0723 0.0416 0.1019 0.0824 0.1167 0.0871 0.0807 0.0647 0.0964 0.0697 
+
+Classic generative recommenders 
+
+TIGER 0.0489 0.0300 0.0763 0.0402 0.1270 0.1037 0.1429 0.1121 0.1003 0.0823 0.1325 0.0924 HSTU 0.0539 0.0396 0.0746 0.0462 0.1204 0.1069 0.1323 0.1107 0.1008 0.0898 0.1138 0.0940 LETTER 0.0445 0.0294 0.0709 0.0378 0.1315 0.1074 0.1520 0.1139 0.1080 0.0850 0.1389 0.0950 LC-Rec 0.0441 0.0274 0.0876 0.0412 0.0964 0.0699 0.1487 0.0867 0.0805 0.0520 0.1330 0.0687 
+
+Reasoning-enhanced recommenders 
+
+ReaRec 0.0568 0.0381 0.0843 0.0470 0.1173 0.0988 0.1385 0.1057 0.0973 0.0796 0.1205 0.0870 R2ec 0.0655 0.0399 0.0931 0.0525 0.1147 0.0894 0.1486 0.1004 0.0880 0.0774 0.1253 0.0774 SIDReasoner 0.0710 0.0460 0.1031 0.0563 0.1373 0.1119 0.1648 0.1208 0.1109 0.0905 0.1438 0.1010 
+
+Evo-Rec 0.0847 0.0649 0.1149 0.0746 0.1476 0.1223 0.1710 0.1299 0.1167 0.0976 0.1476 0.1076 
+
+This behavior is consistent with our Stage-3 reinforcement learning objective, which directly rewards reasoning trajectories according to the rank of the ground-truth SID under constrained beam search. The largest gains are observed on Games, where our method raises R@5 from 0 .0710 to 0 .0847 and N@10 from 0 .0563 to 0 .0746. We attribute this improvement to the complementary roles of our two reasoning optimization stages: Stage 2 uses best-of-𝑁 selec-tion to provide a stronger reasoning initialization, while Stage 3 further aligns these reasoning trajectories with the downstream ranking objective. Together, the two stages progressively transform higher-quality reasoning supervision into improved recommenda-tion performance. Games also exhibits substantially lower thinking baseline per-formance than Office and Industrial in Table 7, suggesting that it represents the more challenging recommendation setting and there-fore provides greater RL optimization headroom. The particularly large gains on Games suggest that ranking-aware RL can be espe-cially effective when the initial recommendation policy leaves more room for refinement. Moreover, the consistent improvements on Office and Industrial further suggest that the proposed framework is not specific to a single domain, but provides a general mechanism of learning better reasoning for recommendation. 
+
+## 4.3 Ablation Study 
+
+4.3.1 Best-of-𝑁 Rejection Sampling. 
+
+CoT Selection Strategy. We first isolate the contribution of the CoT selection strategy, which determines which reasoning trace is retained. At a fixed sampling budget of 𝑁 = 5, all variants draw the same five candidate CoTs per training instance from the same teacher and differ only in the selection rule: random se-lection keeps a uniformly drawn from 𝑁 candidates, rejection Table 3: Effect of the CoT selection rule on Games at a fixed sampling budget 𝑁 = 5. All variants share the same candidate CoTs and the same training pipeline, and differ only in which candidate is retained.                     
+
+> Selection rule R@1 R@5 R@10 N@5 N@10 Random selection 0.0241 0.0694 0.1043 0.0466 0.0587 Rejection sampling 0.0248 0.0696 0.1051 0.0489 0.0594
+> Best-of-𝑁 0.0443 0.0847 0.1149 0.0649 0.0746
+
+Table 4: Effect of the sampling budget 𝑁 on Games under the best-of-𝑁 rejection sampling rule. 𝑁 = 1 corresponds to training on a single sampled CoT without selection. 
+
+Budget R@1 R@5 R@10 N@5 N@10 N=1 0.0247 0.0690 0.1013 0.0467 0.0571 N=3 0.0277 0.0755 0.1055 0.0518 0.0614 
+
+N=5 0.0443 0.0847 0.1149 0.0649 0.0746 sampling keeps the first candidate whose predictive utility is pos-itive ( Δ𝑛,𝑘 > 0), and best-of-𝑁 rejection sampling keeps the highest positive utility candidate arg max 𝑘 Δ𝑛,𝑘 as in Eq. (3). Each variant is then trained with the identical Stage-3 recipe, so any difference is attributable to the selection rule alone. As shown in Table 3 reports the results, Best-of-𝑁 rejection sam-pling improves N@10 by 27 .1% over random selection and by 37 .1% over rejection sampling, and the gain is most pronounced at the top of the ranking R@1, a relative gain of 83 .8%. Two observations follow. First, random selection pays the full 𝑁 sampling cost yet per-forms on par with training on a single trace (Table 4, 𝑁 = 1), which Learning Better Reasoning for Generative Recommendation with Semantic IDs 
+
+Table 5: Effect of the sampling strategy in RL on Games. The number of samples and the beam size are both 10.                
+
+> Sampling strategy R@1 R@5 R@10 N@5 N@10 Constrained sampling 0.0283 0.0669 0.0943 0.0483 0.0570
+> Constrained beam search 0.0443 0.0847 0.1149 0.0649 0.0746
+
+Table 6: Effect of different reward designs on Games. 
+
+Reward R@1 R@5 R@10 N@5 N@10 Prefix Match 0.0425 0.0791 0.1073 0.0608 0.0699 Exact Match 0.0264 0.0650 0.0958 0.0461 0.0561 NDCG + Recall 0.0264 0.0633 0.0912 0.0449 0.0538 
+
+NDCG Reward 0.0443 0.0847 0.1149 0.0649 0.0746 
+
+shows that the benefit comes from scoring the candidates rather than from sampling more of them. Second, rejection sampling is a weak variant: accepting the first positive-utility candidate uses 
+
+Δ𝑛,𝑘 only as a binary filter and discards the ranking information it carries, and since 94 .0% of all candidates are already positive, this filter is close to a random draw. Ranking candidates by predictive utility is therefore the component that matters. 
+
+Sampling Budget. We next vary the number of sampled CoTs 
+
+𝑁 ∈ { 1, 3, 5} while keeping the best-of-𝑁 rejection sampling rule fixed; 𝑁 = 1 degenerates to training on a single sampled CoT without selection. As shown in Table 4, performance increases monotonically in 𝑁 on every metric, with N@10 improving from 0.0571 at 𝑁 = 1 to 0 .0614 at 𝑁 = 3 and 0 .0746 at 𝑁 = 5. These consistent gains demonstrate that our predictive-utility scoring effectively identifies increasingly useful reasoning traces from a larger candidate pool. Moreover, the continued improvement up to 𝑁 = 5 suggests that the gains may not have saturated, leaving room for further improvements with larger sampling budgets. 
+
+4.3.2 Sampling Strategy. We compare the trie-constrained beam search of Section 3.4, which returns the 𝐵 highest-scoring items as an ordered list, against constrained sampling, which pairs each trajectory with 𝐵 candidates drawn independently from the renor-malized distribution e𝑝 𝜃 of Eq. (5); we set 𝐵 = 10 and keep the Stage-2 model the same. In this setting, Table 5 shows that beam search wins on every metric, by 30 .9% on N@10 and 56 .5% on R@1. Both decoders share the same trie, so all candidates are catalog-valid either way and the gap is not output validity but of what the reward measures. Independent draws form an unordered multiset, leaving the rank 
+
+𝑟 𝑛,𝑔 of Eq. (6) undefined and reducing the reward to a hit indicator, so the policy learns to raise the marginal probability of the target rather than to rank it above its competitors. Ten unguided draws also cover little of the effective prefixes of the large Games trie, leaving most groups with zero reward. We therefore adopt constrained beam search as our sampling strategy. 
+
+4.3.3 Reward Design. We investigate how different rewards af-fect RL optimization. For each training instance, constrained beam search produces a ranked list of 𝐾 = 10 valid SID candidates. We compare four reward designs: 
+
+• Exact Match. We use the exact-match reward defined in Eq. 6, which gives a positive reward only when the complete target SID appears in the top-10 beam. 
+
+• Prefix Match. To provide denser supervision, we additionally consider a hierarchical prefix reward. Let 𝑚 denote the number of consecutive SIDs matching the ground truth and 𝐿 denote the total number of SIDs. We assign 𝑅 prefix (𝑚 ) = 12𝐿 −𝑚 .
+
+• NDCG Reward. We use the rank-sensitive NDCG reward in Eq. 6, which assigns a larger reward when the ground-truth SID is ranked higher in the top-10 beam. 
+
+• NDCG + Recall. We also evaluate a hybrid reward that aver-ages the binary Recall@10 signal and the NDCG@10 signal: 
+
+𝑅 NDCG +Recall =
+
+
+
+1 + 1log 2 (𝑟 𝑛,𝑔 +1)
+
+
+
+/2, when the ground-truth SID appears in the top-10 beam, and 0 otherwise. As shown in Table 6, the pure NDCG reward performs best across all evaluation metrics. Exact match performs substantially worse because it treats all top-10 hits identically and therefore provides no signal for improving their relative ordering. Adding partial prefix match produces a denser learning signal, but partial SID agreement does not necessarily correspond to ranking the correct item higher. In contrast, the NDCG reward naturally captures both retrieval and ranking: it assigns zero reward when the ground-truth SID is not retrieved in the top-10 beam, while discounting successful retrievals according to their rank. Adding an additional Recall@10 term therefore overemphasizes retrieval and weakens the relative ranking signal, which may explain the degraded performance of NDCG+Recall. 
+
+## 4.4 Discussion 
+
+4.4.1 Reasoning length. Figure 2 shows how reasoning behavior evolves during Stage-3 reinforcement learning. Across all three domains, the average reasoning length decreases substantially dur-ing training and eventually converges to a shorter level, while recommendation performance continues to improve. Notably, our objective contains no length penalty; the reward is determined solely by how well a reasoning trajectory ranks the ground-truth SID under constrained beam search. The shortening of reasoning therefore emerges naturally from ranking-aware optimization. Stage-2 provides the model with better reasoning trajectories as a useful initialization, and during Stage-3 RL, the model progres-sively learns to disgard those redundant or less relevant reasoning that do not contribute to ranking the target item. This behavior sug-gests that improved recommendation reasoning does not require increasingly long chains of thought. Instead, effective reasoning appears to depend on how efficiently a trajectory captures infor-mation that is useful for ranking. In this sense, Stage-3 RL help the model achieve stronger recommendation performance with shorter and more targeted reasoning trajectories. 
+
+4.4.2 Evolution of Thinking Performance. Table 7 compares rec-ommendation performance under thinking mode before and after Stage-3 reinforcement learning. Although the Stage-2 reasoning policy initially exhibits relatively weak recommendation perfor-mance, Stage-3 RL consistently recovers and substantially improves Zhu et al. 0 500 1000 1500 2000 2500 3000 100 150 200 
+
+> Reasoning length
+
+Games      
+
+> 0500 1000 1500 2000 2500 125 150 175 200
+> Reasoning length
+
+Office     
+
+> 0500 1000 1500 2000
+> Stage-3 training step
+> 120 140 160 180 200
+> Reasoning length
+
+Industrial   
+
+> 0.00 0.05 0.10
+> R@10 / N@10
+> 0.00 0.05 0.10 0.15 0.20
+> R@10 / N@10
+> 0.00 0.05 0.10 0.15
+> R@10 / N@10
+> Reasoning length R@10 N@10
+
+Figure 2: Mean reasoning length over Stage-3 training. Table 7: Thinking performance before and after Stage-3 RL. 
+
+Dataset Stage R@1 R@5 R@10 N@5 N@10 Games Stage 2 0.0103 0.0256 0.0405 0.0177 0.0225 Stage 3 0.0443 0.0847 0.1149 0.0649 0.0746 
+
+Office Stage 2 0.0495 0.0789 0.0908 0.0652 0.0691 Stage 3 0.0933 0.1476 0.1710 0.1223 0.1299 
+
+Industrial Stage 2 0.0435 0.0679 0.0841 0.0562 0.0614 Stage 3 0.0757 0.1167 0.1476 0.0976 0.1076 
+
+all ranking metrics across the three domains. The improvement is especially pronounced at the top of the ranking. On Games, R@1 increases from 0 .0103 to 0 .0446, corresponding to a 333 .0% rela-tive improvement, substantially larger than the gain in R@10. This suggests that Stage-3 optimization does more than recover overall retrieval performance: it sharpens the ranking distribution by push-ing the target SID toward the very top of the constrained beam. These results also clarify the different roles of the two training 
+
+Table 8: Statistics of the best-of-𝑁 corpus at 𝑁 = 5. “pool” averages all 𝑁 candidates of an instance, i.e. the expected utility of a random pick. 
+
+Games Office Industrial Instances 49,133 38,924 36,259 Candidates ( 𝑁 =5) 245,665 194,620 181,295 Saturated candidates 1.9% 11.5% 6.7% Accepted instances 47,976 37,662 35,372 Rejected instances 1,157 1,262 887 Rejection rate 2.4% 3.2% 2.4% ¯Δ retained 3.72 3.03 4.10 ¯Δ pool 3.16 2.60 3.61 Within-instance Δ range 1.22 0.95 1.07 stages. Stage 2 primarily serves as a thinking mode warm-up, teach-ing the model to produce reasoning in the desired thinking format while using best-of-𝑁 rejection sampling to expose it to higher-quality reasoning trajectories. Its objective is therefore not to di-rectly optimize the final ranking performance. Therefore, relatively low thinking performance at this stage does not necessarily imply that the learned reasoning is ineffective. More importantly, learning from better reasoning trajectories provides a stronger potential for subsequent reinforcement learning. Stage-3 RL then provides a task-aligned ranking signal, reinforcing reasoning trajectories that place the ground-truth SID higher in the beam. Consequently, the rea-soning policy becomes increasingly aligned with recommendation, yielding large improvements from Stage 2 to Stage 3, particularly at the top of the ranking. 
+
+## 5 Analysis on Best-of-𝑁 Rejection Sampling 
+
+We further analyze the resulting Stage-2 corpus at 𝑁 = 5 across all three domains. As shown in Table 8, the vast majority of sampled reasoning traces have positive predictive utility, and requiring at least one positive candidate rejects only 2 .4%, 3 .2%, and 2 .4% of training instances. Moreover, rejected instances are predominantly near the decision boundary in Figure 3. These observations explain why rejection sampling alone provides little improvement in Table 3: the binary Δ > 0 criterion is too weak to substantially reshape the training distribution. Although rejection is rare, the candidate reasoning traces for the same history can differ substantially in predictive utility. The mean within-instance Δ range, max 𝑘 Δ𝑛,𝑘 − min 𝑘 Δ𝑛,𝑘 , is 1 .22, 0 .94, and 1 .06 on Games, Office, and Industrial, respectively. Best-of-
+
+𝑁 greatly exploits this within-instance variation. Compared with uniformly drawing one candidate from the same pool, the retained arg max 𝑘 Δ𝑛,𝑘 trace increases predictive utility by 0 .56, 0 .43, and 0.49 on Games, Office, and Industrial. The main gain comes from ranking candidates within each instance. We found that the dataset with smaller within-instance Δ range tends to less benefit from Best-of-𝑁 rejection sampling. Another interesting observation is that a target that is already highly predictable from the history leaves little room for any reason-ing trace to further increase its likelihood. Using log 𝑝 ¯𝜃 (𝑦 ∗ 
+
+> 𝑛
+
+| ℎ𝑛 ) >Learning Better Reasoning for Generative Recommendation with Semantic IDs 4 2 0 2 4 6 8 10 0.0 0.1 0.2 0.3 
+
+> density
+
+Games        
+
+> 420246810 0.0 0.1 0.2 0.3
+> density
+
+Office        
+
+> 420246810
+> n
+> 0.0 0.1 0.2 0.3
+> density
+
+Industrial         
+
+> all candidates n,kaccepted n> 0 rejected n0
+
+Figure 3: Distribution of the best predictive utility per in-stance, Δ∗ 
+
+> 𝑛
+
+= max 𝑘 Δ𝑛,𝑘 , at 𝑁 = 5. Instances left of the accept bar are rejected; the dashed curve is the pooled candidate distribution a random pick draws from. 
+
+−0.2 as an indicator of such saturation, we find saturated-candidate rates of 1 .9%, 11 .5%, and 6 .7% on Games, Office, and Industrial. This effect is particularly pronounced on Office and produces the sharp mass near Δ∗ ≈ 0 in Figure 3. Thus, a small Δ does not necessarily indicate poor reasoning; it can also reflect an instance for which the history-only predictor is already close to its likelihood ceiling. Games exhibits the largest within-instance utility range (1 .22) and the lowest saturation rate (1 .9%), providing the largest opportunity for best-of-𝑁 to identify a substantially better reasoning trace. In contrast, Office has both the highest saturation rate (11 .5%) and the smallest within-instance range (0 .94). Its candidate utilities are therefore more tightly compressed, reducing the benefit obtainable from best-of-𝑁 selection. Taken together, these results reveal that best-of-𝑁 rejection sam-pling operates primarily as a within-instance ranking mechanism ,with rejection playing a secondary role. Figure 4 further shows that this gain is not driven by a sampling-slot bias. The five candidate slots are selected by arg max 𝑘 Δ𝑛,𝑘 at approximately uniform rates across all three datasets, and their negative-utility rates are also largely stable across slots. Thus, no particular sampling position systematically produces better reasoning traces; the benefit arises from comparing multiple candidates and selecting the one with the 1 2 3 4 5025 50 75 100 
+
+> candidates (%)
+> 21.6 5.6 19.0 6.2 19.3 6.2 18.7 6.0 19.1 6.0
+
+Games     
+
+> 12345025 50 75 100
+> candidates (%)
+> 21.2 7.8 18.6 8.3 19.0 8.2 18.9 8.2 19.1 8.2
+
+Office      
+
+> 12345
+> sampling slot k
+> 025 50 75 100
+> candidates (%)
+> 21.6 5.1 18.6 5.4 19.3 5.3 18.9 5.3 19.1 5.3
+
+Industrial     
+
+> selected by arg max
+> kpositive, not selected n,k0
+
+Figure 4: Outcome of the candidates drawn in each sampling slot 𝑘 , as a share of all instances of the domain. 
+
+highest predictive utility. Increasing 𝑁 therefore provides more op-portunities to expose high-utility traces, particularly for instances with large candidate variation. This mechanism is consistent with the monotonic improvement from 𝑁 = 1 to 𝑁 = 5 in Table 4. 
+
+## 6 Conclusion 
+
+In this work, we investigate how to learn and progressively im-prove effective reasoning for Semantic-ID based generative recom-mendation. We propose Evo-Rec , a three-stage framework that first grounds Semantic IDs in language and user behavior, then selects higher-utility reasoning trajectories through Best-of-𝑁 Re-jection Sampling SFT, and finally refines the reasoning policy with catalog-constrained, ranking-aware reinforcement learning. Exper-iments on three Amazon Review benchmarks demonstrate consis-tent improvements over discriminative, generative, and reasoning-enhanced recommenders, with particularly strong gains on ranking-sensitive metrics. Our analyses further reveal that the effectiveness of Best-of-𝑁 rejection sampling primarily comes from distinguish-ing reasoning trajectories with different predictive utility within the same interaction history, rather than from rejection alone. More-over, NDCG-based reinforcement learning provides a more infor-mative signal than coarse outcome rewards by directly reflecting the ranking induced by each reasoning trajectory. It leads to par-ticularly pronounced gains at the top of the ranking, especially Zhu et al. 
+
+on Recall@1. Interestingly, the optimized policy also tends to pro-duce shorter reasoning while achieving stronger recommendation performance, suggesting that effective recommendation reason-ing depends more on useful information than on reasoning length. Overall, these findings support a simple principle: recommendation reasoning should not merely be generated, but should be better se-lected and optimized according to its downstream recommendation utility. 
+
+## Ethical Considerations 
+
+Our experiments are conducted on public Amazon Review bench-marks, which are distributed for research purposes and contain no directly identifying information: users appear as opaque pseudony-mous identifiers, and our models take in only interaction order and item-side metadata such as titles and descriptions. Evo-Rec is evaluated in an offline recommendation setting and does not involve deployment on private user data. If applied to real-world systems in the future, appropriate privacy protection, bias auditing, and safeguards against over-personalization should be considered when handling private interaction histories. 
+
+## References 
+
+[1] Jiaxin Deng, Shiyao Wang, Kuo Cai, Lejian Ren, Qigen Hu, Weifeng Ding, Qiang Luo, and Guorui Zhou. 2025. Onerec: Unifying retrieve and rank with generative recommender and iterative preference alignment. arXiv preprint arXiv:2502.18965 
+
+(2025). [2] Shijie Geng, Shuchang Liu, Zuohui Fu, Yingqiang Ge, and Yongfeng Zhang. 2022. Recommendation as language processing (rlp): A unified pretrain, personalized prompt & predict paradigm (p5). In Proceedings of the 16th ACM conference on recommender systems . 299–315. [3] Yingzhi He, Yan Sun, Junfei Tan, Yuxin Chen, Xiaoyu Kong, Chunxu Shen, Xiang Wang, An Zhang, and Tat-Seng Chua. 2026. Reasoning over semantic ids enhances generative recommendation. In Proceedings of the 32nd ACM SIGKDD Conference on Knowledge Discovery and Data Mining V. 2 . 1638–1649. [4] Balázs Hidasi and Alexandros Karatzoglou. 2018. Recurrent neural networks with top-k gains for session-based recommendations. In Proceedings of the 27th ACM international conference on information and knowledge management . 843–852. [5] Yupeng Hou, Zhankui He, Julian McAuley, and Wayne Xin Zhao. 2023. Learning vector-quantized item representation for transferable sequential recommenders. In Proceedings of the ACM Web Conference 2023 . 1162–1171. [6] Yupeng Hou, Jiacheng Li, Xiangjun Fu, Zhankui He, An Yan, Xiusi Chen, and Julian McAuley. 2026. Bridging language and items for retrieval and recommen-dation: Benchmarking LLMs as semantic encoders. In Proceedings of the 64th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) . 3251–3265. [7] Wang-Cheng Kang and Julian McAuley. 2018. Self-attentive sequential recom-mendation. In 2018 IEEE international conference on data mining (ICDM) . IEEE, 197–206. [8] Xiaoyu Kong, Junguang Jiang, Bin Liu, Ziru Xu, Han Zhu, Jian Xu, Bo Zheng, Jiancan Wu, and Xiang Wang. 2026. Think before Recommendation: Autonomous Reasoning-enhanced Recommender. Advances in Neural Information Processing Systems 38 (2026), 141209–141232. [9] Xiaoyu Kong, Leheng Sheng, Junfei Tan, Yuxin Chen, Jiancan Wu, An Zhang, Xiang Wang, and Xiangnan He. 2025. Minionerec: An open-source framework for scaling generative recommendation. arXiv preprint arXiv:2510.24431 (2025). [10] Kelvin Li, Chuyi Shang, Leonid Karlinsky, Rogerio Feris, Trevor Darrell, and Roei Herzig. 2026. Latent implicit visual reasoning. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition . 33457–33466. [11] Hunter Lightman, Vineet Kosaraju, Yuri Burda, Harrison Edwards, Bowen Baker, Teddy Lee, Jan Leike, John Schulman, Ilya Sutskever, and Karl Cobbe. 2024. Let’s verify step by step. In International Conference on Learning Representations ,Vol. 2024. 39578–39601. [12] Jiacheng Lin, Tian Wang, and Kun Qian. 2025. Rec-r1: Bridging generative large language models and user-centric recommendation systems via reinforcement learning. arXiv preprint arXiv:2503.24289 (2025). [13] Shashank Rajput, Nikhil Mehta, Anima Singh, Raghunandan Hulikal Keshavan, Trung Vu, Lukasz Heldt, Lichan Hong, Yi Tay, Vinh Tran, Jonah Samost, et al. 2023. Recommender systems with generative retrieval. Advances in Neural Information Processing Systems 36 (2023), 10299–10315. [14] Jiakai Tang, Sunhao Dai, Teng Shi, Jun Xu, Xu Chen, Wen Chen, Jian Wu, and Yuning Jiang. 2026. Think before recommend: Unleashing the latent reasoning power for sequential recommendation. IEEE Transactions on Knowledge and Data Engineering (2026). [15] Jiaxi Tang and Ke Wang. 2018. Personalized top-n sequential recommenda-tion via convolutional sequence embedding. In Proceedings of the eleventh ACM international conference on web search and data mining . 565–573. [16] Wenjie Wang, Honghui Bao, Xinyu Lin, Jizhi Zhang, Yongqi Li, Fuli Feng, See-Kiong Ng, and Tat-Seng Chua. 2024. Learnable item tokenization for generative recommendation. In Proceedings of the 33rd ACM International Conference on Information and Knowledge Management . 2400–2409. [17] Xuezhi Wang, Jason Wei, Dale Schuurmans, Quoc Le, Ed Chi, Sharan Narang, Aakanksha Chowdhery, and Denny Zhou. 2022. Self-consistency improves chain of thought reasoning in language models. arXiv preprint arXiv:2203.11171 (2022). [18] Ye Wang, Jiahao Xun, Minjie Hong, Jieming Zhu, Tao Jin, Wang Lin, Haoyuan Li, Linjun Li, Yan Xia, Zhou Zhao, et al. 2024. Eager: Two-stream generative recommender with behavior-semantic collaboration. In Proceedings of the 30th ACM SIGKDD Conference on Knowledge Discovery and Data Mining . 3245–3254. [19] Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, Fei Xia, Ed Chi, Quoc V Le, Denny Zhou, et al. 2022. Chain-of-thought prompting elicits reason-ing in large language models. Advances in neural information processing systems 
+
+35 (2022), 24824–24837. [20] Longtao Xiao, Haozhao Wang, Cheng Wang, Linfei Ji, Yifan Wang, Jieming Zhu, Zhenhua Dong, Rui Zhang, and Ruixuan Li. 2025. Unger: Generative recommendation with a unified code via semantic and collaborative integration. 
+
+ACM Transactions on Information Systems 44, 2 (2025), 1–31. [21] Runyang You, Yongqi Li, Xinyu Lin, Xin Zhang, Wenjie Wang, Wenjie Li, and Liqiang Nie. 2026. R 2ec: Towards Large Recommender Models with Reasoning. 
+
+Advances in Neural Information Processing Systems 38 (2026), 62376–62405. [22] Eric Zelikman, Yuhuai Wu, Jesse Mu, and Noah Goodman. 2022. Star: Boot-strapping reasoning with reasoning. Advances in Neural Information Processing Systems 35 (2022), 15476–15488. [23] Jiaqi Zhai, Lucy Liao, Xing Liu, Yueming Wang, Rui Li, Xuan Cao, Leon Gao, Zhaojie Gong, Fangda Gu, Jiayuan He, Yinghai Lu, and Yu Shi. 2024. Ac-tions Speak Louder than Words: Trillion-Parameter Sequential Transducers for Generative Recommendations. In Proceedings of the 41st International Confer-ence on Machine Learning (Proceedings of Machine Learning Research, Vol. 235) ,Ruslan Salakhutdinov, Zico Kolter, Katherine Heller, Adrian Weller, Nuria Oliver, Jonathan Scarlett, and Felix Berkenkamp (Eds.). PMLR, 58484–58509. https://proceedings.mlr.press/v235/zhai24a.html [24] Yang Zhang, Wenxin Xu, Xiaoyan Zhao, Wenjie Wang, Fuli Feng, Xiangnan He, and Tat-Seng Chua. 2026. Reinforced latent reasoning for llm-based recom-mendation. In International Conference on Learning Representations , Vol. 2026. 128449–128470. [25] Bowen Zheng, Yupeng Hou, Hongyu Lu, Yu Chen, Wayne Xin Zhao, Ming Chen, and Ji-Rong Wen. 2024. Adapting large language models by integrating collaborative semantics for recommendation. In 2024 IEEE 40th International Conference on Data Engineering (ICDE) . IEEE, 1435–1448. [26] Mengdan Zhu, Senhao Cheng, and Liang Zhao. 2026. Decompose, Look, and Reason: Reinforced Latent Reasoning for VLMs. arXiv preprint arXiv:2604.07518 
+
+(2026). [27] Mengdan Zhu, Yufan Zhao, Tao Di, Yulan Yan, and Liang Zhao. 2026. Learning User Interests via Reasoning and Distillation for Cross-Domain News Recom-mendation. arXiv preprint arXiv:2602.15005 (2026).

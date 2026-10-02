@@ -1,0 +1,1017 @@
+Title: SynCo: Learning Cross-Modal Synergy by Contrasting Interaction Residuals
+
+URL Source: https://arxiv.org/pdf/2609.32846v1
+
+Published Time: Tue, 29 Sep 2026 01:20:40 GMT
+
+Number of Pages: 27
+
+Markdown Content:
+## Citation Y. Yarici and G. AlRegib, “SynCo: Learning Cross-Modal Synergy by Contrasting Interaction Residuals,” submitted on September 25, 2026. 
+
+## Review Under Review 
+
+## Codes Under Review 
+
+## Bib @misc{yarici2026synco, title={SynCo: Learning Cross-Modal Synergy by Contrasting Interaction Residuals}, author={Yarici, Yavuz and AlRegib, Ghassan}, note={Submitted on September 25, 2026}, year={2026}} 
+
+## Contact {yavuzyarici, alregib}@gatech.edu 
+
+## https://alregib.ece.gatech.edu/ arXiv:2609.32846v1 [cs.CV] 26 Sep 2026 Preprint 
+
+# SYN CO: L EARNING CROSS -M ODAL SYNERGY BY CON -
+
+# TRASTING INTERACTION RESIDUALS 
+
+Yavuz Yarici 
+
+OLIVES, CSIP, School of ECE Georgia Institute of Technology Atlanta, GA, USA 
+
+yavuzyarici@gatech.edu 
+
+Ghassan AlRegib 
+
+OLIVES, CSIP, School of ECE Georgia Institute of Technology Atlanta, GA, USA 
+
+alregib@gatech.edu 
+
+## ABSTRACT 
+
+Multimodal contrastive learning is a dominant paradigm for learning transferable representations from unlabeled data, but standard objectives primarily capture in-formation that is redundant between modalities. Partial Information Decomposition (PID) shows that task-relevant information in multimodal data decomposes into three components: redundancy shared between modalities, uniqueness specific to each modality, and synergy available only from their joint observation. Recent frameworks extend contrastive learning to capture all three components, yet syn-ergy remains undertrained in practice. We propose SynCo (Synergy Contrastive Learning), a method that directly addresses synergy undertraining through dedi-cated supervision on an interaction residual. SynCo fits a linear projector to predict the fused representation from independently computed unimodal features, and the resulting interaction residual, which removes the linearly unimodal-predictable component, receives dedicated contrastive supervision at negligible computational cost. On the controlled Trifeature benchmark, SynCo achieves state-of-the-art synergy capture with a +5 .98% gain over the baseline, and on real-world bench-marks from MultiBench, DARai, and MM-IMDb, SynCo consistently outperforms or matches prior methods across diverse modality combinations and task types. The method operates as a plug-in to existing contrastive multimodal frameworks without modifying the underlying fusion architecture and can further improve synergy capture when combined with other methods. 
+
+## 1 INTRODUCTION 
+
+Multimodal learning plays a central role in high-stakes applications such as medical imaging (Li et al., 2020; Prabhushankar et al., 2022), autonomous systems (Kokilepersaud et al., 2023), video understanding (Kaviani et al., 2025), and scientific applications (Orlyanchik et al., 2025; Massey et al., 2025). Such domains benefit from leveraging complementary cues across modalities, producing richer representations than unimodal approaches. Complementary signals are particularly valuable in real-world settings where data variation is significant (Hendrycks et al., 2021; Yarici et al., 2025). However, capturing the cross-modal interactions that produce these representations remains a fundamental challenge in multimodal learning. Multimodal contrastive learning has emerged as the dominant approach to this challenge. Methods such as CLIP (Radford et al., 2021) and ALIGN (Jia et al., 2021) learn joint representations across modalities using contrastive objectives (Oord et al., 2018; Chen et al., 2020). Contrastive methods achieve strong transfer across downstream tasks. However, these methods are built on the multi-view redundancy assumption, which holds that all task-relevant information is shared between modalities (Tsai et al., 2021; Tian et al., 2020a). As a result, they capture only the information shared between modalities and miss the complementary modality-specific information (Sridharan & Kakade, 2008). The assumption is restrictive, since many real-world tasks depend on complementary information unique to individual modalities (Baltrušaitis et al., 2018; Zong et al., 2024). Partial Information Decomposition (PID) (Williams & Beer, 2010; Bertschinger et al., 2014) pro-vides a principled framework for characterizing the limitations of redundancy-based objectives. For two modalities X1 and X2 predicting a task Y , PID decomposes the total mutual information 1Preprint 
+
+I(X1, X 2; Y ) into three components: redundancy ( R), information shared across modalities; unique-ness ( U1, U2), information specific to each modality; and synergy ( S), information that emerges only from their joint observation. Each component carries distinct task-relevant information, and capturing all components is necessary for learning representations that reflect the full structure of multimodal information. Despite recent advances in multimodal contrastive learning, effectively capturing synergistic infor-mation remains challenging. FactorCL (Liang et al., 2023b) explicitly separates shared and unique representations but relies on restrictive conditional augmentation assumptions and does not explicitly model synergy. CoMM (Dufumier et al., 2024) extends multimodal contrastive learning to capture redundancy, uniqueness, and synergy by maximizing mutual information between augmented multi-modal representations alongside unimodal contrastive objectives. While redundancy and uniqueness are accessible from individual modalities, synergy requires their joint observation. Consequently, synergy can remain undertrained even when the contrastive objective theoretically preserves all three components. InfMasking (Wen et al., 2025) addresses this challenge by stochastically masking modality features during fusion and aligning masked representations with unmasked ones through mutual information maximization. COrAL (Cissee et al., 2026) promotes synergistic interactions through asymmetric masking while separating shared and modality-specific representations using or-thogonality constraints. Both approaches encourage cross-modal interactions through masking-based training, without explicitly separating the linearly unimodal-predictable component from the fused representation. We propose SynCo (Syn ergy Co ntrastive Learning) to address synergy undertraining in multimodal contrastive learning through dedicated supervision on the interaction residual. SynCo introduces a Synergy Head consisting of a linear projector that predicts the fused representation from unimodal representations and a residual operation that removes the linearly unimodal-predictable component. The resulting interaction residual is used to encourage synergy capture through a dedicated contrastive loss that complements the base objective. SynCo adds only two loss terms and a lightweight prediction head to the base framework, with negligible computational overhead in the evaluated setting and no modifications to the underlying fusion architecture. • We introduce a residual decomposition that removes the linearly unimodal-predictable component of multimodal representations. A linear projector captures the part of the fused representation that is linearly predictable from unimodal features, and the resulting interaction residual provides a direct target for synergy-focused supervision. • We propose SynCo, a method that applies dedicated contrastive supervision on the interaction residual to enhance synergy capture. SynCo operates as a plug-in to existing multimodal con-trastive frameworks and adds only two loss terms and a lightweight prediction head at negligible computational overhead. • We demonstrate SynCo’s effectiveness across multiple benchmarks. On the Trifeature benchmark, SynCo achieves state-of-the-art synergy capture, exceeding the baseline by +5 .98% . On real-world benchmarks from MultiBench, DARai, and MM-IMDb, SynCo consistently outperforms or matches prior methods across vision-language, sensor-based, and clinical domains. 
+
+## 2 RELATED WORK 
+
+Multimodal learning. Multimodal learning combines information from heterogeneous sources such as text, images, audio, and tabular data into a single model (Baltrušaitis et al., 2018; Liang et al., 2024). Early methods combined modalities either at the input level through feature concatenation or at the decision level by aggregating unimodal predictions (Snoek et al., 2005; Baltrušaitis et al., 2018). More recent work uses transformer architectures to model cross-modal interactions directly through attention (Lu et al., 2019; Xu et al., 2023), enabling applications across tasks such as translation (Xu et al., 2015; Rombach et al., 2022) and representation learning (Bengio et al., 2013). Among these directions, self-supervised representation learning has emerged as a leading approach for learning general-purpose representations from unlabeled data through contrastive objectives (Zong et al., 2024; Radford et al., 2021; Jia et al., 2021). Our work targets this setting. 
+
+Self-supervised multimodal representation learning. Self-supervised learning trains models using objectives defined directly on the input data, without requiring human labels (Balestriero et al., 2023). In the multimodal setting, these methods use cross-modal information to learn trans-2Preprint ferable representations (Zong et al., 2024). Prior work can be organized by the type of pretext task. Clustering-based approaches use cluster assignments as pseudo-labels, allowing modalities to supervise one another (Alwassel et al., 2020). Masked modeling methods reconstruct masked portions of the input, often in a cross-modal fashion where one modality predicts missing information from another (Bachmann et al., 2022; Mizrahi et al., 2023). Contrastive methods align representations of matched multimodal pairs while pushing unmatched pairs apart (Radford et al., 2021; Jia et al., 2021). Our work builds on this contrastive line. 
+
+Contrastive multimodal interactions. Standard contrastive multimodal methods (Radford et al., 2021; Jia et al., 2021) optimize cross-modal alignment but primarily capture redundant information shared across modalities. FactorCL (Liang et al., 2023b) explicitly factorizes shared and unique infor-mation, but relies on restrictive conditional augmentation assumptions and does not model synergy. CoMM (Dufumier et al., 2024) grounds its objectives in Partial Information Decomposition (Williams & Beer, 2010; Bertschinger et al., 2014), combining multimodal and unimodal contrastive losses to capture redundancy, uniqueness, and synergy. In practice, however, synergy remains the most difficult component to learn, since it requires cross-modal computation. InfMasking (Wen et al., 2025) ad-dresses this by stochastically masking modality features during fusion, which encourages cross-modal computation through input perturbation but does not supervise synergy directly. COrAL (Cissee et al., 2026) separates shared and modality-specific features through a dual-path architecture with orthogonality constraints and applies asymmetric masking with complementary patterns across views, which also promotes synergy through input perturbation. In contrast, our method targets synergy explicitly through a dedicated contrastive objective on the interaction residual. 
+
+## 3 PRELIMINARIES 
+
+We introduce the problem setup and Partial Information Decomposition, and review the multimodal contrastive learning framework introduced by CoMM (Dufumier et al., 2024). 
+
+Problem setup. Let X1, X 2, . . . , X n be random variables representing n data modalities and let Y
+
+denote a target variable for a downstream task. The objective is to learn a multimodal representation 
+
+Z = fθ (X), where X = ( X1, . . . , X n) and θ denotes the parameters of a multimodal encoder, such that Z preserves all task-relevant information: I(Z; Y ) = I(X; Y ). During pretraining, two augmentations t′ and t′′ are drawn from a set T of multimodal augmentations, independently of each other and of (X, Y ), and applied to the same input. We write X′ = t′(X) and X′′ = t′′ (X)
+
+for the two views and Z′ = fθ (X′) and Z′′ = fθ (X′′ ) for their representations. The two views are identically distributed and differ only in the realized augmentation. For each modality i, the projection ti masks all modalities except the i-th, and Zi = fθ (ti(X)) denotes the corresponding unimodal representation, while Z′ 
+
+> i
+
+= fθ (ti(X′)) and Z′′  
+
+> i
+
+= fθ (ti(X′′ )) denote its counterparts for the two views. Since Z and every Zi are outputs of the same encoder fθ , all representations lie in the same space RD , where D is the output dimension of fθ .
+
+Partial Information Decomposition. To characterize the structure of task-relevant information, we employ Partial Information Decomposition (PID) (Williams & Beer, 2010; Bertschinger et al., 2014; Liang et al., 2023a). Our theoretical analysis is presented for n = 2 modalities, since multimodal interactions have not been characterized by PID for larger n (Dufumier et al., 2024). For two modalities X1 and X2 and a target Y , PID decomposes the total task-relevant information 
+
+I(X1, X 2; Y ) into four non-negative terms: 
+
+I(X1, X 2; Y ) = R + S + U1 + U2, (1) where R denotes redundancy (information shared across modalities), Ui denotes uniqueness (infor-mation specific to modality i), and S denotes synergy (information available only from the joint observation of both modalities). This decomposition satisfies the consistency equations: 
+
+I(X1; Y ) = R + U1, I(X2; Y ) = R + U2, I(X1; X2; Y ) = R − S, (2) 
+
+Multimodal contrastive learning. In self-supervised learning, Y remains unspecified during training, so task-relevant information cannot be optimized directly. CoMM (Dufumier et al., 2024) addresses this by assuming the existence of multimodal augmentations that preserve all task-relevant information, allowing it to be optimized indirectly through contrastive objectives between augmented views. 3Preprint 
+
+Assumption 1 (Minimal label-preserving multimodal augmentations, Dufumier et al., 2024) . The set T of multimodal augmentations preserves task-relevant content: for any t ∈ T and X′ = t(X),
+
+I(X; X′) = I(X; Y ) and I(X′; Y ) = I(X; Y ).The assumption states that augmenting X to X′ preserves the information X carries about the target 
+
+Y , even though Y itself is not used to construct the augmentation. Unlike standard contrastive assumptions, the preserved information is not required to be shared across modalities. The set T
+
+therefore includes augmentations that are jointly defined on (X1, X 2) rather than applied indepen-dently to each modality. Joint augmentations can remove content from one modality when the other modality retains it, which keeps I(X′; Y ) = I(X; Y ). The first equality is the condition stated in CoMM, and the second equality states explicitly that the augmentation preserves the information about Y . Appendix E discusses Assumption 1 further. Let X′ = t(X) for some t ∈ T , and let Z = fθ (X) and Z′ = fθ (X′) denote the representations of the original and augmented inputs. Since the pair (Z, Z ′) is a deterministic function of (X, X ′), the data processing inequality yields I(Z; Z′) ≤ I(X; X′). Combined with Assumption 1, this leads to the following result: 
+
+Lemma 1 (Multimodal information preservation, Dufumier et al., 2024) . Under sufficient expressivity of fθ, the optimal parameters θ⋆ that maximize I(Zθ ; Z′ 
+
+> θ
+
+) satisfy I(Zθ⋆ ; Z′ 
+
+> θ⋆
+
+) = I(X; X′) = 
+
+I(X; Y ) and I(Zθ⋆ ; Y ) = I(X; Y ).
+
+Since I(X; Y ) = I(X1, X 2; Y ) = R + S + U1 + U2 by Eq. (1), Lemma 1 implies that maximizing mutual information between augmented multimodal representations captures all PID components. The two augmented views X′ and X′′ satisfy the same conditions, and the representation at the optimum preserves the task-relevant information of X (Lemma 5, Appendix D). A corresponding result holds for the unimodal case when a single modality is used as the input. Under Assumption 1, the augmented view preserves the information that modality i carries about Y , and the unimodal contrastive terms reach this quantity at the optimum. 
+
+Lemma 2 (Unimodal information preservation, Dufumier et al., 2024) . Let θ⋆ be the optimal parameters satisfying Lemma 1, which under sufficient expressivity of fθ also maximize I(Zi; Z′). For the projection ti that selects modality i, the corresponding unimodal representation Zi = fθ⋆ (ti(X)) 
+
+satisfies 
+
+I(Zi; Z′) = I(Zi; Y ) = I(Xi; Y ) = R + Ui. (3) 
+
+The equalities follow from I(Xi; X′) = I(Xi; Y ) under Assumption 1 and the data processing inequality applied to the chains Y → Xi → Zi and Zi → Y → Z′, together with the sufficient expressivity of fθ on the unimodal input. The same result holds with Z′′ in place of Z′ (Appendix D). 
+
+CoMM (Dufumier et al., 2024) introduces Lemmas 1 and 2 and uses them to learn task-agnostic representations that capture redundancy, uniqueness, and synergy. Mutual information is estimated using the InfoNCE lower bound (Oord et al., 2018) with temperature τ , where ˆINCE (A, B ) denotes the InfoNCE estimate of I(A; B), giving the multimodal contrastive objective: 
+
+LMCL = − ˆINCE (Z′, Z ′′ ) − 12
+
+> n
+
+X
+
+> i=1
+
+h ˆINCE (Zi, Z ′) + ˆINCE (Zi, Z ′′ )
+
+i
+
+. (4) At the theoretical optimum, the first term captures R + S + P 
+
+> i
+
+Ui, and the second term captures P
+
+> i
+
+(R + Ui) in the bimodal setting (Lemmas 1 and 2). Although the first term theoretically captures synergy, learning synergistic interactions remains challenging in practice because they require cross-modal computation. 
+
+## 4 SYNERGY CONTRASTIVE LEARNING 
+
+4.1 THE SYN CO FRAMEWORK 
+
+We propose SynCo (Synergy Contrastive Learning), a framework that addresses synergy undertraining by introducing dedicated supervision for synergistic interactions in fused multimodal representations. SynCo introduces a Synergy Head consisting of a linear projector P followed by a residual operation. The projector predicts the fused representation from the unimodal representations, and the component 4Preprint 
+
+Figure 1: Overview of SynCo. Two augmented views are encoded and processed through a multimodal fusion path producing Z′ and Z′′ , and a unimodal path producing Z1, . . . , Z n. Three contrastive objectives target distinct PID components: ˆINCE (Z′, Z ′′ ) captures R + S + P 
+
+> i
+
+Ui, ˆINCE (Zi, Z ′)
+
+and ˆINCE (Zi, Z ′′ ) capture R + Ui, and ˆINCE (Z′
+
+> res
+
+, Z ′′ 
+
+> res
+
+) provides synergy-focused supervision on the interaction residuals. of the fused representation that the projector cannot predict forms the interaction residual. The interaction residual removes the linearly unimodal-predictable component while retaining information not captured by the linear prediction. A contrastive loss is applied to the residual to encourage synergy capture. The overall pipeline is illustrated in Figure 1. SynCo extends the multimodal contrastive objective LMCL of Eq. (4) with two additional terms that operate on the Synergy Head: a contrastive loss Linteraction on the interaction residuals from the two augmented views, which provides synergy-focused supervision, and a mean-squared-error loss Lpred 
+
+that trains the linear projector P . The complete SynCo training objective is: 
+
+LSynCo = LMCL + λint Linteraction + λpred Lpred 
+
+| {z }
+
+> synergy-targeted terms
+
+, (5) where λint and λpred are the weighting coefficients. The theoretical foundation supporting this claim is presented in Section 4.2. 4.2 THEORETICAL FOUNDATION 
+
+We show that the residual Z⋆ 
+
+> res
+
+provides a target for synergy-focused supervision by removing the linearly unimodal-predictable content while retaining additional task-relevant information given the linear prediction. The argument combines an empirically supported hypothesis about the trained encoder with an information-theoretic decomposition. Let P : R2D → RD be a linear projector trained by mean-squared error to predict the fused multimodal representation Z from the unimodal representations [Z1; Z2]. We denote the prediction by ˆZ = P ([ Z1; Z2]) and define the residual Zres = Z − ˆZ as the component of Z not captured by the prediction. We write P ⋆ for the MSE-optimal projector and ˆZ⋆, Z ⋆ 
+
+> res
+
+for the corresponding prediction and residual. 
+
+Hypothesis 1 (Synergy is not linearly recoverable from unimodal representations) . For the trained encoder fθ and the MSE-optimal projector P ⋆, the linear prediction ˆZ⋆ = P ⋆([ Z1; Z2]) satisfies 
+
+I( ˆZ⋆; Y ) ≤ R + U1 + U2.The hypothesis bounds the task-relevant information retained by the linear prediction of the fused rep-resentation from unimodal representations. We assess it empirically with linear probes in Section 5.1. To combine this hypothesis with the structure of mutual information, we first establish how task-relevant information is distributed between the prediction ˆZ and the residual Zres .
+
+Lemma 3 (Information decomposition of the residual) . For any encoder fθ, any ˆZ = P ([ Z1; Z2]) ,and Zres = Z − ˆZ,
+
+I(Zres ; Y | ˆZ) ≥ I(Z; Y ) − I( ˆZ; Y ), (6) 5Preprint 
+
+with equality when I(Z; Y ) = I(X; Y ).Proof. Given ˆZ, the residual determines Z via Z = ˆZ + Zres , so I(Zres ; Y | ˆZ) = I(Z; Y | ˆZ).The chain rule gives I(Z, ˆZ; Y ) = I( ˆZ; Y ) + I(Z; Y | ˆZ), and I(Z, ˆZ; Y ) ≥ I(Z; Y ) yields the inequality. Both Z and ˆZ are deterministic functions of X, so by the data processing inequality 
+
+I(Z, ˆZ; Y ) ≤ I(X; Y ). When I(Z; Y ) = I(X; Y ), the two bounds give I(Z, ˆZ; Y ) = I(Z; Y ),and the inequality holds with equality. 
+
+Theorem 1 (Residual concentrates synergistic information) . Let Z = fθ (X1, X 2) for any encoder fθ ,and let ∆ = I(X; Y ) − I(Z; Y ) ≥ 0 denote the task-relevant information that Z does not capture. If Hypothesis 1 holds for fθ , then the residual Z⋆ 
+
+> res
+
+= Z − ˆZ⋆ satisfies 
+
+I(Z⋆
+
+> res
+
+; Y | ˆZ⋆) ≥ S − ∆. (7) 
+
+In particular, when ∆ = 0 , the residual satisfies I(Z⋆
+
+> res
+
+; Y | ˆZ⋆) ≥ S, providing at least S additional task-relevant information given the linear prediction. Proof. By Lemma 3 and Hypothesis 1, I(Z⋆
+
+> res
+
+; Y | ˆZ⋆) ≥ I(Z; Y ) − I( ˆZ⋆; Y ) ≥ I(Z; Y ) − (R +
+
+U1 + U2). Substituting I(Z; Y ) = I(X; Y ) − ∆ = R + S + U1 + U2 − ∆ from Eq. (1) gives the lower bound, which reduces to S when ∆ = 0 .
+
+Remark 1. Theorem 1 holds for any encoder that satisfies Hypothesis 1. At the optimum of LMCL ,Lemma 1 and its extension to two augmented views (Lemma 5) give ∆ = 0 . The linear prediction then carries at most R + U1 + U2 of the task-relevant information, while the residual provides at least S additional task-relevant information given the linear prediction. We refer to this conditional information bound as concentration of synergistic information. The linear projector removes the linearly unimodal-predictable component of the fused representation, while nonlinear R + U content beyond the reach of the projector may remain in Z⋆
+
+> res
+
+.
+
+Corollary 1 (Synergy-targeted contrastive learning) . Let Z′ 
+
+> res
+
+and Z′′  
+
+> res
+
+be the residuals from two augmented views of the same sample. Under Assumption 1 and Hypothesis 1, the contrastive objec-tive ˆINCE (Z′
+
+> res
+
+, Z ′′ 
+
+> res
+
+) rewards task-relevant information shared between the interaction residuals, providing a basis for synergy-focused supervision of the multimodal representation. Proof. Assumption 1 preserves the total task-relevant information I(X; Y ) across both augmented views. Theorem 1 applied to each view, with ∆ = 0 at the information-preserving optimum (Lemma 5), shows that each interaction residual provides at least S additional task-relevant infor-mation given its linear prediction, which captures the linearly unimodal-predictable component of the fused representation. The InfoNCE objective ˆINCE (Z′
+
+> res
+
+, Z ′′ 
+
+> res
+
+) is a lower bound on I(Z′
+
+> res
+
+; Z′′ 
+
+> res
+
+)
+
+and rewards information shared between the two residuals. Since the two views are conditionally independent given Y (Lemma 5), the residuals are also conditionally independent given Y . The data processing inequality therefore gives 
+
+I(Z′
+
+> res
+
+; Z′′ 
+
+> res
+
+) ≤ min {I(Z′
+
+> res
+
+; Y ), I (Z′′ 
+
+> res
+
+; Y )} . (8) Thus, the information shared between the interaction residuals is task-relevant under Assumption 1. Applying InfoNCE to these residuals encourages the encoder to preserve shared task-relevant infor-mation in the component remaining after subtraction of the linear prediction, providing the motivation for synergy-focused supervision. 4.3 IMPLEMENTATION 
+
+We apply the theoretical setup of Section 4.2 to two augmented views, where D denotes the dimen-sionality of the fusion output and n the number of modalities. The MSE objective from Section 4.2 is written as 
+
+Lpred = 12
+
+h
+
+∥Z′ − P ([ Z′
+
+> 1
+
+; Z′
+
+> 2
+
+]) ∥2 + ∥Z′′ − P ([ Z′′  
+
+> 1
+
+; Z′′  
+
+> 2
+
+]) ∥2i
+
+. (9) The interaction residual is obtained by subtracting P ’s prediction from the fused representation: 
+
+Z′ 
+
+> res
+
+= Z′ − ˆZ′, Z′′  
+
+> res
+
+= Z′′ − ˆZ′′ , where ˆZ′ = P ([ Z′
+
+> 1
+
+; Z′
+
+> 2
+
+]) , ˆZ′′ = P ([ Z′′  
+
+> 1
+
+; Z′′  
+
+> 2
+
+]) . (10) 6Preprint The interaction contrastive loss applies InfoNCE to ℓ2-normalized residuals from the two augmented views, which form a positive pair targeted at the synergistic component (Corollary 1): 
+
+Linteraction = − ˆINCE 
+
+ Z′
+
+> res
+
+∥Z′
+
+> res
+
+∥2
+
+, Z′′ 
+
+> res
+
+∥Z′′ 
+
+> res
+
+∥2
+
+
+
+, (11) using the same temperature τ as LMCL . Across all experiments, we use fixed weights λint = 0 .01 
+
+and λpred = 0 .1 without dataset-specific tuning, and linearly warm up λint over the first 20 epochs to its full value. The sensitivity analyses in Appendices B.3 and B.6 justify these defaults. Full implementation details are provided in Appendix A. 
+
+Gradient isolation. Stop-gradient operators separate the parameter updates of P from those of the encoder. In Lpred , we detach both the target (Z′, Z ′′ ) and the unimodal inputs (Z′
+
+> 1
+
+, Z ′
+
+> 2
+
+, Z ′′  
+
+> 1
+
+, Z ′′  
+
+> 2
+
+) to P ,restricting this loss to update only the parameters of P . In Linteraction , we detach the predictions ˆZ′ and 
+
+ˆZ′′ before forming the residuals, restricting gradient propagation to Z′ and Z′′ and the multimodal fusion path of the encoder, with no flow into P or the unimodal representations. This construction maintains the convergence of P to the MSE-optimal projector P ⋆ required by Theorem 1 and directs gradient updates to the component of the encoder responsible for cross-modal computation. 
+
+## 5 EXPERIMENTS 
+
+We evaluate SynCo on controlled synthetic experiments and large-scale real-world benchmarks. We compare against cross-modal contrastive learning (Cross) (Radford et al., 2021), its extension with modality-wise self-supervised terms (Cross+Self) (Yuan et al., 2021), the disentanglement-based FactorCL (Liang et al., 2023b), the multimodal interaction framework CoMM (Dufumier et al., 2024), and the masking-based InfMasking (Wen et al., 2025) and COrAL (Cissee et al., 2026). We also add the SynCo terms to InfMasking for additional comparison. On a synthetic bimodal dataset derived from Trifeature (Hermann & Lampinen, 2020), we measure how well the learned representations capture each PID component: redundancy, uniqueness, and synergy. We then assess generalization on real-world tasks from MultiBench (Liang et al., 2021), DARai (Kaviani et al., 2025), and MM-IMDb (Arevalo et al., 2017). These benchmarks span diverse domains and modality combinations. We evaluate all methods via linear probing: after self-supervised pretraining, we freeze the encoder and train a linear classifier or regressor on the learned representations. We report mean and standard deviation over 5 independent runs. Appendix A provides full experimental details. 5.1 CONTROLLED EXPERIMENTS ON THE TRIFEATURE DATASET 
+
+We evaluate SynCo on a controlled synthetic benchmark following the experimental protocol of CoMM (Dufumier et al., 2024). The dataset is derived from Trifeature (Hermann & Lampinen, 2020), where each image is defined by three visual attributes: shape, texture, and color, each taking one of ten possible values. Bimodal inputs are constructed by pairing two images. This construction allows precise control over which attributes are shared or unique to each modality and which cross-modal relationships are synergistic. We construct probing tasks for each PID component. The two constructions below define different pretraining sets, and we pretrain a separate model for each. For redundancy and uniqueness, we pair images by matching shape, making shape the redundant attribute and texture the unique attribute of each modality. We then evaluate linear probes predicting the shared shape (redundancy) and the texture of the first image (uniqueness), both with a chance level of 10%. For synergy, we define a fixed bijection M between the ten textures and the ten colors. The self-supervised pretraining set consists of pairs (X1, X 2) satisfying M, which establishes a cross-modal relationship between texture( X1) and color( X2) that cannot be recovered from either modality in isolation. The probing task is binary classification of whether a given pair satisfies 
+
+M, with label Y = 1[(texture( X1), color( X2)) ∈ M ]. The probe training and test sets are class-balanced, with positive pairs drawn from the pretraining distribution and negative pairs constructed from texture-color combinations outside M, yielding a chance level of 50%. Results are reported in Table 1. Cross-modal contrastive training alone (Cross) achieves perfect redundancy but fails entirely on both uniqueness and synergy. Adding per-modality self-supervised terms (Cross+Self) recovers uniqueness but fails to improve synergy beyond chance. FactorCL 7Preprint Table 1: Linear probing accuracy (%) for redundancy, uniqueness, and synergy on Trifeature. Bold marks the best value per section. †: results from Dufumier et al. (2024).                            
+
+> Model redundancy ↑uniqueness ↑synergy ↑
+> Cross †100.0 11.6 50.0 Cross+Self †99.7 86.9 50.0 FactorCL †99.8 62.5 46.5 COrAL 99.7 ±0.06 91.4 ±0.62 73.91 ±0.51
+> CoMM 99.9 ±0.05 86.6 ±1.32 71.6 ±1.07
+> SynCo (ours) 99.9 ±0.21 90.15 ±1.14 77.58 ±0.74
+> InfMasking 99.9 ±0.07 89.1 ±0.95 76.12 ±1.42
+> SynCo (ours) + InfMasking 99.9 ±0.24 90.51 ±1.27 77.89 ±0.85
+
+Table 2: Linear probing accuracy (%) on the unimodal representations and on the three components of SynCo’s representation decomposition across PID tasks on the Trifeature benchmark. 
+
+[Z1; Z2]: unimodal; Z: multimodal; ˆZ:linear prediction; Zres : residual.                 
+
+> Representation Redun. ↑Uniq. ↑Syn. ↑
+> [Z1;Z2]99.9 ±0.16 89.42 ±2.33 50.00 ±0.00
+> Z99.9 ±0.21 90.15 ±1.14 77.58 ±0.74
+> ˆZ99.9 ±0.18 89.26 ±2.41 50.00 ±0.00
+> Zres 81.1 ±2.17 57.40 ±2.25 87.24 ±1.78
+
+performs below chance on synergy, confirming that disentanglement-based objectives do not resolve the synergy deficit. CoMM is the first method to capture all three PID components, and InfMasking further improves synergy through stochastic feature masking. SynCo surpasses CoMM by +3 .55% 
+
+on uniqueness and +5 .98% on synergy while maintaining near-perfect redundancy, and outperforms InfMasking by +1 .46% on synergy despite using a substantially simpler mechanism. COrAL achieves the highest uniqueness, while SynCo exceeds it by +3 .67% on synergy. Combining SynCo with InfMasking yields the highest synergy among all methods. The consistent gains over CoMM and InfMasking confirm that our method provides effective synergy-focused supervision of the learned representations. 
+
+Linear probing on decomposed representations. We assess Hypothesis 1 empirically by training linear probes on the concatenated unimodal representations [Z1; Z2] and on the three components of SynCo’s representation: the multimodal representation Z, the linear prediction ˆZ = P ([ Z1; Z2]) ,and the residual Zres = Z − ˆZ. Table 2 reports the results. Neither the concatenated unimodal representations nor the linear prediction ˆZ exceeds chance-level accuracy on the synergy task, indicating that the synergy label is not linearly decodable from the unimodal representations or from their linear prediction, consistent with Hypothesis 1. The residual Zres surpasses the multimodal representation Z on synergy by +9 .66% , consistent with Theorem 1. The residual also contains nonzero R and U content, consistent with Remark 1, since the linear projector removes only the linearly unimodal-predictable component and nonlinear R + U content may remain in the residual. 5.2 EXPERIMENTS ON REAL -WORLD DATASETS 
+
+We evaluate SynCo on real-world multimodal datasets from MultiBench (Liang et al., 2021), DARai (Kaviani et al., 2025), and MM-IMDb (Arevalo et al., 2017). These benchmarks span diverse domains, modality types, and task formulations. Following prior work (Liang et al., 2023b; Dufumier et al., 2024; Wen et al., 2025), we use the same data preprocessing steps, modality configu-rations, and backbone networks across all methods for MultiBench and MM-IMDb. For DARai, we adopt the sensor encoder from (Khaertdinov et al., 2021). Implementation details are provided in Appendix A. 
+
+MultiBench. We use five datasets from MultiBench: Vision&Touch (Lee et al., 2020) for end-effector position regression from visual and proprioceptive modalities, MIMIC (Johnson et al., 2016) for binary classification of respiratory-system diagnoses from tabular and time-series modalities, and MOSI (Zadeh et al., 2016), UR-FUNNY (Hasan et al., 2019), and MUSTARD (Castro et al., 2019) Table 3: Linear probing on MultiBench: MSE ( ×10 −4) for regression and top-1 accuracy (%) for classification. Bold: best within each section. †: results from Dufumier et al. (2024). ∗: classification average.                                                         
+
+> Model Regr. Classification V&T ↓MIMIC ↑MOSI ↑UR-FUNNY ↑MUSTARD ↑Avg. ∗↑
+> Cross †33 .09 ±3.67 66 .70 ±0.10 47 .80 ±1.80 50 .10 ±1.90 53 .50 ±2.90 54 .53
+> Cross+Self †7.56 ±0.31 65 .49 ±0.00 49 .00 ±1.10 59 .90 ±0.90 53 .90 ±4.00 57 .07
+> FactorCL †10 .82 ±0.56 67 .30 ±0.00 51 .20 ±1.60 60 .50 ±0.80 55 .80 ±0.90 58 .70
+> COrAL 5.40 ±0.28 67 .95 ±0.21 66 .40 ±0.84 64 .80 ±0.47 66 .10 ±1.02 66 .31
+> CoMM 6.85 ±2.13 65 .92 ±0.35 63 .70 ±2.50 63 .25 ±0.81 64 .58 ±1.50 64 .36
+> SynCo (ours) 5.21 ±0.34 67 .89 ±0.56 67 .92 ±1.06 66 .52 ±0.53 67 .02 ±1.12 67 .34
+> InfMasking 4.95 ±0.56 67 .53 ±0.32 67 .12 ±0.75 64 .11 ±0.95 65 .62 ±0.90 66 .10
+> SynCo + InfMasking 5.12 ±0.21 69 .52 ±0.49 67 .81 ±1.18 66 .91 ±0.62 67 .21 ±1.65 67 .86
+
+8Preprint for sentiment analysis, humor detection, and sarcasm detection from visual and textual modalities. Appendix G describes each dataset in detail. Table 3 reports the results. SynCo outperforms CoMM, InfMasking, and COrAL on average classification accuracy and achieves the highest accuracy on MOSI among standalone methods. Combining SynCo with InfMasking yields the best overall performance, with the highest accuracy on MIMIC, UR-FUNNY, and MUSTARD, and the strongest average across classification tasks. On the regression task (V&T), SynCo remains competitive with InfMasking, outperforms COrAL, and substantially outperforms all other baselines. We report results on the wearable-sensor benchmark DARai (Kaviani et al., 2025) in Appendix B.1 and results in the trimodal setting in Appendix B.2. Table 4: Linear probing F1-scores (weighted and macro, in %) on MM-IMDb (vision and language). All self-supervised methods use a CLIP backbone. † denotes results from Dufumier et al. (2024).                 
+
+> Model w-F1 ↑m-F1 ↑
+> CLIP †Radford et al. (2021) 54 .49 ±0.19 44 .94 ±0.30
+> SLIP †Mu et al. (2022) 56 .54 ±0.19 47 .35 ±0.27
+> CoMM Dufumier et al. (2024) 61 .29 ±0.73 53 .79 ±0.22
+> SynCo (ours) 62 .12 ±0.17 55 .41 ±0.16
+> InfMasking Wen et al. (2025) 61 .97 ±0.28 55 .28 ±0.15
+> SynCo + InfMask. 62 .23 ±0.27 55 .64 ±0.22
+
+MM-IMDb. MM-IMDb (Arevalo et al., 2017) is a multi-label movie genre classification dataset with visual (poster) and textual (plot summary) modali-ties. The dataset is challenging due to substantial class imbalance across genres and a large semantic gap between the two modalities. We compare against CLIP (Radford et al., 2021), SLIP (Mu et al., 2022), CoMM (Dufumier et al., 2024), and InfMasking (Wen et al., 2025), with all methods using a CLIP backbone. Table 4 reports the results. SynCo outperforms both CoMM and standalone InfMasking on weighted-F1 and macro-F1 and achieves the best standalone perfor-mance. Combining SynCo with InfMasking yields a further gain and the best overall result on both metrics. 5.3 ABLATION STUDIES 
+
+Table 5: Synergy probe accuracy (%) on Trifeature across projec-tor architectures. Chance level is 50%.                         
+
+> Projector Z↑ˆZ↓Zres ↑
+> Linear (ours) 77.58 50.00 87.24
+> MLP-2 74.14 59.75 75.31 MLP-3 73.11 62.10 74.13 MLP-5 71.25 64.81 72.84 Gated Residual 70.56 68.19 69.41 Transformer-4 66.45 71.47 62.04
+
+Ablation on Projector Architecture. The residual Zres = Z − ˆZ
+
+contains the part of Z that P cannot predict, so a higher-capacity projector may capture more of the fused representation, leaving less information in the residual. To assess this design choice, we replace P with five higher-capacity variants: 2-layer, 3-layer, and 5-layer MLPs, a Gated Residual projector, and a 4-layer Transformer. Holding all other components fixed, we evaluate linear probing accuracy on the Trifeature synergy task for Z, ˆZ,and Zres . Architectural details are provided in Appendix A.7. Table 5 shows that the prediction ˆZ of the linear projector remains at chance on the synergy task, while higher-capacity projectors increasingly capture information useful for the synergy task in ˆZ. As projector capacity increases, synergy probe accuracy decreases in both Zres and Z, weakening the effectiveness of Linteraction for synergy-focused supervision. The linear projector achieves the highest synergy probe accuracy in Zres 
+
+while removing the linearly unimodal-predictable component of the fused representation. Additional ablations on the loss terms, loss weights, and warmup length are provided in Appendices B.4, B.3, and B.6, respectively. 
+
+## 6 CONCLUSION 
+
+We presented SynCo, a contrastive multimodal framework that addresses synergy undertraining by supervising an interaction residual that removes the linearly unimodal-predictable component of the fused representation. The Synergy Head provides synergy-focused supervision at negligible computa-tional cost. On the controlled Trifeature benchmark, SynCo achieves state-of-the-art synergy capture and improves uniqueness while maintaining near-perfect redundancy. On real-world benchmarks from MultiBench, DARai, and MM-IMDb, SynCo consistently outperforms or matches prior methods across diverse modality combinations and task types, including vision-language, sensor-based, and clinical domains. SynCo adds only two loss terms and a lightweight prediction head without modify-ing the underlying fusion architecture, making it a straightforward plug-in for existing multimodal contrastive frameworks. 9Preprint 
+
+## REFERENCES 
+
+Humam Alwassel, Dhruv Mahajan, Bruno Korbar, Lorenzo Torresani, Bernard Ghanem, and Du Tran. Self-supervised learning by cross-modal audio-video clustering. Advances in neural information processing systems , 33:9758–9770, 2020. John Arevalo, Thamar Solorio, Manuel Montes-y Gómez, and Fabio A González. Gated multimodal units for information fusion. arXiv preprint arXiv:1702.01992 , 2017. Roman Bachmann, David Mizrahi, Andrei Atanov, and Amir Zamir. Multimae: Multi-modal multi-task masked autoencoders. In European conference on computer vision , pp. 348–367. Springer, 2022. Randall Balestriero, Mark Ibrahim, Vlad Sobal, Ari Morcos, Shashank Shekhar, Tom Goldstein, Florian Bordes, Adrien Bardes, Gregoire Mialon, Yuandong Tian, et al. A cookbook of self-supervised learning. arXiv preprint arXiv:2304.12210 , 2023. Tadas Baltrušaitis, Chaitanya Ahuja, and Louis-Philippe Morency. Multimodal machine learning: A survey and taxonomy. IEEE transactions on pattern analysis and machine intelligence , 41(2): 423–443, 2018. Yoshua Bengio, Aaron Courville, and Pascal Vincent. Representation learning: A review and new perspectives. IEEE transactions on pattern analysis and machine intelligence , 35(8):1798–1828, 2013. Nils Bertschinger, Johannes Rauh, Eckehard Olbrich, Jürgen Jost, and Nihat Ay. Quantifying unique information. Entropy , 16(4):2161–2183, 2014. Santiago Castro, Devamanyu Hazarika, Verónica Pérez-Rosas, Roger Zimmermann, Rada Mihalcea, and Soujanya Poria. Towards multimodal sarcasm detection (an obviously perfect paper). In 
+
+Proceedings of the 57th annual meeting of the association for computational linguistics , pp. 4619–4629, 2019. Ting Chen, Simon Kornblith, Mohammad Norouzi, and Geoffrey Hinton. A simple framework for contrastive learning of visual representations. In International conference on machine learning , pp. 1597–1607. PMLR, 2020. Carolin Cissee, Raneen Younis, and Zahra Ahmadi. Orthogonalized multimodal contrastive learning with asymmetric masking for structured representations. arXiv preprint arXiv:2602.14983 , 2026. Alexey Dosovitskiy, Lucas Beyer, Alexander Kolesnikov, Dirk Weissenborn, Xiaohua Zhai, Thomas Unterthiner, Mostafa Dehghani, Matthias Minderer, Georg Heigold, Sylvain Gelly, et al. An image is worth 16x16 words: Transformers for image recognition at scale. arXiv preprint arXiv:2010.11929 , 2020. Benoit Dufumier, Javiera Castillo-Navarro, Devis Tuia, and Jean-Philippe Thiran. What to align in multimodal contrastive learning? arXiv preprint arXiv:2409.07402 , 2024. Yury Gorishniy, Ivan Rubachev, Valentin Khrulkov, and Artem Babenko. Revisiting deep learning models for tabular data. Advances in neural information processing systems , 34:18932–18943, 2021. Md Kamrul Hasan, Wasifur Rahman, AmirAli Bagher Zadeh, Jianyuan Zhong, Md Iftekhar Tanveer, Louis-Philippe Morency, and Mohammed Ehsan Hoque. Ur-funny: A multimodal language dataset for understanding humor. In Proceedings of the 2019 conference on empirical methods in natural language processing and the 9th international joint conference on natural language processing (EMNLP-IJCNLP) , pp. 2046–2056, 2019. Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun. Deep residual learning for image recognition. In Proceedings of the IEEE conference on computer vision and pattern recognition ,pp. 770–778, 2016. 10 Preprint Dan Hendrycks, Steven Basart, Norman Mu, Saurav Kadavath, Frank Wang, Evan Dorundo, Rahul Desai, Tyler Zhu, Samyak Parajuli, Mike Guo, et al. The many faces of robustness: A critical analysis of out-of-distribution generalization. In Proceedings of the IEEE/CVF international conference on computer vision , pp. 8340–8349, 2021. Katherine Hermann and Andrew Lampinen. What shapes feature representations? exploring datasets, architectures, and training. Advances in Neural Information Processing Systems , 33:9995–10006, 2020. Chao Jia, Yinfei Yang, Ye Xia, Yi-Ting Chen, Zarana Parekh, Hieu Pham, Quoc Le, Yun-Hsuan Sung, Zhen Li, and Tom Duerig. Scaling up visual and vision-language representation learning with noisy text supervision. In International conference on machine learning , pp. 4904–4916. PMLR, 2021. Alistair EW Johnson, Tom J Pollard, Lu Shen, Li-wei H Lehman, Mengling Feng, Mohammad Ghassemi, Benjamin Moody, Peter Szolovits, Leo Anthony Celi, and Roger G Mark. Mimic-iii, a freely accessible critical care database. Scientific data , 3(1):1–9, 2016. Ghazal Kaviani, Yavuz Yarici, Seulgi Kim, Mohit Prabhushankar, Ghassan AlRegib, Mashhour Solh, and Ameya Patil. Hierarchical and multimodal data for daily activity understanding. Journal of Data-centric Machine Learning Research (DMLR) , 2025. Bulat Khaertdinov, Esam Ghaleb, and Stylianos Asteriadis. Contrastive self-supervised learning for sensor-based human activity recognition. In 2021 IEEE International Joint Conference on Biometrics (IJCB) , pp. 1–8. IEEE, 2021. Kiran Kokilepersaud, Mohit Prabhushankar, Yavuz Yarici, Ghassan AlRegib, and Armin Parchami. Exploiting the distortion-semantic interaction in fisheye data. IEEE Open Journal of Signal Processing , 4:284–293, 2023. Alex Krizhevsky, Ilya Sutskever, and Geoffrey E Hinton. Imagenet classification with deep convolu-tional neural networks. Advances in neural information processing systems , 25, 2012. Michelle A Lee, Yuke Zhu, Peter Zachares, Matthew Tan, Krishnan Srinivasan, Silvio Savarese, Li Fei-Fei, Animesh Garg, and Jeannette Bohg. Making sense of vision and touch: Learning multimodal representations for contact-rich tasks. IEEE Transactions on Robotics , 36(3):582–596, 2020. Haoliang Li, YuFei Wang, Renjie Wan, Shiqi Wang, Tie-Qiang Li, and Alex Kot. Domain generaliza-tion for medical imaging classification with linear-dependency regularization. Advances in neural information processing systems , 33:3118–3129, 2020. Paul Pu Liang, Yiwei Lyu, Xiang Fan, Zetian Wu, Yun Cheng, Jason Wu, Leslie Chen, Peter Wu, Michelle A. Lee, Yuke Zhu, Ruslan Salakhutdinov, and Louis-Philippe Morency. Multibench: Multiscale benchmarks for multimodal representation learning. CoRR , abs/2107.07502, 2021. URL https://arxiv.org/abs/2107.07502 .Paul Pu Liang, Yun Cheng, Xiang Fan, Chun Kai Ling, Suzanne Nie, Richard Chen, Zihao Deng, Nicholas Allen, Randy Auerbach, Faisal Mahmood, et al. Quantifying & modeling multimodal in-teractions: An information decomposition framework. Advances in Neural Information Processing Systems , 36:27351–27393, 2023a. Paul Pu Liang, Zihao Deng, Martin Q Ma, James Y Zou, Louis-Philippe Morency, and Ruslan Salakhutdinov. Factorized contrastive learning: Going beyond multi-view redundancy. Advances in Neural Information Processing Systems , 36:32971–32998, 2023b. Paul Pu Liang, Amir Zadeh, and Louis-Philippe Morency. Foundations & trends in multimodal machine learning: Principles, challenges, and open questions. ACM computing surveys , 56(10): 1–42, 2024. Ilya Loshchilov and Frank Hutter. Decoupled weight decay regularization. arXiv preprint arXiv:1711.05101 , 2017. 11 Preprint Jiasen Lu, Dhruv Batra, Devi Parikh, and Stefan Lee. Vilbert: Pretraining task-agnostic visiolinguistic representations for vision-and-language tasks. Advances in neural information processing systems ,32, 2019. Matthew Massey, Nusrat Munia, and Abdullah-Al-Zubaer Imran. Earthscape: A multimodal dataset for surficial geologic mapping and earth surface analysis. arXiv preprint arXiv:2503.15625 , 2025. David Mizrahi, Roman Bachmann, Oguzhan Kar, Teresa Yeo, Mingfei Gao, Afshin Dehghan, and Amir Zamir. 4m: Massively multimodal masked modeling. Advances in Neural Information Processing Systems , 36:58363–58408, 2023. Norman Mu, Alexander Kirillov, David Wagner, and Saining Xie. Slip: Self-supervision meets language-image pre-training. In European conference on computer vision , pp. 529–544. Springer, 2022. Aaron van den Oord, Yazhe Li, and Oriol Vinyals. Representation learning with contrastive predictive coding. arXiv preprint arXiv:1807.03748 , 2018. Vladimir Orlyanchik, Jeffrey Kimmell, Zackary Snow, Amir Ziabari, and Vincent Paquit. A co-registered in-situ and ex-situ dataset from wire arc additive manufacturing process. Scientific Data ,12(1):343, 2025. Mohit Prabhushankar, Kiran Kokilepersaud, Yash-yee Logan, Stephanie Trejo Corona, Ghassan AlRegib, and Charles Wykoff. Olives dataset: Ophthalmic labels for investigating visual eye semantics. Advances in Neural Information Processing Systems , 35:9201–9216, 2022. Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya Ramesh, Gabriel Goh, Sandhini Agarwal, Girish Sastry, Amanda Askell, Pamela Mishkin, Jack Clark, et al. Learning transferable visual models from natural language supervision. In International conference on machine learning , pp. 8748–8763. PMLR, 2021. Nils Reimers and Iryna Gurevych. Sentence-bert: Sentence embeddings using siamese bert-networks. In Proceedings of the 2019 conference on empirical methods in natural language processing and the 9th international joint conference on natural language processing (EMNLP-IJCNLP) , pp. 3982–3992, 2019. Robin Rombach, Andreas Blattmann, Dominik Lorenz, Patrick Esser, and Björn Ommer. High-resolution image synthesis with latent diffusion models. In Proceedings of the IEEE/CVF confer-ence on computer vision and pattern recognition , pp. 10684–10695, 2022. Cees GM Snoek, Marcel Worring, and Arnold WM Smeulders. Early versus late fusion in semantic video analysis. In Proceedings of the 13th annual ACM international conference on Multimedia ,pp. 399–402, 2005. Karthik Sridharan and Sham M. Kakade. An information theoretic framework for multi-view learning. In Rocco A. Servedio and Tong Zhang (eds.), 21st Annual Conference on Learning Theory - COLT 2008, Helsinki, Finland, July 9-12, 2008 , pp. 403–414. Omnipress, 2008. URL 
+
+http://colt2008.cs.helsinki.fi/papers/94-Sridharan.pdf .Yonglong Tian, Dilip Krishnan, and Phillip Isola. Contrastive multiview coding. In European conference on computer vision , pp. 776–794. Springer, 2020a. Yonglong Tian, Chen Sun, Ben Poole, Dilip Krishnan, Cordelia Schmid, and Phillip Isola. What makes for good views for contrastive learning? Advances in neural information processing systems ,33:6827–6839, 2020b. Yao-Hung Hubert Tsai, Yue Wu, Ruslan Salakhutdinov, and Louis-Philippe Morency. Self-supervised learning from a multi-view perspective, 2021. URL https://arxiv.org/abs/2006. 05576 .Liangjian Wen, Qun Dai, Jianzhuang Liu, Jiangtao Zheng, Yong Dai, Dongkai Wang, Zhao Kang, Jun Wang, Zenglin Xu, and Jiang Duan. Infmasking: Unleashing synergistic information by contrastive multimodal interactions. arXiv preprint arXiv:2509.25270 , 2025. 12 Preprint Paul L Williams and Randall D Beer. Nonnegative decomposition of multivariate information. arXiv preprint arXiv:1004.2515 , 2010. Kelvin Xu, Jimmy Ba, Ryan Kiros, Kyunghyun Cho, Aaron Courville, Ruslan Salakhudinov, Rich Zemel, and Yoshua Bengio. Show, attend and tell: Neural image caption generation with visual attention. In International conference on machine learning , pp. 2048–2057. PMLR, 2015. Peng Xu, Xiatian Zhu, and David A Clifton. Multimodal learning with transformers: A survey. IEEE Transactions on Pattern Analysis and Machine Intelligence , 45(10):12113–12132, 2023. Yavuz Yarici, Kiran Kokilepersaud, Mohit Prabhushankar, and Ghassan AlRegib. Subject invariant contrastive learning for human activity recognition. In 2025 IEEE 35th International Workshop on Machine Learning for Signal Processing (MLSP) , pp. 1–6. IEEE, 2025. Xin Yuan, Zhe Lin, Jason Kuen, Jianming Zhang, Yilin Wang, Michael Maire, Ajinkya Kale, and Baldo Faieta. Multimodal contrastive training for visual representation learning. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pp. 6995–7004, 2021. Amir Zadeh, Rowan Zellers, Eli Pincus, and Louis-Philippe Morency. Multimodal sentiment intensity analysis in videos: Facial gestures and verbal messages. IEEE Intelligent Systems , 31(6):82–88, 2016. Yongshuo Zong, Oisin Mac Aodha, and Timothy M Hospedales. Self-supervised multimodal learning: A survey. IEEE Transactions on Pattern Analysis and Machine Intelligence , 47(7):5299–5318, 2024. 13 Preprint 
+
+## A APPENDIX IMPLEMENTATION DETAILS 
+
+This section describes the encoder architectures, modality-specific augmentations, latent converters, and optimization settings used across all experiments. A.1 ENCODER ARCHITECTURES 
+
+Trifeature. Both modalities are visual, so we use a shared AlexNet backbone (Krizhevsky et al., 2012) with a 512 -dimensional embedding space, matching the encoder choice of CoMM. We remove the final average-pooling layer and apply a linear patch-embedding module (Dosovitskiy et al., 2020) to the resulting 6 × 6 feature maps. Fixed two-dimensional sine-cosine positional embeddings are added before the fusion transformer. 
+
+MIMIC. The two modalities of MIMIC are tabular and time-series. The tabular branch uses a two-layer MLP with a 10 -dimensional hidden size and a 10 -dimensional output, and the time-series branch uses a GRU with a 512 -dimensional hidden state. A feature tokenizer (Gorishniy et al., 2021) maps the tabular output to a 512 -dimensional embedding space, and no latent converter is applied to the time-series branch. 
+
+MOSI, UR-FUNNY, and MUSTARD. For these three datasets the modalities are pre-extracted visual and textual features. We follow FactorCL (Liang et al., 2023b) and CoMM in using a five-head, five-layer Transformer with a 40 -dimensional embedding space for each modality, with no latent converter. 
+
+Vision&Touch. For the end-effector regression task we use the visual and force-torque modalities. Images are encoded with a ResNet-18 (He et al., 2016) producing 128 -channel spatial feature maps, and force-torque signals are encoded with a five-layer causal convolutional network producing a 
+
+128 -dimensional output, following the original Vision&Touch protocol (Lee et al., 2020). A patch-embedding module is applied to the ResNet-18 feature maps, and the force-torque embeddings are tokenized through a feature tokenizer. 
+
+DARai. For each wearable modality we adopt the encoder architecture introduced for sensor-based human activity recognition by Khaertdinov et al. (Khaertdinov et al., 2021), which combines a stack of three one-dimensional convolutional layers, each followed by batch normalization and a ReLU activation and using reflective padding to preserve the temporal length, with a transformer self-attention block. We fix the kernel size to three throughout the convolutional stack and use eight attention heads in the transformer block. All sensor streams are resampled to a common length of 
+
+100 time steps before encoding, so that the IMU, EMG, and insole branches operate on tensors of identical temporal extent. The three branches share this backbone configuration and differ only in the channel count of the input layer, which is determined by the corresponding sensor dimensionality. 
+
+MM-IMDb. The visual encoder is a ViT-B/ 32 (Dosovitskiy et al., 2020) pre-trained with CLIP (Rad-ford et al., 2021), and the textual encoder is the multilingual Sentence-BERT model distilled from CLIP (Reimers & Gurevych, 2019). Both encoders are frozen during pretraining, and SynCo operates directly on the token embeddings produced by these backbones, without latent converters. A.2 FUSION TRANSFORMER AND LINEAR PROJECTOR 
+
+The fusion module is a Transformer encoder layer with multi-head self-attention, a feed-forward block, residual connections, and layer normalization. We use a single layer with eight heads in the bimodal setting and two layers with eight heads in the trimodal setting. A learnable [CLS] 
+
+token is prepended to the input sequence, and the corresponding output token is read out as the fused representation Z. The unimodal representation Zi is the [CLS] output of the same modality encoders and fusion transformer when all modalities except the i-th are masked, so the fused and unimodal representations lie in the same space RD . The linear projector P in SynCo is implemented as a single linear layer mapping RnD to RD , where D is the dimensionality of Z and n is the number of modalities. It is applied to the concatenation of the unimodal representations [Z1; . . . ; Zn] and produces ˆZ.14 Preprint A.3 RESIDUAL COMPUTATION AND TRAINING DYNAMICS 
+
+Gradient structure. The three stop-gradient placements introduced in Section 4.3 yield a clear separation of learning roles. The linear projector P receives gradients only from Lpred and learns to approximate Z from [Z1; Z2] to the extent permitted by a linear function. The encoder and fusion transformer receive gradients from two distinct sources: the multimodal contrastive loss LMCL , which propagates through the projection head and operates in the projected space, and the interaction contrastive loss Linteraction , which propagates through Z′ 
+
+> res
+
+and Z′′  
+
+> res
+
+and operates in the raw fusion space. The interaction contrastive loss specifically supervises features that P cannot predict, which by Theorem 1 provide at least S additional task-relevant information given the linear prediction. The construction does not introduce conflicting optimization objectives. P is trained to minimize prediction error and therefore cannot increase the residual norm. The encoder receives no gradient that would degrade the unimodal representations to enlarge the residual, since the predictions ˆZ′
+
+and ˆZ′′ are detached in Linteraction and no gradient from this loss passes through P or the unimodal representations. The modality encoders and fusion transformer are shared between the fused and unimodal paths, so updates driven by Linteraction still change the unimodal representations indirectly, and the unimodal terms of LMCL keep them informative about R + Ui (Lemma 2). 
+
+Training dynamics. SynCo exhibits a natural curriculum arising from the interplay of prediction and interaction objectives, and the implementation additionally performs an explicit linear warmup of the interaction weight. Early in training the projector P is randomly initialized and the residual approximates the fused representation, so the interaction contrastive term initially provides a broad discriminative signal. To avoid the interaction term dominating too early, we linearly scale the effective interaction weight from zero to its configured value over a fixed number of warmup epochs: 
+
+λeff int = λint · min 
+
+
+
+1, epoch warmup_epochs 
+
+
+
+.
+
+In our runs, warmup_epochs is set to 20, so λint is fully active only after the warmup period. The prediction loss Lpred is applied from the start, while the interaction loss is gradually annealed in as P
+
+converges, so that the residual progressively excludes the linearly unimodal-predictable component. Beyond this linear warmup of λint , no additional scheduling or curriculum is required. A.4 MODALITY -S PECIFIC AUGMENTATIONS 
+
+For raw images on Trifeature, MM-IMDb, and Vision&Touch, we adopt the SimCLR augmentation pipeline (Chen et al., 2020). Tabular features in MIMIC are perturbed with additive Gaussian noise applied independently to each feature dimension. For pre-extracted time-series features in MIMIC, MOSI, UR-FUNNY, MUSTARD, and the force-torque modality of Vision&Touch, we apply Gaussian noise together with random dropping of a uniformly sampled fraction of the sequence between 0% and 80%; dropped timesteps are zeroed rather than removed. For the wearable signals in DARai, we do not use sequence dropping; instead we apply sensor-level augmentations including additive Gaussian jittering, optional scaling, random sign and rotation, permutation of segments, and channel shuffling, as implemented in the DARai transforms. For raw text on MM-IMDb, we apply random token masking with probability 15% , where tokens are selected uniformly with pad, CLS, and SEP tokens excluded, by replacing selected token ids with the tokenizer’s mask token. This is a direct mask-replacement scheme applied only during training and does not implement the BERT 80 /10 /10 
+
+replace/keep schedule. A.5 OPTIMIZATION 
+
+All experiments use the AdamW optimizer (Loshchilov & Hutter, 2017), except for DARai where we use Adam following the protocol of the source benchmark. The learning rate is set to 3 × 10 −4 with weight decay 10 −4 on Trifeature, 1 × 10 −3 with weight decay 10 −2 on MIMIC, MOSI, UR-FUNNY, and MUSTARD, 1 × 10 −4 with weight decay 10 −2 on Vision&Touch and MM-IMDb, and 1 × 10 −3
+
+on DARai. Pretraining uses a batch size of 64 across all datasets. For MM-IMDb we additionally use a cosine schedule with a final value of 10 −6 and a ten-epoch warmup. Pretraining is run for 
+
+100 epochs on every dataset except MM-IMDb, where we run 70 epochs following CoMM, and DARai, where we pretrain for 300 epochs following the source benchmark. The InfoNCE critic 15 Preprint is implemented as a three-layer MLP with 512 -dimensional hidden layers and a 256 -dimensional output, matching the projection head architecture of SimCLR. The temperature τ in every InfoNCE term is set to 0.1 and shared across LMCL and Linteraction . Across all experiments we use the fixed coefficients λint = 0 .01 and λpred = 0 .1 for the two SynCo-specific terms. The sensitivity analysis in Appendix B.3 justifies these defaults. All experiments are performed on a single NVIDIA A40 GPU with 48 GB of memory. A.6 LINEAR PROBING PROTOCOL 
+
+After pretraining, the encoder and fusion transformer are frozen, and a single linear layer is trained on top of the multimodal representation Z for 100 epochs. Classification tasks are optimized with cross-entropy loss, and the Vision&Touch end-effector task is optimized with mean-squared error. We use early stopping on the validation set and report mean and standard deviation across five independent runs. A.7 PROJECTOR ARCHITECTURE ABLATION DETAILS 
+
+This appendix details the projector variants evaluated in the ablation reported in Section 5.3. All variants implement the mapping P : RnD → RD from the concatenated unimodal representations 
+
+[Z1; . . . ; Zn] to the fused representation space, where D is the dimensionality of Z and n is the number of modalities. Throughout the ablation, only the architecture of P is varied; the encoder, fusion transformer, augmentations, optimizer, loss coefficients, and training schedule are held fixed at the values reported in Appendix A, and each variant is trained jointly with the SynCo objective. The stop-gradient configuration from Section 4 continues to apply, so Lpred updates only the parameters of P regardless of its architecture. All variants are described under the bimodal Trifeature setting with n = 2 and D = 512 .
+
+Linear (baseline). A single fully connected layer with weight matrix W ∈ RD×nD and bias 
+
+b ∈ RD , giving ˆZ = W [Z1; Z2] + b. This is the projector used in all main-text results. 
+
+2-layer MLP. A two-layer feed-forward network. The first layer maps RnD to a hidden dimension 
+
+h = ( nD + D)/2, followed by a ReLU activation. The second layer maps the hidden representation to RD .
+
+3-layer and 5-layer MLPs. Stacks of three and five fully connected layers respectively, with ReLU activations between consecutive layers and constant intermediate widths equal to the output dimension D. The first layer maps RnD to RD and all subsequent layers operate within RD .
+
+Gated Residual. A linear branch combined additively with a parallel nonlinear branch: 
+
+ˆZ = Wℓ[Z1; Z2] + bℓ + γ · MLP([ Z1; Z2]) , (12) where Wℓ ∈ RD×nD and bℓ ∈ RD parameterize the linear branch, MLP is a two-layer feed-forward network with hidden dimension D and ReLU activation, and γ ∈ R is a learnable scalar gate initialized to zero. Initializing γ to zero renders the projector strictly linear at the start of training, so the residual loss begins from the same starting point as the linear baseline, and γ grows only when the nonlinear branch reduces Lpred .
+
+Transformer (4-layer). The concatenated input [Z1; Z2] ∈ RnD is reshaped into n modality tokens of dimension D, and learned modality-specific embeddings E1, . . . , E n ∈ RD are added to the corresponding tokens. The resulting sequence is processed by a stack of four Transformer encoder layers, each containing multi-head self-attention with eight heads, a position-wise feed-forward sublayer with hidden dimension 4D and GELU activation, and pre-layer normalization on both sublayers. The output tokens are flattened to RnD and passed through a two-layer MLP head with hidden dimension D and GELU activation, producing ˆZ ∈ RD . This variant comprises approximately 14.7M parameters. 16 Preprint A.8 COMBINING SYN CO WITH INF MASKING 
+
+Combining SynCo with InfMasking augments the multimodal contrastive terms with a masking objective Lmask that stochastically replaces fusion-input tokens with a learned mask token and maximizes agreement between the masked and unmasked multimodal representations. Its total loss is the uniform mean of the masking terms and the contrastive terms of LMCL ; we denote it LInfMasking 
+
+and leave it untouched. The combined objective is 
+
+LSynCo+InfMasking = LInfMasking + λint Linteraction + λpred Lpred . (13) The Synergy Head operates on the unmasked representations. The residuals Z′ 
+
+> res
+
+and Z′′  
+
+> res
+
+are formed from the fused representations Z′ and Z′′ computed without InfMasking’s feature masking, and the projector P receives the unimodal representations Z′ 
+
+> i
+
+and Z′′  
+
+> i
+
+defined in Section 3. The stochastically masked representations enter only Lmask . InfMasking perturbs the input to fusion, while SynCo decomposes the unmasked output of fusion, and the two mechanisms act on different quantities. The stop-gradient configuration of Section 4.3 is unchanged, and Lmask does not update P . We use the InfMasking hyperparameters of Wen et al. (2025) for the masking ratio, the number of masked views, and λmask , together with the fixed SynCo coefficients λint = 0 .01 and λpred = 0 .1 and the 20-epoch warmup of λint . All other settings follow Appendix A. The combination requires no forward passes beyond those of InfMasking, and its only additional cost is the linear projector. 
+
+## B APPENDIX ADDITIONAL EXPERIMENTS 
+
+B.1 EXPERIMENTS ON DAR AI 
+
+DARai (Kaviani et al., 2025) is a human activity recognition dataset with multiple wearable sensor modalities, and we use it to evaluate whether SynCo’s gains generalize across modality pairings. We evaluate three bimodal configurations, IMU + Insole, IMU + EMG, and EMG + Insole, and compare FactorCL, CoMM, InfMasking, and SynCo under identical preprocessing and backbones. Appendix G describes the sensor modalities and the three configurations in detail. Table 6: Linear probing top-1 accuracy (%) on DARai across three bimodal sensor configurations. Bold values indicate the best within each section. 
+
+Model IMU+Insole ↑ IMU+EMG ↑ EMG+Insole ↑ Avg. ↑
+
+FactorCL 36 .74 ±1.15 34 .18 ±1.05 30 .92 ±1.18 33 .95 
+
+CoMM 42 .12 ±0.81 41 .85 ±0.94 32 .21 ±1.05 38 .73 
+
+SynCo (ours) 45 .52 ±0.54 43 .78 ±0.42 36 .15 ±0.59 41 .82 
+
+InfMasking 43 .85 ±1.13 42 .32 ±0.84 36 .04 ±1.12 40 .74 
+
+SynCo (ours) + InfMasking 45 .21 ±0.98 44 .15 ±1.07 36 .38 ±1.06 41 .91 
+
+Table 6 reports the results. SynCo outperforms CoMM on every configuration and achieves the best standalone average. Combining SynCo with InfMasking yields an additional gain on average, with the best mean accuracy on IMU + EMG and EMG + Insole, while standalone SynCo leads on IMU + Insole. The consistent gains across configurations show that SynCo generalizes beyond vision-language settings to wearable sensor data. B.2 EXPERIMENTS WITH 3 M ODALITIES 
+
+We extend our evaluation to the trimodal setting using MOSI, UR-FUNNY, and MUSTARD with their full text, audio, and video configurations. While Section 5.2 reports results on the bimodal variants of these datasets, the trimodal setting introduces additional cross-modal interactions that test whether the synergy-targeted supervision in SynCo scales beyond two modalities. We follow the same experimental protocol as the bimodal evaluation, comparing against CoMM and InfMasking under identical preprocessing, backbone networks, and linear probing procedures. Table 7 reports the results. SynCo achieves the strongest performance across all three datasets and on average, outperforming CoMM by +2 .94% and InfMasking by +1 .35% in average classification accuracy. The improvement over CoMM is consistent with the bimodal results and indicates that the residual 17 Preprint Table 7: Linear probing top-1 accuracy (in %) on trimodal classification benchmarks (text, audio, video). 
+
+Model MOSI ↑ UR-FUNNY ↑ MUSTARD ↑ Average ↑
+
+CoMM Dufumier et al. (2024) 64 .00 ±2.33 64 .74 ±0.71 65 .52 ±1.42 64 .75 
+
+SynCo (ours) 68 .11 ±0.92 66 .85 ±0.55 68 .12 ±1.24 67 .69 
+
+InfMasking Wen et al. (2025) 67 .15 ±1.21 64 .95 ±0.92 66 .92 ±2.75 66 .34 
+
+SynCo (ours) + InfMasking 67 .52 ±1.11 66 .18 ±0.57 67 .48 ±1.48 67 .06 
+
+decomposition continues to provide effective synergy-focused supervision as the number of modalities increases. Combining SynCo with InfMasking improves over standalone InfMasking on average but does not exceed standalone SynCo in the trimodal setting. B.3 ABLATION EXPERIMENT : S ENSITIVITY TO LOSS WEIGHTS 
+
+The two coefficients in the SynCo objective control disjoint parameter sets due to the stop-gradient configuration: λpred governs only the optimization of P , while λint scales the encoder gradient from 
+
+Linteraction . We sweep each coefficient on Trifeature with the other held at its default value. 
+
+(a) λint sweep (b) λpred sweep 
+
+Figure 2: Sensitivity of SynCo’s loss weights on Trifeature. (a) λpred = 0 .1 fixed. (b) λint = 0 .01 
+
+fixed. Dotted lines mark the values used for all experiments. Figure 2a reports the sweep over λint with λpred = 0 .1. Synergy rises with λint , reaches a peak at 
+
+λint = 0 .01 , and degrades at larger values. Redundancy remains stable across all values, while uniqueness degrades alongside synergy at very large λint , which indicates that overly large values disrupt overall representation quality. Figure 2b reports the sweep over λpred with λint = 0 .01 . Once 
+
+λpred is sufficiently large to train P effectively, all three components remain approximately flat across several orders of magnitude. The flat response is consistent with the gradient isolation property: 
+
+λpred scales the loss for P alone and does not directly affect the encoder. The two sweeps show that 
+
+λint = 0 .01 yields the best synergy performance and λpred = 0 .1 provides a sufficient threshold for training P ; both are used as fixed defaults throughout all experiments. B.4 ABLATION EXPERIMENT : L OSS TERMS 
+
+The SynCo objective in Eq. (5) adds two terms to LMCL , and the interaction residual is defined relative to the fused representation that the multimodal term of Eq. (4) shapes. To isolate the contribution of each component, we train three objectives on Trifeature under identical settings: LMCL alone, the full SynCo objective, and the SynCo objective without the multimodal term ˆINCE (Z′, Z ′′ ). All other hyperparameters are held fixed at the values reported in Appendix A, and we report mean and standard deviation across five independent runs. Table 8 reports the results. The residual term accounts for most of the gain over the baseline: without the multimodal term, SynCo still improves synergy by 3.90 points over LMCL , and adding the multimodal term recovers the remaining 2.08 points. The multimodal term therefore remains necessary. It drives Z toward ∆ = 0 in Theorem 1, and the residual is informative about synergy to the extent that the fused representation it is computed from preserves the task-relevant information. Uniqueness follows the same pattern, while redundancy is unaffected by either term. 18 Preprint Table 8: Linear probing accuracy (%) of redundancy, uniqueness, and synergy on Trifeature under different combinations of loss terms. 
+
+Objective redundancy ↑ uniqueness ↑ synergy ↑LMCL (CoMM) 99 .9±0.05 86 .6±1.32 71 .6±1.07 
+
+SynCo w/o ˆINCE (Z′, Z ′′ ) 99 .7±0.37 88 .1±0.49 75 .5±0.28 
+
+SynCo (full) 99 .9±0.21 90 .15 ±1.14 77 .58 ±0.74 
+
+B.5 LINEAR PROBES ON UNIMODAL REPRESENTATIONS 
+
+Hypothesis 1 concerns the linear prediction of the fused representation from the unimodal representa-tions, and Table 2 is consistent with it for the MSE-optimal projector P ⋆. Here we probe the unimodal representations directly. We freeze the SynCo encoder trained on the Trifeature synergy task and train linear probes on the individual unimodal representations Z1 and Z2, on their concatenation [Z1; Z2],and on the fused representation Z, following the protocol of Appendix A. Table 9: Linear probing accuracy (%) on the Trifeature synergy task for the unimodal representations, their concatenation, and the fused representation. Chance level is 50%. 
+
+Representation synergy ↑
+
+Z1 (modality 1) 50 .00 ±0.00 
+
+Z2 (modality 2) 50 .00 ±0.00 
+
+[Z1; Z2] (concatenation) 50 .00 ±0.00 
+
+Z (fused) 77 .58 ±0.74 
+
+Table 9 reports the results. Both unimodal representations and their concatenation remain at chance level, while the fused representation reaches 77 .58% . The gap does not come from missing attribute information: texture and color are individually recoverable from the corresponding unimodal repre-sentation, and the synergy label depends on whether the particular texture-color pairing belongs to M.Recovering the label therefore requires a function that combines the two modalities, which no linear function of [Z1; Z2] provides. Since the linear prediction ˆZ = P ([ Z1; Z2]) is one such function, the concatenation result supports the premise of Hypothesis 1 independently of how well P is trained. B.6 ABLATION EXPERIMENT : W ARMUP EPOCH ABLATION 
+
+The interaction weight λint is linearly annealed from zero to its full value over a fixed number of warmup epochs at the start of training, as described in Appendix A. Early in training the linear projector P is randomly initialized, so the residual Zres = Z − ˆZ initially approximates the fused representation itself rather than the component that excludes linearly unimodal-predictable content. The warmup delays the residual loss until P has had time to approach its MSE-optimal solution. To assess the sensitivity of SynCo to this schedule, we sweep warmup_epochs on Trifeature while holding all other hyperparameters fixed at the values reported in Appendix A. 
+
+Figure 3: Sensitivity of SynCo to the warmup length on Trifeature. We sweep warmup_epochs 
+
+∈ { 0, 5, 10 , 20 , 40 , 60 } with all other hyperparameters fixed. Linear probing accuracy (%) is reported for each PID component, averaged over five independent runs. The dotted line marks the value used for all main-text experiments. 19 Preprint Figure 3 reports the results. All three PID components remain stable across the sweep, with redun-dancy unaffected and uniqueness and synergy varying within roughly two points across the full range. Performance peaks at 20 epochs and declines mildly at the endpoints. We use 20 as the default across all experiments. 
+
+## C APPENDIX PROCESSING TIMES AND COMPLEXITY 
+
+We benchmark the computational cost of SynCo against CoMM and InfMasking to characterize the overhead introduced by the residual decomposition relative to existing multimodal contrastive frameworks. All measurements are obtained on a single GPU with batch size 64, averaged over multiple training steps. Table 10 reports per-step time, peak memory, and parameter counts for each method. Table 10: Computational requirements of SynCo, CoMM, and InfMasking. Overhead is reported relative to CoMM. All measurements use batch size 64 on a single GPU.                       
+
+> Method Time/step (ms) Memory (GB) Parameters Overhead
+> CoMM 21 .91 ±0.23 0.17 448 ,464 baseline SynCo (ours) 21 .94 ±0.18 0.17 451 ,704 +0 .15%
+> InfMasking 57 .82 ±0.33 0.71 448 ,504 +163 .92%
+
+The results confirm that SynCo’s residual decomposition introduces negligible computational cost. Relative to CoMM, SynCo increases per-step time by only 0.15% and adds 3,240 parameters, corre-sponding to the linear projector that maps concatenated unimodal features to the fused representation space. Memory consumption is essentially unchanged. By contrast, InfMasking incurs substantially higher cost than both CoMM and SynCo, with per-step time more than doubling and peak memory in-creasing by approximately a factor of four. This overhead reflects the masking strategy of InfMasking, which requires multiple forward passes over masked feature combinations during training. SynCo achieves comparable or superior synergy capture to InfMasking on the Trifeature benchmark and competitive performance across MultiBench and MM-IMDb at a fraction of the computational cost, making it the more efficient choice when training resources are constrained. The overhead of SynCo is bounded by the size of the linear projector, which scales as O(nD 2) in the number of modalities n
+
+and the fusion dimension D.
+
+## D APPENDIX PROOFS 
+
+This appendix provides detailed proofs of the theoretical results stated in the main text. Assumption 1 and Lemmas 1 and 2 follow CoMM (Dufumier et al., 2024), and we prove the two lemmas in the notation of Section 3. Hypothesis 1 is assessed empirically in Section 5.1 and is treated as a premise rather than proven here. Throughout, the augmentations t, t′, and t′′ are drawn from T independently of each other and of (X, Y ), so each augmented view depends on (X, Y ) only through X and the chains Y → X → X′ and Y → X → X′′ are Markov. We write sums for discrete variables; the arguments are identical with integrals for continuous variables. EQUIVALENT FORM OF ASSUMPTION 1
+
+Lemma 4. Let X′ = t(X) with t ∈ T . The equalities I(X; X′) = I(X; Y ) and I(X′; Y ) = 
+
+I(X; Y ) of Assumption 1 hold if and only if X′ ⊥ X | Y and Y ⊥ X | X′.Proof. Step 1: Label preservation. The Markov chain Y → X → X′ gives I(X′; Y | X) = 0 , and the chain rule expands I(X, X ′; Y ) in two orders as 
+
+I(X; Y ) = I(X, X ′; Y ) = I(X′; Y ) + I(X; Y | X′). (14) The equality I(X′; Y ) = I(X; Y ) therefore holds if and only if I(X; Y | X′) = 0 , that is, 
+
+Y ⊥ X | X′.20 Preprint 
+
+Step 2: Minimality. The chain rule expands I(X; X′, Y ) in two orders as 
+
+I(X; X′) + I(X; Y | X′) = I(X; Y ) + I(X; X′ | Y ). (15) When I(X; Y | X′) = 0 , Eq. (15) reduces to I(X; X′) − I(X; Y ) = I(X; X′ | Y ), and the equality 
+
+I(X; X′) = I(X; Y ) holds if and only if I(X; X′ | Y ) = 0 , that is, X′ ⊥ X | Y .The condition X′ ⊥ X | Y states that the augmented view carries no information about X beyond the label, and the condition Y ⊥ X | X′ states that the view retains all information that X carries about the label. PROOF OF LEMMA 1
+
+Proof. Let Zθ = fθ (X) and Z′ 
+
+> θ
+
+= fθ (X′) with X′ = t(X) for some t ∈ T .
+
+Step 1: Upper bounds. The pair (Zθ , Z ′ 
+
+> θ
+
+) is a deterministic function of (X, X ′), and the data processing inequality together with Assumption 1 gives 
+
+I(Zθ ; Z′ 
+
+> θ
+
+) ≤ I(X; X′) = I(X; Y ). (16) By Lemma 4, X′ ⊥ X | Y . Since Zθ and Z′ 
+
+> θ
+
+are functions of X and X′ respectively, Z′ 
+
+> θ
+
+⊥ Zθ | Y ,and the data processing inequality applied to the chains Zθ → Y → Z′ 
+
+> θ
+
+and Y → X → Zθ gives 
+
+I(Zθ ; Z′ 
+
+> θ
+
+) ≤ I(Zθ ; Y ) ≤ I(X; Y ). (17) 
+
+Step 2: Tightness under sufficient expressivity. Under sufficient expressivity, the encoder family {fθ }
+
+contains a map that is injective on the supports of X and X′, such as the identity, and such a map attains the bound in Eq. (16). Hence 
+
+I(Zθ⋆ ; Z′ 
+
+> θ⋆
+
+) = max  
+
+> θ
+
+I(Zθ ; Z′ 
+
+> θ
+
+) = I(X; X′) = I(X; Y ). (18) Substituting Eq. (18) into Eq. (17) gives I(X; Y ) ≤ I(Zθ⋆ ; Y ) ≤ I(X; Y ), and therefore 
+
+I(Zθ⋆ ; Y ) = I(X; Y ).The first term of Eq. (4) contrasts two augmented views rather than an input and its augmentation. The following lemma shows that the pair (X′, X ′′ ) satisfies the conditions used in the proof above. 
+
+Lemma 5. Let X′ = t′(X) and X′′ = t′′ (X) with t′, t ′′ ∈ T . Under Assumption 1, X′ ⊥ X′′ | Y
+
+and I(X′; X′′ ) = I(X′; Y ) = I(X′′ ; Y ) = I(X; Y ).Proof. Given X, the views X′ and X′′ are independent of each other and of Y . By Lemma 4, 
+
+X′ ⊥ X | Y , which together with the Markov chain Y → X → X′ gives p(x′ | x) = p(x′ | y) for every (x, y ) in the support. Therefore 
+
+p(x′, x ′′ | y) = X
+
+> x
+
+p(x | y) p(x′ | x) p(x′′ | x) = p(x′ | y) p(x′′ | y), (19) which proves X′ ⊥ X′′ | Y . Lemma 4 applied to X′′ gives Y ⊥ X | X′′ , and therefore 
+
+p(y, x ′ | x′′ ) = X
+
+> x
+
+p(x | x′′ ) p(y | x′′ ) p(x′ | x) = p(y | x′′ ) p(x′ | x′′ ), (20) which proves I(X′; Y | X′′ ) = 0 . Expanding I(X′; X′′ , Y ) in two orders, as in Eq. (15), gives 
+
+I(X′; X′′ ) = I(X′; Y ) + I(X′; X′′ | Y ) − I(X′; Y | X′′ ) = I(X′; Y ), (21) and Assumption 1 gives I(X′; Y ) = I(X′′ ; Y ) = I(X; Y ).With Lemma 5 in place of Lemma 4, the proof of Lemma 1 applies to Z′ 
+
+> θ
+
+and Z′′  
+
+> θ
+
+. The optimal parameters that maximize I(Z′ 
+
+> θ
+
+; Z′′  
+
+> θ
+
+) therefore satisfy I(Z′ 
+
+> θ⋆
+
+; Z′′  
+
+> θ⋆
+
+) = I(Z′ 
+
+> θ⋆
+
+; Y ) = I(Z′′  
+
+> θ⋆
+
+; Y ) = 
+
+I(X; Y ) = R + S + U1 + U2, which is the quantity targeted by the first term of Eq. (4). 21 Preprint PROOF OF LEMMA 2
+
+Proof. Step 1: Assumption 1 for a single modality. The selected modality Xi = ti(X) is a determin-istic function of X. By Lemma 4, X′ ⊥ X | Y and Y ⊥ X | X′, which imply X′ ⊥ Xi | Y and 
+
+Y ⊥ Xi | X′. Expanding I(Xi; X′, Y ) in two orders, as in Eq. (15), gives 
+
+I(Xi; X′) = I(Xi; Y ) + I(Xi; X′ | Y ) − I(Xi; Y | X′) = I(Xi; Y ) = R + Ui, (22) where the last equality follows from the consistency equations in Eq. (2). 
+
+Step 2: Upper bounds. The unimodal representation Zi = fθ (ti(X)) is a function of Xi, and the data processing inequality together with Eq. (22) gives 
+
+I(Zi; Z′) ≤ I(Xi; X′) = R + Ui. (23) Since X′ ⊥ Xi | Y , the representations satisfy Z′ ⊥ Zi | Y , and the data processing inequality applied to the chains Zi → Y → Z′ and Y → Xi → Zi gives 
+
+I(Zi; Z′) ≤ I(Zi; Y ) ≤ I(Xi; Y ) = R + Ui. (24) 
+
+Step 3: Tightness under sufficient expressivity. As in the proof of Lemma 1, a map that is injective on the supports of Xi and X′ attains the bound in Eq. (23), and the optimal parameters θ⋆ that maximize 
+
+I(Zi; Z′) satisfy I(Zi; Z′) = R + Ui. Eq. (24) then holds with equality: 
+
+I(Zi; Z′) = I(Zi; Y ) = I(Xi; Y ) = R + Ui. (25) The argument with Z′′ in place of Z′ is identical. 
+
+Relation to CoMM. CoMM states the unimodal result as the special case of its multimodal lemma in which the augmentation is the projection ti. Under Assumption 1, ti ∈ T would require 
+
+I(Xi; Y ) = I(X; Y ), which by Eqs. (1) and (2) holds only when S = 0 and Uj = 0 for j̸ = i. The proof above instead transfers Assumption 1 from X to Xi in Step 1 and does not require ti ∈ T .PROOF OF LEMMA 3
+
+Proof. Recall ˆZ = P ([ Z1; Z2]) and Zres = Z − ˆZ, so Z = ˆZ + Zres pointwise. 
+
+Step 1: Equivalence under conditioning on ˆZ. Given ˆZ, the residual Zres determines Z via Z =ˆZ + Zres , and conversely Z determines Zres via Zres = Z − ˆZ. The two random variables therefore carry the same information given ˆZ, hence 
+
+I(Zres ; Y | ˆZ) = I(Z; Y | ˆZ). (26) 
+
+Step 2: Chain rule decomposition. The chain rule for mutual information gives 
+
+I(Z, ˆZ; Y ) = I( ˆZ; Y ) + I(Z; Y | ˆZ). (27) 
+
+Step 3: Bounds on I(Z, ˆZ; Y ). Both Z = fθ (X) and ˆZ = P ([ Z1; Z2]) =
+
+P ([ fθ (t1(X)); fθ (t2(X))]) are deterministic functions of X, so the joint (Z, ˆZ) is a function of 
+
+X. The data processing inequality therefore yields 
+
+I(Z, ˆZ; Y ) ≤ I(X; Y ). (28) The reverse direction follows from the chain rule, I(Z, ˆZ; Y ) = I(Z; Y ) + I( ˆZ; Y | Z), and the non-negativity of conditional mutual information: 
+
+I(Z, ˆZ; Y ) ≥ I(Z; Y ). (29) When I(Z; Y ) = I(X; Y ), Eqs. (28)–(29) give 
+
+I(Z, ˆZ; Y ) = I(Z; Y ). (30) 
+
+Step 4: Combine. Combining Eq. (29) with Eq. (27) and rearranging, 
+
+I(Z; Y | ˆZ) ≥ I(Z; Y ) − I( ˆZ; Y ), (31) with equality under Eq. (30). By Eq. (26), the left side equals I(Zres ; Y | ˆZ), completing the proof. 22 Preprint PROOF OF THEOREM 1
+
+Proof. Apply Lemma 3 to the MSE-optimal projector P ⋆ with corresponding prediction ˆZ⋆ and residual Z⋆ 
+
+> res
+
+= Z − ˆZ⋆:
+
+I(Z⋆
+
+> res
+
+; Y | ˆZ⋆) ≥ I(Z; Y ) − I( ˆZ⋆; Y ). (32) The PID decomposition in Eq. (1) and the definition of ∆ give 
+
+I(Z; Y ) = I(X; Y ) − ∆ = R + S + U1 + U2 − ∆. (33) Hypothesis 1 bounds the task-relevant content of the linear prediction: 
+
+I( ˆZ⋆; Y ) ≤ R + U1 + U2. (34) Substituting Eqs. (33)–(34) into Eq. (32), 
+
+I(Z⋆
+
+> res
+
+; Y | ˆZ⋆) ≥ (R + S + U1 + U2 − ∆) − (R + U1 + U2) = S − ∆. (35) When ∆ = 0 , Eq. (35) gives I(Z⋆
+
+> res
+
+; Y | ˆZ⋆) ≥ S, so the residual provides at least S additional task-relevant information given the linear prediction. PROOF OF COROLLARY 1
+
+Proof. Let X′ = t′(X) and X′′ = t′′ (X) for t′, t ′′ ∈ T , with corresponding fused represen-tations Z′ = fθ⋆ (X′) and Z′′ = fθ⋆ (X′′ ), unimodal representations Z′ 
+
+> i
+
+= fθ⋆ (ti(X′)) and 
+
+Z′′  
+
+> i
+
+= fθ⋆ (ti(X′′ )) , and residuals 
+
+Z′ 
+
+> res
+
+= Z′ − P ⋆([ Z′
+
+> 1
+
+; Z′
+
+> 2
+
+]) , Z′′  
+
+> res
+
+= Z′′ − P ⋆([ Z′′  
+
+> 1
+
+; Z′′  
+
+> 2
+
+]) . (36) 
+
+Step 1: Task-relevant information is preserved across views. By Assumption 1, I(X′; Y ) = 
+
+I(X′′ ; Y ) = I(X; Y ), so the total task-relevant information R + S + U1 + U2 is preserved in both views. By Lemma 5, the fused representations satisfy I(Z′; Y ) = I(Z′′ ; Y ) = I(X; Y ) at the information-preserving optimum, which gives ∆ = 0 in Theorem 1 for each view. 
+
+Step 2: Conditional task-relevant information in the residuals. By Theorem 1 applied to each view, 
+
+I(Z′
+
+> res
+
+; Y | ˆZ′⋆) ≥ S, I(Z′′ 
+
+> res
+
+; Y | ˆZ′′ ⋆) ≥ S, (37) where ˆZ′⋆ and ˆZ′′ ⋆ are the corresponding linear predictions. Given the linear prediction, each residual therefore provides at least S additional task-relevant information. 
+
+Step 3: InfoNCE rewards task-relevant information shared between the residuals. The InfoNCE estimator ˆINCE (Z′
+
+> res
+
+, Z ′′ 
+
+> res
+
+) is a lower bound on I(Z′
+
+> res
+
+; Z′′ 
+
+> res
+
+), and maximizing this lower bound rewards information shared between the two residuals. Each residual is a deterministic function of its corresponding augmented view, and X′ ⊥ X′′ | Y by Lemma 5. Consequently, Z′ 
+
+> res
+
+⊥ Z′′  
+
+> res
+
+| Y ,and the data processing inequality gives 
+
+I(Z′
+
+> res
+
+; Z′′ 
+
+> res
+
+) ≤ min {I(Z′
+
+> res
+
+; Y ), I (Z′′ 
+
+> res
+
+; Y )} . (38) The information shared between the interaction residuals is therefore task-relevant under Assump-tion 1. By Step 2, each residual provides at least S additional task-relevant information given its linear prediction. Applying InfoNCE to the interaction residuals encourages the encoder to preserve shared task-relevant information in the component remaining after subtraction of the linear prediction, providing the motivation for synergy-focused supervision. 
+
+## E APPENDIX DISCUSSION OF THE AUGMENTATION ASSUMPTION 
+
+We discuss the interpretation and feasibility of Assumption 1, its role in SynCo, and the effect of an approximate version on the guarantee of Theorem 1. 23 Preprint 
+
+Interpretation. Lemma 4 restates Assumption 1 as two conditional independences. The condition 
+
+X′ ⊥ X | Y requires the augmented view to carry no information about X beyond the label, and the condition Y ⊥ X | X′ requires the view to retain all information that X carries about the label. Practical augmentation families satisfy both conditions only approximately. The assumption formalizes the goal of view design in contrastive learning, where augmentations remove nuisance information and preserve task-relevant information (Tian et al., 2020b), and extends the goal to multimodal augmentations that are jointly defined on (X1, X 2).
+
+Feasibility. CoMM examines the feasibility of the assumption by varying the augmentation strength on Trifeature and MM-IMDb (Dufumier et al., 2024, Appendix C.4). Downstream performance improves as stronger augmentations remove nuisance information and declines once the augmenta-tions also remove task-relevant information. The interior optimum corresponds to the regime that Assumption 1 describes. 
+
+Role in SynCo. Assumption 1 underlies Lemmas 1 and 2, which characterize the optimum of LMCL 
+
+in Eq. (4). CoMM, InfMasking (Wen et al., 2025), and SynCo all train with LMCL , so the assumption applies equally to all three methods and does not differentiate SynCo from them. Lemma 3 and the bound of Theorem 1 do not require Assumption 1; the assumption enters only through ∆ = 0 in Theorem 1. The premise specific to SynCo is Hypothesis 1, which concerns the trained encoder and the linear projector rather than the augmentation family and is assessed empirically in Table 2. 
+
+Approximate label preservation. When the augmentations preserve task-relevant information only approximately, ∆ can be positive, and Theorem 1 still gives I(Z⋆
+
+> res
+
+; Y | ˆZ⋆) ≥ S − ∆.
+
+## F APPENDIX BROADER IMPACT 
+
+SynCo is a method for self-supervised multimodal representation learning that improves the capture of synergistic information across modalities. As foundational research on contrastive learning objectives, the work is not tied to a specific application or deployment, but its downstream applications span both beneficial and potentially sensitive domains. 
+
+Potential positive impacts. By improving the quality of representations learned from unlabeled multimodal data, SynCo can reduce the labeling burden in domains where annotations are expensive or require expert knowledge. The benchmarks evaluated in this paper highlight several such domains: clinical decision support from physiological time-series and tabular records (MIMIC), human activity recognition from wearable sensors (DARai), and robotic manipulation from vision and force-torque feedback (Vision&Touch). Improved synergy capture is particularly valuable in these settings, where the most informative cues often emerge only from the joint observation of multiple modalities. SynCo also introduces negligible computational overhead relative to existing contrastive frameworks (Appendix C), lowering the energy cost and hardware barrier to applying multimodal self-supervised learning compared to more compute-intensive alternatives. 
+
+Potential negative impacts. As with any general-purpose representation learning method, SynCo could in principle be applied in settings with negative consequences, such as surveillance applications. The method is presented as a general-purpose training objective rather than a deployable system, and we do not release any pretrained model that constitutes a direct path to such applications. 
+
+Fairness and reliability. Models trained with SynCo inherit the properties of their training data and backbone encoders. In high-stakes domains, deployment should follow established validation and evaluation protocols, which are independent of the training objective. 
+
+## G APPENDIX DATASET DETAILS 
+
+G.1 TRIFEATURE 
+
+The Trifeature benchmark (Hermann & Lampinen, 2020) was originally introduced for studying how convolutional networks represent visual factors of variation. Each image contains a single shape 24 Preprint rendered with a chosen texture and a chosen color, and shape, texture, and color each take one of ten values, giving 1,000 unique (shape, texture, color) combinations. We assign 800 combinations to training and reserve the remaining 200 for evaluation. Every training combination is rendered three times, with the shape and texture orientations sampled independently from [−45 ◦, 45 ◦]. The shape occupies a 128 × 128 region placed at a uniformly random location inside a 224 × 224 image canvas so that the region lies entirely within the canvas, and the texture and color are then applied. We form bimodal examples by pairing two such images, producing 10 ,000 training pairs and 4,096 test pairs from the same distribution. Section 5.1 describes how each pair is labeled to obtain the redundancy, uniqueness, and synergy probes. G.2 MULTI BENCH 
+
+We use five datasets from the MultiBench benchmark (Liang et al., 2021) and follow the preprocessing released with the benchmark in every case. All datasets are anonymized at source and contain no personally identifiable information. 
+
+MIMIC. The MIMIC dataset (Johnson et al., 2016) comprises de-identified critical-care records gathered between 2001 and 2012, totaling 53 ,423 admissions from 38 ,597 distinct patients. We use the two modalities released by MultiBench: a time-series modality of hourly 12 -dimensional physiological measurements taken over the first 24 hours of an admission, and a static modality of 
+
+5-dimensional patient demographics such as age and gender. Consistent with (Liang et al., 2023b), the target is a binary indicator of whether an admission falls under ICD-9 code group 7 (460 -519 ), corresponding to diseases of the respiratory system. 
+
+MOSI. MOSI (Zadeh et al., 2016) is a sentiment analysis benchmark built from 2,199 short YouTube monologue clips, each accompanied by video frames, audio, and a transcript of the spoken content. The original labels are continuous sentiment scores in [−3, 3] , which we binarize into positive and negative classes consistent with (Liang et al., 2023b). Our bimodal experiments use the visual and textual modalities. 
+
+UR-FUNNY. UR-FUNNY (Hasan et al., 2019) is a benchmark for humor detection built from 
+
+1,866 TED talks, providing 16 ,514 short video segments with aligned audio and transcripts, each labeled as humorous or not. Our bimodal experiments use the visual and textual modalities. 
+
+MUSTARD. MUSTARD (Castro et al., 2019) is a sarcasm detection benchmark comprising utterances from popular television shows, including Friends , The Big Bang Theory , and The Golden Girls . We use the balanced split of 690 utterances, with every utterance providing synchronized video, audio, and transcript along with a binary sarcasm label. Our bimodal experiments use the visual and textual modalities. 
+
+Vision&Touch. Vision&Touch (Lee et al., 2020) records 150 trajectories of 1,000 time steps each, captured from a 7-DoF Franka Panda robot performing a peg-insertion task. Every step provides an RGB image, a depth map, force readings, and the end-effector position and velocity. Consistent with the regression setting in MultiBench (Liang et al., 2021), we predict the next-step end-effector position under mean-squared error. Our bimodal experiments use the visual and proprioceptive modalities. G.3 DAR AI 
+
+DARai (Kaviani et al., 2025) is a multimodal benchmark for human activity recognition, providing over 200 hours of synchronized recordings from 50 participants in 10 indoor environments. The full release contains 20 sensor streams, including multiple camera views, depth and radar sensors, wearable inertial measurement units (IMU), forearm electromyography (EMG), instrumented insoles, biomonitors, and a gaze tracker. Annotations are organized in a three-level hierarchy spanning high-level activities, lower-level actions, and fine-grained procedures. We use DARai to assess whether the gains of SynCo extend beyond the vision-language regime that dominates the other benchmarks. The wearable subset operates on physical signals with markedly different temporal dynamics and information content from natural images and text. 25 Preprint Each wearable modality captures a distinct physical aspect of human activity. The wearable IMU records three-axis accelerometer, gyroscope, and magnetometer signals at 12 Hz and reflects the kinematics of the upper body, including limb orientation, acceleration, and rotation. The forearm EMG records muscle activity at 4 kHz and carries information about exerted effort that is largely invisible to a purely kinematic sensor, since the same motion can arise from very different muscular loads. The instrumented insoles record eight-point pressure at 500 Hz and capture weight transfer, balance, and ground-contact patterns that the upper-body sensors cannot observe. The wearable subset thus pairs signals that differ in physical origin, body location, and temporal scale. To assess whether the gains of SynCo depend on the choice of modality pairing, we evaluate three bimodal configurations: IMU + Insole, IMU + EMG, and EMG + Insole. The IMU + Insole pairing combines arm-mounted kinematics with foot-mounted pressure. Activities requiring coordinated upper- and lower-body motion, such as climbing stairs or carrying an object, can only be inferred by integrating both signals. The IMU + EMG pairing relates gross kinematics to muscular effort and exposes activities where the same motion arises from different effort profiles, such as lifting a heavy versus a light object. The EMG + Insole pairing combines forearm and foot signals from physically separated body regions, requiring the model to relate cues across distant sensors rather than rely on a single body segment. The three configurations share the same preprocessing and backbone networks, as reported in Table 6. G.4 MM-IMD B
+
+MM-IMDb (Arevalo et al., 2017) is a multilabel benchmark for movie genre classification, with 
+
+25 ,959 films described by a poster image and a plot summary. The genre annotations span 23 
+
+categories, and a single film often belongs to several of them, which makes the task multilabel rather than multiclass. We use the poster and plot modalities. Although MM-IMDb is included in MultiBench (Liang et al., 2021), we report it separately because we train directly on the raw modalities rather than on the preprocessed feature vectors that MultiBench provides. 26

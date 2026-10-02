@@ -1,0 +1,305 @@
+Title: When LLM-Based User Profiling Adds Value in Production Streaming Recommendation
+
+URL Source: https://arxiv.org/pdf/2609.27183v1
+
+Published Time: Thu, 24 Sep 2026 00:23:37 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# When LLM-Based User Profiling Adds Value in Production Streaming Recommendation 
+
+# Milad Sabouri 
+
+DePaul University / Comcast Technology AI Chicago, IL, USA msabouri@depaul.edu milad_sabouri@comcast.com 
+
+# Neeraj Sharma 
+
+Comcast Technology AI Sunnyvale, CA, USA neeraj_sharma@comcast.com 
+
+# Sardar Hamidian 
+
+Comcast Technology AI Washington, DC, USA sardar_hamidian@comcast.com 
+
+# Shaghayegh Agah ∗
+
+Comcast Technology AI Sunnyvale, CA, USA shaghayegh_agah@comcast.com 
+
+## Abstract 
+
+Personalized recommendation depends critically on how user repre-sentations are constructed from historical behavior. Two paradigms have emerged for constructing semantic user profiles in content-based recommendation. First, aggregate methods derive user repre-sentations as numerical aggregates of semantic item embeddings. Second, LLM-based methods generate natural-language summaries of user preferences and encode them through a text encoder. Each paradigm can be combined with temporal disentanglement of re-cent versus historical behavior. LLM-based profile generation is significantly more expensive than aggregate approaches, raising the question of when this additional cost is justified. We present a systematic comparison of four semantic user-profiling strate-gies, factorially crossed across representation type and temporal handling, evaluated on a real-world production dataset. The com-parison reveals how these strategies differ across user behavior types, across both accuracy and beyond-accuracy dimensions of recommendation quality, and across the temporal-window setting that governs the disentanglement. 
+
+## CCS Concepts 
+
+• Information systems → Recommender systems .
+
+## Keywords 
+
+Semantic User Profiling, LLMs, Recommender Systems 
+
+## 1 Introduction 
+
+A central design choice in content-based recommendation is how to construct the user profile, which is the compressed representation of a user’s historical preferences against which candidate items are ranked at retrieval and scoring time. Profile design strategy shapes both the accuracy of the resulting recommendations and the operational properties of the recommender pipeline, including the cost of profile generation, the cadence at which profiles are re-freshed, and the engineering complexity of maintaining the system in production. Two paradigms have emerged in the literature for constructing semantic user profiles in content-based recommendation. Aggre-gate methods derive user representations as numerical aggregates 
+
+> ∗Corresponding author.
+
+of semantic embeddings of items the user has interacted with, with simple centroid-based pooling as the canonical example [9]. More recent work has proposed LLM-based methods that generate user profiles as natural-language summaries of preferences, which are subsequently encoded into vector representations through a text encoder [10, 11, 14]. Each paradigm can be combined with a tem-poral component that disentangles short-term and long-term user behavior through attention-based fusion of segment-level represen-tations [2, 19]. Prior work has demonstrated cases where LLM-based profiling outperforms aggregate methods on public e-commerce benchmarks [14]; whether this advantage extends to production streaming data, with its different scale, user behavior heterogeneity, and ranking conditions, has received less characterization. Production streaming environments differ substantially from typical academic evaluation settings, where candidate catalogs are much larger, user histories are deeper, and consumption behavior is more heterogeneous, ranging from stable preference reinforcement to exploratory engagement. At the same time, LLM-based profil-ing introduces nontrivial computational, latency, and operational considerations compared with aggregate profiling. These realities raise a key question: when do the benefits of LLM-based profiling justify this increased complexity, and when are simpler aggregate methods more effective? We address this question through a systematic offline evalua-tion on a sample from a production streaming platform. We com-pare four semantic user-profiling strategies in a 2 ×2 design across two axes: representation type (aggregate item-embedding vs. LLM-generated summaries) and temporal handling (full-history profiles vs. temporally disentangled short- and long-term profiles fused via attention). This design allows us to examine whether LLM-based representations outperform aggregate methods, whether tempo-ral disentanglement improves performance in either setting, and whether these effects vary by user behavior type. Two findings emerge from our analysis. First, the relative ef-fectiveness of LLM-based and aggregate semantic user profiling is segment-conditional. Aggregate methods dominate among habitual users, while LLM-based methods produce accuracy gains among ex-ploratory users whose future consumption diverges from their past behavior. Second, LLM-based profiling exhibits counterintuitive recommendation behavior. Although individual recommendation arXiv:2609.27183v1 [cs.IR] 23 Sep 2026 Milad Sabouri, Neeraj Sharma, Sardar Hamidian, and Shaghayegh Agah 
+
+lists become modestly more diverse, the system as a whole concen-trates on a smaller and more popular subset of the catalog, with measurable reductions in catalog coverage and recommendation novelty. We additionally characterize the operating range of the temporal-window hyperparameter and discuss implications for deployment. Taken together, these findings suggest that simpler aggregate methods remain a robust default. The additional cost of LLM-based profiling is justified selectively, on user segments where it produces measurable accuracy gains. 
+
+## 2 Related Work 
+
+Aggregate user profiling. Content-based recommendation has a long tradition of constructing user representations by aggre-gating item-level features [9]. With the rise of dense semantic embeddings, items became represented in continuous embedding spaces produced by language models, and user profiles were con-structed as centroids or other pooling functions over these em-beddings. Sentence-level embeddings, particularly those produced by Sentence-BERT [13], became standard for content-based item representation. Variants such as weighted aggregation, recency-decayed pooling, and attention-based fusion have been explored as refinements to plain centroid aggregation. 
+
+LLM-based user profiling. A more recent line of work proposes the use of large language models to generate user profiles as natural-language summaries of preferences, rather than as numerical ag-gregates of item embeddings [10, 11]. The premise is that an LLM, given a structured representation of a user’s interaction history, can produce a thematic summary that captures preference patterns at a higher level of abstraction than item-level pooling. This sum-mary is typically encoded into a vector through a sentence encoder, allowing it to be consumed by the same downstream architecture used for aggregate profiles. LLM-based profile generation has been explored in several con-texts, including explainable recommendation [10, 11], sequential recommendation, and user understanding for personalization. The motivation in these works is that natural-language profiles offer in-terpretability and the potential for thematic generalization beyond observed items. Empirical evaluation has been conducted primar-ily on academic benchmarks, with the relative cost of LLM-based profile generation acknowledged but not deeply characterized in production settings. Closely related to our setting, recent work has proposed temporally disentangled LLM-based profiling that generates separate short-term and long-term natural-language sum-maries [14]; we adopt the prompting, the idea of short and long term preference split, and attention-fusion patterns established in this line of work for the temporally disentangled LLM strategy in our comparison (Section 3.1.4). 
+
+Temporal user modeling. Modeling temporal aspects of user be-havior is a long-standing thread in recommender systems research. Sequence-based models, including recurrent neural networks [16], self-attentive sequential recommenders [6], and bidirectional trans-formers [15], treat the user’s interaction history as an ordered sequence and learn to predict the next item conditional on the se-quence. These methods have demonstrated strong performance on next-item prediction tasks and have informed much subsequent work on temporal modeling in recommendation. A complementary line of work decomposes user behavior into short-term and long-term components rather than modeling the sequence directly [20, 22]. Short-term components capture recent interests and behavioral shifts, while long-term components capture stable preferences across the full history. The two components are typically combined through attention-based fusion, with the relative weighting learned from data. The architectural patterns for attention-based fusion in this setting trace to broader work on attention mechanisms in deep learning [2, 19]. Both temporally disentangled strategies in our comparison (TemporalCentroid and TemporalNarrative) build on this short-term/long-term framework, applied within the content-based ranking paradigm. 
+
+Production-scale evaluation. A small but growing literature ad-dresses the gap between academic recommender evaluation and production deployment conditions. Industry-track and applied re-search have raised concerns about the candidate-pool sizes used in academic benchmarks, the absence of full-catalog ranking, the lim-ited treatment of user heterogeneity, and the underrepresentation of beyond-accuracy metrics relevant to deployment such as catalog coverage and item novelty [3, 18]. Segment-level analysis, in which evaluation metrics are computed separately for distinct user popu-lations, has also been advocated as a tool for understanding where recommendation methods produce value and where they fail[7]. The user-conditional analysis we present in Section 4.2 draws on this body of work and applies it to characterize the deployment-relevant properties of LLM-based versus aggregate user profiling. 
+
+## 3 Methodology 
+
+We compare four semantic user-profiling strategies for content-based recommendation, factorially crossed across two design axes. The first axis, representation type , distinguishes profiles derived as numerical aggregates of item embeddings from profiles generated as natural-language summaries by a large language model. The second axis, temporal handling , distinguishes profiles constructed over the user’s full chronological history from profiles temporally disentangled into short-term and long-term components fused via attention. The four resulting strategies are named Centroid (C), Temporal-Centroid (TC), Narrative (N), and TemporalNarrative (TN). Their organization across the two design axes is summarized in Table 1. All four strategies share a common downstream architecture: a user profile vector p𝑢 ∈ R𝑑 is concatenated with an item embedding 
+
+e𝑖 ∈ R𝑑 and passed to a multi-layer perceptron (MLP) that produces a relevance score. Item embeddings are computed identically across strategies by encoding textual item metadata with a pretrained SBERT model [13]. The strategies differ only in the construction of 
+
+p𝑢 , isolating user-profile design as the sole experimental variable. The four strategies compared in this work draw on established methodological traditions. The aggregate strategies (Centroid and TemporalCentroid) build on conventional centroid-based content profiling [9]; TemporalCentroid additionally applies attention-based fusion of short- and long-term user segments [2, 20]. The holistic LLM-based profile (Narrative) follows an established pattern of gen-erating natural-language user summaries and encoding them into a When LLM-Based User Profiling Adds Value in Production Streaming Recommendation 
+
+Table 1: The 2 ×2 design space of semantic user-profiling strategies compared in this work. Rows correspond to representation type; columns correspond to temporal handling. Holistic   
+
+> (single profile over full history)
+> Temporal
+> (short / long-term split, attention-fused)
+> Aggregate
+> (SBERT centroid of items)
+> Centroid (C)
+> Single centroid of SBERT embeddings over the full inter-action history.
+> TemporalCentroid (TC)
+> Short-term and long-term SBERT centroids combined via attention.
+> Narrative
+> (LLM-generated NL sum-mary, SBERT-encoded)
+> Narrative (N)
+> Single LLM-generated natural-language summary of user preferences, SBERT-encoded.
+> TemporalNarrative (TN)
+> Two LLM-generated natural-language summaries (recent and full history), SBERT-encoded and fused via attention.
+
+shared embedding space. The temporally disentangled LLM-based profile (TemporalNarrative) combines these elements in an architec-ture previously evaluated on public e-commerce benchmarks [14]. The contribution of this section is to organize these strategies into a 2 ×2 design space and to isolate the construction of p𝑢 as the sole experimental variable across the four conditions. 
+
+## 3.1 Semantic user-profiling strategies 
+
+Let U denote the set of users and I the catalog of items. For a user 𝑢 ∈ U , let H𝑢 = {( 𝑖, 𝑡 ) : 𝑖 ∈ I , 𝑡 ∈ R} denote the user’s chronologically ordered interaction history, where each entry is a pair of an item 𝑖 and a timestamp 𝑡 . Each item 𝑖 is associated with textual metadata 𝑚 𝑖 comprising its title and description. The recommendation task is to score every item in the catalog for each user and return the top-𝐾 highest-scoring items. Scoring is performed as 
+
+𝑠 (𝑢, 𝑖 ) = 𝑓 𝜃 (p𝑢 ∥ e𝑖 ) , (1) where ∥ denotes vector concatenation, 𝑓 𝜃 is a learned MLP with parameters 𝜃 , p𝑢 ∈ R𝑑 is the user profile vector produced by one of the four strategies described below, and e𝑖 = SBERT (𝑚 𝑖 ) is the item embedding. The MLP, the item encoder, and the training and evaluation protocols are held identical across the four strategies. 
+
+3.1.1 Centroid (C). The Centroid profile is the arithmetic mean of SBERT[13] embeddings of all items in the user’s interaction history: 
+
+p𝐶 𝑢 = 1
+
+|H 𝑢 |∑︁ (𝑖,𝑡 ) ∈ H 𝑢 
+
+SBERT (𝑚 𝑖 ). (2) This strategy uses no temporal structure and produces no natural-language artifact. It serves as the reference against which all other strategies are compared. 
+
+3.1.2 TemporalCentroid (TC). TemporalCentroid computes two centroids over different temporal segments of the user’s history. Given a short-term window parameter 𝜌 ∈ ( 0, 1), the short-term segment H short  
+
+> 𝑢
+
+consists of the most recent 𝜌 · |H 𝑢 | interactions sorted chronologically. The long-term segment is the user’s full chronological history H𝑢 , not the complement of the short-term segment. This choice preserves the recent interactions in both segments, ensuring the long-term profile captures persistent themes anchored by all of the user’s behavior. Two centroids, cshort  
+
+> 𝑢
+
+and clong  
+
+> 𝑢
+
+, are computed as the mean SBERT embeddings of items in their respective segments and combined into a single profile vector via attention: 
+
+p𝑇𝐶 𝑢 = 𝛼 𝑢 · cshort  
+
+> 𝑢
+
++ ( 1 − 𝛼 𝑢 ) · clong  
+
+> 𝑢
+
+, (3) where 𝛼 𝑢 ∈ ( 0, 1) is a softmax-normalized scalar produced from the two centroids by a learnable single-layer attention parameterized by W𝑎 ∈ R1×𝑑 .
+
+3.1.3 Narrative (N). Given the user’s full interaction history, an LLM is prompted to produce a single textual description 𝑇 𝑁 𝑢 of the user’s preferences. A simplified version of the prompt template is: “Given the user’s complete viewing history below, produce a concise summary of the user’s overall preferences, emphasizing enduring themes and recurring patterns across the full history. ” The summary is encoded into a vector through the same SBERT model used for item embeddings: 
+
+p𝑁 𝑢 = SBERT (𝑇 𝑁 𝑢 ). (4) 
+
+3.1.4 TemporalNarrative (TN). TemporalNarrative combines LLM-based representation with temporal disentanglement. Using the same short-term window 𝜌 and segment definitions as Temporal-Centroid, the LLM is prompted twice: a short-term prompt eliciting recent interests and behavioral shifts, and a long-term prompt elic-iting persistent preferences. Simplified versions of the two prompts are: “Summarize the user’s most recent viewing patterns, focusing on shifts in genre, tone, or content type” (short-term) and “Sum-marize the user’s persistent preferences across their full viewing history, emphasizing themes that have remained stable over time” (long-term). Let 𝑇 short  
+
+> 𝑢
+
+and 𝑇 long  
+
+> 𝑢
+
+denote the two resulting summaries. Each is encoded via SBERT and the two embeddings are combined through the same attention-based fusion as in TemporalCentroid: 
+
+p𝑇 𝑁 𝑢 = 𝛼 𝑢 · SBERT (𝑇 short  
+
+> 𝑢
+
+) + ( 1 − 𝛼 𝑢 ) · SBERT (𝑇 long  
+
+> 𝑢
+
+), (5) where 𝛼 𝑢 is computed from the SBERT embeddings of the two sum-maries by the same W𝑎 parameterization described in Section 3.1.2. 
+
+## 3.2 Shared infrastructure 
+
+The four profiling strategies differ only in the construction of p𝑢 .All other components are held constant. 
+
+Item encoder. All item embeddings are produced by a frozen pretrained SBERT model applied to the concatenation of each item’s title and description. Embeddings are precomputed and cached. 
+
+Scoring head. A two-layer MLP with ReLU activations con-sumes p𝑢 ∥ e𝑖 and produces a scalar relevance score, as in Equa-tion (1). The MLP architecture is identical across strategies. Milad Sabouri, Neeraj Sharma, Sardar Hamidian, and Shaghayegh Agah 
+
+Training objective. Each strategy is trained with binary cross-entropy loss using negative sampling: each positive interaction in the training set is paired with uniformly sampled negative items, and the model learns to score positives above negatives. Optimiza-tion uses the Adam optimizer [8]. The four strategies thus differ exclusively in the function p𝑢 (H 𝑢 ),supporting clean attribution of observed differences in evaluation metrics to semantic user-profile design choices rather than to con-founds in candidate scoring or item representation. 
+
+## 4 Experiments 
+
+We evaluate the four strategies through an offline experiment on a sample drawn from a production streaming platform. 
+
+## 4.1 Experimental setup 
+
+4.1.1 Dataset and sample. The dataset is sampled from a produc-tion streaming platform serving Movies, TV Shows, and Sports content. We evaluate on a random sample of 10,000 users. The cat-alog is filtered to items whose title and description are in English and contain sufficient text for meaningful encoding, yielding ap-proximately 2 .4 × 10 5 items. For each user, the interaction history is split chronologically into 80% training, 10% validation, and 10% test. The split is performed per user to prevent within-user temporal leakage. 
+
+4.1.2 Scope: content-based comparison. The four profiling strate-gies compared in this work are content-based, deriving user repre-sentations from the textual content of consumed items. We deliber-ately exclude sequence-based and collaborative methods such as SASRec [6] and BERT4Rec [15] from the comparison. These meth-ods address a complementary problem, namely next-item prediction over interaction sequences using collaborative signal, and would introduce confounds in signal source were they to be compared directly to content-based profiling strategies. Holding the broader recommendation paradigm fixed at content-based ranking allows the 2 ×2 contrast across the design space introduced in Section 3 to isolate the effect of user-profile design within that paradigm. 
+
+4.1.3 User segmentation. Profiling-strategy effectiveness may de-pend on whether a user’s future consumption resembles their past behavior or departs from it. To study this conditioning effect, we group users into two segments and report results separately for each. The segmentation is post-hoc and is used for analytical pur-poses only; how an inference-time proxy for exploratory behavior might be constructed for deployment is discussed in Section 5.2. A user is labeled an Explorer if no item in their test history appears in their training history, and a Non-Explorer otherwise. Non-Explorers exhibit habitual consumption that reinforces estab-lished preferences, while Explorers represent a regime in which past consumption has limited predictive power for future behavior. In our sample, 1,761 users are classified as Explorers and the remain-ing as Non-Explorers. Results are reported for the full population (All) and for each segment separately. 
+
+4.1.4 Evaluation metrics. We report six metrics at 𝐾 ∈ { 10 , 100 },organized into two families. 
+
+Accuracy. Recall@ 𝐾 is the fraction of test-set items that appear in the user’s top-𝐾 list. NDCG@ 𝐾 is the standard rank-aware vari-ant. HitRate@ 𝐾 is the fraction of users with at least one test-set item in the top-𝐾 .
+
+Beyond-accuracy. Diversity@ 𝐾 is the average pairwise cosine dissimilarity within each user’s top-𝐾 list, capturing within-list semantic spread [3]. Coverage@ 𝐾 is the fraction of the full cat-alog that appears in any user’s top-𝐾 list, capturing cross-user catalog footprint. Novelty@ 𝐾 is the mean self-information of rec-ommended items, Novelty@ 𝐾 (𝑢 ) = 1
+
+> 𝐾
+
+Í  
+
+> 𝑖 ∈𝑅 𝐾 𝑢
+
+− log 2 𝑝 (𝑖 ), where 
+
+𝑅 𝐾 𝑢 is the user’s top-𝐾 recommendation list and 𝑝 (𝑖 ) is the popu-larity of item 𝑖 , measured as the fraction of training-set users with at least one interaction with 𝑖 [18]. Lower Novelty indicates that recommendations are concentrated on more popular items. 
+
+4.1.5 Short-term window sweep. The short-term window param-eter 𝜌 governs the temporal partition in TemporalCentroid and TemporalNarrative (Section 3.1.2). We refer to this parameter as PCT, the percentage of the user’s chronological history assigned to the short-term segment, and sweep 𝜌 ∈ { 0.15 , 0.20 , 0.25 , 0.30 },reported throughout as percentages. Centroid and Narrative are PCT-invariant by construction and produce identical results across all four settings; their values appear as a reference point in PCT-related comparisons. 
+
+4.1.6 Reporting and statistical testing. All metric values are re-ported as relative percentage change with respect to a within-segment, within-𝐾 reference, in accordance with platform con-fidentiality requirements. Two normalization conventions are used. For cross-model comparisons in tables and figures, the reference is the Centroid value at the same segment and same cutoff 𝐾 . For the temporal-window sensitivity analysis in Section 4.2.3, each model’s trajectory is normalized to its own value at 𝜌 = 0.25 within the same segment, isolating the shape of each model’s response to PCT from absolute level differences across models. To assess statistical reliability, we apply the Wilcoxon signed-rank test [5, 21] to pairwise comparisons of per-user metric values, independently for each metric, cutoff 𝐾 , and segment combination at PCT = 25%. The test is non-parametric and makes no distri-butional assumptions on per-user metric values. Statistically sig-nificant differences at 𝛼 = 0.05 are indicated with an asterisk in Tables 2 and 3. Because Coverage is a system-level metric computed across all users rather than per user, it is not subject to per-user significance testing. 
+
+## 4.2 Results 
+
+4.2.1 Segment-conditional accuracy. Results in this section are re-ported at PCT = 25%, a representative value within the stable op-erating range identified in Section 4.2.3. Table 2 reports accuracy metrics at 𝐾 = 10 and 𝐾 = 100 across the three segments. The headline finding is that the relative ordering of LLM-based and aggregate strategies is conditional on the user segment. On the All segment, both LLM-based strategies underperform Centroid on Recall@10 by approximately 31% and 22% respectively, while TemporalCentroid is essentially indistinguishable from Cen-troid. The same pattern holds at 𝐾 = 100 and across NDCG and When LLM-Based User Profiling Adds Value in Production Streaming Recommendation 
+
+Table 2: Accuracy results at PCT = 25% . All values are percentage change relative to the Centroid, which serves as the reference and is reported as “—”. The ∗ indicates the difference from the centroid is statistically significant at 𝛼 = 0.05 . Statistical significance varies with segment and 𝐾 ;the segment-conditional pattern is most robustly significant at 𝐾 = 100 , while 𝐾 = 10 results on the Explorer segment are at the margin of significance owing to the smaller segment sample size, as discussed in Section 4.2.1.                                                                                     
+
+> 𝐾 =10 𝐾 =100
+> Segment Strategy Recall NDCG HR Recall NDCG HR All Centroid ——————TemporalCentroid +0.5+4.7∗+1.4−0.3+2.9∗+0.3
+> Narrative −30 .7∗−26 .9∗−20 .9∗−9.0∗−11 .4∗−6.1∗
+> TemporalNarrative −21 .6∗−15 .2∗−14 .2∗−9.0∗−11 .5∗−5.0∗
+> Non-Explorer Centroid ——————TemporalCentroid +0.7+4.8∗+1.7∗−0.3+3.0∗+0.3
+> Narrative −31 .7∗−27 .8∗−21 .8∗−10 .2∗−11 .9∗−7.2∗
+> TemporalNarrative −22 .4∗−15 .8∗−14 .7∗−10 .2∗−12 .3∗−5.9∗
+> Explorer Centroid ——————TemporalCentroid −7.4−6.0−10 .2−0.7−0.2+0.5
+> Narrative +18 .7+31 .5∗+14 .8+9.5∗+12 .8∗+6.2
+> TemporalNarrative +14 .3+21 .8+9.0+11 .4∗+10 .2∗+7.1
+
+Table 3: Beyond-accuracy results at PCT = 25% . All values are percentage change relative to the Centroid, which serves as the reference and is reported as “—”. The ∗ indicates the difference from Centroid is statistically significant at 𝛼 = 0.05 . † Coverage is a system-level metric and is not subject to per-user statistical testing.                                                                                     
+
+> 𝐾 =10 𝐾 =100
+> Segment Strategy Diversity Coverage †Novelty Diversity Coverage †Novelty All Centroid ——————TemporalCentroid +0.0−5.8+1.9∗−0.1∗−8.7+0.5∗
+> Narrative +4.2∗−79 .8−17 .8∗+3.0∗−82 .2−19 .0∗
+> TemporalNarrative +4.0∗−79 .2−19 .9∗+3.2∗−83 .7−20 .5∗
+> Non-Explorer Centroid ——————TemporalCentroid +0.1−5.9+1.6∗−0.0−8.7+0.3∗
+> Narrative +4.1∗−78 .3−17 .5∗+3.0∗−81 .1−18 .7∗
+> TemporalNarrative +4.0∗−77 .6−19 .6∗+3.2∗−82 .7−20 .3∗
+> Explorer Centroid ——————TemporalCentroid −0.1−4.1+2.9∗−0.2∗−5.9+1.1∗
+> Narrative +4.3∗−74 .0−18 .9∗+3.1∗−77 .2−20 .7∗
+> TemporalNarrative +3.9∗−74 .0−21 .1∗+3.1∗−79 .2−21 .6∗
+
+HitRate. Because the All segment is dominated by Non-Explorer users, this aggregate result largely reflects the majority population. The Non-Explorer segment confirms this reading. Narrative trails Centroid by approximately 32% on Recall@10 and TemporalNar-rative by approximately 22%, while TemporalCentroid is within a few percent of Centroid across metrics. Aggregate profiling, with or without temporal disentanglement, is the stronger choice for ha-bitual users, and LLM-based profiling provides no accuracy benefit. The Explorer segment produces the inversion. The same LLM-based strategies that underperformed on the majority population now outperform Centroid on Recall@10, with Narrative ahead by approximately 19% and TemporalNarrative by approximately 14%, while TemporalCentroid is below Centroid by approximately 7% on Recall@10, though this difference does not reach statistical significance. The same directional pattern holds across NDCG and HitRate, and at 𝐾 = 100. Figure 1 visualizes this contrast: LLM-based bars extend below zero on All and Non-Explorer, and above zero on Explorer. The segment-conditional flip is most robustly supported at 𝐾 =
+
+100, where both Narrative and TemporalNarrative significantly outperform Centroid on Recall and NDCG on the Explorer segment. HitRate differences on Explorer do not reach significance at either cutoff, and Recall at 𝐾 = 10 similarly does not. The 𝐾 = 10 Explorer results should therefore be read as directionally supporting the more robust 𝐾 = 100 Recall/NDCG pattern, which we attribute to the smaller Explorer sample size (1,761 users). The corresponding LLM-based comparisons on All and Non-Explorer reach significance for every metric and cutoff in Table 2. A secondary observation concerns the temporal-disentanglement axis. In the aggregate regime, adding temporal disentanglement (Centroid → TemporalCentroid) produces small and inconsistent ef-fects, with marginal improvements on Non-Explorers and marginal degradation on Explorers . In the LLM regime, however, Narrative is directionally ahead of TemporalNarrative across all three accuracy metrics on Explorers at 𝐾 = 10, by approximately 4 to 10 percentage points; the pattern weakens at 𝐾 = 100. The temporal split does not produce clear gains over the holistic LLM profile on the segment where LLM-based profiling adds value, particularly at the smaller cutoff most relevant to top-of-list ranking. Milad Sabouri, Neeraj Sharma, Sardar Hamidian, and Shaghayegh Agah −40 −30 −20 −10 010 Δ Recall@10 (%)  +0.5 -30.7 -21.6 
+
+All 
+
+> −40 −30 −20 −10 010
+> +0.7 -31.7 -22.4
+
+Non-Explorer 
+
+> −10 010 20
+> -7.4 +18.7 +14.3
+
+Explorer 
+
+TemporalCentroid Narrative TemporalNarrative 
+
+Figure 1: Recall@10 across user segments, reported as percentage change relative to the within-segment Centroid baseline at PCT = 25% .Independent y-axis scale per panel. The relative ordering of LLM-based profiling strategies (Narrative, TemporalNarrative) and aggregate strategies (TemporalCentroid) inverts on the Explorer panel. 
+
+4.2.2 Beyond-accuracy trade-offs. Beyond accuracy, the four strate-gies show a distinct pattern across Diversity, Coverage, and Novelty. Figure 2 reports the comparison at 𝐾 = 10 on the All segment. LLM-based strategies (Narrative, TemporalNarrative) achieve modestly higher within-list Diversity than Centroid, by approxi-mately 4%. The same strategies post substantially lower Coverage, around -80%, indicating that recommendations across users are con-centrated on a much smaller subset of the catalog. Novelty values follow the same direction, with LLM-based strategies producing recommendations whose self-information is approximately 18-20% lower than Centroid. TemporalCentroid is within a few percent of Centroid on Diversity and Coverage, with a modest Novelty improvement of approximately 2%. The same direction holds across PCT settings and across all three segments. Table 3 reports the comparison at 𝐾 = 10 and 
+
+𝐾 = 100 for all three segments: LLM-based strategies show modest Diversity gains alongside large Coverage and Novelty losses, while TemporalCentroid is within a few percent of Centroid on all three metrics. The Coverage and Novelty deficits deepen at 𝐾 = 100 relative to 𝐾 = 10, indicating that the effect is not specific to any one cutoff. Statistical testing supports the popularity-attractor pattern as the most robust empirical signal in our results. Every per-user Novelty comparison between LLM-based and aggregate strategies reaches significance at 𝛼 = 0.05 across all three segments and both cutoffs (Table 3). The corresponding Diversity differences are also significant in every LLM-based-versus-aggregate cell. 
+
+4.2.3 Sensitivity to the short-term window. Figure 3 reports Re-call@10 sensitivity to PCT for the All and Explorer segments. Cen-troid and Narrative are PCT-invariant by construction and appear as the dashed zero reference; only TemporalCentroid and Tempo-ralNarrative vary with PCT. On the All segment, both strategies are stable in PCT ∈ {15%, 20%, 25%}, with within-model variation under approximately 4% either way. At PCT = 30%, TemporalNarrative drops to approximately 
+
+−4.7% while TemporalCentroid remains stable. The Explorer segment shows sharper degradation. TemporalNar-rative falls to approximately -9.5% at PCT = 15%, recovers between PCT = 20% and PCT = 25%, and drops sharply to approximately -19% at PCT = 30%. TemporalCentroid is comparatively flat through PCT = {15%, 20%, 25%} and drops to approximately -11% at PCT = 30%. Both strategies degrade most at PCT = 30% on Explorer , sug-gesting that the short-term window becomes large enough that the temporal partition stops providing distinguishable signals for users whose recent behavior departs from historical patterns. Both PCT-sensitive strategies operate stably across PCT values of 15%, 20%, and 25%, and degrade at PCT = 30%, with the larger drop on the Explorer segment. We adopt PCT = 25% as the default within this stable range for the comparisons in Sections 4.2.1 and 4.2.2. 
+
+## 5 Discussion 5.1 Interpreting the segment-conditional effect 
+
+Why does the relative effectiveness of LLM-based and aggregate profiling flip with user segment? We connect the pattern to the structure of the two representation types. A Centroid profile is the arithmetic mean of SBERT embeddings of items the user has consumed, and therefore sits near those items in embedding space. When test-period consumption draws from the same neighborhood, this specificity is a strength: ranking against item embeddings efficiently recovers similar items. This is the Non-Explorer regime, where aggregate methods win by a substantial margin. A Narrative profile is qualitatively different. The LLM compresses the user’s history into a natural-language summary that abstracts away from individual items toward themes and preference pat-terns. When this summary is SBERT-encoded, the resulting vector is positioned in embedding space according to the language of the summary rather than the items that informed it. For Explorer users, item-level affinity has limited predictive power; what is needed is a representation that captures preference at a level of generality that can extrapolate to new items. Narrative profiles do this by virtue of their thematic abstraction, which is why they outperform Centroid on this segment. When LLM-Based User Profiling Adds Value in Production Streaming Recommendation −2 02468Δ Diversity@10 (%)  
+
+> +0.0 +4.2 +4.0
+
+−80 −60 −40 −20 0Δ Coverage@10 (%)  -5.8 -79.8 -79.2 
+
+−20 −10 0Δ Novelty@10 (%)  
+
+> +1.9 -17.8 -19.9
+
+TemporalCentroid Narrative TemporalNarrative 
+
+Figure 2: Beyond-accuracy metrics at 𝐾 = 10 , All segment, PCT = 25% , reported as percentage change relative to the Centroid baseline. LLM-based profiling produces modestly higher within-list Diversity but substantially lower Coverage and Novelty. 15% 20% 25% 30% PCT (%) −20 −10 010 Δ Recall@10 vs. PCT=25 (%)  All    
+
+> 15% 20% 25% 30% PCT (%) −20 −10 010
+
+Explorer 
+
+PCT-invariant ref TemporalCentroid TemporalNarrative 
+
+Figure 3: Recall@10 sensitivity to the short-term window parameter PCT. Each model’s trajectory is normalized to its own value at PCT = 25%   
+
+> within the same segment. The dashed line at zero represents the PCT-invariant Centroid and Narrative strategies. TemporalNarrative shows the largest degradation at PCT =30% , particularly on the Explorer segment.
+
+A second mechanistic question concerns the popularity-attractor signature from Section 4.2.2. One plausible explanation traces this to training-data bias in the underlying language models. The LLM used for profile generation is trained on web-scale text where pop-ular items are discussed substantially more than long-tail items, producing richer semantic associations for popular content. SBERT, used both for item and profile encoding, is trained on similar text distributions. When user histories are summarized into natural lan-guage and encoded into embedding space, the resulting representa-tions gravitate toward regions densely populated by embeddings of popular items, by virtue of the underlying models having more refined semantic coverage of those items. The mechanism predicts the Section 4.2.2 pattern directly: thematic abstraction raises within-list Diversity while popularity-skewed embedding regions lower Novelty and Coverage. This is consistent with the broader pattern of popularity bias documented in language models [4, 12] and in embedding-based retrieval systems [1]. While we do not isolate the contributions of the generative and encoding steps individually, the pattern’s consistency across PCT settings and segments suggests the effect is structural to LLM-based representation rather than an artifact of specific architectural choices. A related observation from Section 4.2.1 fits the same frame. On Explorer at 𝐾 = 10, TemporalNarrative does not improve over the holistic Narrative; at 𝐾 = 100 the two are closer, with neither holding a clear advantage. Temporal disentanglement is informa-tive when there is a coherent recent-versus-historical distinction to disentangle. For Non-Explorer users, this distinction exists, and short-term and long-term centroids produce complementary sig-nals. For Explorer users, by construction, recent behavior departs from historical patterns; forcing the LLM to commit to two distinct summaries may decompose a preference structure that does not naturally split along the time axis. 
+
+## 5.2 Deployment implications 
+
+The segment-conditional pattern motivates a specific deployment direction: if a sufficiently reliable inference-time signal for ex-ploratory behavior can be constructed, users could be routed to Milad Sabouri, Neeraj Sharma, Sardar Hamidian, and Shaghayegh Agah 
+
+different profiling methods. Habitual users would be served by lower-cost aggregate profiling; exploratory users would be routed to the more expensive LLM-based pipeline where it produces accu-racy gains. The Explorer /Non-Explorer distinction is post-hoc, computed from the relationship between training and test items. A deployed routing strategy would therefore depend on a separate prediction problem: detecting exploratory behavior from features available at inference time, before the user’s near-future consumption is ob-served. To assess whether such a predictor is plausibly constructible, we examined whether features from training-period behavior cor-relate with the Explorer label using point-biserial correlation [5, 17]. Two features show significant correlation: history size ( 𝑟 = −0.30, 
+
+𝑝 < 0.001) and within-history content diversity, measured as the mean pairwise cosine distance of SBERT embeddings across the user’s training items ( 𝑟 = +0.11, 𝑝 < 0.001). Users with smaller and more diverse training histories are more likely to be Explorers . Ex-ploratory behavior is thus partially predictable from training-period features, supporting the feasibility of inference-time routing. The current analysis is a preliminary observation rather than a deploy-able predictor; substantial work in feature engineering, threshold calibration, and online validation would be needed to construct and deploy such a signal. A reasonable fallback when an explorer signal is unavailable or noisy is to default to aggregate profiling, which biases the system toward the lower-cost option that is also the stronger choice on the majority population. The routing strategy would also concen-trate the popularity-attractor effect (Section 4.2.2) on the Explorer population, with attendant lower catalog Coverage and Novelty for those users; production systems would need to weigh this against the accuracy gains. The routing strategy described here depends on solving the inference-time explorer-detection problem, which we do not ad-dress empirically. Our contribution is to demonstrate that segment-conditional heterogeneity exists and is large enough to make selec-tive routing potentially attractive; converting this into a deployable system requires construction and online validation of an explorer-detection signal, and online evaluation of the routing pattern itself. 
+
+## 5.3 Cost considerations 
+
+LLM-based profile generation is meaningfully more expensive than aggregate profile construction. Aggregate centroids reduce to mean-pooling over precomputed and cached SBERT embeddings. LLM-based generation requires one or more LLM forward passes per user, with associated compute cost, latency for refresh cycles, and operational complexity in pipeline management. Selective routing (Section 5.2) takes this asymmetry into account: by concentrating LLM-based generation on the user population for which it produces accuracy gains, additional compute cost is paid where it produces commensurate value. In our sample, this concentrates LLM-based generation on approximately 18% of users. A quantitative cost-benefit analysis would depend on platform-specific factors including subscriber-base size, profile refresh ca-dence, LLM API pricing or self-hosted compute amortization, and engagement value differences between user segments. We leave that quantification to deployment; the qualitative asymmetry alone makes selective application an attractive design pattern when ac-curacy gains are themselves selective. 
+
+## 5.4 Limitations 
+
+The evaluation is conducted on a sample drawn from a production streaming platform within a specific content domain. Whether the segment-conditional pattern can be generalized to other platforms, content domains, or LLM-and-encoder pipelines is an open ques-tion that warrants replication. Extrapolation to platforms with sub-stantially different user-base characteristics or interaction-pattern distributions should be made cautiously. The evaluation is con-ducted offline; online deployment may introduce dynamics that this evaluation does not capture. 
+
+## 6 Conclusion 
+
+We presented a systematic comparison of four semantic user profil-ing strategies for content-based recommendation, factorially crossed across representation type and temporal handling, evaluated on real-world production data with ranking against the full filtered catalog. The relative effectiveness of aggregate and LLM-based pro-filing proved to be not uniform between users but conditional on the behavioral regime. Aggregate methods were stronger for habit-ual users, while LLM-based methods provided accuracy gains on exploratory users whose future consumption diverges from their past behavior. Beyond accuracy, LLM-based profiling exhibited con-centration of recommendations on a smaller and more popular slice of the catalog, with measurable reductions in catalog coverage and recommendation novelty. Together, these findings suggest that sim-pler aggregate methods remain a robust default, while the added cost of LLM-based profiling is justified only selectively, for user segments where it delivers measurable accuracy gains rather than being deployed uniformly across all users. 
+
+## References                          
+
+> [1] Himan Abdollahpouri, Robin Burke, and Bamshad Mobasher. 2019. Managing Popularity Bias in Recommender Systems with Personalized Re-ranking. In
+> Proceedings of the 32nd International Florida Artificial Intelligence Research Society Conference (FLAIRS) . AAAI Press, 413–418. [2] Dzmitry Bahdanau, Kyunghyun Cho, and Yoshua Bengio. 2014. Neural Ma-chine Translation by Jointly Learning to Align and Translate. arXiv preprint arXiv:1409.0473 (2014). arXiv:1409.0473 [cs.CL] [3] Pablo Castells, Neil J. Hurley, and Saúl Vargas. 2015. Novelty and Diversity in Recommender Systems. In Recommender Systems Handbook , Francesco Ricci, Lior Rokach, and Bracha Shapira (Eds.). Springer, Boston, MA, Chapter 26. https: //doi.org/10.1007/978-1-4899-7637-6_26 [4] Isabel O. Gallegos, Ryan A. Rossi, Joe Barrow, Md Mehrab Tanjim, Sungchul Kim, Franck Dernoncourt, Tong Yu, Ruiyi Zhang, and Nesreen K. Ahmed. 2024. Bias and Fairness in Large Language Models: A Survey. Computational Linguistics 50, 3 (2024), 1097–1179. [5] Myles Hollander, Douglas A. Wolfe, and Eric Chicken. 2014. Nonparametric Statistical Methods (3rd ed.). Wiley, Hoboken, NJ. [6] Wang-Cheng Kang and Julian McAuley. 2018. Self-attentive sequential recom-mendation. In 2018 IEEE international conference on data mining (ICDM) . IEEE, 197–206. [7] Yejin Kim, Shaghayegh Agah, Mayur Nankani, Neeraj Sharma, Feifei Peng, Maria Peifer, Sardar Hamidian, and H Howie Huang. 2025. From Time and Place to Preference: LLM-Driven Geo-Temporal Context in Recommendations. arXiv preprint arXiv:2510.24430 (2025). [8] Diederik P. Kingma and Jimmy Ba. 2014. Adam: A Method for Stochastic Opti-mization. arXiv preprint arXiv:1412.6980 (2014). arXiv:1412.6980 [cs.LG] [9] Pasquale Lops, Marco De Gemmis, and Giovanni Semeraro. 2011. Content-based recommender systems: State of the art and trends. Recommender systems handbook (2011), 73–105.
+
+When LLM-Based User Profiling Adds Value in Production Streaming Recommendation 
+
+[10] Simon Lubos, Thi Ngoc Trang Tran, Alexander Felfernig, Seda Polat Erdeniz, and Viet Man Le. 2024. LLM-Generated Explanations for Recommender Systems. In Adjunct Proceedings of the 32nd ACM Conference on User Modeling, Adaptation and Personalization . ACM, 276–285. [11] Qiang Ma, Xinyi Ren, and Chao Huang. 2024. XRec: Large Language Models for Explainable Recommendation. In Findings of the Association for Computational Linguistics: EMNLP 2024 . Association for Computational Linguistics, 391–402. [12] Roberto Navigli, Simone Conia, and Björn Ross. 2023. Biases in Large Language Models: Origins, Inventory, and Discussion. Journal of Data and Information Quality 15, 2 (2023), 1–21. https://doi.org/10.1145/3597307 [13] Nils Reimers and Iryna Gurevych. 2019. Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks. In Proceedings of the 2019 Conference on Em-pirical Methods in Natural Language Processing . Association for Computational Linguistics. https://arxiv.org/abs/1908.10084 [14] Milad Sabouri, Masoud Mansoury, Kun Lin, and Bamshad Mobasher. 2025. To-wards Explainable Temporal User Profiling with LLMs. In Adjunct Proceedings of the 33rd ACM Conference on User Modeling, Adaptation and Personalization .219–227. [15] Fei Sun, Jun Liu, Jian Wu, Changhua Pei, Xiao Lin, Wenwu Ou, and Peng Jiang. 2019. BERT4Rec: Sequential recommendation with bidirectional encoder rep-resentations from transformer. In Proceedings of the 28th ACM international conference on information and knowledge management . 1441–1450. [16] Yong Kiam Tan, Xinxing Xu, and Yong Liu. 2016. Improved Recurrent Neural Networks for Session-Based Recommendations. In Proceedings of the 1st Workshop on Deep Learning for Recommender Systems . ACM, 17–22. [17] Robert F. Tate. 1954. Correlation between a discrete and a continuous variable. Point-biserial correlation. The Annals of Mathematical Statistics 25, 3 (1954), 603–607. [18] Saúl Vargas and Pablo Castells. 2011. Rank and Relevance in Novelty and Diversity Metrics for Recommender Systems. In Proceedings of the Fifth ACM Conference on Recommender Systems . ACM, 109–116. [19] A Vaswani, N Shazeer, N Parmar, J Uszkoreit, L Jones, A Gomez, L Kaiser, and I Polosukhin. 2017. Attention is all you need. In NIPS .[20] Chenyang Wang, Min Zhang, Weizhi Ma, Yiqun Liu, and Shaoping Ma. 2019. Modeling Item-Specific Temporal Dynamics of Repeat Consumption for Rec-ommender Systems. In Proceedings of the World Wide Web Conference . ACM, 1977–1987. [21] Frank Wilcoxon. 1945. Individual comparisons by ranking methods. Biometrics Bulletin 1, 6 (1945), 80–83. [22] Yu Zhu, Hua Li, Yubo Liao, Beidou Wang, Zhixu Guan, Hui Liu, and Deng Cai. 2017. What to Do Next: Modeling User Behaviors by Time-LSTM. In Proceedings of the 26th International Joint Conference on Artificial Intelligence (IJCAI 2017) .IJCAI, 3602–3608.

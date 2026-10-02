@@ -1,0 +1,493 @@
+Title: A Flexible Recommendation System for Individuals and Groups
+
+URL Source: https://arxiv.org/pdf/2609.27998v1
+
+Published Time: Thu, 24 Sep 2026 01:08:15 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# A F LEXIBLE RECOMMENDATION SYSTEM FOR INDIVIDUALS AND GROUPS 
+
+Yacine Mokhtari 
+
+IMT Atlantique - Lab-STICC, UMR CNRS 6285 29238 Brest, France Intescia Group 92130 Issy-les-Moulineaux, France 
+
+yacine.mokhtari@imt-atlantique.fr 
+
+Grégory Smits 
+
+IMT Atlantique - Lab-STICC, UMR CNRS 6285 29238 Brest, France 
+
+gregory.smits@imt-atlantique.fr 
+
+September 24, 2026 
+
+## ABSTRACT 
+
+Group recommender systems typically rely on either aggregating individual preferences or treat-ing groups as distinct meta-users. However, these methods often suffer from static aggregation strategies or data sparsity issues within group histories. This paper introduces a novel approach, that relies on a GNN-based architecture to learn a dual representation of each user’s preferences, capturing their behavior as an independent individual from one side and as a member of a collective from the other side. By performing a differential analysis of these individual and group-oriented preferences, our system then determines the behavioral profile of each user when joining a group. Finally, specific preference aggregation strategies are defined to cope with the behavioral profiles of the users composing a group. Consequently, the system is equally capable of delivering precise recommendations to individuals and to arbitrary groups, effectively unifying the two traditional paradigms of recommendation. Experiments on synthetic data simulating diverse group settings and behaviors confirm the flexibility and relevance of the proposed approach compared to state-of-the-art methods. 1
+
+Keywords Group recommendation · Aggregation function · User behavioral analysis · Graph neural networks When it comes to recommend items to a group of users, two families of approaches have been considered. On the one hand, Persistent Group Recommenders (PGRs) [3, 17, 22, 19] consider a group as a meta-user and learn its group-specific representations. On the other hand, Occasional Group Recommenders (OGRs) [1, 9, 13] aggregate the pre-computed representations of group members, without considering prior group histories. Both families of approaches have their limitations. PGRs struggle to recommend relevant items to groups that are either unseen or rarely seen. The performance of OGRs mainly depends on the aggregation strategy that they rely on, and they do not take into account variability in user behavior when joining a group. Beyond these methodological limitations, an important aspect of group dynamics has remained largely underexplored in group recommender systems (GRSs): the adaptability of individual members [10, 14]. Users often adjust their preferences according to the group context, and this behavioral trait must be taken into account to determine which items to recommend to the group. Within a group, not all members’ preferences are of equal importance [16]. Some act as leaders [8], imposing their preferences, while others are more willing to adjust theirs to those of the rest of the group. For instance, in a family group looking for movies recommendations, preferences of children generally prevail over those of their parents. As another example, users joining reading groups with experts often discard their individual preferences to follow those of the experts. These scenarios highlight the importance of modeling user adaptability as a key factor in enhancing group-level recommendations. This paper introduces a novel group recommendation strategy that overcomes the aforementioned limitations by explicitly modeling user behavior when joining groups. By analyzing how user preferences shift when interacting with 
+
+> 1
+
+Corresponding author: gregory.smits@imt-atlantique.fr arXiv:2609.27998v1 [cs.IR] 23 Sep 2026 A PREPRINT - S EPTEMBER 24, 2026 items alone or in a group and how diverse these items are, we can determine their behavioral profile. A Knowledge Graph(KG)-enhanced Graph Attention Network (GAT)-based architecture is proposed to learn two preference rep-resentations for each user, as an individual and as a member of a group. Second, based on the analysis of these two representations, a strategy is proposed to determine the group behavioral profile of each user. And third, a recommenda-tion aggregation method inspired by bipolar functions is defined to prioritize the preferences of less adaptable members, ensuring their satisfaction, while incorporating the preferences of adaptable members to refine and nuance group-level recommendations. After a positioning in Section 1, as an hybrid strategy gathering the advantages of both PGRs and OGRs, section 2 then details the theoretical and technical components of the proposed approach. Section 3 details comparison with OGR and PGR state-of-the-art methods, and shows its superiority, especially in terms of flexibility as it generates relevant recommendations for both individuals, seen groups and unseen or rarely seen groups. The complete implementation of the approach as well as the baselines and datasets used to assess it are available at the following url: https://gitlab.imt-atlantique.fr/research/druper .
+
+## 1 Related Work 
+
+There are two main approaches to GRs. So-called OGRs consider that users’ preferences remain stable when joining groups. To determine which items to recommend to an arbitrary group, OGRs aggregate the group members’ individual preferences, or the recommendations yielded by each member individually [2, 1]. OGRs are designed not to leverage the history of past interactions of different group compositions or of users as group members. The key distinguishing feature of OGRs is the type of aggregation function they use, which generally ranges from average to minimum or maximum satisfaction. Oppositely, PGRs rely on the history of past interactions to learn, for each group composition, a representation of their preferences. One of the key models in this category, AGREE [3] uses an attention mechanism to weight the influence of each group member, modelling group decision-making. Its extension, SoAGREE [4], integrates social relationships to enhance recommendation accuracy on real-world datasets. GroupSA [9] brings the use of voting mechanism in addition to the use of a social network. GroupIM [17] employs a self-supervised learning process to capture member contributions by minimizing the mutual information between the group and its members. And ConsRec [22], which achieves state-of-the-art performance, aims to capture group consensus using hypergraphs and multi-view learning. SGGCF [11] uses a user-centered graph, containing users, items and groups, to refine the representation of the preferences of the group. It has been shown, in both individual [20] and group [6] contexts, that the use of an item knowledge graph(KG) leads to more relevant recommendation. The SOTA approach in KG-based GRSs, on simulated data, is KGAG [6]. OGRs thus fail modeling complex group behavior by assuming that user preferences remain constant when engaging with items as part of a group. Conversely, PGR approaches are limited by the availability of large-scale group interaction data and are unable to generalize to newly formed or rarely seen groups. 
+
+## 2 Flexible Recommendation System 
+
+Figure 1: Architecture of the recommendation system. This section details the components of the proposed approach that make it possible to provide any user and group composition with relevant items. 2A PREPRINT - S EPTEMBER 24, 2026 
+
+2.1 Context and Notations 
+
+Let U be set of users, I be the set of items, and G be the set of groups with known compositions. Items are described as a KG denoted by G. Past interactions between users and items are represented as triplets, (u, individual_inter , i )
+
+means that user u has interacted alone with item i whereas (u, group_inter , i ) means that u has interacted with i as a member of a group. These two types of relations are used to infer two representations of each user’s preferences, as an individual and as a member of a group. 
+
+2.2 KG-based GAT Architecture 2.2.1 KGE layer 
+
+First step is to initiate the latent representation of the entities and relations forming the KG using the TransR model [12]. The model relies on the following scoring function g:
+
+g(h, r, t ) = ∥Mr eh + er − Mr et∥22 , (1) where eh, et ∈ Rd are the head and tail entity embeddings, er ∈ Rdr is the relation embedding, and Mr ∈ Rdr ×d is the projection matrix for relation r. Notations h and t represent any type of entity in the graph, not only users and items. A key specificity of the contribution is to learn two representations per user, one as an individual captured in the embedding of the user node, and one as a member of a group. A modulation vector mu ∈ Rd is so attached to each user, representing a non-linear transformation over the user embedding in group setting context. Hence, the scoring function of u is: 
+
+g(u, r, i ) = 
+
+
+
+∥Wr (eu ⊙ mu) + r − Wr ei∥,
+
+if r = "group_inter" 
+
+∥Wr eu + r − Wr ei∥, otherwise. (2) To learn the embeddings, a contrastive loss is used on a training set TKGE composed of positive triplets (h, r, t ) ∈ G and negative triplets (h, r, t ′) sampled by corrupting the tail entity such that (h, r, t ′) /∈ G :
+
+LKGE = X
+
+> (h,r,t,t ′)∈T KGE
+
+− log σ (g(h, r, t ) − g(h, r, t ′)) , (3) where σ(·) is the sigmoid function. This loss forces the model to assign higher scores to positive triplets in the KG. This serves as an initial embedding layer and incorporates semantics represented in the domain KG. 
+
+2.2.2 GAT layers 
+
+A GAT [18] is used to encode structural properties of the KG in the node embeddings. This architecture is particularly suited for learning user-item representations in multi-hop heterogeneous graphs [21]. Let us denote by Nh = {t | (h, r, t ) ∈ G} the neighborhood of a node h. At each layer l, node embeddings from the neighborhood are aggregated as follows : 
+
+elNh = X
+
+> (h,r,t )∈Nh
+
+ Wr elt
+
+T tanh  Wr elh + er
+
+ elt. (4) The following bi-interaction aggregator is applied: 
+
+f (elh, elNh ) = LeakyReLU  Wl
+
+> 1
+
+ elhelNh
+
+ +
+
+LeakyReLU  Wl
+
+> 2
+
+ elh ⊙ elNh
+
+ , (5) where Wl 
+
+> 1
+
+and Wl 
+
+> 2
+
+are trainable weights matrices of layer l to distill useful information for propagation. Thus, the updated embedding at layer l + 1 is: 
+
+el+1  
+
+> h
+
+= f  elh, elNh
+
+ . (6) 3A PREPRINT - S EPTEMBER 24, 2026 The initial embedding e(0)  
+
+> h
+
+is set to eh (from Eq. 2). After L propagation layers, the final user and item embeddings are obtained: For user u : eIND (∗) 
+
+> u
+
+= eIND (0)  
+
+> u
+
+|| . . . || eIND (L) 
+
+> u
+
+,
+
+eMEM (∗) 
+
+> u
+
+= eMEM (0)  
+
+> u
+
+|| . . . || eMEM (L) 
+
+> u
+
+,
+
+For item i : e(∗) 
+
+> i
+
+= e(0)  
+
+> i
+
+|| . . . || e(L) 
+
+> i
+
+,
+
+(7) with eIND (0)  
+
+> u
+
+= e(0)  
+
+> u
+
+and eMEM (0)  
+
+> u
+
+= e(0)  
+
+> u
+
+⊙ mu being the user u’s individual and group-member preference respectively at l = 0 . For each user u and item i, Eq. 8 is used to compute an individual matching score , denoted ˆyIND  
+
+> u,i
+
+, and a group matching score , denoted ˆyMEM  
+
+> u,i
+
+.
+
+ˆyIND  
+
+> u,i
+
+= e(∗)T 
+
+> i
+
+eIND (∗) 
+
+> u
+
+, ˆyMEM  
+
+> u,i
+
+= e(∗)T 
+
+> i
+
+eMEM (∗) 
+
+> u
+
+. (8) These scores are used to optimize the model using Bayesian Personalized Ranking (BPR) loss, known to be suitable for implicit feedback and ranking tasks, which is the case in recommendation systems: 
+
+LCF = X
+
+> (u,i,j )∈T IND
+
+−ln σ  ˆyIND  
+
+> u,i
+
+− ˆyIND 
+
+> u,j
+
+ +
+
+X
+
+> (u,i,j )∈T MEM
+
+−ln σ  ˆyMEM  
+
+> u,i
+
+− ˆyMEM 
+
+> u,j
+
+ ,(9) where, TIND and TMEM represent the training set of individual user interactions and the training set of group-member interactions respectively, made of valid interactions and negative examples sampled randomly. The joint objective function is written as follows: 
+
+L = LKGE + LCF + λ∥Θ∥22 , (10) where Θ = {E, M, P, W} represents the set of model parameters including the entity embeddings ( E), the modulation vectors ( M), projection matrices P = {Wr , ∀r ∈ R} , and the GAT weight matrices W =
+
+n
+
+W(l)1 , W(l)2 , ∀l ∈ [1 ..L ]
+
+o
+
+,and λ is the L2-regularization coefficient applied to prevent overfitting. 
+
+2.3 Recommending to Groups 
+
+To provide interpretable recommendations, one does not compute the items’ relevance scores using an end-to-end learning architecture. Representations of preferences are first learned and then the behavioral profile of each user, to finally determine which items to recommend to arbitrary groups. Categorizing the behavior of each user when joining groups is a crucial step of the process. This profile should indicate how the user adapts their preferences when joining a group. Adaptability is modeled through two complementary aspects: Duality , which captures the ability of a user to adapt their individual preferences to align with those of other group members, and diversity , which reflects the variety of items with which a user interacts as a group member. 
+
+Definition 2.1 (Duality degree) Let u be a user with two (latent) representations eIND  
+
+> u
+
+, eMEM  
+
+> u
+
+∈ Rd obtained, respec-tively, from their interactions with items as an individual and a member of a group respectively. The duality degree 
+
+αu ∈ [0 , 1] measures the extent to which preferences of user u shift between these two contexts. 
+
+αu = 1 − cos  eIND  
+
+> u
+
+, eMEM 
+
+> u
+
+
+
+2 = 1 − eIND    
+
+> u·eMEM
+> u
+> ∥eIND
+> u∥ ∥ eMEM
+> u∥
+
+2 , (11) 
+
+where cos is the cosine similarity measure. 
+
+Definition 2.2 (Diversity degree) Let u be a user, and let IMEM  
+
+> u
+
+denote the set of items u has interacted with in a group context. For each item i ∈ I MEM  
+
+> u
+
+, let ei ∈ Rd be its (latent) representation. The diversity degree βu ∈ [0 , 1] captures the degree to which u interacts with diverse items when in group. It is defined as the average pairwise dissimilarity among the item embeddings in IMEM  
+
+> u
+
+:
+
+βu = 12 − 1
+
+|I MEM  
+
+> u
+
+|(|I MEM  
+
+> u
+
+| − 1) 
+
+X
+
+> i,j ∈I MEM
+> u
+> i̸=j
+
+cos ( ei, ej ) . (12) 
+
+In case |I MEM  
+
+> u
+
+| < 2, then βu is set to 0.
+
+4A PREPRINT - S EPTEMBER 24, 2026 Based on the duality and diversity scores, and in line with the user categorization described in [5], three user profiles are considered: • Adaptable Users (AUs) : Users who adjust their preferences depending on the group they join, exhibiting high duality and high diversity scores. • Non-Adaptable Users (NAUs) : Users with low adaptability, divided into: 
+
+– Constant Users (CUs) : Users whose individual and group preferences remain similar (low duality). 
+
+– Dual Users (DUs) : Users who join groups that differ from their individual preferences (high duality), but whose group interactions are homogeneous (low diversity). Algorithm 1 describes the decision-making rules for categorizing user behaviors, where α (resp. β) is a duality (resp. item diversity) threshold that can be adjusted to cope with the dataset particularities. 
+
+2.3.1 Aggregation Strategy wrt. Group Configuration 
+
+OGR systems assume that member preferences are commensurable and compensatory, allowing AUs to override the preferences of NAUs. A layered aggregation strategy prioritizes the preferences of NAUs, to determine the set of candidate items to recommend, and then considers the preferences of AUs to re-rank these candidate items. In this sense, the proposed group recommendation strategy acts as a behavioral-driven bipolar aggregation function [7]. Let g be a group of users, ga ⊆ g its subgroup of AUs, gc ⊆ g its subgroup of CUs and gd ⊆ g its subgroup of DUs, such that ga
+
+S gc
+
+S gd = g. As detailed in Table 1, three different group compositions are considered and handled with dedicated recommendation strategies. Let i and i′ be two items and g a group of users. least (g) is the least-misery aggregation strategy that ensures the satisfaction of all members of g. Formally: 
+
+i ⪯ i′ if min u∈g ˆyMEM  
+
+> u,i
+
+≥ min u∈g ˆyMEM  
+
+> u,i ′
+
+, (13) where i ⪯ i′ means that i is ranked before i′. avg (g) is the average aggregation strategy looking for an overall compensatory satisfaction of gs’ members. More formally, using the average strategy: 
+
+i ⪯ i′ if 1
+
+|g| sum u∈g ˆyMEM  
+
+> u,i
+
+≥ 1
+
+|g| sum u∈g ˆyMEM  
+
+> u,i ′
+
+. (14) The bipolar (least (g), avg (g′)) operator uses the preferences of g to build the set ⊤Kg of candidate items to recommend, and the preferences of g′ to rank these candidates. More formally: 
+
+⊤Kg = i ∈ I |̸ ∃ i′ ∈ I \ ⊤ Kg , least (g, i ) < least (g), i ′) . (15) In the recommendation strategy for group composition G1, preferences of DUs, despite being non-adaptable, are combined with those of AUs to rank candidate items filtered by CUs’ preferences. The following justifies the non-prioritization of DUs’ preferences when at least one CU is present in the group. Either the group preferences of the DU(s) align with the constant preferences of the CU(s), thus confirming an interest for specific items when in group and justifying the low diversity characterizing profiles of type DU. In this case, the preferences of both the CUs and the DUs are satisfied. Alternatively, the low diversity of such dual users may be due to a poor group context in the training set, leading to an overconsideration of their duality. In this case, aggregating the DUs’ group preferences with those of AUs would make sense. Unlike compensatory aggregation operators, using a bipolar-based aggregation strategy for group compositions (which include both AUs and NAUs) also facilitates explaining the rationale behind a recommendation; that non-adaptable users are prioritized, while efforts are made to satisfy the rest of the group. 
+
+Data: User u, thresholds α and β
+
+Result: User profile classification 
+
+if dual (u) ≥ α then if div (u) ≥ β then 
+
+u is AU ;
+
+else 
+
+u is DU ;
+
+end else 
+
+u is CU ;
+
+end Algorithm 1: User profiling decision rules 5A PREPRINT - S EPTEMBER 24, 2026 Table 1: Group compositions according to members’ profiles Type Group composition Aggregation strategy 
+
+G1 gc̸ = ∅; gd̸ = ∅; bipolar (least (gc), avg (g ∪ gc)) 
+
+G2 gc̸ = ∅; gd = ∅; bipolar (least (gc), avg (ga)) 
+
+G3 gc = ∅; gd̸ = ∅; bipolar (least (gd), avg (ga)) 
+
+G4 gc = ∅; gd = ∅; avg (ga)
+
+Table 2: Statistics of MovieLens-KG #items #entities #relations #triplets MovieLensKG 1598 33029 24 91631 
+
+## 3 Experiments 
+
+This section presents the experiments conducted to determine how does the approach compare to baselines, when recommending to individuals, as well as seen and unseen group compositions? 
+
+3.1 Experimentation context Datasets 
+
+A major limitation when it comes to evaluate GRSs, especially those leveraging an item KG, is the lack of real datasets. CAMRa2011 and Mafengwo are, to the best of our knowledge, the only two real datasets providing both user-item interactions, group-item interaction and group compositions. However, they do not come with an item-KG. The dataset generator dedicated to group recommendation introduced in [15] has thus been used on top of the movie KG MovieLens-KG 2 to produce three datasets. MovieLens-KG is the main KG used to compare KG-based RS. The generator has been configured to reproduce the data distribution, user behaviors and group compositions observed in CAMRa2011 and Mafengwo. The former exhibits low diversity and high duality, while the latter exhibits high diversity and low duality. They are thus composed of homogeneous dual users (DUs) for the former and constant users (CUs) for the latter. To have a complete representation of the different user behaviors, adaptive users (AUs) are also generated. Statistics about the MovieLens-KG are given in Table 2 and about the generated datasets in Table 3. It shows that both datasets involve very different group compositions but differs mainly on the number of interactions per group. Groups in genData small and genData small 2 have a poor interaction history with items to challenge PGRs. Users in genData small 2 have larger individual histories of interaction then those of genData small . Oppositely, groups in genData large have large histories of interactions with items to assess the capacity of the compared GRS to generalize group behavior. For individual interactions, we used an 80 /20 train-test split. For group interactions, 10% of groups are not present in the training subset to challenge GRS on unseen group compositions. The remaining 90% of groups were split 70 /30 
+
+for training and testing. 
+
+Experimental Settings 
+
+Items a user has not interacted with are considered as negative during training. For the evaluation, the ranked list of recommendations produced by ranking all the items except the ones used in the training, for each user and group, are evaluated using Hit Rate (HR) and Normalized Discounted Cumulative Gain (NDCG) at K = 20 . The following baseline models are considered: • KGAT: [20] Knowledge Graph Attention Network, an explainable SOTA RS using attention, also combined with Least Misery (LM), Maximum Satisfaction (MS) and AVeraGe (AVG) aggregation strategies. • KGAT-PGR: A variant of KGAT where a preference vector is learned for each user and each group composi-tion. • KGAG: [6] Knowledge-Aware Group Representation Learning for Group Recommendation, a recent SOTA model. 
+
+> 2https://recbole.io/dataset_list.html
+
+6A PREPRINT - S EPTEMBER 24, 2026 Table 3: Statistics about the generated dataset. Nb : number of users and groups, NbI : mean number of user/group interactions, NbA mean number of group affiliations 
+
+Users Group composition types 
+
+AU CU DU G1 G2 G3 G4 
+
+genData large 
+
+Nb 799 208 215 356 307 296 241 
+
+NbI 35.11 33.06 32.91 41.82 41.68 42.24 42.17 
+
+NbA 5.08 3.4 3.23 — — — —
+
+genData small 
+
+Nb 784 209 209 368 307 286 239 
+
+NbI 3.49 2.95 3.03 3.46 3.54 3.43 3.64 
+
+NbA 5.06 3.45 3.42 — — — —
+
+genData small 2
+
+Nb 783 215 216 336 315 309 240 
+
+NbI 14.87 13.22 13.56 3.60 3.45 3.50 3.45 
+
+NbA 5.06 3.25 3.31 — — — —Table 4: Performance comparison to baseline models on diverse generated datasets.                                                                                                                                     
+
+> OGR PGR Proposed Metric KGAT-lm KGAT-ms KGAT-avg KGAT-PGR KGAG Approach
+> genData small
+> Inds. HR@20 0.044 0.044 0.044 0.041 0.051 0.052
+> NDCG@20 0.011 0.011 0.011 0.009 0.013 0.013
+> Seen HR@20 0.055 0.087 0.066 0.018 0.162 0.132
+> Grps. NDCG@20 0.015 0.023 0.016 0.018 0.044 0.025
+> Unseen HR@20 0.058 0.225 0.108 --0.033
+> Grps. NDCG@20 0.007 0.032 0.021 --0.166
+> genData small 2
+> Inds. HR@20 0.327 0.327 0.327 0.329 0.356 0.393
+> NDCG@20 0.052 0.052 0.052 0.052 0.071 0.123
+> Seen HR@20 0.148 0.211 0.171 0.320 0.346 0.335
+> Grps. NDCG@20 0.036 0.056 0.043 0.089 0.102 0.095
+> Unseen HR@20 0.158 0.350 0.400 --0.416
+> Grps. NDCG@20 0.019 0.047 0.053 --0.066
+> genData large
+> Inds. HR@20 0.462 0.462 0.462 0.620 0.659 0.674
+> NDCG@20 0.061 0.061 0.061 0.103 0.121 0.123
+> Seen HR@20 0.712 0.792 0.729 0.765 0.832 0.785
+> Grps. NDCG@20 0.093 0.151 0.161 0.138 0.184 0.178
+> Unseen HR@20 0.533 0.783 0.791 --0.883
+> Grps. NDCG@20 0.066 0.155 0.137 --0.178
+
+The model was optimized using the Adam optimizer with a batch size of 1024 . All parameters were initialized using Xavier Initialization, except for modulation vectors, which were initialized as vectors of ones. Hyper-parameters were finetuned via grid search over {[64 , 32 , 16] , [32 , 16 , 8] , [16 , 8, 4] } for the GNN layers, {0.1, 0.2, 0.5} for the dropout rate, and {0.1, 0.05 , 0.001 , 0.005 , 0.0001 } for the regularization term. All baselines are also fine-tuned. 
+
+3.2 Performance Evaluation 
+
+Table 4 reports the performance comparison and various baselines across three settings: individual recommendations, seen group recommendations, and unseen group recommendations. 7A PREPRINT - S EPTEMBER 24, 2026 
+
+Individual Recommendations: Our approach consistently outperforms all baselines across evaluation metrics at top-20 values. Its advantage stems from modeling two distinct user representations, which enhances the quality of collaborative signals. In contrast, KGAT-PGR captures only a single user representation, while variants like KGAT-LM and KGAT-ms make the limiting assumption that group and individual interactions are equivalent. 
+
+Seen Group Recommendations: When a large amount of interactions are available, KGAT-PGR obviously remains slightly better overall, with the ability to learn specific preference representations for each group. The competitive performance we achieved, which aggregates group interactions per user instead of learning a representation per group, confirms the relevance of the user profiling and adaptive aggregation strategies based on group composition. 
+
+Unseen Group Recommendations: Unlike PGR models, the proposed approach generalizes well to unseen groups and provides more accurate recommendations and outperforms OGR models. Where PGRs fail to make recommendations because the groups were not previously observed during the training set. 
+
+## 4 Conclusion & Perspectives 
+
+A novel approach to group recommendation is introduced that learns two representations of each user’s preferences, one when interacting alone with items and a second one as a member of a group. Comparing these representations and the items that yield them makes it possible to determine the adaptability of the user when joining groups. To recommend items to a group of users, it gives priority to the preferences of non-adaptive users but without discarding adaptive group members. Experiments in various group settings confirm the flexibility of the proposition as it suggest relevant items to individuals, known groups (seen during the model training) as well as unseen groups. Experiments involving real datasets and possibly synthetic knowledge graphs (KGs) are currently being conducted to confirm the relevance, flexibility and performance of this new approach to GRS compared with state-of-the-art methods. These experiments will be completed with a robustness analysis, wrt. settings of the hyper-parameters, and an ablation study of the different components. 
+
+## References 
+
+[1] A MER -Y AHIA , S., R OY , S. B., C HAWLAT , A., D AS , G., AND YU, C. Group recommendation: Semantics and efficiency. Proceedings of the VLDB Endowment 2 , 1 (2009), 754–765. [2] B ALTRUNAS , L., M AKCINSKAS , T., AND RICCI , F. Group recommendations with rank aggregation and collaborative filtering. In Proceedings of the Fourth ACM Conference on Recommender Systems (New York, NY, USA, 2010), RecSys ’10, Association for Computing Machinery, p. 119–126. [3] C AO , D., H E, X., M IAO , L., A N, Y., Y ANG , C., AND HONG , R. Attentive group recommendation. In The 41st International ACM SIGIR conference on research & development in information retrieval (2018), pp. 645–654. [4] C AO , D., H E, X., M IAO , L., X IAO , G., C HEN , H., AND XU, J. Social-enhanced attentive group recommendation. 1195–1209. Conference Name: IEEE Transactions on Knowledge and Data Engineering. [5] D ELI ´ C, A., E MAMGHOLIZADEH , H., R ICCI , F., AND MASTHOFF , J. Supporting group decision-making: Insights from a focus group study. In Proceedings of the 32nd ACM Conference on User Modeling, Adaptation and Personalization (2024), pp. 301–306. [6] D ENG , Z., L I, C., L IU , S., A LI , W., AND SHAO , J. Knowledge-aware group representation learning for group recommendation. In 2021 IEEE 37th International Conference on Data Engineering (ICDE) , pp. 1571–1582. ISSN: 2375-026X. [7] D UBOIS , D., AND PRADE , H. An introduction to bipolar representations of information and preference. 
+
+International Journal of Intelligent Systems 23 , 8 (2008), 866–877. [8] G AN , D., G AO , M., L I, W., W ANG , Z., G UO , L., J IANG , F., AND SONG , Y. Large: A leadership perception framework for group recommendation. Expert Systems with Applications 260 (2025), 125416. [9] G UO , L., Y IN , H., W ANG , Q., C UI , B., H UANG , Z., AND CUI , L. Group recommendation with latent voting mechanism. In 2020 IEEE 36th International Conference on Data Engineering (ICDE) (2020), pp. 121–132. [10] K ERR , N. L., AND TINDALE , R. S. Group performance and decision making. Annu. Rev. Psychol. 55 , 1 (2004), 623–655. [11] L I, K., W ANG , C.-D., L AI , J.-H., AND YUAN , H. Self-supervised group graph collaborative filtering for group recommendation. In Proceedings of the Sixteenth ACM International Conference on Web Search and Data Mining 
+
+(New York, NY, USA, 2023), WSDM ’23, Association for Computing Machinery, p. 69–77. 8A PREPRINT - S EPTEMBER 24, 2026 [12] L IN , Y., L IU , Z., S UN , M., L IU , Y., AND ZHU , X. Learning entity and relation embeddings for knowledge graph completion. In Proceedings of the AAAI conference on artificial intelligence (2015), vol. 29. [13] L IU , X., T IAN , Y., Y E, M., AND LEE , W.-C. Exploring personal impact for group recommendation. In 
+
+Proceedings of the 21st ACM International Conference on Information and Knowledge Management (New York, NY, USA, 2012), CIKM ’12, Association for Computing Machinery, p. 674–683. [14] M ASTHOFF , J., AND GATT , A. In pursuit of satisfaction and the prevention of embarrassment: affective state in group recommender systems. User Modeling and User-Adapted Interaction 16 , 3 (2006), 281–319. [15] M OKHTARI , Y., AND SMITS , G. Behave: Synthetic data generator for group recommender systems. In 2025 IEEE 37th International Conference on Tools with Artificial Intelligence (ICTAI) (2025), IEEE. [16] Q UIJANO -S ANCHEZ , L., R ECIO -G ARCIA , J. A., D IAZ -A GUDO , B., AND JIMENEZ -D IAZ , G. Social factors in group recommender systems. ACM Transactions on Intelligent Systems and Technology (TIST) 4 , 1 (2013), 1–30. [17] S ANKAR , A., W U, Y., W U, Y., Z HANG , W., Y ANG , H., AND SUNDARAM , H. Groupim: A mutual information maximization framework for neural group recommendation. In Proceedings of the 43rd International ACM SIGIR Conference on Research and Development in Information Retrieval (New York, NY, USA, 2020), SIGIR ’20, Association for Computing Machinery, p. 1279–1288. [18] V ELICKOVIC , P., C UCURULL , G., C ASANOVA , A., R OMERO , A., L IO , P., B ENGIO , Y., ET AL . Graph attention networks. stat 1050 , 20 (2017), 10–48550. [19] V INH TRAN , L., N GUYEN PHAM , T.-A., T AY , Y., L IU , Y., C ONG , G., AND LI, X. Interact and decide: Medley of sub-attention networks for effective group recommendation. In Proceedings of the 42nd International ACM SIGIR Conference on Research and Development in Information Retrieval (New York, NY, USA, 2019), SIGIR’19, Association for Computing Machinery, p. 255–264. [20] W ANG , X., H E, X., C AO , Y., L IU , M., AND CHUA , T.-S. KGAT: Knowledge Graph Attention Network for Recommendation. In Proceedings of the 25th ACM SIGKDD International Conference on Knowledge Discovery & Data Mining (New York, NY, USA, 2019), KDD ’19, Association for Computing Machinery, pp. 950–958. [21] W U, S., S UN , F., Z HANG , W., X IE , X., AND CUI , B. Graph neural networks in recommender systems: A survey. 
+
+ACM Comput. Surv. 55 , 5 (Dec. 2022). [22] W U, X., X IONG , Y., Z HANG , Y., J IAO , Y., Z HANG , J., Z HU , Y., AND YU, P. S. Consrec: Learning consensus behind interactions for group recommendation. In Proceedings of the ACM Web Conference 2023 (New York, NY, USA, 2023), WWW ’23, Association for Computing Machinery, p. 240–250. 9

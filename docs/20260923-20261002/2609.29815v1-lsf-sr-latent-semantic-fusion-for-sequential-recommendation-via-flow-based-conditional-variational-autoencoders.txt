@@ -1,0 +1,398 @@
+Title: LSF-SR: Latent Semantic Fusion for Sequential Recommendation via Flow-based Conditional Variational Autoencoders
+
+URL Source: https://arxiv.org/pdf/2609.29815v1
+
+Published Time: Fri, 25 Sep 2026 01:39:26 GMT
+
+Number of Pages: 11
+
+Markdown Content:
+# LSF-SR: Latent Semantic Fusion for Sequential Recommendation via Flow-based Conditional Variational Autoencoders 
+
+# Shih-Hong Chen 
+
+shihhong25.cs13@nycu.edu.tw National Yang Ming Chiao Tung University Hsinchu, Taiwan 
+
+# Josh Jia-Ching Ying 
+
+jashying@gmail.com National Chung Hsing University Taichung, Taiwan 
+
+# Vincent S. Tseng ∗
+
+vtseng@cs.nycu.edu.tw National Yang Ming Chiao Tung University Hsinchu, Taiwan 
+
+## Abstract 
+
+Sequential recommendation aims to predict users’ future inter-ests from their historical interactions. Although Large Language Models (LLMs) capture rich item semantics, existing methods of-ten struggle to align collaborative signals with textual semantic knowledge. As a result, the learned item representations fail to capture the complementary strengths of both signals, leading to suboptimal recommendation quality. To address this limitation, we propose Latent Semantic Fusion for Sequential Recommendation via Flow-based Conditional Variational Autoencoders ( LSF-SR ), a novel framework that uses a Conditional Variational Autoen-coder (CVAE) with Normalizing Flows to fuse item ID embeddings and LLM-generated semantic signals. At the core of LSF-SR is a conditional fusion module augmented with planar or radial flows. This module learns a flexible latent space that encourages items with similar semantic profiles to cluster together within the latent manifold. Through extensive experiments on five public bench-mark datasets, we demonstrate that LSF-SR consistently outper-forms state-of-the-art baselines, achieving gains of up to 12.98% and 14.13% in Recall@20 and NDCG@20, respectively. 
+
+## CCS Concepts 
+
+• Information systems → Recommender systems .
+
+## Keywords 
+
+Sequential Recommendation, Large Language Models, Normalizing Flows, Latent Semantic Fusion, Conditional Variational Autoen-coder 
+
+ACM Reference Format: 
+
+Shih-Hong Chen, Josh Jia-Ching Ying, and Vincent S. Tseng. 2026. LSF-SR: Latent Semantic Fusion for Sequential Recommendation via Flow-based Conditional Variational Autoencoders. In Proceedings of the 35th ACM In-ternational Conference on Information and Knowledge Management (CIKM ’26), November 07–11, 2026, Rome, Italy. ACM, New York, NY, USA, 11 pages. https://doi.org/10.1145/3799682.3841099 
+
+> ∗Corresponding author.
+> This work is licensed under a Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International License.
+> CIKM ’26, Rome, Italy
+> © 2026 Copyright held by the owner/author(s). ACM ISBN 979-8-4007-2539-5/2026/11 https://doi.org/10.1145/3799682.3841099
+
+## 1 Introduction 
+
+Sequential Recommendation (SR) has become a crucial aspect of modern information systems, as it aims to capture users’ evolv-ing preferences from their historical interactions [26]. The main challenge is modeling the complex temporal dependencies in user behavior sequences to accurately predict what a user is likely to engage with next. In recent years, attention-based architectures have become prevalent in this field, particularly self-attention mech-anisms, which effectively assign contextual weights to historical items and model long-range dependencies within sequences [10, 25]. These models have set competitive performance benchmarks across various recommendation scenarios and remain the standard frame-work for sequential recommendation research. Despite their effectiveness, attention-based sequential models face a significant limitation: they rely solely on discrete item identi-fiers for representation. In this framework, each item is mapped to a learnable embedding vector, and the semantic meaning of these vectors derives entirely from co-occurrence patterns in the training data. This approach works well when interaction data is abundant, making collaborative signals strong. However, it becomes fragile under two common conditions. First, when the overall interaction matrix is sparse, item embeddings train poorly, making it hard to capture reliable preference signals. Second, for new or rarely in-teracted items, the cold-start problem arises, making collaborative embeddings almost uninformative because they lack sufficient be-havioral signals to inform their representations. These limitations pose significant challenges for real-world recommendation systems, where item catalogs are extensive, and interaction distributions of-ten follow a long-tail pattern. To address the inherent constraints of sequential modeling, re-searchers have developed several approaches. A major focus is integrating structural side information—such as item categories, brands, or user ratings—into sequential models to improve perfor-mance on sparse interaction data [11, 27, 29]. By incorporating these attributes, these side-information-integrated methods can strengthen item representations even when behavioral signals are limited. However, these techniques typically rely on deterministic feature fusion methods, such as concatenation or gating mecha-nisms, which assume that side attributes are available, consistent, and complete. In practice, item metadata is often fragmented or missing, which can hinder the effectiveness of these approaches when attribute coverage is incomplete. Another line of research addresses noise in behavioral sequences through frequency-domain filtering and refinements to attention mechanisms [3, 23, 33]. These spectral methods convert interaction sequences to the frequency domain and apply selective filtering to reduce short-term behavioral fluctuations, revealing more stable underlying preference signals. arXiv:2609.29815v1 [cs.IR] 24 Sep 2026 CIKM ’26, November 07–11, 2026, Rome, Italy Shih-Hong Chen, Josh Jia-Ching Ying, and Vincent S. Tseng 
+
+Figure 1: Empirical analysis of the distributional mismatch between collaborative and LLM semantic embeddings on the Amazon Beauty dataset. We randomly select a user (left) and an item (right) and compute their cosine similarity distributions against all remaining users and items, respectively, revealing severe misalignment in their representations. 
+
+Although these methods improve signal quality, they do not en-rich the semantic content of item representations and thus fail to address the core issue of sparse collaborative signals. In contrast, contrastive learning has emerged as an influential paradigm that uses self-supervised objectives to improve item rep-resentations. Conventional methods create alternative views of interaction sequences through data augmentation, such as mask-ing, reordering, or cropping [15, 28]. More advanced techniques move beyond random perturbations by constructing high-quality contrastive pairs through coarse-to-fine intent clustering or hier-archical sequence organization [1, 9, 18–20]. Although effective at enhancing representation robustness, contrastive learning operates solely within the collaborative embedding space. Regardless of how the contrastive pairs are formed or how sophisticated the augmenta-tion strategies are, the resulting representations depend entirely on behavioral co-occurrence patterns. Therefore, although contrastive learning can improve the quality of collaborative signals, it cannot compensate for the lack of semantic knowledge about items. As a result, the semantic scope of these representations is limited to what can be inferred from interaction histories alone. Recently, the impressive capabilities of Large Language Mod-els (LLMs) in semantic understanding and contextual reasoning have inspired efforts to integrate rich semantic knowledge into sequential recommendation systems [5, 7]. By using LLMs to gen-erate descriptive textual profiles from metadata, these methods add semantic grounding to item representations beyond mere item co-occurrence. Existing methods typically employ LLMs in one of two ways: first, as direct generative recommenders that reformulate the recommendation task as a text generation problem [6, 8, 12, 32]; or second, as tools for semantic extraction that generate item text embeddings, which are then used within collaborative filtering frameworks [14, 21, 30]. Recent techniques have also used LLM-generated content to define semantic neighborhoods that serve as self-supervised anchors for contrastive learning [2]. However, LLM-augmented recommendation methods face two fundamental and underexplored challenges. First, the semantic spaces generated by LLMs and the collaborative behavior spaces de-rived from interaction data are inherently incompatible. As shown in Figure 1, LLM-generated embeddings tend to cluster tightly, ex-hibiting high inter-item cosine similarity. This clustering arises from the rich shared vocabulary and contextual overlap in natu-ral language descriptions. In contrast, collaborative embeddings approximate a zero-centered Gaussian distribution, reflecting the stochastic and sparse nature of user behavior. This distributional discrepancy creates disjoint neighborhood structures, so the top-𝐾 
+
+neighbors identified in the textual semantic space often differ from those in the collaborative space. Consequently, attempts to combine these mismatched representations through late fusion or indepen-dent retrieval strategies often fail to align. Second, approaches that rely on LLM-based user-level profiling require continuous queries to the model during inference. Unlike item-level semantic extrac-tion, which can be performed offline as a single preprocessing step, user-level profiling must be updated dynamically for each user at every inference step because user preferences evolve as their interaction histories grow. As a result, this approach introduces significant computational overhead that increases with the num-ber of active users and the frequency of recommendation requests. Consequently, these methods may struggle to meet the real-time latency requirements needed for effective recommendations. In response to these challenges, we propose Latent Semantic 
+
+Fusion for Sequential Recommendation via Flow-based Condi-tional Variational Autoencoders ( LSF-SR ), a novel probabilistic framework that addresses both distributional misalignment and the inference overhead of prior LLM-based approaches. Rather than combining collaborative and textual semantic signals via determin-istic projections or late fusion, LSF-SR models their interaction as a probabilistic inference problem. We use a Conditional Varia-tional Autoencoder (CVAE) [24] in which LLM-derived semantic embeddings serve as conditioning signals. These signals guide the transformation of collaborative item representations into a shared latent space. This formulation accounts for uncertainty when align-ing two heterogeneous representation spaces, enabling coherent LSF-SR: Latent Semantic Fusion for Sequential Recommendation via Flow-based Conditional Variational Autoencoders CIKM ’26, November 07–11, 2026, Rome, Italy 
+
+joint representations even when the two modalities disagree. To cap-ture non-Gaussian structure in the joint distribution, we integrate normalizing flows [22] into the approximate posterior, applying invertible transformations that reshape a simple base distribution into a more flexible form. By restricting LLM invocations to the item level and running them offline, LSF-SR eliminates real-time computational overhead from user-level profiling while still bene-fiting from textual semantic signals. Our main contributions are as follows: 
+
+• We propose LSF-SR, a novel probabilistic fusion framework that directly addresses misalignment between collaborative behaviors and LLM-derived semantic signals. 
+
+• We develop a conditional fusion module with stacked normalizing flows to model a flexible posterior for precise semantic alignment. 
+
+• We implement a dynamic KL annealing strategy to prevent pos-terior collapse during training, ensuring that collaborative em-beddings remain meaningfully grounded in semantic context. 
+
+• Our extensive experiments on five benchmark datasets [17, 31] show that LSF-SR consistently outperforms state-of-the-art methods, achieving up to 12.98% in Recall@20 and 14.13% in NDCG@20. The remainder of this paper is organized as follows: We briefly review related work in Section 2 and present preliminaries in Sec-tion 3. In Section 4, we detail our proposed Latent Semantic Fusion for Sequential Recommendation via Flow-based Conditional Varia-tional Autoencoders. Finally, Section 5 presents the results of our quantitative experimental evaluation, and Section 6 discusses our conclusions and future work. 
+
+## 2 Related Work 
+
+To contextualize LSF-SR’s contributions, we review the relevant literature across two interconnected research threads: conventional sequential recommendation, which underpins the behavioral mod-eling in our framework, and LLM-augmented recommendation, which motivates our semantic fusion strategy. 
+
+## 2.1 Conventional Sequential Recommendation 
+
+Conventional behavior-centric sequential recommendation models broadly fall into three research directions: attention mechanisms with frequency-domain enhancements, integration of side informa-tion, and contrastive learning. 
+
+2.1.1 Attention Mechanisms and Frequency-Domain Enhancements. 
+
+Self-attention mechanisms are widely used in sequential recom-mendation because they weight past interactions by their relevance to predicting the next item [10, 25]. Some studies also incorporate frequency-domain denoising to reduce random behavioral noise. These spectral techniques transform historical item sequences into the frequency domain, filter out short-term variations and mislead-ing anomalies, and preserve the core signals of user preferences [3, 23, 33]. 
+
+2.1.2 Side-Information Integrated Methods. Integrating structural side information, such as item categories, brands, or user ratings, is a common strategy for alleviating data sparsity and cold-start issues in behavioral histories. Early approaches primarily concatenated or gated these attributes with discrete behaviors at the input layer [27, 29]. Over time, more advanced methods emerged that focus on operations in intermediate neural layers [11]. These strategies aim to preserve items’ collaborative characteristics while leveraging structural attributes to enhance undertrained features in sparse interaction matrices. 
+
+2.1.3 Contrastive Learning Paradigms. Contrastive learning has be-come increasingly popular as a robust approach to address the lack of supervisory signals through self-supervised representation learn-ing. Conventional contrastive sequential recommenders typically generate alternative views of interaction sequences using heuristic data augmentation [15, 28]. More sophisticated methods adopt a coarse-to-fine approach to create high-quality contrastive pairs [1, 9, 18–20]. By organizing sequences or intent clusters hierarchi-cally, these frameworks optimize multi-level contrastive objectives during training, effectively augmenting supervisory signals without compromising behavioral consistency. 
+
+## 2.2 LLM-Augmented Recommendation 
+
+The remarkable semantic understanding and reasoning abilities of LLMs have sparked significant interest in improving behavior modeling. In prevailing frameworks, LLMs are deployed in two dis-tinct capacities: as direct generative recommenders or as text-based semantic extraction tools that support conventional models. As direct recommenders, existing schemes reframe recommendations as a text-generation task, turning interaction histories into textual prompts to generate suggestions based on pre-trained knowledge or instruction tuning. However, these methods are constrained by strict context-window limits and prohibitive real-time token infer-ence costs, which inherently prevent them from capturing global collaborative behavior patterns. Researchers are exploring a scalable approach that uses LLMs as advanced semantic extractors to improve conventional recommen-dation systems. For instance, RLMRec [21] combines collaborative representations with LLM-generated profile semantics by maximiz-ing cross-view mutual information. LRD [30] leverages LLMs to extract language-based knowledge representations from textual metadata and uses a discrete-state variational autoencoder (DVAE) to autonomously discover latent item relations, which are jointly optimized with the sequential recommendation task. Additionally, LLM-ESR [14] directly extracts frozen semantic embeddings from LLMs, employing a dual-view modeling approach and retrieval-augmented self-distillation to enhance representations for long-tail items and users in sparse scenarios. More recently, SRA-CL [2] uses LLMs to infer user preferences and item contexts, combining seman-tic retrieval with a learnable sample synthesizer and semantic item substitution to create high-quality positive pairs for contrastive learning within and across users. Unlike prior strategies that rely on separate optimization steps or fixed, deterministic mappings, our LSF-SR framework introduces a fundamentally new paradigm. We frame the integration of be-havioral and textual semantic signals as a flexible probabilistic inference task and use normalizing flows to reshape the posterior distribution, achieving coherent semantic alignment. CIKM ’26, November 07–11, 2026, Rome, Italy Shih-Hong Chen, Josh Jia-Ching Ying, and Vincent S. Tseng 
+
+Figure 2: Overview of the proposed LSF-SR framework. The architecture uses LLMs to synthesize descriptive item prose offline and to extract semantic signals from text. Grounded in these signals, the conditional semantic fusion module, which incorporates normalizing flows to reshape the latent posterior, and the Transformer-based sequential backbone are jointly optimized end-to-end under a unified objective. 
+
+## 3 Preliminaries 
+
+This section establishes the formal notation and background needed to describe the proposed framework. 
+
+## 3.1 Problem Formulation 
+
+Let U = {𝑢 1, 𝑢 2, . . . , 𝑢 | U | } and I = {𝑖 1, 𝑖 2, . . . , 𝑖 | I | } denote the sets of users and items, respectively. For each user 𝑢 ∈ U , the historical interaction sequence is 𝑆 𝑢 = (𝑖 1, 𝑖 2, . . . , 𝑖 𝑡 , . . . , 𝑖 |𝑆 𝑢 | ), where 𝑖 𝑡 ∈ I is the item interacted with at timestep 𝑡 . The next-item prediction task is to develop a model that predicts the most likely next item, denoted 
+
+𝑖 |𝑆 𝑢 |+ 1. The model estimates the probability 𝑃 (𝑖 |𝑆 𝑢 |+ 1 = 𝑗 | 𝑆 𝑢 ) for all candidates 𝑗 ∈ I and generates a ranked list. 
+
+## 3.2 Sequential Recommendation Backbone 
+
+We use a Transformer-based architecture as the foundation for our sequential recommendation model to capture evolving preferences in user-item interactions. The backbone typically comprises three main components: (1) Embedding Layer : Each item ID is mapped to a 𝑑 -dimensional embedding e𝑖 ∈ R𝑑 . In LSF-SR, these embed-dings are first passed through the conditional semantic fusion module to produce enhanced representations e′ 
+
+> 𝑖
+
+.Learnable positional embeddings are then added to e′ 
+
+> 𝑖
+
+before the Transformer encoder to preserve temporal order. (2) Self-Attention Blocks : Multiple layers of multi-head self-attention are used to adaptively aggregate information. For each head, the attention mechanism computes the relevance between items using Query ( 𝑄 ), Key ( 𝐾 ), and Value ( 𝑉 ) matri-ces derived from the sequence representations. Let 𝑑 𝑘 denote the per-head key dimension. Attention (𝑄, 𝐾, 𝑉 ) = softmax 
+
+ 𝑄𝐾 ⊤
+
+√𝑑 𝑘 
+
+
+
+𝑉 (1) (3) Point-wise Feed-Forward Network (FFN) : After the at-tention layers, a two-layer FFN with non-linear activations is applied independently at each position to enhance the encoder’s non-linear modeling capability. The backbone outputs a comprehensive sequence representation 
+
+h𝑢 ∈ R𝑑 that captures the user’s latent intent and serves as the basis for the recommendation. 
+
+## 4 Our Proposed LSF-SR 
+
+In this section, we present the technical details of our proposed 
+
+Latent Semantic Fusion for Sequential Recommendation via Flow-based Conditional Variational Autoencoders ( LSF-SR ). As shown in Figure 2, the framework first uses LLMs to synthesize descriptive item prose and extract semantic signals from text. The conditional semantic fusion module then applies normalizing flows to reshape the latent posterior and generate condition-aware item representa-tions, thereby bridging the representation gap between collabora-tive signals and textual semantic conditions. Finally, we integrate the enriched item representations into the Transformer-based se-quential backbone to model dynamic user preferences end-to-end. 
+
+## 4.1 Item Semantic Acquisition 
+
+We use a pre-trained LLM’s reasoning capabilities to profile item semantics. This process transforms fragmented item information into a cohesive semantic context, providing a strong foundation for representation learning. 
+
+4.1.1 LLM-based Profiling. Instead of passing raw metadata di-rectly to the recommendation backbone, we recast item profiling as a generative task. For each item 𝑖 ∈ I , we assemble a detailed prompt 𝑃 𝑖 that combines its available attributes 𝐴 𝑖 with a represen-tative subset of historical interaction sequences 𝐻 𝑖 . We then query the LLM to produce a descriptive text 𝑇 𝑖 that captures the item’s LSF-SR: Latent Semantic Fusion for Sequential Recommendation via Flow-based Conditional Variational Autoencoders CIKM ’26, November 07–11, 2026, Rome, Italy 
+
+factual characteristics and hypothesized user intent: 
+
+𝑇 𝑖 = LLM (𝑃 𝑖 ) (2) The generated description 𝑇 𝑖 serves as a semantic intermediary, transforming sparse, discrete, and potentially incomplete attributes into a coherent textual representation. This enriched representation mitigates the limitations of static metadata and provides a more informative, context-aware input for downstream components. 
+
+4.1.2 Semantic Representation. To embed the descriptive text 𝑇 𝑖 
+
+into a latent representation, we use a pre-trained semantic encoder that outputs a dense vector c𝑖 ∈ R𝑑 𝑠 :
+
+c𝑖 = Encoder (𝑇 𝑖 ) (3) where 𝑑 𝑠 is the dimensionality of the semantic embedding space. To align these semantic vectors with the hidden space of the sequential recommender, we introduce a linear projection layer that yields the projected semantic vector ˆ c𝑖 ∈ R𝑑 :ˆc𝑖 = W𝑠 c𝑖 + b𝑠 (4) where W𝑠 ∈ R𝑑 ×𝑑 𝑠 and b𝑠 ∈ R𝑑 are learnable parameters. The resulting projected embeddings capture high-level semantic signals and condition the subsequent fusion module, anchoring collabora-tive signals in rich semantic information. 
+
+## 4.2 Conditional Semantic Fusion 
+
+Integrating LLM knowledge into sequential recommendation sys-tems requires precise alignment between collaborative and textual semantic spaces. To address this challenge, we propose a condi-tional fusion module within the conditional variational autoencoder framework. This module frames fusion as a stochastic inference task, capturing complex nonlinear interactions more effectively than deterministic mappings. 
+
+4.2.1 Probabilistic Fusion Framework. Let e𝑖 ∈ R𝑑 denote the col-laborative embedding of item 𝑖 , and ˆ c𝑖 ∈ R𝑑 denote its correspond-ing semantic condition embedding. Our goal is to learn a latent variable z that synthesizes these two representations. In the condi-tional variational autoencoder framework, the semantic condition embedding ˆ c𝑖 serves as a conditioning variable that guides the transformation of the collaborative embedding. The CVAE infers an approximate posterior 
+
+𝑞 𝜙 (z|e𝑖 , ˆc𝑖 ) (5) where 𝜙 denotes the encoder parameters. By modeling this distri-bution, the fusion module accounts for uncertainty when aligning item identities with their semantic context, rather than assuming a deterministic mapping between the two spaces. Unlike a reconstruc-tion autoencoder, the decoder generates enhanced embeddings e′
+
+> 𝑖
+
+for next-item prediction rather than reconstructing e𝑖 .
+
+4.2.2 Latent Encoding and Reparameterization. The conditional encoder maps the joint input to a latent space by processing the concatenation of the collaborative embedding and the semantic condition: 
+
+[𝝁 𝑖 , log 𝝈 2 
+
+> 𝑖
+
+] = MLP enc ([ e𝑖 ; ˆ c𝑖 ]) (6) where 𝝁 𝑖 , 𝝈 𝑖 ∈ R𝑑 𝑧 denote the mean and standard deviation of the base Gaussian, and 𝑑 𝑧 is the latent dimensionality. To enable stable end-to-end optimization via stochastic sampling, we apply the reparameterization trick to obtain a base latent variable: 
+
+z0 = 𝝁 𝑖 + 𝝐 ⊙ 𝝈 𝑖 , 𝝐 ∼ N ( 0, I) (7) This ensures that z0 captures synthesized features from both spaces while remaining differentiable with respect to the inputs. 
+
+4.2.3 Condition-aware Embedding Generation. The final stage uses a conditional decoder to generate the enhanced item representation 
+
+e′ 
+
+> 𝑖
+
+. After reparameterization, the base latent code z0 can be trans-formed via normalizing flows (Section 4.3) into z𝐾 . The decoder conditions on this latent code and the semantic condition ˆ c𝑖 :
+
+e′ 
+
+> 𝑖
+
+= MLP dec ([ z𝐾 ; ˆ c𝑖 ]) (8) where z𝐾 = z0 when the flow depth is 𝐾 = 0. By incorporating the semantic condition into both the encoder and the decoder, LSF-SR establishes a unified latent manifold in which collaborative and semantic features are closely aligned. This design reduces the mis-match that often arises when collaborative and semantic features are combined via concatenation or other deterministic fusion oper-ators. 
+
+## 4.3 Expressive Posterior with Normalizing Flows 
+
+Although a Gaussian posterior is a fundamental assumption in the conditional variational autoencoder paradigm, the complex, nonlinear relationships between collaborative signals and seman-tic conditions often require a more flexible posterior. To address this, we incorporate normalizing flows to make the latent space more expressive. This approach transforms a simple initial density into a complex posterior distribution through a series of invert-ible mappings, enabling a more accurate representation of item characteristics on the latent manifold. 
+
+4.3.1 Probability Transformation via Flows. The transformation process begins with an initial latent variable z0 sampled from the base Gaussian distribution. We then apply a chain of 𝐾 invert-ible transformations 𝑓 1, 𝑓 2, . . . , 𝑓 𝐾 to obtain the final latent variable 
+
+z𝐾 = 𝑓 𝐾 ◦ · · · ◦ 𝑓 1 (z0). By the change-of-variables formula, the log-probability of the final variable is: ln 𝑞 𝐾 (z𝐾 ) = ln 𝑞 0 (z0) − 
+
+> 𝐾
+
+∑︁ 
+
+> 𝑘 =1
+
+ln det 𝜕𝑓 𝑘 
+
+𝜕 z𝑘 −1
+
+(9) The second term, the sum of the log-determinants of the Jacobians, captures the volume change induced by each transformation. This warping mechanism enables LSF-SR to refine the latent space so that it more accurately reflects the underlying item semantics, especially for complex, non-Gaussian feature distributions. 
+
+4.3.2 Planar and Radial Flow Stacks. We implement two types of flow layers to adapt to varying data characteristics across domains. Planar flows apply transformations along specific directions via hyperplanes, which are particularly effective at capturing nonlinear boundaries between distinct clusters in the semantic manifold. The transformation for each layer is defined as: 
+
+𝑓 (z) = z + u tanh (w𝑇 z + 𝑏 ) (10) CIKM ’26, November 07–11, 2026, Rome, Italy Shih-Hong Chen, Josh Jia-Ching Ying, and Vincent S. Tseng 
+
+where w, u ∈ R𝑑 𝑧 and 𝑏 ∈ R are learnable parameters. In con-trast, radial flows model localized semantic clusters by applying transformations centered on a reference point zref :
+
+𝑓 (z) = z + 𝛽 𝑟 · 1
+
+𝛼 + ∥ z − zref ∥2
+
+· ( z − zref ) (11) where 𝛼 > 0, 𝛽 𝑟 ∈ R, and zref ∈ R𝑑 𝑧 are parameters optimized during training. Stacking multiple layers of these flows allows the model to refine the latent posterior adaptively, ensuring high-fidelity fusion of collaborative signals and semantic conditions. 
+
+## 4.4 Training Objectives and KL Annealing 
+
+LSF-SR training is governed by a joint objective function that opti-mizes both recommendation accuracy and the structural regularity of the fused latent space. We introduce a dynamic KL annealing mechanism to address posterior collapse, a known issue in which the model effectively ignores the latent semantic variables. This adaptive strategy promotes stable convergence and ensures that collaborative signals are grounded in the semantic conditions. 
+
+4.4.1 Recommendation Loss. The primary goal of LSF-SR is to pre-dict the next item in a sequence. For each training instance, the model maps items in the input sequence to collaborative embed-dings, fuses them into enhanced representations, adds positional embeddings, and encodes them with the Transformer backbone to obtain h𝑢 . Enhanced embeddings for the full item catalog, denoted 
+
+E′ = {e′
+
+> 1
+
+, . . . , e′| I | }, are obtained from the fusion module in infer-ence mode. The next-item probability is computed via a softmax over the full catalog: ˆ𝑦 𝑢 𝑗 = exp (h⊤ 
+
+> 𝑢
+
+e′ 
+
+> 𝑗
+
+)
+
+Í𝑘 ∈ I exp (h⊤ 
+
+> 𝑢
+
+e′ 
+
+> 𝑘
+
+) (12) The recommendation loss L𝑟𝑒𝑐 is the negative log-likelihood of the ground-truth next item 𝑖 + for each training instance: 
+
+L𝑟𝑒𝑐 = −∑︁   
+
+> (𝑆 𝑢 ,𝑖 +)
+
+ln ˆ 𝑦 𝑢,𝑖 + (13) During training, KL regularization is computed on the stochas-tic fusion path for sequence items, whereas full-catalog logits for 
+
+L𝑟𝑒𝑐 use the deterministic inference path ( z𝐾 = flow (𝝁 𝑖 ) without sampling). 
+
+4.4.2 KL Divergence in Conditional Fusion Module. In our condi-tional fusion module, the variational objective minimizes the KL divergence between the approximate posterior and the prior. When incorporating normalizing flows, the KL term for each item 𝑖 is expressed as an expectation over the base distribution 𝑞 0 (z0):
+
+L𝐾𝐿 = E𝑞 0 (z0 )
+
+"
+
+ln 𝑞 0 (z0) − 
+
+> 𝐾
+
+∑︁ 
+
+> 𝑘 =1
+
+ln det 𝜕𝑓 𝑘 
+
+𝜕 z𝑘 −1
+
+− ln 𝑝 (z𝐾 )
+
+#
+
+(14) where z𝐾 is the latent variable after 𝐾 successive flow transforma-tions. We use a standard isotropic Gaussian prior 𝑝 (z𝐾 ) = N ( 0, I).This term regularizes the approximate posterior toward the prior while preserving informative fused representations. 
+
+Table 1: Data statistics after preprocessing. Avg. Length indi-cates the average number of interactions per user. 
+
+Dataset Beauty Office Sports Toys Yelp # Users 22,363 4,905 35,598 19,412 19,936 # Items 12,101 2,420 18,357 11,924 14,587 # Interactions 198,502 53,258 296,337 167,597 207,952 Avg. Length 8.9 10.9 8.3 8.6 10.4 Sparsity 99.93% 99.55% 99.95% 99.93% 99.93% 
+
+4.4.3 Dynamic KL Annealing Strategies. The overall training objec-tive is a weighted combination of the aforementioned losses: 
+
+L𝑡𝑜𝑡𝑎𝑙 = L𝑟𝑒𝑐 + 𝛽 · L 𝐾𝐿 (15) where 𝛽 serves as a dynamic regularization coefficient. To prevent the optimization from converging to suboptimal local minima, we implement three annealing strategies for 𝛽 as a function of the training epoch 𝑒 :
+
+• Linear Annealing : 𝛽 increases linearly from a starting value to its maximum, providing steady latent-space regularization. 
+
+• Sigmoid Annealing : 𝛽 follows a sigmoid curve, enabling a smooth, non-linear transition that prioritizes early recommenda-tion accuracy before enforcing strict semantic alignment. 
+
+• Cyclical Annealing : 𝛽 follows a periodic sawtooth pattern, allowing the model to alternate between recommendation and regularization phases, refining representations multiple times during training. 
+
+## 5 Experiments 
+
+In this section, we present a comprehensive empirical evaluation of LSF-SR across five public benchmark datasets. We conduct all experiments using PyTorch 1.13 (CUDA 11.7) and Python 3.8.19 on a Linux workstation with an Intel Xeon Gold 6140 CPU (2.30 GHz) and a single NVIDIA GeForce RTX 4090 GPU. 
+
+## 5.1 Datasets 
+
+We evaluate the performance of our LSF-SR framework on five widely used public datasets: four domains from the Amazon review dataset (Beauty, Office, Sports, and Toys) and the Yelp open dataset [17, 31]. The Amazon datasets span diverse consumer product cate-gories and include user transaction histories and item metadata. The Yelp dataset is a well-known resource for business recommenda-tions and captures user reviews of local establishments. Consistent with the literature [2, 11], we filter Yelp interactions to 2019 and ap-ply standard 5-core filtering across all datasets. Table 1 summarizes the statistics of the preprocessed datasets. 
+
+## 5.2 Evaluation Metrics 
+
+To assess the recommendation model’s performance, we adopt the leave-one-out protocol, commonly used in sequential recommenda-tion tasks. For each user interaction sequence, we designate the last interaction as the test set, the penultimate interaction as the valida-tion set, and use all remaining historical interactions for training. During evaluation, we follow the full-ranking protocol, ranking the ground-truth next item against the entire item space to ensure an LSF-SR: Latent Semantic Fusion for Sequential Recommendation via Flow-based Conditional Variational Autoencoders CIKM ’26, November 07–11, 2026, Rome, Italy 
+
+Figure 3: The structured prompt template used to generate semantic textual profiles for the Amazon Beauty dataset. 
+
+unbiased, thorough assessment [13]. To quantify recommendation accuracy and ranking quality, we employ two standard information retrieval metrics: Recall@ 𝐾 and Normalized Discounted Cumula-tive Gain (NDCG@ 𝐾 ), with 𝐾 ∈ { 10 , 20 }.
+
+## 5.3 Baseline Methods 
+
+To demonstrate LSF-SR’s effectiveness, we compare it with several competitive baselines across two main paradigms: Con-ventional Behavior-Centric Sequential Recommendation and LLM-augmented Sequential Recommendation. The behavior-centric group includes the foundational self-attention architecture (SASRec) [10], along with state-of-the-art models from three sub-paradigms: (1) contrastive learning methods (DuoRec, ICLRec, MCLRec, ICSRec, and FENRec) [1, 9, 18–20]; (2) frequency-enhanced filters (FMLP-Rec, FEARec, and BSARec) [3, 23, 33]; and (3) side-information-integrated sequential recommendation, represented by the dual side-information filtering and fusion framework (DIFF) [11]. In contrast, the LLM-augmented domain includes prominent representative methods (LRD, LLM-ESR, and SRA-CL) [2, 14, 30] that use LLM-generated textual semantics to contextualize sequential behavior patterns. 
+
+## 5.4 Implementation Details 
+
+In our model, we set the item ID embedding dimension and the Transformer hidden size to 64. The backbone uses two self-attention layers with two attention heads, applies dropout of 0 .3 to both hid-den units and attention weights, and limits the sequence length to 20. We use a learning rate of 0 .001 (0 .0001 on Yelp). The condi-tional semantic fusion module uses a 32-dimensional latent space (𝑑 𝑧 = 32), and both the conditional encoder and decoder are im-plemented as two-layer MLPs with layer normalization and GELU activations. To enhance posterior expressiveness, we use planar flows with 𝐾 = 2 on Beauty and Sports, planar flows with 𝐾 = 3on Toys and Yelp, and radial flows with 𝐾 = 3 on Office. We set 
+
+𝛽 end to 0.1 on Beauty, Sports, and Yelp, 0.15 on Toys, and 0.2 on Office. We adopt cyclical KL annealing by default, raising 𝛽 from 
+
+𝛽 start = 0.01 (0 .001 on Yelp) to the selected 𝛽 end over cycles of 30 epochs (40 on Yelp). For all baseline models, we adhere strictly to the hyperparameter configurations reported in their original lit-erature. If specific details are not provided, we carefully tune the parameters to achieve optimal performance. To ensure a rigorous and fair comparison, the baseline implementations are standardized under two strict protocols: (1) for both side-information-integrated and LLM-augmented approaches, we consistently use the same raw data fields to maintain historical input consistency; and (2) for all LLM-augmented models, we standardize the text processing pipeline by using Meta LLaMA 3.1-8B-Instruct as the generative language model and supervised SimCSE (RoBERTa-large; 𝑑 𝑠 = 1024) as the textual embedding extractor [4, 16]. Figure 3 illustrates the representative prompt template developed for the Amazon Beauty dataset. 
+
+## 5.5 Experimental Results 
+
+We first compare LSF-SR with state-of-the-art methods, then ablate core components and KL annealing schedules, and finally analyze hyperparameter sensitivity and cold-start case studies. 
+
+5.5.1 Comparison with SOTA. Table 2 presents a comprehensive performance comparison of our proposed LSF-SR against several competitive baselines across five benchmark datasets. To ensure statistical validity, we ran each experiment with five random seeds and report the average results. We validated these results with two-tailed paired 𝑡 -tests, confirming that LSF-SR’s performance gains are statistically significant ( 𝑝 < 0.05). CIKM ’26, November 07–11, 2026, Rome, Italy Shih-Hong Chen, Josh Jia-Ching Ying, and Vincent S. Tseng 
+
+Table 2: Overall performance comparison across five benchmark datasets. The best baseline results are underlined, and our proposed method and its improvements are highlighted in bold. ∗ indicates a statistically significant improvement over the best baseline ( 𝑝 < 0.05 ) using two-tailed paired 𝑡 -tests.                                                                                                                                                                                                                                                                                                                               
+
+> Dataset Metric Conventional Behavior-Centric SR Baselines LLM-Augmented SR Baselines (Ours) Improv. SASRec ICLRec DuoRec MCLRec ICSRec FENRec FMLP-Rec FEARec BSARec DIFF LRD LLM-ESR SRA-CL LSF-SR Beauty R@10 0.0798 0.0846 0.0828 0.0849 0.0857 0.0898 0.0885 0.0880 0.0872 0.0845 0.0760 0.0663 0.0919 0.0969 *5.51%
+> N@10 0.0404 0.0436 0.0437 0.0439 0.0445 0.0466 0.0444 0.0454 0.0443 0.0481 0.0364 0.0304 0.0466 0.0520 *8.11%
+> R@20 0.1140 0.1195 0.1190 0.1215 0.1213 0.1286 0.1272 0.1242 0.1265 0.1209 0.1149 0.1019 0.1323 0.1406 *6.26%
+> N@20 0.0490 0.0524 0.0527 0.0532 0.0534 0.0564 0.0542 0.0545 0.0542 0.0572 0.0462 0.0394 0.0568 0.0629 *10.00%
+> Office R@10 0.0968 0.0875 0.0979 0.1056 0.1023 0.1063 0.1043 0.1032 0.1057 0.1133 0.1099 0.0924 0.1074 0.1281 *12.99%
+> N@10 0.0484 0.0403 0.0507 0.0545 0.0524 0.0567 0.0518 0.0529 0.0528 0.0586 0.0490 0.0432 0.0564 0.0667 *13.85%
+> R@20 0.1487 0.1411 0.1514 0.1635 0.1601 0.1689 0.1627 0.1624 0.1648 0.1767 0.1751 0.1439 0.1689 0.1925 *8.97%
+> N@20 0.0615 0.0537 0.0642 0.0690 0.0669 0.0724 0.0664 0.0678 0.0676 0.0745 0.0654 0.0561 0.0719 0.0830 *11.30%
+> Sports R@10 0.0470 0.0506 0.0475 0.0480 0.0501 0.0547 0.0545 0.0514 0.0535 0.0507 0.0407 0.0374 0.0529 0.0614 *12.26%
+> N@10 0.0235 0.0250 0.0244 0.0248 0.0248 0.0284 0.0259 0.0250 0.0254 0.0271 0.0184 0.0174 0.0272 0.0324 *14.14%
+> R@20 0.0692 0.0736 0.0703 0.0721 0.0727 0.0812 0.0805 0.0758 0.0791 0.0762 0.0648 0.0575 0.0801 0.0917 *12.98%
+> N@20 0.0291 0.0308 0.0302 0.0308 0.0305 0.0351 0.0324 0.0312 0.0319 0.0335 0.0245 0.0225 0.0341 0.0401 *14.13%
+> Toys R@10 0.0828 0.0962 0.0936 0.0905 0.0963 0.1000 0.0946 0.0968 0.0959 0.0913 0.0804 0.0745 0.0960 0.1086 *8.58%
+> N@10 0.0411 0.0521 0.0476 0.0462 0.0500 0.0509 0.0480 0.0498 0.0480 0.0484 0.0362 0.0344 0.0488 0.0570 *9.49%
+> R@20 0.1148 0.1318 0.1281 0.1258 0.1302 0.1380 0.1331 0.1308 0.1335 0.1300 0.1233 0.1078 0.1356 0.1545 *11.95%
+> N@20 0.0492 0.0610 0.0563 0.0551 0.0585 0.0604 0.0577 0.0583 0.0576 0.0581 0.0470 0.0428 0.0588 0.0686 *12.32%
+> Yelp R@10 0.0699 0.0760 0.0752 0.0737 0.0749 0.0804 0.0800 0.0742 0.0785 0.0781 0.0686 0.0595 0.0777 0.0846 *5.30%
+> N@10 0.0376 0.0404 0.0398 0.0394 0.0398 0.0416 0.0424 0.0391 0.0419 0.0408 0.0324 0.0308 0.0403 0.0436 *2.78%
+> R@20 0.1099 0.1187 0.1176 0.1155 0.1187 0.1283 0.1244 0.1155 0.1230 0.1250 0.1119 0.0936 0.1247 0.1363 *6.24%
+> N@20 0.0477 0.0511 0.0504 0.0499 0.0508 0.0537 0.0535 0.0495 0.0530 0.0525 0.0432 0.0393 0.0522 0.0566 *5.40%
+
+Empirically, LSF-SR consistently and significantly outperforms all baselines across datasets and metrics. Under full-ranking eval-uation, conventional behavior-centric models remain competitive and often outperform LLM-augmented baselines. LLM-ESR, in par-ticular, lags behind strong behavior-centric methods on all five datasets; LRD is similarly weak on most datasets, though it remains competitive on Office. These results suggest that methods devel-oped primarily under sampled-negative protocols may not transfer as well to exhaustive ranking. SRA-CL narrows this gap through LLM-based semantic retrieval and contrastive learning, yet its de-coupled retrieval and alignment still limit bridging between textual semantic and collaborative spaces. Overall, LSF-SR’s superiority over both conventional and LLM-augmented models indicates that probabilistic fusion better exploits complementary behavioral and textual semantic signals. 
+
+5.5.2 Ablation Study. This subsection evaluates each core compo-nent of LSF-SR and examines how different optimization schedules affect performance. Table 3 summarizes the results, highlighting performance drops across ablated modules and across KL annealing schemes. We examine three architectural variants, each designed to iso-late a key component and evaluate its impact. In the w/o LLM 
+
+setting, we skip the generative profiling stage and directly trans-form raw metadata prompt templates into text embeddings, which then serve as semantic conditions. Consistently weaker results across all datasets indicate that unprocessed, fragmented metadata fails to provide effective semantic guidance for alignment. This highlights the crucial role of the LLM’s semantic synthesis in gener-ating rich, expressive item profiles. Notably, the performance drop is smallest on the Yelp dataset, which has metadata constraints. Unlike the Amazon datasets, raw Yelp metadata lacks extensive textual features, such as detailed descriptions, limiting the qual-ity of the generated prose and the associated incremental gains. This discrepancy shows that LSF-SR’s performance advantage is intrinsically linked to the input metadata’s contextual richness. We also explore the latent space’s structural properties. In the 
+
+w/o Flows setting, we remove the normalizing flows by setting the flow depth to 𝐾 = 0, which constrains the approximate posterior to a learned diagonal Gaussian. The resulting performance decline underscores the importance of invertible, nonlinear transforma-tions for reshaping the latent space into an expressive manifold. Notably, this reduction remains relatively minor for Sports; on Yelp, Recall@20 drops slightly while NDCG@20 is unchanged rela-tive to the full model. We hypothesize that the larger item scales and intrinsic sparsity in these domains allow their underlying geo-metric co-occurrence patterns to resemble a normal distribution closely. As a result, a simple Gaussian posterior provides adequate representational capacity. By contrast, datasets with more com-plex collaborative–semantic dependencies benefit more from the additional geometric flexibility of the flow stacks. Finally, in the w/o KL loss setup, we eliminate latent-space reg-ularization by explicitly setting the regularization weight 𝛽 = 0. Among the ablations, removing the KL divergence constraint pro-duces the largest performance drop. This clearly shows that our conditional fusion module relies on latent-space regularization; without the KL penalty, the posterior is unconstrained and can overfit idiosyncratic fusion patterns, ultimately compromising rec-ommendation quality. Beyond architectural components, Table 3 compares a fixed 𝛽 
+
+penalty with three dynamic scheduling methods. A constant coeffi-cient yields suboptimal performance because a rigid regularization penalty early in training severely constrains recommendation op-timization and hinders effective semantic alignment. In contrast, LSF-SR: Latent Semantic Fusion for Sequential Recommendation via Flow-based Conditional Variational Autoencoders CIKM ’26, November 07–11, 2026, Rome, Italy 
+
+Table 3: An ablation study of model components and KL annealing strategies for LSF-SR. The right panel compares a fixed KL penalty with three dynamic annealing schedules: Linear, Sigmoid, and Cyclical. We adopt cyclical annealing as the default strategy. 
+
+Dataset Metric Ablated Components KL Annealing Strategies w/o LLM w/o Flows w/o KL loss Fixed Linear Sigmoid Cyclical Beauty R@20 0.1362 ± 0.0025 0.1384 ± 0.0017 0.1234 ± 0.0018 0.1315 ± 0.0012 0.1387 ± 0.0017 0.1373 ± 0.0023 0.1406 ± 0.0013 N@20 0.0606 ± 0.0010 0.0622 ± 0.0007 0.0563 ± 0.0007 0.0597 ± 0.0007 0.0619 ± 0.0012 0.0615 ± 0.0005 0.0629 ± 0.0007 Office R@20 0.1806 ± 0.0042 0.1896 ± 0.0056 0.1750 ± 0.0039 0.1854 ± 0.0039 0.1855 ± 0.0030 0.1857 ± 0.0054 0.1925 ± 0.0028 N@20 0.0763 ± 0.0022 0.0815 ± 0.0028 0.0743 ± 0.0028 0.0793 ± 0.0023 0.0797 ± 0.0020 0.0793 ± 0.0024 0.0830 ± 0.0009 Sports R@20 0.0877 ± 0.0006 0.0911 ± 0.0012 0.0813 ± 0.0017 0.0880 ± 0.0013 0.0887 ± 0.0012 0.0892 ± 0.0012 0.0917 ± 0.0008 N@20 0.0378 ± 0.0003 0.0397 ± 0.0003 0.0348 ± 0.0007 0.0383 ± 0.0004 0.0387 ± 0.0008 0.0388 ± 0.0004 0.0401 ± 0.0003 Toys R@20 0.1450 ± 0.0023 0.1514 ± 0.0024 0.1288 ± 0.0012 0.1474 ± 0.0006 0.1549 ± 0.0017 0.1546 ± 0.0024 0.1545 ± 0.0010 N@20 0.0642 ± 0.0008 0.0677 ± 0.0009 0.0602 ± 0.0005 0.0654 ± 0.0004 0.0678 ± 0.0014 0.0681 ± 0.0009 0.0686 ± 0.0007 Yelp R@20 0.1349 ± 0.0019 0.1359 ± 0.0020 0.1239 ± 0.0023 0.1303 ± 0.0020 0.1356 ± 0.0017 0.1342 ± 0.0025 0.1363 ± 0.0009 N@20 0.0557 ± 0.0007 0.0566 ± 0.0006 0.0524 ± 0.0007 0.0545 ± 0.0006 0.0562 ± 0.0006 0.0559 ± 0.0013 0.0566 ± 0.0005 
+
+Figure 4: Analysis of hyperparameter sensitivity for LSF-SR across five datasets. The left panel shows the effect of the number of normalizing flows, while the right panel displays the impact of the maximum KL regularization coefficient (𝛽 end ) on NDCG@20. 
+
+progressive scheduling techniques mitigate this issue by enabling a smoother transition between behavior modeling and semantic alignment. Ultimately, the cyclical annealing strategy achieves the best or near-best NDCG@20 on all five datasets and the best or comparable Recall@20 on four of five datasets. By periodically re-laxing and tightening the KL constraints, this schedule gives the optimization process multiple opportunities to escape suboptimal local minima and adaptively refine the latent manifold geometry. 
+
+5.5.3 Hyperparameter Study. This subsection evaluates LSF-SR’s sensitivity and stability with respect to two critical hyperparam-eters: the number of normalizing flows ( 𝐾 ) and the maximum KL regularization coefficient ( 𝛽 end ). These parameters control the flex-ibility of the latent-space transformation and the strength of the regularization term, respectively. As shown in Figure 4, the model’s performance generally increases initially and then declines slightly as both parameters increase. Regarding flow depth, setting 𝐾 = 0 constrains the latent mani-fold to a learned diagonal Gaussian posterior, inherently limiting its ability to capture complex patterns. Increasing 𝐾 significantly improves the expressiveness of the normalizing flows, achieving peak performance by effectively aligning collaborative and textual semantic embeddings. However, if 𝐾 becomes excessively large, it over-parameterizes the model, complicates optimization, and moderately reduces recommendation quality. The impact of 𝛽 end presents a similar trade-off, balancing the main recommendation objective against semantic regularization. A small 𝛽 end provides insufficient constraints for effective semantic integration, whereas an appropriately scaled coefficient encourages the model to embed behavioral patterns in a rich semantic context. Conversely, if 𝛽 end exceeds the optimal threshold, the stringent KL penalty dominates the joint loss function. This over-regularization can suppress behavior-centric signals too much, ultimately com-promising recommendation quality. Empirical evidence shows that LSF-SR achieves optimal performance by striking a delicate balance between behavioral discriminability and semantic regularization, a pattern consistently observed when 𝐾 is set to 2 or 3 and 𝛽 end falls between 0.1 and 0.2. 
+
+## 5.6 Case Study: Cold Scenarios 
+
+To assess the robustness of our framework under severe data spar-sity and cold-start scenarios, we conducted an in-depth case study using the representative Beauty and Yelp datasets. We divided the test cases using the first quartile (Q1) as the statistical threshold: user sequences were categorized into two groups—short sequences (length ≤ 5) and long sequences. Similarly, we classified ground-truth items into two groups—tail items (frequency ≤ 9) and head items. Because accurate ranking is most important when interac-tion signals are scarce, we report performance comparisons using NDCG@20, as shown in Figures 5 and 6. In short interaction sequences, LSF-SR consistently outperforms all representative baselines. An interesting pattern in the Yelp dataset is that all models perform better on short sequences than on long ones. This contrasts with e-commerce domains, such as Beauty, where long sequences can reflect stable user preferences. In Yelp interactions, however, users often explore local businesses and dining options episodically. As a result, short sequences tend to capture cohesive, immediate intents, such as searching for similar CIKM ’26, November 07–11, 2026, Rome, Italy Shih-Hong Chen, Josh Jia-Ching Ying, and Vincent S. Tseng 
+
+Figure 5: Performance comparison (NDCG@20) across user groups with varying sequence lengths. Short sequences are defined as those with a length less than or equal to 5. 
+
+Figure 6: Performance comparison (NDCG@20) across target items with varying popularity levels. Tail items are defined as those appearing at most 9 times. Note that dual y-axes are employed to accommodate the differences in scale between the tail and head groups. 
+
+restaurants in a specific neighborhood over a weekend. In contrast, long sequences span longer periods and often include significant location shifts and intent changes, making next-item prediction more challenging and noisy. Despite the focused nature of these short-term intents, the scarcity of historical interactions remains a major obstacle. Behavior-centric methods struggle here because they lack sufficient co-occurrence patterns. Additionally, existing LLM-augmented methods that rely on independent retrieval strategies often suffer from semantic misalignment. In contrast, our proposed probabilis-tic fusion approach uses rich textual semantics as robust conditions, enabling the framework to accurately identify immediate user intents. This allows us to maintain superior ranking quality, even with extremely limited behavioral data. Furthermore, LSF-SR shows significant advantages in recom-mending tail items, which often suffer from the most severe lack of collaborative signals. The results show that LSF-SR achieves remark-able improvements in NDCG@20, increasing by 22.88% and 18.50% over the strongest LLM-augmented baseline (SRA-CL) for tail items in the Beauty and Yelp datasets, respectively. Even with advanced techniques—including time-dependent soft labeling and coarse-to-fine intent contrastive learning in FENRec, or frequency filtering and side-information integration in DIFF—these baselines still un-derperform our semantic-conditioned fusion approach. Tail-item embeddings trained only on discrete identifiers are often under-trained because interactions are scarce. By generating item descrip-tions with an LLM and producing enhanced embeddings through a flow-augmented conditional variational module, LSF-SR can place tail items by semantic relatedness rather than popularity, improving ranking in cold scenarios. 
+
+## 6 Conclusion 
+
+In this paper, we present LSF-SR , a novel probabilistic fusion framework for sequential recommendation that recasts heteroge-neous alignment as a stochastic inference problem. Unlike prior approaches that rely on deterministic projections or late fusion, 
+
+LSF-SR employs a Conditional Variational Autoencoder in which LLM-derived semantic embeddings condition the transformation of collaborative item representations into a shared latent space. To capture the non-Gaussian geometry of the joint collaborative– semantic distribution, we augment the posterior with stacked planar or radial normalizing flows, enabling fine-grained distributional modeling beyond what a diagonal Gaussian posterior can express. A dynamic KL annealing strategy further stabilizes training and prevents the latent fusion path from collapsing to an unregularized deterministic mapping. Extensive evaluations across five bench-mark datasets demonstrate that LSF-SR consistently outperforms state-of-the-art baselines from both behavior-centric and LLM-augmented paradigms, achieving up to 12.98% in Recall@20 and 14.13% in NDCG@20. On tail items, the framework achieves relative NDCG@20 improvements of 22.88% and 18.50% over the strongest LLM-augmented baseline on Beauty and Yelp, respectively. Case studies under extreme data sparsity and cold-start scenarios fur-ther establish the practical robustness of LSF-SR . In future work, we plan to explore adaptive flow architectures that dynamically calibrate posterior expressiveness based on domain-specific data characteristics, as our ablation results suggest that datasets with sparser collaborative signals derive comparatively less benefit from deep flow stacks. Additionally, the intent drift patterns observed in the Yelp case study motivate the development of temporally aware semantic conditioning mechanisms that can track evolving user preferences over extended interaction horizons. 
+
+## Acknowledgments 
+
+This research was supported in part by the National Science and Technology Council Taiwan under grant nos. 115-2223-E-A49-001 and 115-2221-E-005-094-MY3. 
+
+## GenAI Usage Disclosure 
+
+During the preparation of this work, the authors used generative ar-tificial intelligence (AI) tools solely for language editing and improv-ing the manuscript’s grammatical clarity. The authors did not use generative AI tools for experimental design, code implementation, data analysis, or developing the core algorithms and methodology. The authors have thoroughly reviewed and edited the final text and take full responsibility for the academic integrity and content of this paper. 
+
+## References  
+
+> [1] Yongjun Chen, Zhiwei Liu, Jia Li, Julian McAuley, and Caiming Xiong. 2022. Intent Contrastive Learning for Sequential Recommendation. In Proceedings of the ACM Web Conference 2022 (TheWebConf) . Association for Computing Machinery, 2172–2182.
+
+LSF-SR: Latent Semantic Fusion for Sequential Recommendation via Flow-based Conditional Variational Autoencoders CIKM ’26, November 07–11, 2026, Rome, Italy 
+
+[2] Ziqiang Cui, Yunpeng Weng, Xing Tang, Xiaokun Zhang, Shiwei Li, Peiyang Liu, Bowei He, Dugang Liu, Weihong Luo, Xiuqiang He, and Chen Ma. 2025. Semantic Retrieval Augmented Contrastive Learning for Sequential Recommendation. In 
+
+Advances in Neural Information Processing Systems (NeurIPS) , Vol. 38. Curran Associates, Inc., 180504–180528. [3] Xinyu Du, Huanhuan Yuan, Pengpeng Zhao, Jianfeng Qu, Fuzhen Zhuang, Guan-feng Liu, and Victor S. Sheng. 2023. Frequency Enhanced Hybrid Attention Network for Sequential Recommendation. In Proceedings of the 46th International ACM SIGIR Conference on Research and Development in Information Retrieval (SIGIR) . Association for Computing Machinery, 78–88. [4] Tianyu Gao, Xingcheng Yao, and Danqi Chen. 2021. SimCSE: Simple Contrastive Learning of Sentence Embeddings. In Proceedings of the 2021 Conference on Em-pirical Methods in Natural Language Processing (EMNLP) . Association for Compu-tational Linguistics, 6894–6910. [5] Shijie Geng, Shuchang Liu, Zuohui Fu, Yingqiang Ge, and Yongfeng Zhang. 2022. Recommendation as Language Processing (RLP): A Unified Pretrain, Personalized Prompt & Predict Paradigm (P5). In Proceedings of the 16th ACM Conference on Recommender Systems (RecSys) . Association for Computing Machinery, 299–315. [6] Yingzhi He, Xiaohao Liu, An Zhang, Yunshan Ma, and Tat-Seng Chua. 2025. LLM2Rec: Large Language Models Are Powerful Embedding Models for Se-quential Recommendation. In Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining (KDD) . Association for Computing Machinery, 896–907. [7] Yupeng Hou, Shanlei Mu, Wayne Xin Zhao, Yaliang Li, Bolin Ding, and Ji-Rong Wen. 2022. Towards Universal Sequence Representation Learning for Recom-mender Systems. In Proceedings of the 28th ACM SIGKDD Conference on Knowledge Discovery and Data Mining (KDD) . Association for Computing Machinery, 585– 593. [8] Guoqing Hu, An Zhang, Shuo Liu, Zhibo Cai, Xun Yang, and Xiang Wang. 2025. AlphaFuse: Learn ID Embeddings for Sequential Recommendation in Null Space of Language Embeddings. In Proceedings of the 48th International ACM SIGIR Con-ference on Research and Development in Information Retrieval (SIGIR) . Association for Computing Machinery, 1614–1623. [9] Yu-Hsuan Huang, Ling Lo, Hongxia Xie, Hong-Han Shuai, and Wen-Huang Cheng. 2025. Future Sight and Tough Fights: Revolutionizing Sequential Rec-ommendation with FENRec. In Proceedings of the AAAI Conference on Artificial Intelligence (AAAI) , Vol. 39. AAAI Press, 11826–11834. [10] Wang-Cheng Kang and Julian McAuley. 2018. Self-Attentive Sequential Rec-ommendation. In Proceedings of the 2018 IEEE International Conference on Data Mining (ICDM) . IEEE Computer Society, 197–206. [11] Hye-young Kim, Minjin Choi, Sunkyung Lee, Ilwoong Baek, and Jongwuk Lee. 2025. DIFF: Dual Side-Information Filtering and Fusion for Sequential Recommen-dation. In Proceedings of the 48th International ACM SIGIR Conference on Research and Development in Information Retrieval (SIGIR) . Association for Computing Machinery, 1624–1633. [12] Sein Kim, Hongseok Kang, Seungyoon Choi, Donghyun Kim, Minchul Yang, and Chanyoung Park. 2024. Large Language Models meet Collaborative Filtering: An Efficient All-round LLM-based Recommender System. In Proceedings of the 30th ACM SIGKDD Conference on Knowledge Discovery and Data Mining (KDD) .Association for Computing Machinery, 1395–1406. [13] Walid Krichene and Steffen Rendle. 2020. On Sampled Metrics for Item Rec-ommendation. In Proceedings of the 26th ACM SIGKDD International Conference on Knowledge Discovery and Data Mining (KDD) . Association for Computing Machinery, 1748–1757. [14] Qidong Liu, Xian Wu, Yejing Wang, Zijian Zhang, Feng Tian, Yefeng Zheng, and Xiangyu Zhao. 2024. LLM-ESR: Large Language Models Enhancement for Long-tailed Sequential Recommendation. In Advances in Neural Information Processing Systems (NeurIPS) , Vol. 37. Curran Associates, Inc., 26701–26727. [15] Zhiwei Liu, Yongjun Chen, Jia Li, Philip S. Yu, Julian McAuley, and Caiming Xiong. 2021. Contrastive Self-supervised Sequential Recommendation with Robust Augmentation. arXiv preprint arXiv:2108.06479 (2021). [16] Llama Team, AI @ Meta. 2024. The Llama 3 Herd of Models. arXiv preprint arXiv:2407.21783. [17] Julian McAuley, Christopher Targett, Qinfeng Shi, and Anton van den Hengel. 2015. Image-based Recommendations on Styles and Substitutes. In Proceedings of the 38th International ACM SIGIR Conference on Research and Development in Information Retrieval (SIGIR) . Association for Computing Machinery, 43–52. [18] Xiuyuan Qin, Huanhuan Yuan, Pengpeng Zhao, Junhua Fang, Fuzhen Zhuang, Guanfeng Liu, and Victor S. Sheng. 2023. Meta-optimized Contrastive Learning for Sequential Recommendation. In Proceedings of the 46th International ACM SIGIR Conference on Research and Development in Information Retrieval (SIGIR) .Association for Computing Machinery, 89–98. [19] Xiuyuan Qin, Huanhuan Yuan, Pengpeng Zhao, Guanfeng Liu, Fuzhen Zhuang, and Victor S. Sheng. 2024. Intent Contrastive Learning with Cross Subsequences for Sequential Recommendation. In Proceedings of the 17th ACM International Conference on Web Search and Data Mining (WSDM) . Association for Computing Machinery, 548–556. [20] Ruihong Qiu, Zi Huang, Hongzhi Yin, and Zijian Wang. 2022. Contrastive Learn-ing for Representation Degeneration Problem in Sequential Recommendation. In Proceedings of the 15th ACM International Conference on Web Search and Data Mining (WSDM) . Association for Computing Machinery, 813–823. [21] Xubin Ren, Wei Wei, Lianghao Xia, Lixin Su, Suqi Cheng, Junfeng Wang, Dawei Yin, and Chao Huang. 2024. Representation Learning with Large Language Models for Recommendation. In Proceedings of the ACM Web Conference 2024 (TheWebConf) . Association for Computing Machinery, 3464–3475. [22] Danilo Jimenez Rezende and Shakir Mohamed. 2015. Variational Inference with Normalizing Flows. In Proceedings of the 32nd International Conference on Machine Learning (ICML) . PMLR, 1530–1538. [23] Yehjin Shin, Jeongwhan Choi, Hyowon Wi, and Noseong Park. 2024. An Attentive Inductive Bias for Sequential Recommendation beyond the Self-Attention. In 
+
+Proceedings of the AAAI Conference on Artificial Intelligence (AAAI) , Vol. 38. AAAI Press, 8984–8992. [24] Kihyuk Sohn, Honglak Lee, and Xinchen Yan. 2015. Learning Structured Output Representation using Deep Conditional Generative Models. In Advances in Neural Information Processing Systems (NeurIPS) , Vol. 28. Curran Associates, Inc., 3483– 3491. [25] Fei Sun, Jun Liu, Jian Wu, Changhua Pei, Xiao Lin, Wenwu Ou, and Peng Jiang. 2019. BERT4Rec: Sequential Recommendation with Bidirectional Encoder Rep-resentations from Transformer. In Proceedings of the 28th ACM International Conference on Information and Knowledge Management (CIKM) . Association for Computing Machinery, 1441–1450. [26] Shoujin Wang, Liang Hu, Yan Wang, Longbing Cao, Quan Z. Sheng, and Mehmet Orgun. 2019. Sequential Recommender Systems: Challenges, Progress and Prospects. In Proceedings of the Twenty-Eighth International Joint Conference on Artificial Intelligence, IJCAI-19 . International Joint Conferences on Artificial Intelligence Organization, 6332–6338. [27] Shuhan Wang, Bin Shen, Xu Min, Yong He, Xiaolu Zhang, Liang Zhang, Jun Zhou, and Linjian Mo. 2024. Aligned Side Information Fusion Method for Sequential Recommendation. In Companion Proceedings of the ACM Web Conference 2024 (TheWebConf) . Association for Computing Machinery, 112–120. [28] Xu Xie, Fei Sun, Zhaoyang Liu, Shiwen Wu, Jinyang Gao, Bolin Ding, and Bin Cui. 2022. Contrastive Learning for Sequential Recommendation. In Proceedings of the 2022 IEEE 38th International Conference on Data Engineering (ICDE) . IEEE Computer Society, 1259–1273. [29] Yueqi Xie, Peilin Zhou, and Sunghun Kim. 2022. Decoupled Side Information Fusion for Sequential Recommendation. In Proceedings of the 45th International ACM SIGIR Conference on Research and Development in Information Retrieval (SIGIR) . Association for Computing Machinery, 1611–1621. [30] Shenghao Yang, Weizhi Ma, Peijie Sun, Qingyao Ai, Yiqun Liu, Mingchen Cai, and Min Zhang. 2024. Sequential Recommendation with Latent Relations based on Large Language Model. In Proceedings of the 47th International ACM SIGIR Con-ference on Research and Development in Information Retrieval (SIGIR) . Association for Computing Machinery, 335–344. [31] Yelp. 2022. Yelp Open Dataset. https://www.yelp.com/dataset. [32] Zhenrui Yue, Sara Rabhi, Gabriel de Souza Pereira Moreira, Dong Wang, and Even Oldridge. 2023. LlamaRec: Two-Stage Recommendation using Large Language Models for Ranking. arXiv preprint arXiv:2311.02089. [33] Kun Zhou, Hui Yu, Wayne Xin Zhao, and Ji-Rong Wen. 2022. Filter-enhanced MLP is All You Need for Sequential Recommendation. In Proceedings of the ACM Web Conference 2022 (TheWebConf) . Association for Computing Machinery, 2388–2399.
