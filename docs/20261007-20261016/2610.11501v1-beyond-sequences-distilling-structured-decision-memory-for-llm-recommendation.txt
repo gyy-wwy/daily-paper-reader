@@ -1,0 +1,785 @@
+Title: Beyond Sequences: Distilling Structured Decision Memory for LLM Recommendation
+
+URL Source: https://arxiv.org/pdf/2610.11501v1
+
+Published Time: Fri, 09 Oct 2026 01:03:02 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# Beyond Sequences: Distilling Structured Decision Memory for LLM Recommendation 
+
+Leikun Liang *, Guoshuai Wang *, Xingsheng He †, Yushan Han, Yunyi Xuan, Xiaoxiao Xu, Lin Qu 
+
+Alibaba Group 
+
+Hangzhou, China 
+
+{liangleikun.llk, guoshui.wgs, xingsheng.hxs, hanyushan.hys, xuanyunyi.xyy, xiaoxiao.xuxx }@alibaba-inc.com 
+
+{xide.ql }@taobao.com 
+
+Abstract —Despite the adoption of large language models (LLMs) in recommendation systems, prevailing approaches mostly model single-type behaviors (e.g., views or purchases). Even when incorporating multiple behaviors, existing methods flatten heterogeneous actions into homogeneous token sequences, ignoring their distinct decision-making roles. This flattening fails to capture semantic hierarchies and contextual nuances in complex decision-making, such as trade-offs between price and quality. Consequently, performance degrades in critical “difficult-choice” scenarios involving highly similar items. To bridge this gap, we propose MARI (Memory-Augmented Recom-mendation with Interpretability), which grounds predictions in explicit, structured decision evidence. MARI maintains a Decision Memory Bank (DMB) that archives users’ past rationales as Structured Decision Memories (SDMs): concise records of goals, constraints, and trade-offs. These SDMs are generated offline via Post-Hoc Decision Distillation from heterogeneous behaviors and user-generated content. By retrieving relevant SDMs to augment LLM reasoning, MARI achieves interpretability and scalability without the prohibitive cost of processing long raw sequences. Extensive experiments show MARI significantly outperforms state-of-the-art baselines on standard next-item prediction and a newly introduced Difficult Choice Prediction task, incurring low latency overhead by decoupling memory construction from online inference. Qualitative analyses reveal actionable, human-readable insights into user decision-making, marking a concrete step toward reasoning-aware recommendation systems. 
+
+Index Terms —LLM-based Recommendation, Structured De-cision Memory, Interpretable Recommendation, Multi-behavior Modeling 
+
+I. I NTRODUCTION 
+
+Integrating Large Language Models (LLMs) into recom-mender systems enables semantic user modeling by treating interaction sequences as contextual inputs. Current research predominantly serializes single-type interactions (e.g., ratings or purchases) into long textual prompts [1]–[4]. However, these sequences are costly to process and contain substan-tial redundancy and behavioral noise. While single-behavior datasets (e.g., Amazon [5]) have advanced the field, they overlook a critical real-world challenge: understanding the complex decision logic derived from heterogeneous, multi-behavior interactions (e.g., search, view, favorite, purchase) fundamental to e-commerce and streaming platforms. Traditional multi-behavior models [6]–[10] rely on implicit, opaque embeddings that lack the reasoning and interpretability 
+
+* Equal contribution, †Corresponding author. Without Decision Memory (Using Raw Behaviors) 2. Directly Input to LLM  
+
+> LLM
+> Hard to capture latent decision factors & trade-offs
+> 1. Long Raw Behavior History 3. Recommendation Result
+> Candidates
+
+With MARI (Using Decision Memory and Recent Behaviors)                        
+
+> 05-01
+> Purchase View
+> 05-03
+> Favorite
+> 05-04
+> View
+> ……
+> 05-10
+> Search
+> Running shoes
+> 06-01
+> View
+> 06-02
+> ……
+> 05-30 06-01 06-02
+> ……
+> Running shoes
+> View Search
+> View
+> 1. Recent Behaviors 2. Retrieve Relevant Decision Memories
+> Decision Memory Bank (DMB)
+> Category: Camera Reasoning: User viewed…
+> Profile Tag: Tech-functional Efficiency: Considered
+> Preference Factors: (Dynamic-range, 15+ stops), …
+> Avoidance Factors: (Price, >15000), … SDM #1
+> SDM #2
+> SDM #3
+> ……
+> 3. Augment LLM with Retrieved SDMs
+> LLM
+> Grounded on explicit decision factors, trade-offs, and constraints
+> Candidates
+> 4. Recommendation Result
+> Extremely long input, exceeding LLM context limits Long behavior sequences introduce noise. Lack of explicit reasons (goals, constraints, trade-offs) Hard to distinguish the roles of different behaviors
+> Issues
+> Category: Sneakers Reasoning: User viewed ...
+> Profile Tag: Brand loyalists Efficiency: Rapid
+> Preference Factors: (Brand, Nike), …
+> Avoidance Factors: (Color, Red), …
+> Category: Backpack Reasoning: User searched ...
+> Profile Tag: Price-sensitive Efficiency: Considered
+> Preference Factors: (Capacity: 15–20L), …
+> Avoidance Factors: (Material, Heavy Canvas), …
+
+Fig. 1. Workflow comparison. Top: Directly feeding long raw behavior sequences into an LLM introduces context limits, noise, and latent decision factors, hindering accurate reasoning. Bottom: MARI retrieves Structured Decision Memories (SDMs) from a Decision Memory Bank (DMB) based on recent behaviors. Augmenting the LLM with these explicit rationales (goals, constraints, trade-offs) enables interpretable, grounded reasoning and improves recommendation accuracy. 
+
+strengths of LLMs. Consequently, the powerful inferential capabilities of LLMs remain underutilized for reconstructing user decision-making processes. Existing LLM-based recom-menders either restrict themselves to single-behavior data or flatten multi-behavior logs into homogeneous sequences, losing the distinct semantic roles and hierarchical structures of different actions. Thus, the LLM revolution in recommen-dation has largely overlooked the rich decision signals woven across diverse behavioral contexts. To bridge this gap, we propose an LLM-powered framework that explicitly reconstructs and leverages users’ historical decision logic through a Decision Memory Bank (DMB), an interpretable repository of structured decision rationales. Our work is motivated by a key observation from industrial data: users’ final decisions, especially when choosing between highly similar items (i.e., difficult-choice scenarios at the SKU level), reflect consistent patterns encoding their underlying criteria (e.g., prioritizing “organic” over “budget”). Because these latent patterns are distributed across multi-behavior trajectories, directly feeding raw sequences to LLMs is ineffi-cient; it introduces noise and forces on-the-fly decision recon-struction under tight context constraints, a limitation visually arXiv:2610.11501v1 [cs.CL] 8 Oct 2026 demonstrated in the top workflow of Figure 1. In contrast, our two-stage approach (Figure 1, bottom) constructs the DMB, where each entry is a Structured Decision Memory (SDM), a concise textual record of a user’s goals, constraints, and trade-offs. We devise Post-Hoc Decision Distillation (PHDD), which uses an LLM as a retrospective analyst to generate SDMs by examining final outcomes within heterogeneous behavioral contexts. This transforms noisy logs into explicit decision evidence. Second, we introduce MARI (Memory-Augmented Recommendation with Interpretability), a plug-and-play framework that retrieves relevant SDMs to ground LLM reasoning in explicit historical logic. This design cleanly separates offline knowledge construction from online recom-mendation, enabling robust, interpretable inference without significant latency overhead. Our contributions are threefold:  
+
+> •
+
+Fine-Grained SKU-Level Recommendation: We refor-mulate LLM-based recommendation as a SKU-level task, leveraging heterogeneous behaviors to reason over near-identical items. This effectively addresses difficult-choice scenarios with nuanced attribute differences, which are typically overlooked by title-level approaches.  
+
+> •
+
+Decision Memory Bank via Retrospective Distillation: 
+
+We introduce the DMB, a compact archive of human-readable Structured Decision Memories (SDMs). Dis-tilled via our Post-Hoc Decision Distillation (PHDD) method, each SDM encodes a user’s goals, constraints, and trade-offs from heterogeneous trajectories.  
+
+> •
+
+Effective Memory-Augmented Recommendation Ar-chitecture: We design a modular framework integrating the DMB via Retrieval-Augmented Generation (RAG) to enable interpretable reasoning grounded in historical logic. MARI achieves significant performance gains over state-of-the-art baselines in offline evaluations on a real-world e-commerce platform, demonstrating practical ef-ficacy and scalability. II. R ELATED WORK 
+
+A. LLM-based Recommendation 
+
+Large Language Models (LLMs) have enabled semantic user modeling in recommendation, moving beyond ID-based collaborative filtering [11]–[16]. Existing approaches fall into three categories: (1) feature enhancement, where LLMs enrich embeddings with textual semantics [17], [18]; (2) end-to-end recommendation, where LLMs are prompted or tuned to pre-dict preferences directly [1]–[4]; and (3) behavior compression and summary, where lengthy user histories are compressed into compact representations or summarized into semantic profiles to address context-length limitations [19]–[21]. However, these methods either perform preference inference and summariza-tion based on a single type of user behavior, or incorporate multiple behaviors only as semantically impoverished IDs, failing to account for their distinct roles in the decision-making process. A-LLMRec [3] and LLM-SRec [4] align collaborative filtering signals with the LLM’s token space to inject collaborative awareness but operate on a single type of interaction, thus lacking the capacity to model cross-behavior decision dynamics; while User-LLM [19] compresses multiple behaviors into fixed-size vectors, obscuring transi-tions between action types. While converting raw behavior streams into semantic summaries effectively mitigates context-length and sparsity issues [20], [21], these remain shallow abstractions that reflect what users did, not why they decided. More fundamentally, static global summaries aggregate cross-category preferences, losing the context-dependent trade-offs essential for SKU-level difficult choices. We instead condi-tionally retrieve structured decision rationales to preserve this specificity without aggregation loss. 
+
+B. Multi-Behavior Recommendation 
+
+Multi-behavior recommendation leverages heterogeneous interactions to mitigate data sparsity. While early work ex-tends matrix factorization [22] or designs behavior-aware sam-pling [23], [24], recent deep models use attention [25], [26] or graph convolutions to fuse multi-behavior signals [6]–[10]. Yet all produce opaque embeddings that capture statistical correlations without revealing the decision intent behind be-havior transitions. Moreover, they ignore rich item textual at-tributes—such as price, brand, and product descriptions—that could ground user choices in semantic evidence. Recent LLM-based approaches often concatenate heterogeneous actions into flat sequences [27], failing to capture the decision-level mean-ings that different behavior types convey in the user’s choice process. Critically, both lines predict next actions rather than modeling the decision logic behind behavior transitions—they capture statistical patterns (e.g., “view X → purchase Y”) but miss the underlying goals (e.g., seeking premium brands) or constraints (e.g., limited budget). We address this by using LLMs to retrospectively distill explicit decision rationales from trajectories, enabling recommendations grounded in in-terpretable evidence. 
+
+C. Retrieval-Augmented Recommendation 
+
+Retrieval-Augmented Generation (RAG) [28] reduces hal-lucination by grounding LLMs in external knowledge. In rec-ommendation, methods like CoRAL [29] and RETURN [30] retrieve collaborative signals (e.g., co-purchases) to support long-tail reasoning. However, they retrieve only atomic in-teractions (“what users did”) without capturing the underly-ing decision logic (“why they decided”). Unlike these ap-proaches—which aim to improve item prediction by retriev-ing behavioral or item-level evidence—our framework targets the reconstruction of interpretable decision rationales from multi-behavior trajectories. We argue that effective multi-behavior reasoning requires retrieving decision patterns, not just behavior logs. Our Decision Memory Bank (DMB) stores Structured Decision Memories (SDMs)—concise records of context, rationale, and outcome—so that RAG can retrieve his-torically grounded, trade-off-aware decision evidence instead of surface-level co-occurrences. III. P RELIMINARY 
+
+Let U and I denote the sets of users and items, respectively. For a user u ∈ U , we observe a historical heterogeneous interaction sequence: 
+
+Hu = {(it, a t, τ t)}Tu 
+
+> t=1
+
+, (1) where it ∈ I is the interacted item (associated with rich attributes and metadata), at ∈ A is the associated behavior type (e.g., A = {view , search , favorite , purchase }) and τt
+
+is the timestamp. Interactions are chronologically ordered (τ1 < τ 2 < · · · < τ Tu ). Notably, items in I are defined at the SKU level—distinct attribute combinations (e.g., color or size) yield distinct items, even with identical titles. An example is given in Appendix A. In real-world recommendation scenarios, users typically exhibit multiple types of behavior before making a final decision (e.g., purchase). Critically, these heterogeneous be-haviors encode complementary signals about the user’s un-derlying intent—such as exploration (search/view), preference expression (favorite), and commitment (purchase). However, directly modeling Hu as a flat token sequence overlooks the semantic hierarchy among action types and fails to reconstruct the high-level decision logic that governs user choices. To systematically evaluate a model’s capacity to overcome this limitation and capture such latent decision logic, we formalize two complementary prediction tasks that reflect different levels of recommendation difficulty and intent granularity. 
+
+A. Task 1: Next-Item Prediction (NIP) 
+
+Given the full historical sequence Hu and a recent short-term context Cu ⊆ Hu (e.g., the last k interactions), the goal is to predict the next item the user will purchase. In practice, a purchased item always appears earlier in Cu through non-purchase interactions (e.g., view or search). Thus, NIP requires the model to identify the specific item within Cu that will eventually be purchased. This task assesses the model’s capacity to identify the next purchase from the full item set using the user’s heterogeneous interaction history. 
+
+B. Task 2: Difficult Choice Prediction (DCP) 
+
+This task simulates realistic “difficult-choice” scenarios where users compare highly similar alternatives (e.g., products with near-identical specifications but differing in price, brand, or minor features). Formally, given Hu, a recent context Cu
+
+, and a candidate set X ⊂ I of m items with high pairwise similarity, the goal is to predict which item in X the user will purchase next. Unlike NIP, DCP isolates the ability to resolve fine-grained user preferences by restricting candidate items to highly substitutable sets, thereby directly testing a model’s capacity to infer subtle trade-offs—such as “willingness to pay more for organic certification”—from past decisions. 
+
+C. Key Challenge and Our Approach 
+
+Both NIP and DCP require distilling latent decision logic—such as goals, constraints, and attribute-level trade-offs—from the noisy heterogeneous sequence Hu, rather than 50 100 200 300 400 500 600   
+
+> Behavioral sequence length
+> 0.0 0.1 0.2 0.3 0.4 0.5 0.6
+> Hit@1
+> Difficult Choice Prediction Next Item Prediction
+> Fig. 2. Effect of input sequence length on Hit@1 for NIP and DCP tasks (using DeepSeek-R1).
+
+relying on surface-level patterns. However, as shown in Fig-ure 2, our experiments with DeepSeek-R1 [31] show that simply extending the input context yields diminishing returns: performance peaks at around 100 historical interactions and degrades with longer sequences, suggesting that raw behavior logs overwhelm LLMs with noise rather than useful signals. To address this, we propose a personalized Decision Mem-ory Bank (DMB) that stores Structured Decision Memories (SDMs), generated via Post-Hoc Decision Distillation (PHDD) as concise, interpretable summaries of past decisions. Building on DMB, we design MARI (Memory-Augmented Recommen-dation with Interpretability), which retrieves relevant SDMs during inference to ground the LLM’s reasoning about Cu in explicit decision logic. Formal details follow. IV. M ETHODOLOGY 
+
+We present MARI, a two-stage framework that decouples decision knowledge construction from on-the-fly recommen-dation reasoning. As illustrated in Figure 3, MARI first builds a personalized DMB for each user via Post-Hoc Decision Dis-tillation (PHDD), then leverages retrieval-augmented genera-tion to inject relevant decision memories into an LLM-based recommender during inference. Below we detail the DMB construction pipeline and the MARI inference architecture for both NIP and DCP tasks. 
+
+A. Decision Memory Bank (DMB) 1) Category-Aware: While some decision tendencies (e.g., cost-effectiveness) generalize across categories, purchase logic is largely category-specific: “Organic certification” matters for baby food but not electronics, whereas “512GB storage” drives electronics choices but not food purchases. Flattening cross-category interactions dilutes these discriminative, category-conditioned rules. To preserve fidelity, we build the DMB in a category-aware manner, with each entry encoding the structured rationale behind a user’s purchase in category c ∈ C .
+
+2) Formal definition: For user u, the Decision Memory Bank is defined as a set of structured records: DMB u = [
+
+> c∈C
+
+n 
+
+e(j)
+
+> u,c
+
+, M(j)
+
+> u,c
+
+, τ (j)
+
+> u,c
+
+o Ju,c 
+
+> j=1
+
+(2) where Ju,c is the number of purchases user u made in category 
+
+c; τ (j) 
+
+> u,c
+
+is the timestamp of the j-th purchase; e(j) 
+
+> u,c
+
+∈ Rd is the Post-Hoc Decision Distillation (PHDD)    
+
+> Teacher
+> R1
+> Student
+> Qwen3-4B
+> User’s Raw Behavior Sequence
+> Decision Memory Bank (DMB)
+> Structured Decision Memory (SDM)
+> {“Profile Tags ": "price_sensitive", "Prefs ": ["high_performance"],
+> “Avoids ”: [ “brand_premium ”],
+> “Reasoning ”:…}
+> Memory Vectorization & Indexing
+> Step1: Encoding
+> User Behavior Sequence → 𝑉 !"# (via Qwen3-Embedding 0.6B)
+> Step2: Indexing
+> Store ( 𝑉 !"# , SDM) → FAISS Vector DB
+> FAISS Vector DB
+> Current Task Context
+> Recent Behaviors (≤100 Items)
+> Query Vectorization
+> Recent Behaviors → Q!"#$%&
+> (via Qwen3 Embedding 0.6B )
+> Context Augmentation
+> Prompt = [instruction] + [Retrieved SDMs (Top-K)] + [Recent Behaviors]
+> Reader LLM Reasoning
+> LLM Reasoning on Augmented Context (e.g., Qwen3-4B )
+> Output
+> Decisions & Explanations
+> Memory Retrieval (Top-K)
+
+Offline Stage: Memory Construction & Indexing Online Stage: Memory-Augmented Inference Fig. 3. Algorithmic framework of MARI. The offline stage constructs DMB via PHDD; during online inference, MARI retrieves relevant SDMs and fuses them to prompt the LLM for interpretable recommendation. 
+
+embedding vector of the pre-purchase heterogeneous behavior sequence leading to this purchase (used for similarity-based retrieval); and M(j) 
+
+> u,c
+
+is the structured decision memory (SDM) —a structured quintuple capturing five complementary facets of the user’s decision logic: 
+
+M(j) 
+
+> u,c
+
+=  R(j)
+
+> u,c
+
+, T (j) 
+
+> u,c
+
+, E(j)
+
+> u,c
+
+, P(j)
+
+> u,c
+
+, A(j)
+
+> u,c
+
+. (3) Each component is formally defined as follows:  
+
+> •
+
+Decision Intent Reasoning R(j)
+
+> u,c
+
+: a natural language expla-nation of the purchase of item i∗, grounded in the user’s historical heterogeneous behaviors.  
+
+> •
+
+Decision Profile Tags T (j) 
+
+> u,c
+
+: a set of categorical labels characterizing the user’s decision style in this context, drawn from a predefined taxonomy Vtag . Examples of user decision profile tags include brand-sensitive, price-sensitive, and certification-driven preferences.  
+
+> •
+
+Decision Efficiency E(j)
+
+> u,c
+
+: a discrete decision tempo type reflecting the user’s decision-making speed, inferred from behavioral signals such as session duration, number of item comparisons, and backtracking frequency. This yields four categories of decision efficiency: flash, rapid, considered, and prolonged.  
+
+> •
+
+Decision Preference Factors P(j)
+
+> u,c
+
+: a set of key-value pairs 
+
+{(kp, v p)} where kp denotes a positively weighted deci-sion attribute (e.g., brand, price, style) and vp specifies its concrete instantiation in the chosen item. Example: (brand, Nike), (price, 500–800), (style, minimalist).  
+
+> •
+
+Decision Avoidance Factors A(j)
+
+> u,c
+
+: a set of key-value pairs 
+
+{(ka, v a)} capturing attributes explicitly rejected during exploration. Here ka denotes a decision dimension (same category as kp), and va specifies the avoided value. Exam-ple: (material, polyester), (price, >1200), (color, bright-red). Both the profile tags T (j) 
+
+> u,c
+
+and the keys in P(j) 
+
+> u,c
+
+and A(j)
+
+> u,c
+
+are from closed vocabularies, derived via iterative LLM-based clustering on large-scale e-commerce data. The LLM also generates evidence-backed rationales for each factor to ensure plausibility. An example of an SDM is provided in Appendix C. 
+
+B. Post-Hoc Decision Distillation (PHDD) 
+
+To enable efficient inference, we design a two-stage dis-tillation pipeline that yields a lightweight student model for generating user SDMs: (1) a teacher LLM generates structured memories and Chain-of-Thought (CoT) [32]; (2) a small student model is trained via CoT distillation [33] to mimic this capability. 
+
+1) Teacher Model: Category-Conditioned Memory Genera-tion: To construct high-quality CoT training data for PHDD, we leverage the powerful reasoning capability of DeepSeek-R1 [31] to generate grounded, interpretable decision rationales from real user interaction logs. Specifically, for each purchase event (i∗, c, τ ∗) by user u in category c, we extract the category-filtered pre-purchase sequence: 
+
+Hpre  
+
+> u,c
+
+= {(it, a t, τ t) | τt < τ ∗, category (it) = c} . (4) We employ a teacher LLM ϕPHDD tea , prompted with a care-fully designed template to enforce a consistent output for-mat, generating structured decision memories M(j)
+
+> u,c
+
+. These outputs are subsequently verified to eliminate hallucinations and ensure high-quality reasoning trajectories. Critically, to enhance rationale accuracy, we provide the teacher with post-purchase reviews as privileged calibration references exclu-sively during dataset construction. Guided by the prompt, the teacher deduces decision logic solely from pre-purchase behaviors, utilizing the reviews merely to validate the inferred rationale without directly leaking their text. These signals are excluded during student training and inference, ensuring realistic deployment conditions. 
+
+2) Student Model Training via CoT Distillation: To enable scalable DMB construction in real-world production scenarios, we distill the teacher’s capability into a compact student LLM 
+
+ϕPHDD stu (Qwen3-4B [34]) using Chain-of-Thought distillation:  
+
+> •
+
+Dataset creation: For each purchase event, we collect the teacher’s CoT reasoning trace (intermediate rationale steps) and final structured memory M(j) 
+
+> u,c
+
+as supervision signals.  
+
+> •
+
+Input representation: The student receives only Hpre  
+
+> u,c
+
+and category context c.• Training objective: Minimize the cross-entropy loss between student-generated tokens and the teacher’s CoT trace + final memory: 
+
+LPHDD = −
+
+> L
+
+X
+
+> l=1
+
+log PϕP HDD 
+
+> stu
+
+ ytea  
+
+> l
+
+| H pre 
+
+> u,c
+
+, c, y tea 
+
+> <l
+
+ (5) where ytea  
+
+> 1: L
+
+is the concatenated CoT trace and SDM text. After training, ϕPHDD stu generates SDMs M(j) 
+
+> u,c
+
+for all his-torical purchases. For each SDM, we compute its retrieval embedding e(j) 
+
+> u,c
+
+by encoding the corresponding pre-purchase sequence Hpre  
+
+> u,c
+
+with a lightweight, frozen text encoder (e.g., Qwen3-Embedding-0.6B [35]). The resulting DMB u is stored as a category-indexed vector database supporting efficient similarity search. 
+
+C. Memory-Augmented Reasoning Framework 
+
+The MARI inference pipeline consists of two core stages: (1) context processing and adaptive memory retrieval, and (2) prompt construction and memory-augmented LLM reasoning. 
+
+1) Context Processing and Adaptive Memory Retrieval: Given a user’s recent interaction context 
+
+Cu = {(it, a t, τ t)}Tu
+
+> t=Tu−k+1
+
+, we first encode it into adense vector ectx using the frozen text encoder (same as in DMB construction). The retrieval strategy then adapts to the prediction task. For Next-Item Prediction (NIP): The target category is un-known a priori. We perform cross-category similarity retrieval to find SDM with behaviorally similar exploration patterns: 
+
+SNIP  
+
+> u
+
+=
+
+(
+
+M(j) 
+
+> u,c
+
+(c, j ) ∈ TopK 
+
+> c∈C ,j ∈[1 ,J u,c ]
+
+
+
+sim 
+
+
+
+ectx , e(j)
+
+> u,c
+
+ )
+
+(6) where sim (a, b) = a⊤b 
+
+> ∥a∥∥ b∥
+
+.For Difficult Choice Prediction (DCP): The target category 
+
+ctarget is known from session context. We perform category-constrained temporal retrieval: 
+
+SDCP  
+
+> u
+
+=
+
+n
+
+M(j) 
+
+> u,c target
+
+| j ∈ TopK time 
+
+
+
+{τ (j) 
+
+> u,c target
+
+}
+
+o 
+
+. (7) Prioritizing recency over behavioral similarity is critical here: fine-grained preference trade-offs evolve rapidly within cate-gories and are best captured by recent decisions. If the user has no SDM records in the target category ctarget , we fall back to decision memory retrieval as defined in Equation 6. 
+
+2) Prompt Construction and Memory-Augmented Reason-ing: We integrate retrieved memories Su with the current context Cu to construct task-specific prompts for ϕrec , an LLM-based recommender.  
+
+> •
+
+For NIP, where the target category is unknown a priori, the prompt instructs the LLM to predict the next purchased item directly from the user’s recent interaction sequence, augmented with SDMs retrieved from the DMB based on the current behavioral context.  
+
+> •
+
+For DCP, where the candidate set within a known category is provided, the prompt instructs the LLM to predict the next purchased item directly from the candidate set, augmented with SDMs retrieved from the DMB preferentially based on the target category. Both designs enforce structured reasoning grounded in explicit decision evidence, enabling ϕrec to move beyond surface-level sequential patterns—enhancing robustness under data sparsity while preserving interpretability through trace-able memory references. The prompt template is provided in Appendix D. 
+
+D. Deployment Strategies 
+
+MARI supports two deployment paradigms that balance training overhead, interpretability, and integration flexibility. 
+
+1) Plug-and-Play Augmentation Mode: MARI functions as a lightweight, training-free augmentation module for existing LLM-based recommenders. Given context Cu, it retrieves rele-vant memories Su and constructs the task-appropriate prompt for any off-the-shelf recommendation LLM ϕrec . This training-free compatibility enables:  
+
+> •
+
+Seamless integration into production pipelines.  
+
+> •
+
+No additional training costs or architectural modifications.  
+
+> •
+
+Preservation of existing model investments while enhancing decision transparency. 
+
+2) CoT-Distilled Mode: For maximum performance and full interpretability, we distill a specialized student model 
+
+ϕrec stu that generates both predictions and justifications. Training follows the MARI inference pipeline: (1) For each purchase 
+
+(i∗, τ ∗), extract pre-purchase context Cpre  
+
+> u
+
+; (2) Retrieve relevant memories Spre  
+
+> u
+
+using task-appropriate strategy; (3) Prompt the teacher LLM to generate CoT reasoning from (Cpre  
+
+> u
+
+, Spre  
+
+> u
+
+),concluding with i∗; (4) Train student to autoregressively generate this CoT+item sequence label yrec :
+
+Lrec = −
+
+> L
+
+X
+
+> l=1
+
+log Pϕrec  
+
+> stu
+
+(yrec l | C pre  
+
+> u
+
+⊕ S pre  
+
+> u
+
+, y rec <l ) . (8) At inference, ϕrec stu outputs human-interpretable rationales alongside predictions. This establishes a new paradigm for transparent recommendation where every prediction is grounded in explicit, retrievable decision evidence. Both deployment modes share the same DMB infrastructure, allowing practitioners to choose based on their system con-straints and interpretability requirements. This design enables MARI to scale efficiently to large-scale systems while pre-serving detailed decision semantics critical for difficult-choice recommendations. V. E XPERIMENTS SETUP 
+
+A. Datasets 
+
+Existing public multi-behavior datasets lack the rich textual item metadata (e.g., titles, attributes) essential for LLM-based reasoning, as they mostly contain anonymized IDs. To address this, we construct a new large-scale dataset from six months of real-world user logs on a major e-commerce platform, capturing heterogeneous behaviors—search, view, favorite, and purchase—along with comprehensive item metadata. We further split it into two task-specific datasets: the Post-Hoc Decision Distillation (PHDD) Dataset and the Multi-Behavior Recommendation (MBR) Dataset. 
+
+1) PHDD Dataset: The PHDD Dataset captures fine-grained, user-level decision traces in their original form, pre-serving all observed interactions without behavioral filtering or deduplication. It is partitioned into 200k, 10k, and 10k samples for training, validation, and testing, respectively. 
+
+2) MBR Dataset: We construct this dataset to evaluate tasks NIP and DCP, following the previous methods [36] with two preprocessing steps to ensure data quality: (1) we merge duplicated user-item-behavior interactions by keeping the earliest record; (2) we apply a k-core filtering (k=10) to retain users and items with at least 10 interactions, mitigating data sparsity. Each user’s filtered chronological sequence is then split via leave-one-out by timestamp: the last purchase for testing, the second-last for validation, and earlier interactions for training. To evaluate the cross-category generalization capability of our MARI framework under the Next Item Prediction (NIP) setting, we further partition the instances into two disjoint subsets: (1) NIP-in-category (NIP-in) , comprising users who have previously purchased at least one item in the same category as the target item; and (2) NIP-out-of-category (NIP-out) , where the target purchase represents the user’s first interaction in that category. This partition enables us to assess whether our method can effectively leverage decision memory to support recommendations in both familiar and novel category contexts. For the DCP task, where the target item category is assumed to be known, we construct the candidate set by using an LLM (Qwen3-Max) to select 2–5 items within the same category that the user showed notable hesitation or comparison behavior toward in their recent interaction history, followed by manual validation of the selected candidates. An example of a candidate set is provided in Appendix B. The resulting MBR dataset comprises three distinct tasks (NIP-in, NIP-out, and DCP) with non-overlapping users across tasks, yielding a total of 150,000 unique users. To ensure fair comparison, each task is identically sampled into 50k training, 10k validation, and 10k testing instances. 
+
+B. Metrics 1) PHDD Task: For the PHDD task, Decision Profile Tags, Decision Efficiency, and the keys of Decision Pref-erence/Avoidance Factors are closed-set. We evaluate them using precision, defined as the fraction of correctly predicted items among all predictions. In contrast, Decision Intent Reasoning and the values of Preference/Avoidance Factors are open-ended. We assess them via an LLM-as-judge approach, measuring the following dimensions on a scale of 0–5: (1) structural correctness (adherence to output format), (2) rea-soning quality (logical coherence of the decision inference process), and (3) value abstraction (appropriateness and gener-alizability of extracted factor values). Specifically, we employ DeepSeek-R1 as the judge model and provide it with a human-verified reference solution as the scoring benchmark to ensure evaluation reliability. 
+
+2) MBR Task: For the MBR task, we adopt a next-item prediction setting where the user’s subsequent actual purchase serves as the ground-truth target. Model performance is eval-uated using a widely used metric Hit Ratio@1 (Hit@1). 
+
+C. Experimental Settings 1) Baseline: We establish a comprehensive set of baseline models for our two core tasks. For the PHDD task, which focuses on generating a user’s decision memory, we adopt the off-the-shelf Qwen3 [34] series of large language models as our primary baselines. These models are used without any additional fine-tuning. For the MBR task, we benchmark against two baseline cat-egories. First, we include ID-based sequential recommenders: SASRec M B [37], SASRec’s [14] multi-behavior extension that incorporates different interaction types; and three recent state-of-the-art ID-based multi-behavior recommendation methods, namely MULE [8], COPF [9], and HGIB [10]. Second, to fully leverage the rich textual semantics of items, we integrate several powerful open-source LLMs into the recommenda-tion pipeline. Specifically, we employ Qwen3, DeepSeek-R1 (R1) [31], and GPT-OSS [38], which process item metadata such as titles, prices, and attributes using their native language understanding capabilities. Similar to the PHDD task, these LLMs are also used in their original, unmodified form without any further training on recommendation data. To ensure fair comparison, all baselines predict the target item from a unified candidate space: the recent historical sequence (for NIP) or the provided candidate set (for DCP). 
+
+2) Implementation Details: For the PHDD task, we set the maximum length of the input behavior sequence Hu,c to 200, considering only interactions that occurred within a two-week window prior to the target decision. To support retrieval in the DMB, we employ the Qwen3-Embedding-0.6B model to extract dense representations of behavior sequences. The PHDD Model ϕPHDD stu is trained via full-parameter fine-tuning on the PHDD dataset, based on the Qwen3-4B. For the MBR task, we set the maximum input sequence length Cu to 100, as our preliminary experiments (Figure 2) show that model performance peaks at this length. During memory retrieval, we perform a top-K search with K = 3 ,retrieving the three most relevant decision memories from the DMB. The MBR model ϕrec stu is fully fine-tuned from Qwen3-4B on the constructed MBR dataset. We train the model on a mixture of the three tasks: NIP-in-category, NIP-out-of-category, and DCP. VI. E XPERIMENTAL RESULTS 
+
+A. Performance Comparison 
+
+We perform comprehensive performance comparisons across two distinct tasks: the PHDD task, designed to generate users’ structured decision memories, and the Multi-Behavior Recommendation (MBR) task. 1) PHDD: Results on the PHDD dataset (Table I) show that our method enables the compact Qwen3-4B to match the much larger R1 model in precision metrics, while surpassing it in Reasoning Quality and Value Abstraction under LLM-as-Judge evaluation. This confirms that PHDD effectively distills the ability to understand user decision intent into a smaller model, ensuring the generation of high-quality SDMs while achieving competitive performance at a fraction of the inference cost. 
+
+TABLE I QUALITY OF STRUCTURED DECISION MEMORY (SDM) GENERATION ON THE PHDD DATASET . MODELS : Q4B (Q WEN 3-4B), Q8B (Q WEN 3-8B), Q14B, Q32B. BOLD : B EST , U NDERLINED : S ECOND -BEST .
+
+Metric Q4B Q8B Q14B Q32B R1 Q4B-PHDD(Ours) 
+
+Precision ( ↑)
+
+Factor Key 0.577 0.654 0.636 0.631 0.779 0.769 Decision Prof. 0.467 0.470 0.525 0.556 0.725 0.713 Decision Effic. 0.483 0.473 0.529 0.513 0.707 0.693 
+
+LLM-as-Judge ( ↑)
+
+Struct. Corr. 3.56 3.31 3.58 3.71 4.13 4.12 Reason. Qual. 3.51 3.40 3.69 3.75 3.89 3.93 
+
+Value Abst. 3.49 3.50 3.66 3.81 4.21 4.22 
+
+2) MBR: Table II details the Hit@1 performance, revealing three core findings: (1) Plug-and-play SDMs generalize across diverse model scales. By simply injecting SDMs into off-the-shelf LLMs without weight updates, MARI † broadly enhances performance across diverse parameter sizes (from 4B to 671B). Crucially, when applied to sufficiently large models (e.g., R1, Qwen3-235B-A22B-Think), this plug-and-play approach successfully surpasses strong fully-trained ID-based baselines (e.g., HGIB, MULE), explicitly confirming the generality and potency of our framework. (2) SDMs significantly amplify reasoning on complex tasks. The struc-tured priors provide vital context that medium-to-large models (≥14B) can effectively leverage, yielding massive gains on the challenging NIP-out task (e.g., +165% for GPT-OSS-20B, +128% for Qwen3-32B). However, smaller models (4B/8B) degrade on NIP-out, suggesting that out-of-category reasoning inherently requires a minimum intrinsic capacity. Conversely, on the DCP task, MARI † empowers all model scales to con-sistently outperform ID-based baselines, highlighting LLMs’ inherent advantage in difficult choice prediction that demands semantic comparison. (3) SFT empowers compact models to achieve state-of-the-art results. Fine-tuning the lightweight 4B model yields substantial improvements across all three tasks. Notably, MARI (4B) achieves 0.5561 on NIP-out and 0.8868 on DCP, significantly outperforming both fully-trained ID-based models and massive 671B untuned LLMs like R1. This demonstrates that specializing compact models to reason over SDMs offers a practical pathway to superior accuracy, mitigating reliance on massive architectures. Figure 4 presents an example of MARI’s interpretable recommendations, demonstrating that the model effectively uses the information of the SDMs (marked in red) during reasoning to produce the correct product recommendations. Candidate Items False (w/o SDMs) True (MARI)   
+
+> [{”item_title": "Drawer-Style Under-Desk Mobile Storage Rack", "attribute": "Color/Variant: 2-Tier
+> ⭐Solid Color – Upgraded Thickened, High-Capacity Smooth-Glide Drawers", "brand": "0001", "price": "44.76", "stock": "79708", ”favorites_count": "146", "sales_count": "314", ”item_id": ”xxxx269932943" }, {”item_title": "Drawer-Style Under-Desk Mobile Storage Rack", "attribute": "Color/Variant: 5-Tier
+> ⭐Transparent – Upgraded Thickened, High-Capacity Smooth-Glide Drawers", "brand": "0001", "price": "89.76", "stock": "79637", ”favorites_count": "146.0", "sales_count": "375",
+> ”item_id": ”xxxx269932950"
+> }]{"reasoning": "The user's recent behavior (from 19:16 to 19:18 on December 7, 2025) indicates strong interest in a drawer-style under-desk mobile storage rack, including multiple views and searches, reflecting an urgent need for home organization. All candidate items are from brand 0001, consistent with the brand of the user's most recently viewed product. Item 1 (2-tier solid-color version) is priced lower (44.76) compared to Item 2 (89.76), aligning better with the user’s historical price sensitivity (e.g., paid 43.09 for a shoe cabinet and 17.24 for a floor mat). Additionally, the user has previously viewed the 2-tier version, and the lower price point may reduce decision friction and increase purchase intent.", "item_title": "Drawer-Style Under-Desk Mobile Storage Rack", "item_id": ”xxxx269932943" }{"reasoning": "The user's historical decisions reveal a strong preference for high-capacity products (e.g., choosing a 2-column, 4-tier shoe cabinet over a 1-column, 3-tier one) and leveraging deep discounts (paying significantly below the original price). Recent behavior (from 19:16 to 19:18 on December 7, 2025) shows interest in a drawer-style under-desk mobile storage rack, with particular attention to the number of tiers (viewing both 2-tier and 5-tier versions), indicating a clear interest in storage solutions. The candidate item list is non-empty and includes both 2-tier and 5-tier options. The 5-tier version offers greater capacity—aligning with the user’s tendency to opt for larger sizes—and the user has explicitly viewed the 5-tier variant, making it the most relevant choice. Although the 5-tier option has a higher listed price (89.76), the user’s history demonstrates willingness to pay for enhanced functionality and may be awaiting a discount. Thus, the 5-tier storage rack exhibits the strongest purchase intent.", ”item_title": "Drawer-Style Under-Desk Mobile Storage Rack", ”item_id": ”xxxx269932950" }
+
+Fig. 4. The role of structured decision memory: comparing recommendation rationales with and without decision memory augmentation. 
+
+B. Ablation Study 
+
+To validate the core design of MARI, we conduct a series of ablation studies comparing MARI-B, MARI †⋆, MARI †, and SFT variants. Table III details the configurations and results, revealing three core insights: 
+
+(1) Superiority of structured memories over raw be-haviors. Directly injecting raw sequences aligned with SDMs (MARI-B) yields gains on simpler tasks (e.g., NIP-in) but degrades performance on complex tasks like NIP-out and DCP. This indicates that the verbosity of raw behaviors dilutes con-textual information, distracting the LLM from critical decision factors required for deep reasoning. Conversely, using decision memories (MARI †⋆ and MARI †) consistently outperforms MARI-B across all scales. This proves that enriching the input with explicit decision logic—rather than relying solely on implicit patterns in raw sequences—is crucial for guiding LLMs in challenging scenarios. 
+
+(2) Critical impact of memory quality. High-quality mem-ories distilled via PHDD (MARI †) always beat undistilled, lower-quality ones (MARI †⋆), particularly in NIP-out and DCP. This direct correlation between memory quality and performance validates the necessity of PHDD for filtering noise and abstracting clear user intent. 
+
+(3) SDMs enhance supervised fine-tuning. The baseline SFT and MARI share the same training objective, differing only in input augmentation. Incorporating retrieved SDMs during SFT yields clear gains over standard SFT without SDMs. This confirms a strong synergy between structured memory inputs and parameter updates for complex reasoning and generalization. 
+
+C. Effect of the Number of Retrieved Memories ( K)
+
+We investigate the influence of the retrieved memory count (K) on MARI †’s performance, using DeepSeek-R1 as the underlying recommendation model. Results in Figure 5 show a consistent trend: performance initially improves with K,TABLE II FULL COMPARISON OF HIT @1. MARI † DENOTES AN OFF -THE -SHELF OPEN -SOURCE GENERAL -PURPOSE MODEL WITHOUT ANY TASK -SPECIFIC FINE -TUNING FOR RECOMMENDATION . B ASE DENOTES VANILLA LLM S AND ID-BASED MODELS . BOLD : B EST , U NDERLINED : S ECOND -BEST .
+
+Category Model Base MARI † (Ours, w/o SFT) 
+
+NIP-in NIP-out DCP NIP-in NIP-out DCP ID-based (w/ train) SASRec M B 0.1666 0.1697 0.4077 - - -MULE 0.2363 0.1968 0.4206 - - -COPF 0.2013 0.1795 0.4037 - - -HGIB 0.2489 0.2251 0.4384 - - -LLMs (w/o train) Qwen3-4B 0.0751 0.0225 0.4617 0.1278 0.0157 0.4751 Qwen3-8B 0.1120 0.0687 0.4203 0.1580 0.0675 0.4505 Qwen3-14B 0.0999 0.0391 0.4514 0.1535 0.0676 0.4549 GPT-OSS-20B 0.1477 0.0934 0.4207 0.1963 0.2480 0.4533 Qwen3-32B 0.1136 0.0496 0.4479 0.1742 0.1135 0.4697 Qwen3-235B-A22B-Ins 0.1304 0.0798 0.5069 0.2224 0.2422 0.5251 Qwen3-235B-A22B-Thk 0.2068 0.2992 0.5010 0.2687 0.4189 0.5249 R1 0.1957 0.2503 0.5158 0.2531 0.3641 0.5336 
+
+MARI (Ours, w/ SFT) - - - 0.4869 0.5561 0.8868 
+
+TABLE III ABLATION STUDY ON HIT @1. MARI-B : U SES RAW BEHAVIOR SEQUENCES ALIGNED WITH SDM S. MARI †⋆ : U SES UNDISTILLED SDM S GENERATED BY QWEN 3-4B ( W/O PHDD). MARI † : U SES DISTILLED SDM SGENERATED BY QWEN 3-4B ( W/ PHDD). SFT variants : C OMPARES STANDARD SFT AGAINST SFT WITH SDM S. BOLD INDICATES THE BEST 
+
+(MARI † ) AND OVERALL (MARI) RESULTS .
+
+Variant Q4B Q14B Q32B GPT-OSS-20B R1 
+
+NIP-in 
+
+Base 0.075 0.100 0.114 0.148 0.196 MARI-B (Raw Behav.) 0.105 0.125 0.127 0.132 0.247 MARI †⋆ (Undist. SDM) 0.110 0.134 0.157 0.170 0.249 
+
+MARI † (Dist. SDM) 0.128 0.154 0.174 0.196 0.253 
+
+SFT w/o SDM 0.458 - - - -
+
+MARI (SFT + SDM) 0.487 - - - -
+
+NIP-out 
+
+Base 0.023 0.039 0.050 0.093 0.250 MARI-B 0.012 0.015 0.014 0.061 0.270 MARI †⋆ 0.013 0.046 0.084 0.133 0.317 
+
+MARI † 0.016 0.068 0.114 0.248 0.364 
+
+SFT w/o SDM 0.538 - - - -
+
+MARI 0.556 - - - -
+
+DCP 
+
+Base 0.462 0.451 0.448 0.421 0.516 MARI-B 0.436 0.437 0.441 0.409 0.511 MARI †⋆ 0.470 0.451 0.451 0.432 0.520 
+
+MARI † 0.475 0.455 0.470 0.453 0.534 
+
+SFT w/o SDM 0.866 - - - -
+
+MARI 0.887 - - - -1 2 3 4 5 6 7 8 9 10   
+
+> K
+> 0.2 0.3 0.4 0.5
+> Hit@1
+> NIP-in-category NIP-out-of-category DCP
+
+Fig. 5. MARI †’s Hit@1 performance across different tasks as K increases. 
+
+peaks around K = 3 or 4, and then declines. Sensitivity to K varies by task. The NIP-out task is most sensitive, as larger K introduces noise that impairs cross-category reason-ing. Conversely, NIP-in and DCP performance remains stable across a broader K range, demonstrating robustness to context volume. We set K = 3 as the default, achieving a balance of strong performance across tasks while minimizing noise from excessive context. 
+
+D. Memory Error Analysis 
+
+To evaluate the performance lower bound of MARI under degraded SDM quality, we simulate two error scenarios: (1) 
+
+error retrieval (lowest-similarity memories) and (2) error memory (random same-category SDMs from other users). Table IV reveals three key insights: 
+
+(1) Structural priors defy noise. On NIP-in, error variants consistently outperform the Base LLM (e.g., boosting 4B from 0.075 to 0.094). This suggests even inaccurate SDMs provide valuable structural signals guiding attention better than raw behaviors. 
+
+(2) Robustness scales with capacity. On NIP-out, small models (4B/14B) degrade slightly, whereas larger models (≥20B) remain robust and even improve (e.g., R1 jumps to 0.307). This indicates larger LLMs possess sufficient intrinsic capacity to filter noise. 
+
+(3) Factual sensitivity in DCP. Performance dips modestly but stays competitive, as DCP inherently relies on precise preference matching, making it more sensitive to factual inaccuracies. Overall, while LLMs exhibit commendable robustness, high-quality memories remain indispensable for maximizing complex reasoning performance. VII. C ONCLUSION 
+
+We propose MARI, a reasoning-aware framework that explicitly models the decision logic behind heterogeneous user interactions. Via Post-Hoc Decision Distillation, MARI TABLE IV MEMORY ERROR ANALYSIS . Err. Ret. : L OWEST -SIMILARITY MEMORIES .
+
+Err. Mem. : R ANDOM SAME -CATEGORY SDM S FROM OTHER USERS .
+
+Variant Q4B Q14B Q32B GPT-OSS R1 
+
+NIP-in 
+
+Base 0.075 0.100 0.114 0.148 0.196 Err. Ret. 0.079 0.124 0.124 0.158 0.230 Err. Mem. 0.094 0.120 0.117 0.151 0.223 
+
+MARI † 0.128 0.154 0.174 0.196 0.253 
+
+NIP-out 
+
+Base 0.023 0.039 0.050 0.093 0.250 Err. Ret. 0.013 0.038 0.080 0.129 0.307 Err. Mem. 0.012 0.032 0.062 0.118 0.301 
+
+MARI † 0.016 0.068 0.114 0.248 0.364 
+
+DCP 
+
+Base 0.462 0.451 0.448 0.421 0.516 Err. Ret. 0.437 0.398 0.432 0.428 0.495 Err. Mem. 0.443 0.414 0.438 0.405 0.494 
+
+MARI † 0.475 0.455 0.470 0.453 0.534 
+
+constructs a Decision Memory Bank of structured rationales capturing user goals and trade-offs. Retrieving these memories grounds LLM recommendations in explicit historical evidence, ensuring both interpretability and efficiency. Extensive offline experiments confirm MARI’s superiority in accuracy and real-world engagement, offering a practical path toward trans-parent, rationale-driven recommender systems. Future work will explore advanced SDM retrieval strategies and adaptive memory updates for dynamic environments, and quantify the specific contribution of individual SDM dimensions to recommendation quality and interpretability. REFERENCES [1] K. Bao, J. Zhang, Y. Zhang, W. Wang, F. Feng, and X. He, “Tallrec: An effective and efficient tuning framework to align large language model with recommendation,” in Proceedings of the 17th ACM conference on recommender systems , 2023, pp. 1007–1014. [2] S. Kim, H. Kang, S. Choi, D. Kim, M. Yang, and C. Park, “Large language models meet collaborative filtering: An efficient all-round llm-based recommender system,” in Proceedings of the 30th ACM SIGKDD Conference on Knowledge Discovery and Data Mining , 2024, pp. 1395– 1406. [3] Y. Hou, J. Zhang, Z. Lin, H. Lu, R. Xie, J. McAuley, and W. X. Zhao, “Large language models are zero-shot rankers for recommender systems,” in European Conference on Information Retrieval . Springer, 2024, pp. 364–381. [4] S. Kim, H. Kang, K. Kim, J. Kim, D. Kim, M. Yang, K. Oh, J. McAuley, and C. Park, “Lost in sequence: Do large language models understand sequential recommendation?” in Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining V. 2 , 2025, pp. 1160–1171. [5] Y. Hou, J. Li, Z. He, A. Yan, X. Chen, and J. McAuley, “Bridging language and items for retrieval and recommendation,” arXiv preprint arXiv:2403.03952 , 2024. [6] S. Gu, X. Wang, C. Shi, and D. Xiao, “Self-supervised graph neural networks for multi-behavior recommendation.” in IJCAI , 2022, pp. 2052–2058. [7] Z. Cheng, S. Han, F. Liu, L. Zhu, Z. Gao, and Y. Peng, “Multi-behavior recommendation with cascading graph convolution networks,” in Proceedings of the ACM Web Conference 2023 , 2023, pp. 1181–1189. [8] S. Lee, G. Ko, H.-J. Song, and J. Jung, “Mule: Multi-grained graph learning for multi-behavior recommendation,” in Proceedings of the 33rd ACM international conference on information and knowledge management , 2024, pp. 1163–1173. [9] C. Zhai, C. Meng, Y. Yang, K. Zhang, X. Zhao, and X. Li, “Com-binatorial optimization perspective based framework for multi-behavior recommendation,” in Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining V. 1 , 2025, pp. 1891–1902. [10] H. Zhang, C. Shen, X. Sun, J. Tan, Y. Tan, Y. Rong, H. Cheng, and L. Yi, “Hierarchical graph information bottleneck for multi-behavior recommendation,” in Proceedings of the Nineteenth ACM Conference on Recommender Systems , 2025, pp. 155–164. [11] A. Mnih and R. R. Salakhutdinov, “Probabilistic matrix factorization,” 
+
+Advances in neural information processing systems , vol. 20, 2007. [12] A. J. Chaney, D. M. Blei, and T. Eliassi-Rad, “A probabilistic model for using social networks in personalized item recommendation,” in 
+
+Proceedings of the 9th ACM Conference on Recommender Systems ,2015, pp. 43–50. [13] X. He, L. Liao, H. Zhang, L. Nie, X. Hu, and T.-S. Chua, “Neural col-laborative filtering,” in Proceedings of the 26th international conference on world wide web , 2017, pp. 173–182. [14] W.-C. Kang and J. McAuley, “Self-attentive sequential recommenda-tion,” in 2018 IEEE international conference on data mining (ICDM) .IEEE, 2018, pp. 197–206. [15] F. Sun, J. Liu, J. Wu, C. Pei, X. Lin, W. Ou, and P. Jiang, “Bert4rec: Sequential recommendation with bidirectional encoder representations from transformer,” in Proceedings of the 28th ACM international confer-ence on information and knowledge management , 2019, pp. 1441–1450. [16] S. Kim, N. Lee, D. Kim, M. Yang, and C. Park, “Task relation-aware continual user representation learning,” in Proceedings of the 29th ACM SIGKDD Conference on Knowledge Discovery and Data Mining , 2023, pp. 1107–1119. [17] X. Ren, W. Wei, L. Xia, L. Su, S. Cheng, J. Wang, D. Yin, and C. Huang, “Representation learning with large language models for recommendation,” in Proceedings of the ACM web conference 2024 ,2024, pp. 3464–3475. [18] C. Zhang, S. Wu, H. Zhang, T. Xu, Y. Gao, Y. Hu, and E. Chen, “Notellm: A retrievable large language model for note recommendation,” in Companion Proceedings of the ACM Web Conference 2024 , 2024, pp. 170–179. [19] L. Ning, L. Liu, J. Wu, N. Wu, D. Berlowitz, S. Prakash, B. Green, S. O’Banion, and J. Xie, “User-llm: Efficient llm contextualization with user embeddings,” in Companion Proceedings of the ACM on Web Conference 2025 , 2025, pp. 1219–1223. [20] Z. Zheng, W. Chao, Z. Qiu, H. Zhu, and H. Xiong, “Harnessing large language models for text-rich sequential recommendation,” in 
+
+Proceedings of the ACM Web Conference 2024 , 2024, pp. 3207–3216. [21] J. Kim, H. Kim, H. Cho, S. Kang, B. Chang, J. Yeo, and D. Lee, “Review-driven personalized preference reasoning with large lan-guage models for recommendation. corr, abs/2408.06276, 2024. doi: 10.48550,” arXiv preprint ARXIV.2408.06276 , 2024. [22] Z. Zhao, Z. Cheng, L. Hong, and E. H. Chi, “Improving user topic interest profiles by behavior factorization,” in Proceedings of the 24th international conference on world wide web , 2015, pp. 1406–1416. [23] J. Ding, G. Yu, X. He, Y. Quan, Y. Li, T.-S. Chua, D. Jin, and J. Yu, “Improving implicit recommender systems with view data.” in IJCAI ,2018, pp. 3343–3349. [24] G. Guo, H. Qiu, Z. Tan, Y. Liu, J. Ma, and X. Wang, “Resolving data sparsity by multi-type auxiliary implicit feedback for recommender systems,” Knowledge-Based Systems , vol. 138, pp. 202–207, 2017. [25] L. Guo, L. Hua, R. Jia, B. Zhao, X. Wang, and B. Cui, “Buying or browsing?: Predicting real-time purchasing intent using attention-based deep network with multiple behavior,” in Proceedings of the 25th ACM SIGKDD international conference on knowledge discovery & data mining , 2019, pp. 1984–1992. [26] L. Xia, C. Huang, Y. Xu, P. Dai, B. Zhang, and L. Bo, “Multiplex behavioral relation learning for recommendation via memory augmented transformer network,” in Proceedings of the 43rd international ACM SIGIR conference on research and development in information retrieval ,2020, pp. 2397–2406. [27] B. Geng, Z. Huan, X. Zhang, Y. He, L. Zhang, F. Yuan, J. Zhou, and L. Mo, “Breaking the length barrier: Llm-enhanced ctr prediction in long textual user behaviors,” in Proceedings of the 47th International ACM SIGIR Conference on Research and Development in Information Retrieval , 2024, pp. 2311–2315. [28] P. Lewis, E. Perez, A. Piktus, F. Petroni, V. Karpukhin, N. Goyal, H. K¨ uttler, M. Lewis, W.-t. Yih, T. Rockt¨ aschel et al. , “Retrieval-augmented generation for knowledge-intensive nlp tasks,” Advances in neural information processing systems , vol. 33, pp. 9459–9474, 2020. [29] J. Wu, C.-C. Chang, T. Yu, Z. He, J. Wang, Y. Hou, and J. McAuley, “Coral: collaborative retrieval-augmented large language models im-prove long-tail recommendation,” in Proceedings of the 30th ACM SIGKDD Conference on Knowledge Discovery and Data Mining , 2024, pp. 3391–3401. [30] L. Ning, W. Fan, and Q. Li, “Retrieval-augmented purifier for robust llm-empowered recommendation,” arXiv preprint arXiv:2504.02458 , 2025. [31] DeepSeek-AI, “Deepseek-r1: Incentivizing reasoning capability in llms via reinforcement learning,” 2025. [Online]. Available: https://arxiv.org/abs/2501.12948 [32] J. Wei, X. Wang, D. Schuurmans, M. Bosma, F. Xia, E. Chi, Q. V. Le, D. Zhou et al. , “Chain-of-thought prompting elicits reasoning in large language models,” Advances in neural information processing systems ,vol. 35, pp. 24 824–24 837, 2022. [33] L. C. Magister, J. Mallinson, J. Adamek, E. Malmi, and A. Severyn, “Teaching small language models to reason,” in Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics (Volume 2: Short Papers) , 2023, pp. 1773–1781. [34] A. Yang, A. Li, B. Yang, B. Zhang, B. Hui, B. Zheng, B. Yu, C. Gao, C. Huang, C. Lv, C. Zheng, D. Liu, F. Zhou, F. Huang, F. Hu, H. Ge, H. Wei, H. Lin, J. Tang, J. Yang, J. Tu, J. Zhang, J. Yang, J. Yang, J. Zhou, J. Zhou, J. Lin, K. Dang, K. Bao, K. Yang, L. Yu, L. Deng, M. Li, M. Xue, M. Li, P. Zhang, P. Wang, Q. Zhu, R. Men, R. Gao, S. Liu, S. Luo, T. Li, T. Tang, W. Yin, X. Ren, X. Wang, X. Zhang, X. Ren, Y. Fan, Y. Su, Y. Zhang, Y. Zhang, Y. Wan, Y. Liu, Z. Wang, Z. Cui, Z. Zhang, Z. Zhou, and Z. Qiu, “Qwen3 technical report,” arXiv preprint arXiv:2505.09388 , 2025. [35] Y. Zhang, M. Li, D. Long, X. Zhang, H. Lin, B. Yang, P. Xie, A. Yang, D. Liu, J. Lin, F. Huang, and J. Zhou, “Qwen3 embedding: Advancing text embedding and reranking through foundation models,” 
+
+arXiv preprint arXiv:2506.05176 , 2025. [36] C. Gao, X. He, D. Gan, X. Chen, F. Feng, Y. Li, T.-S. Chua, L. Yao, Y. Song, and D. Jin, “Learning to recommend with multiple cascading behaviors,” IEEE transactions on knowledge and data engineering ,vol. 33, no. 6, pp. 2588–2601, 2019. [37] Y. Yang, C. Huang, L. Xia, Y. Liang, Y. Yu, and C. Li, “Multi-behavior hypergraph-enhanced transformer for sequential recommendation,” in 
+
+Proceedings of the 28th ACM SIGKDD conference on knowledge discovery and data mining , 2022, pp. 2263–2274. [38] OpenAI, “gpt-oss-120b & gpt-oss-20b model card,” 2025. [Online]. Available: https://arxiv.org/abs/2508.10925 
+
+APPENDIX 
+
+A. Item Metadata Example 
+
+Example: Raw Item Profile in the Dataset 
+
+Item ID: 12345678 Category: Four-Wheel Strollers 
+
+Brand: Phoenix Price: 2000.0 
+
+Title: Phoenix 0-3 Years Reclining & Seating Baby Stroller 
+
+Attributes: Color: Camel [Premium Edition] - Upgraded polished aluminum frame, electroplated EVA silent wheels, includes bonus cartoon seat cushion. 
+
+Engagement Statistics: 
+
+Stock: 8,600 Favorites: 1,900 Total Sales: 2,700 
+
+B. Candidate Set Example 
+
+Example: Candidate Set 
+
+[{"item_title": "PiP Studio Unisex Dutch Imported Mug", 
+
+,→ "attribute": "Color: Orange", "brand": "PiP 
+
+,→ Studio", "price": "105.0", "stock": 620, " 
+
+,→ favorites_count": 2410, "sales_count": 853, " 
+
+,→ item_id": "578462125xxxx"}, {"item_title": "PiP Studio Unisex Dutch Imported Mug", 
+
+,→ "attribute": "Color: Chocolate Brown", "brand": 
+
+,→ "PiP Studio", "price": "118.0", "stock": 582, " 
+
+,→ favorites_count": 2410, "sales_count": 878, " 
+
+,→ item_id": "578114651xxxx"}, {"item_title": "PiP Studio Unisex Dutch Imported Mug", 
+
+,→ "attribute": "Color: Sky Blue", "brand": "PiP 
+
+,→ Studio", "price": "105.0", "stock": 620, " 
+
+,→ favorites_count": 2410, "sales_count": 853, " 
+
+,→ item_id": "578114651xxxx"} ]
+
+C. Structured Decision Memory Example 
+
+Example: Structured Decision Memory 
+
+Profile: Brand Loyalist Efficiency: Considered 
+
+Intent Reasoning: User exhibited highly goal-directed behavior for women’s comfort loungewear. On Oct 1 (15:50), searched “Fenteng cotton loungewear”, inspected attributes (XXL, beige), added to cart, and repeatedly viewed media to validate comfort. At 15:52, briefly explored an alternative (“Hannaguo modal loungewear set”) but returned to Fenteng within 1 min, reinforcing brand trust. After a cooling-off period, replayed video/images on Oct 7 (09:38) for final confirmation, purchasing at 125 (orig. 318) at 09:40. Core drivers: brand reliability and material safety; alternative exploration merely reinforced the initial choice. 
+
+Preference Factors:  
+
+> •
+
+Brand : Fenteng – Consistent focus from search to purchase with repeated interactions. (High)  
+
+> •
+
+Material : Cotton – Explicitly required; no non-cotton alternatives consid-ered. (High)  
+
+> •
+
+Price Range : 100-200 – Final payment (125) falls in range; accepted discount. (Medium) 
+
+Avoidance Factors:  
+
+> •
+
+Material : Modal – Briefly viewed Hannaguo modal product but abandoned it in favor of cotton option (Medium) 
+
+D. Prompt Templates 
+
+Prompt Template for MARI 
+
+# Role & Task 
+
+You are a senior e-commerce shopping advisor. Given the user’s [Historical Decisions], [Recent Behaviors], and [Candidate Items], predict the single item the user is most likely to purchase next. 
+
+# Decision Logic (in order of priority) 
+
+1. Intent Recognition : Analyze commonalities across recent behaviors and decisions (e.g., brand preference, price range, urgent needs). 2. Logical Judgment :- If [Candidate Items] is non-empty: Select the single item from the pool that best aligns with the user’s recent behavior and exhibits the strongest purchase intent. - If [Candidate Items] is empty: Revisit [Recent Behaviors] and select the single item with the strongest recent purchase intent. 
+
+# Output Format (Strict JSON) 
+
+{
+
+"reasoning": "A logical and coherent explanation", "item_title": "Full name of the predicted item", "item_id": "Unique ID of the predicted item" 
+
+}
+
+# Runtime Input Variables 
+
+Historical Decisions: {Historical_Decisions }
+
+Recent Behaviors: {Recent_Behaviors }
+
+Candidate Items: {Candidate_Items }

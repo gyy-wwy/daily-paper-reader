@@ -1,0 +1,631 @@
+Title: Bridging the Topological Divide: Dual-Branch Graph Distillation with Semantic Priors for Robust Cold-Start Recommendation
+
+URL Source: https://arxiv.org/pdf/2610.19578v1
+
+Published Time: Thu, 15 Oct 2026 00:47:21 GMT
+
+Number of Pages: 28
+
+Markdown Content:
+# Bridging the Topological Divide: Dual-Branch Graph Distillation with Semantic Priors for Robust Cold-Start Recommendation 
+
+## Yuanfeng QIU 
+
+The Hong Kong University of Science and Technology (Guangzhou) 
+
+## Abstract 
+
+Graph Collaborative Filtering models have achieved remarkable success in recom-mendation systems. However, they inherently suffer from a catastrophic repre-sentation collapse in strict cold-start scenarios due to the topological isolation of unobserved items. While integrating multi-modal semantic features offers a poten-tial remedy, directly mapping isolated semantic attributes into a globally topology-driven collaborative space frequently precipitates representation degradation and optimization conflicts. To bridge this fundamental structural divide, we propose DualGCN, an innovative Dual-Branch Graph Knowledge Distillation Framework. Operating under a decoupled two-stage training paradigm, DualGCN first constructs a robust collaborative teacher network where item representations are anchored by a topology-smoothed semantic prior, effectively reshaping the latent manifold. Sub-sequently, a semantic student branch employs a residual mapping mechanism and a magnitude-agnostic cosine distillation objective to achieve high-fidelity cross-modal alignment without disrupting established collaborative signals. Furthermore, we introduce a dynamic norm reconstruction mechanism to rigorously calibrate the physical scales of novel and warm items during global retrieval. Extensive ex-periments across three real-world benchmark datasets demonstrate that DualGCN significantly outperforms state-of-the-art baselines in strict cold-start scenarios while comprehensively preserving recommendation accuracy for highly active items. iarXiv:2610.19578v1 [cs.IR] 14 Oct 2026 1 Introduction 
+
+Recommender systems are core components of modern online platforms, including e-commerce and social media [1–4]. Among existing paradigms, Collaborative Filtering (CF) remains fundamental due to its domain-agnostic nature and proficiency in capturing user in-terests from historical interactions [5–8]. Because these interactions naturally form bipartite graphs, Graph Collaborative Filtering (GCF) has emerged as a dominant approach [9–11]. Specifically, ID-based GCF models explicitly capture high-order collaborative signals via multi-hop message passing [12]. Architectures such as LightGCN [13] and LR-GCCF [14] further streamline this paradigm by omitting non-linear transformations, achieving high training and inference efficiency through a minimalist representation space. However, ID-only models inherently struggle with extreme data sparsity and the cold-start problem. Without sufficient interaction history, cold-start items cannot be effectively mapped into the mature collaborative space. This creates a severe distribution shift between warm and cold items, significantly bottlenecking model performance [15, 16]. To mitigate this, a common practice is to incorporate side semantic features (e.g., text or multimodal metadata) to enrich the representation space [17–23]. While providing valuable contextual priors to bridge sparse interaction chains [21, 24–26], these hybrid models typically rely on complex feature extractors and multi-layer fusion modules. This complexity not only escalates computational overhead but often compromises the purity of collaborative signals, thereby degrading general recommendation performance [27, 28]. This dilemma raises a critical question: Can we leverage the rich priors of semantic features for cold-start items while preserving the lightweight architecture and collaborative efficiency of ID-based models? 
+
+To answer this, we propose DualGCN, a novel dual-path graph knowledge distillation frame-work for cold-start recommendation. DualGCN enables approximate topological-to-semantic knowledge transfer without relying on heavy fusion modules. Our main contributions are summarized as follows: 
+
+• We introduce DualGCN, a lightweight distillation framework featuring an asymmetric dual-path architecture. By replacing traditional heavy fusion modules with this design, it achieves approximate semanticknowledge transfer to the topological space, drastically reducing online inference costs. 1• We design a two-stage optimization paradigm that decouples topological updates from semantic alignment, effectively resolving gradient conflicts common in multitask graph training. Coupled with a novel topology-smoothed semantic prior, the model successfully aligns cold-start nodes within the collaborative space. 
+
+• Extensive experiments on multiple real-world datasets demonstrate that DualGCN signif-icantly outperforms state-of-the-art baselines in graph collaborative recommendation and achieves superior performance in cold-start scenarios. 
+
+# 2 Related Work 
+
+## 2.1 Graph-based Collaborative Filtering 
+
+Conventional Matrix Factorization (MF) models [29] primarily capture first-order interac-tions between users and items, often overlooking the intricate topological dependencies inherent in user-item data. To address this limitation, NGCF [12] introduced a message-passing mecha-nism via Graph Neural Networks to explicitly model high-order collaborative signals. Building on this, [13] proposed a streamlined architecture by removing redundant feature transformations and non-linear activations. This simplification not only reduced computational complexity but also established LightGCN as a state-of-the-art benchmark in graph-based recommendation. However, these models remain heavily reliant on the connectivity of the interaction bipartite graph. In scenarios characterized by long-tail items or extreme data sparsity, the high-order infor-mation propagation mechanism often falters [16], which fundamentally constrains the model’s representation capability. 
+
+## 2.2 Cold-start Recommendation 
+
+To compensate for the scarcity of interaction signals, researchers have extensively explored leveraging item metadata, such as textual descriptions, categories, or multimodal attributes, to enhance recommendation performance. Current cold-start solutions generally bifurcate into approach-driven and data-driven strategies. Approach-driven strategies, such as Dropout-Net [18], explicitly optimize cold-start performance by randomly dropping collaborative features during training. Meta-learning models, such as MetaEmbedding [19], utilize an embedding gen-erator to produce high-quality initial ID embeddings for new items based on their side information 2and a limited set of interactions. Conversely, data-driven strategies focus on augmenting the interaction matrix. For instance, content-boosted models [30] utilize content features to gen-erate pseudo-ratings for sparse user-item pairs before applying traditional CF. DeepMusic [17] pioneered the use of deep neural networks to extract textual and acoustic features from side attributes and map them into the CF latent space, demonstrating that integrating content features effectively mitigates the cold-start dilemma. Furthermore, weakly supervised methods [31] leverage user content preferences and item attributes to score new items, bridging the gap left by missing interactions. 
+
+## 2.3 Representation Alignment in Recommendation 
+
+While content features provide a viable path to alleviate cold-start issues, an inherent hetero-geneous gap exists between the topology-based ID space and the attribute-based semantic space. To bridge this discrepancy, frontier research often relies on complex external graph structures for cross-view alignment. For example, DCIB [32] employs a dual contrastive information bottleneck to facilitate topological knowledge transfer from knowledge graphs to collaborative views. Similarly, DFHE [33] injects structural information into the semantic view by fusing meta-graphs and meta-paths. However, these methods depend heavily on complete prior knowl-edge bases, such as high-quality knowledge graphs or predefined heterogeneous information networks. In many practical and stringent industrial scenarios, such external knowledge is often unavailable [34–36], leaving the model to rely solely on highly sparse bipartite graphs and mini-mal item features. Consequently, achieving efficient cross-space representation alignment, while decoupling the model from external graph structures and relying only on minimalist features, remains a critical and unresolved challenge. 
+
+# 3 Preliminaries 
+
+In this chapter, we first formalize the candidate retrieval and strict cold-start problems in recommender systems, alongside a brief review of the graph convolutional paradigm exemplified by LightGCN. Subsequently, we analyze the fundamental causes of GCN failure in cold-start scenarios from a message-passing perspective. Finally, through preliminary empirical analysis, we demonstrate the efficacy of substituting random ID embeddings with pre-trained seman-tic features, providing both theoretical and empirical motivation for the proposed dual-path 3architecture. 
+
+## 3.1 Problem Definition 
+
+In modern recommender systems, the core objective of the candidate retrieval stage is to efficiently retrieve a highly relevant subset of items from a massive corpus for a specific user. Formally, let U and I denote the user and item sets, respectively. Based on the visibility of historical interactions, the item set is strictly partitioned into warm and cold items, such that 
+
+I = I𝑤𝑎𝑟𝑚 ∪ I 𝑐𝑜𝑙𝑑 and I𝑤𝑎𝑟𝑚 ∩ I 𝑐𝑜𝑙𝑑 = ∅. The historical interactions between users and warm items naturally form a bipartite graph G = (V 𝑤𝑎𝑟𝑚 , E) .In this context, Graph Collaborative Filtering (GCF) paradigms, particularly LightGCN, have achieved remarkable success. These transductive paradigms assign learnable ID embeddings 
+
+e𝑢 , e𝑖 ∈ R𝑑 to each user 𝑢 ∈ U and warm item 𝑖 ∈ I 𝑤𝑎𝑟𝑚 participating in training. High-order topological signals are then explicitly aggregated by performing efficient message passing on the interaction graph G. Concurrently, items in modern systems are typically associated with rich multimodal content. Encoded by pre-trained foundation models, these multimodal attributes are formalized as initial semantic vectors s𝑖 ∈ R𝑑 𝑠 .However, traditional GCF paradigms expose critical limitations when confronting the strict cold-start (or Out-Of-Vocabulary, OOV) challenge. Specifically, when a completely novel item 
+
+𝑖 𝑛𝑒𝑤 ∈ I 𝑐𝑜𝑙𝑑 enters the system during inference, existing models suffer a dual structural failure: First, constrained by the transductive parameterized lookup table mechanism, the unseen 𝑖 𝑛𝑒𝑤 
+
+lacks a pre-learned ID embedding, resulting in an immediate representation absence in the initial collaborative space. Second, devoid of historical interactions, its degree in the interaction graph 
+
+G is strictly zero. This structural isolation halts the neighborhood-aggregation message-passing mechanism, completely severing the new item from the established collaborative signal space. Consequently, the core challenge of this work is formulated as an inductive cross-modal representation alignment and latent preference prediction task. The objective is to design and jointly optimize a cross-modal mapping function 𝑓 𝜃 : R𝑑 𝑠 → R𝑑 , enabling the independent inference of a pseudo-collaborative representation ˜e𝑖 𝑛𝑒𝑤 = 𝑓 𝜃 (s𝑖 𝑛𝑒𝑤 ) for any strict cold-start item 
+
+𝑖 𝑛𝑒𝑤 ∈ I 𝑐𝑜𝑙𝑑 , relying exclusively on its semantic prior s𝑖 𝑛𝑒𝑤 . To ensure the retrieval validity of 
+
+˜e𝑖 𝑛𝑒𝑤 , the optimization of 𝑓 𝜃 is governed by two key constraints: 1. Heterogeneous Spatial Alignment: On the visible warm subgraph G, the mapped rep-resentation distribution { 𝑓 𝜃 (s𝑖 ) | 𝑖 ∈ I 𝑤𝑎𝑟𝑚 } must strictly approximate the high-order 4collaborative space aggregated via message passing. This minimizes the heterogeneous distribution shift between the semantic space R𝑑 𝑠 and the collaborative space R𝑑 .2. Zero-Shot Preference Fidelity: The generated cold-start vector ˜e𝑖 𝑛𝑒𝑤 must seamlessly integrate into the existing GCF retrieval space. This ensures that the similarity metric can accurately estimate the true interaction probability between a user 𝑢 ∈ U and the unseen item 𝑖 𝑛𝑒𝑤 , thereby achieving zero-shot candidate retrieval under the extreme condition of zero topological degree. 
+
+## 3.2 Review of Graph Neural Networks for Recommendation 
+
+To capture high-order collaborative signals on bipartite interaction graphs, the core paradigm of GCF focuses on optimizing initial representations via iterative message passing between nodes. Following our previous definitions, let G = (V warm , E) be the interaction graph compris-ing users and warm items. We define N𝑢 and N𝑖 as the first-order neighbor sets for user 𝑢 ∈ U 
+
+and item 𝑖 ∈ I warm , respectively. Let e(𝑘 ) 
+
+> 𝑢
+
+, e(𝑘 ) 
+
+> 𝑖
+
+∈ R𝑑 denote the node embeddings generated at the 𝑘 -th graph convolutional layer, where 𝑘 = 0 corresponds to the initialized, learnable ID embeddings. NGCF [12] established the foundational paradigm for topology-driven feature evolution. It explicitly models the information interaction between a target node and its neighbors by incorporating parameterized feature transformations and non-linear activations. Specifically, the aggregation operation in the 𝑘 -th layer of NGCF is formulated as: 
+
+e(𝑘 +1) 
+
+> 𝑢
+
+= 𝜎 W1e(𝑘 ) 
+
+> 𝑢
+
++∑︁ 
+
+> 𝑖 ∈N 𝑢
+
+1√︁ 
+
+|N 𝑢 ||N 𝑖 |
+
+
+
+W1e(𝑘 ) 
+
+> 𝑖
+
++ W2 (e(𝑘 ) 
+
+> 𝑖
+
+⊙ e(𝑘 ) 
+
+> 𝑢
+
+)
+
+!
+
+(1) Here, W1, W2 ∈ R𝑑 ×𝑑 are layer-specific trainable weight matrices, ⊙ denotes the element-wise product used to capture second-order feature interactions, and 𝜎 (·) is the non-linear activation function, typically LeakyReLU. The symmetric normalization term 1√|N 𝑢 ||N 𝑖 | is introduced to mitigate scale shifts caused by degree discrepancies. While NGCF validates the efficacy of topological signal aggregation, subsequent research by LightGCN reveals a critical inefficiency: in an ID-only embedding space devoid of explicit semantics, complex weight matrices W and non-linear activations 𝜎 are not merely redundant, but significantly exacerbate training difficulty and induce overfitting. Consequently, LightGCN 5[13] drastically streamlines the GCF paradigm by discarding all feature transformations and non-linearities, retaining only the essential symmetric normalized neighborhood smoothing: 
+
+e(𝑘 +1) 
+
+> 𝑢
+
+=∑︁ 
+
+> 𝑖 ∈N 𝑢
+
+1√︁ 
+
+|N 𝑢 ||N 𝑖 | e(𝑘 ) 
+
+> 𝑖
+
+(2) 
+
+e(𝑘 +1) 
+
+> 𝑖
+
+=∑︁ 
+
+> 𝑢 ∈N 𝑖
+
+1√︁ 
+
+|N 𝑖 ||N 𝑢 | e(𝑘 ) 
+
+> 𝑢
+
+(3) After executing 𝐾 layers of message passing, to synthesize collaborative signals across different hops and alleviate the over-smoothing problem, both NGCF and LightGCN employ a layer combination mechanism. This computes the final representations, ˜ e𝑢 and ˜ e𝑖 , for downstream prediction by aggregating the node embeddings across all layers via a weighted sum: ˜e𝑢 =
+
+> 𝐾
+
+∑︁ 
+
+> 𝑘 =0
+
+𝛼 𝑘 e(𝑘 ) 
+
+> 𝑢
+
+, ˜e𝑖 =
+
+> 𝐾
+
+∑︁ 
+
+> 𝑘 =0
+
+𝛼 𝑘 e(𝑘 ) 
+
+> 𝑖
+
+(4) where 𝐾 is the total number of graph convolutional layers, and the scalar 𝛼 𝑘 ≥ 0 is a hyper-parameter controlling the weight of the 𝑘 -th layer features. To maintain model simplicity and avoid additional tuning overhead, it is empirically set to a uniform distribution 𝛼 𝑘 = 1/( 𝐾 + 1)
+
+in practice. Ultimately, the model computes the predicted preference score of a user for an item via the inner product ˆ 𝑦 𝑢𝑖 = ˜e⊤ 
+
+> 𝑢
+
+˜e𝑖 .Although these architectures achieve remarkable performance on active items with abundant interactions, their underlying transductive learning paradigm renders them highly vulnerable. This heavy reliance on topological connectivity inevitably leads to catastrophic performance collapse in strict cold-start scenarios. In the following subsection, we will provide concrete experimental evidence through an empirical analysis to uncover the mechanisms behind this failure. 
+
+## 3.3 DualGCN’s Motivation 
+
+3.3.1 Strict Cold-Start Breakdown in GCNs 
+
+While LightGCN has achieved significant success on active items, the efficacy of its rep-resentation learning is inherently bottlenecked by the rigid coupling of historical interaction topology and pre-trained ID embeddings. From a matrix perspective, the smoothing propaga-6tion mechanism in LightGCN can be formulated as: 
+
+E(𝑘 +1) = ˜AE (𝑘 ) , ˜A = D−1/2AD −1/2 (5) where E(𝑘 ) ∈ R(𝑁 +𝑀 )× 𝑑 denotes the embedding matrix at the 𝑘 -th layer, E(0) represents the initial ID embeddings, and A is the adjacency matrix of the user-item interaction graph. However, when a novel item 𝑖 new ∈ I cold enters the system during inference, traditional GCF models encounter a dual structural failure. First, due to the constraints of the transductive parameterized lookup table mechanism, un-seen items 𝑖 new lack pre-learned ID embeddings. This results in an immediate representation void in the initial collaborative space, causing a collapse in model performance. Second, the absence of historical interactions implies that the degree of 𝑖 new in the interaction graph G is strictly zero. Consequently, the corresponding row and column vectors in the normalized adja-cency matrix ˜ A are null, leading to a structural fracture in the topology-dependent neighborhood aggregation mechanism. After 𝐾 layers of propagation, the final output representation of such an item degenerates into an unoptimized, isolated state: ˜e𝑖 new = e(0) 
+
+> 𝑖 new
+
+(6) This isolated feature suffers from a severe distribution gap relative to the highly clustered and mature collaborative manifold. As a result, cold-start items are significantly marginalized during vector retrieval. As illustrated in Table 1, on the Amazon-Book2023 dataset, pure ID-driven models such as NGCF and LightGCN experience a catastrophic collapse of over 97% in Recall@20 and NDCG@20 metrics when transitioning from warm items to strict cold-start scenarios. Since topological isolation severs the acquisition of collaborative signals for cold items, leveraging graph-independent prior knowledge to bridge the representation gap becomes es-sential. To this end, we explore the potential of substituting uninformative random IDs with high-dimensional continuous semantic features s𝑖 ∈ R𝑑 𝑠 extracted from pre-trained content models for node initialization. Specifically, on the Amazon-Book2023 dataset, we utilize the pre-trained all-mpnet-base-v2 model from the Sentence Transformers framework [37] as the text encoder to extract item titles and categories to generate dense semantic vectors. These vectors are subsequently reduced to the model’s latent dimension via Principal Component Analysis 7Table 1: Performance comparison on Warm vs. Strict Cold-Start scenarios on Amazon-Book2023. Δ ↓ denotes the relative performance drop when transitioning from warm to cold-start items. 
+
+Method Recall@20 NDCG@20 
+
+Warm Cold Δ ↓ Warm Cold Δ ↓
+
+NGCF 0.0736 0.0021 -97.1% 0.0463 0.0009 -98.1% 
+
+LightGCN 0.1244 0.0027 -97.8% 0.0791 0.0013 -98.4% 
+
+NGCF-Semantic 0.0753 0.0948 +25.9% 0.0459 0.0515 +12.2% 
+
+LightGCN-Semantic 0.1141 0.0515 -54.9% 0.0717 0.0270 -62.3% 
+
+(PCA) [38] to serve as initial embeddings: 
+
+e(0) 
+
+> 𝑖
+
+= s𝑖 (7) As shown in the lower half of Table 1, the introduction of semantic initialization significantly mitigates or even reverses the decline in cold-start performance, providing preliminary evidence of the efficacy of semantic priors. (a) Random ID Initialization (b) Semantic Initialization 
+
+> Warm (Layer 0) Category 1 Warm (Output) Category 2 Cold (Zero-shot) Category 3
+
+Figure 1: Uniform Manifold Approximation and Projection visualization of item representations in the latent space before and after graph message passing. With random ID initialization, the final smoothed collaborative manifold completely decouples from the initial random state, leaving degree-0 cold items severely isolated. In contrast, semantic initialization exerts a strong anchoring effect, preserving the topological clustering structure and inherently aligning the isolated cold items with the mature collaborative signal space. 83.3.2 Semantic Anchoring Effect 
+
+To intuitively illustrate the proposed Semantic Anchoring Effect, we employ the UMAP algorithm in Figure 1 to visualize the evolution of representations within the latent space. Fol-lowing the message-passing mechanism of LightGCN, we extract both the initial ID embeddings and the final output representations after multi-layer aggregation and residual weighting. To construct a discriminative sample distribution, we randomly select anchor items from three distinct semantic categories and retrieve the 50 warm items with the highest semantic similarity to each anchor to form visible clusters. Furthermore, to simulate strict cold-start scenarios, we identify 5 isolated nodes with zero degree and the highest semantic proximity to the anchors for each category. Our observations indicate that under random ID initialization, representations exhibit signifi-cant representation drift after high-order graph smoothing. Cold-start nodes, lacking topological connections, remain completely dissociated from the collaborative manifold. Conversely, the introduction of semantic vectors provides a robust anchoring effect for the nodes. For active items, the feature distribution remains tightly clustered around the initial semantic anchors even after low-pass graph filtering. This empirical finding strongly supports the core motivation of this work: since semantic features can naturally anchor the distribution within the graph structure during the smoothing process, we can design a cross-modal mapping mechanism to align the semantic features s𝑖 new of isolated items into the mature collaborative space. This alignment allows the model to effectively overcome the cold-start dilemma caused by the failure of graph topology. 
+
+# 4 Methodology 
+
+Building on the empirical motivations and problem scope established previously, this chapter systematically delineates the proposed Dual-Branch Graph Knowledge Distillation framework (DualGCN). The framework leverages the anchoring effect of semantic features to construct asymmetric teacher and student branches, detailing their respective architectures and training strategies. Furthermore, we introduce a dynamic magnitude reconstruction mechanism and conclude with an analysis of the computational complexity of DualGCN. 94.1 The Dual-Branch Alignment Architecture 
+
+4.1.1 Collaborative Teacher Branch 
+
+The collaborative teacher branch is designed to extract the topological structures of warm-start nodes from the bipartite interaction graph G = (V warm , E) , thereby establishing a stable and generalizable collaborative reference frame. To integrate the anchoring effect of the static semantic space into the collaborative topological space, we first define and align the physical sources of the two heterogeneous features involved. On one hand, the collaborative features 
+
+e𝑖 ∈ R𝑑 are learnable embeddings initialized via random IDs, intended to capture pure interaction preferences. On the other hand, static semantic features s𝑖 are derived from item metadata. Since cold-start items typically lack user reviews or rich interaction histories, we extract only their most fundamental attributes by concatenating the item name and category into an input description 
+
+𝑡 𝑖 . Specifically, we employ a pre-trained language model all-mpnet-base-v2 [37], denoted as Φenc (·) , to encode 𝑡 𝑖 into high-dimensional dense representations. These are subsequently projected via PCA [38] into a 𝑑 -dimensional space aligned with the collaborative features. The specific settings for the original dimensions and 𝑑 are elaborated in the Experiments section. This extraction and dimensionality reduction process is formalized as: 
+
+s𝑖 = PCA  Φenc (𝑡 𝑖 ) (8) Notably, to maintain the semantic integrity of s𝑖 , this semantic prior remains strictly frozen throughout the joint training process and does not participate in backpropagation updates. However, an inherent magnitude discrepancy exists between the dense semantic vectors generated by pre-trained models and the randomly initialized collaborative vectors. To prevent this scale variance from inducing severe representation oscillation during the early stages of optimization, DualGCN first applies 𝐿 2 normalization to the semantic features. This strips away the absolute magnitude, extracting a pure semantic directional prior: ¯ s𝑖 = s𝑖   
+
+> ∥s𝑖 ∥2
+
+. Subsequently, we introduce a global learnable scalar 𝛾 to adaptively regulate the injection intensity of this semantic prior. Ultimately, the 0-th layer initial embedding for a warm item 𝑖 ∈ I warm is formulated as a composition of the collaborative basis and the semantic anchor: 
+
+e(0) 
+
+> 𝑖
+
+= e𝑖 + 𝛾 ¯s𝑖 (9) 10 For a user 𝑢 ∈ U , the initial state retains only the ID embedding, i.e., e(0) 
+
+> 𝑢
+
+= e𝑢 . During the 𝑘 -th layer of graph convolutional propagation, nodes aggregate the (𝑘 − 1)-th layer representations of their first-order interactive neighbors N𝑖 and N𝑢 via symmetric normalization: 
+
+e(𝑘 ) 
+
+> 𝑖
+
+=∑︁ 
+
+> 𝑢 ∈N 𝑖
+
+1√︁ 
+
+|N 𝑖 ||N 𝑢 | e(𝑘 −1) 
+
+> 𝑢
+
+(10) After 𝐾 layers of propagation, a layer combination mechanism is employed to perform mean aggregation across all layers, generating the final teacher representation ˜ eT 
+
+> 𝑖
+
+for downstream tasks: ˜eT 
+
+> 𝑖
+
+= 1
+
+𝐾 + 1
+
+> 𝐾
+
+∑︁ 
+
+> 𝑘 =0
+
+e(𝑘 ) 
+
+> 𝑖
+
+(11) The final user representation ˜ eT 
+
+> 𝑢
+
+is obtained analogously. 
+
+Matrix Formulation Analysis: Let R ∈ R|U|×|I warm | denote the interaction matrix between users and warm-start items. The adjacency matrix A of the bipartite interaction graph G and its symmetrically normalized form ˜ A are defined as: 
+
+A =
+
+
+
+0 RR𝑇 0
+
+
+
+, ˜A = D− 12 AD − 12 (12) Let E𝑢 ∈ R|U|× 𝑑 and E𝑖 ∈ R|I warm |× 𝑑 define the initial ID embedding matrices for users and warm items, respectively, and ¯ S ∈ R|I warm |× 𝑑 denote the normalized semantic matrix. The comprehensive node embedding matrix at the 0-th layer, E(0) , can be represented in block form as: 
+
+E(0) =
+
+
+
+E𝑢 
+
+E𝑖 + 𝛾 ¯S
+
+
+
+(13) Consequently, the final global teacher feature matrix ˜ ET = 1
+
+> 𝐾 +1
+
+Í𝐾 𝑘 =0 E(𝑘 ) can be linearly expanded as: ˜ET = 1
+
+𝐾 + 1
+
+> 𝐾
+
+∑︁ 
+
+> 𝑘 =0
+
+˜A𝑘 
+
+
+
+E𝑢 
+
+E𝑖 
+
+| {z }
+
+> Graph-Propagated ID Embeddings
+
++ 𝛾 1
+
+𝐾 + 1
+
+> 𝐾
+
+∑︁ 
+
+> 𝑘 =0
+
+˜A𝑘 
+
+
+
+0
+
+¯S
+
+| {z }
+
+> Topology-Smoothed Semantic Prior
+
+(14) The second term in Eq. 14 introduces the Topology-Smoothed Semantic Prior , where ¯ S
+
+represents the initial multimodal/content features on the item side. Notably, although the user-11 side semantic prior is initially empty, the multi-hop information diffusion via the graph adjacency matrix ˜ A𝑘 enables the seamless injection of item semantic features into user representations along the interaction edges. 
+
+4.1.2 Semantic Student Branch 
+
+To address the structural failure caused by the zero-degree isolation of cold-start items 
+
+𝑖 new ∈ I cold , the student branch relies exclusively on the static semantic prior ¯ s𝑖 new to construct a cross-modal alignment network. Because of the inherent distribution discrepancy between the static semantic space and the dynamic collaborative space, direct mapping is highly susceptible to representation degeneration. Therefore, this branch employs an incremental prediction mech-anism, using the fundamental semantic direction as an anchor to predict the feature deviation of the cold-start target within the collaborative space. Let W1, W2 denote the weight matrices, b1, b2 the bias terms, and LN (·) Layer Normaliza-tion. The raw student representation ˜ eS 
+
+> 𝑖
+
+for item 𝑖 is formally defined as: ˜eS 
+
+> 𝑖
+
+= W2𝜎 (LN (W1¯s𝑖 + b1)) + b2 + 𝛾 ¯s𝑖 (15) Through residual connections, this branch learns the semantic-to-collaborative alignment map-ping. As elaborated in the subsequent dynamic representation reconstruction section, cold-start items obtain an approximate collaborative projection via this semantic mapping. 
+
+## 4.2 Decoupled Two-stage Optimization 
+
+Graph neural networks inevitably suffer from the over-smoothing effect during message passing. If topological updates and semantic alignment are jointly optimized in an end-to-end framework, the dominant gradients from the highly sparse graph reconstruction can easily over-whelm the low-frequency alignment signals, thereby disrupting the inherent representations of the static semantic space. To isolate this gradient interference and ensure that the original rec-ommendation accuracy for warm items is not compromised by the mapping network, DualGCN adopts a decoupled two-stage training paradigm. The primary objective of the first stage is to construct a robust collaborative reference frame. During this phase, the parameters of the semantic alignment network {W1, W2, b1, b2} are strictly frozen. The semantic features serve merely as structural anchors and do not participate 12 in the gradient updates of the learnable embeddings. The model activates e𝑢 , e𝑖 , and 𝛾 , and computes the predicted score via the inner product ˆ 𝑦 𝑢𝑖 = (˜eT 
+
+> 𝑢
+
+)𝑇 ˜eT 
+
+> 𝑖
+
+. Optimization is driven by the Bayesian Personalized Ranking (BPR) loss: 
+
+LBPR = −∑︁ 
+
+> (𝑢,𝑖, 𝑗 )
+
+ln 𝜎   ˆ𝑦 𝑢𝑖 − ˆ𝑦 𝑢 𝑗 
+
+ + 𝜆 Θ (16) where Θ represents the 𝐿 2 regularization term for the learnable parameters. To capture high-quality collaborative signals as effectively as possible, we employ a training strategy similar to LightGCN in this first stage: the trainable parameters are restricted solely to the 0-th layer embeddings, which makes Θ = ∥E(0) ∥2. In this stage we also omit the dropout mechanisms commonly used in GCN [39] and NGCF. The second stage aims to achieve targeted cross-spatial transfer of modal knowledge. The parameter space {e𝑢 , e𝑖 , 𝛾 } converged in the first stage is permanently frozen. The final teacher representations ˜ eT 
+
+> 𝑖
+
+serve as static soft labels to exclusively supervise the alignment network parameters. The model employs a bilaterally normalized cosine distillation loss, Ldistill , which discards absolute constraints in the Euclidean space and solely aligns the correlation of warm and cold features on the unit hypersphere: 
+
+Ldistill = 1 − 1
+
+|I warm |∑︁ 𝑖 ∈I warm 
+
+(˜eS 
+
+> 𝑖
+
+)𝑇 ˜eT
+
+> 𝑖
+
+∥ ˜eS 
+
+> 𝑖
+
+∥2 ∥ ˜eT 
+
+> 𝑖
+
+∥2
+
+(17) During the second-stage alignment, we investigated alternative optimization criteria, includ-ing Mean Squared Error (MSE) and InfoNCE [40]. However, empirical evidence indicates that imposing absolute magnitude constraints on a mapping network devoid of interaction frequency priors, or incorporating negative samples, yields no performance dividends. Consequently, we empirically adopt the cosine distillation loss as our final objective. 
+
+## 4.3 Adaptive Inference and Dynamic Norm Reconstruction 
+
+As the distillation stage decouples feature magnitudes from their directional information, directly utilizing the student branch’s unit vectors for global retrieval would precipitate per-formance degradation due to geometric misalignment between the representation spaces. To circumvent this, we propose a dynamic norm reconstruction mechanism. Specifically, for each inference batch, the model first computes the average 𝐿 2 norm of the warm-start representations 13 (a) LightGCN (b) DualGCN(Ours)       
+
+> Static Semantic Anchor Initial Representation Final Representation
+> Category 1 Category 2 Category 3 Category 4 Category 5
+
+Figure 2: UMAP Visualization of feature evolution from initial to final representation. (a) LightGCN starts from chaotic random initialization. (b) DualGCN systematically expands from frozen semantic anchors ˜ Eprior towards the global collaborative manifold. from the teacher branch: 
+
+𝜇 norm = 1
+
+|I warm |∑︁ 𝑖 ∈I warm 
+
+˜eT  
+
+> 𝑖 2
+
+(18) To unify the downstream retrieval space, a routing mechanism is introduced to dynamically address and reconstruct the final inference representation e∗ 
+
+> 𝑖
+
+. The routing logic is governed by an interaction threshold 𝜏 relative to the item’s real-time degree 𝑑 𝑖 . For items in a cold-start or extremely sparse state ( 𝑑 𝑖 < 𝜏 ), we extract the unit directional vector from the student network and scale it by the dynamic mean 𝜇 norm to achieve scale calibration. This inference process is formally defined as: 
+
+e∗ 
+
+> 𝑖
+
+=
+
+
+
+˜eT 
+
+> 𝑖
+
+, if 𝑑 𝑖 ≥ 𝜏, 
+
+> ˜eS
+> 𝑖
+
+∥˜eS 
+
+> 𝑖
+
+∥2
+
+𝜇 norm , if 𝑑 𝑖 < 𝜏. 
+
+(19) Finally, the preference score for user 𝑢 toward any item 𝑖 is computed as the inner product ˆ𝑦 𝑢,𝑖 = (˜eT 
+
+> 𝑢
+
+)⊤e∗ 
+
+> 𝑖
+
+. By aligning the physical scales of novel and established items within a global retrieval manifold, this mechanism effectively eliminates representation bias arising from uneven magnitudes without necessitating additional training overhead. 14 4.4 Theoretical Validity Analysis of Cross-Space Mapping 
+
+An inherent distribution gap exists between the static semantic feature space and the dynamic collaborative manifold. Consequently, compelling a mapping function to reconstruct globally topology-driven representations using solely localized and isolated semantic attributes is intrin-sically unreasonable. To address this, we employ an early fusion strategy for semantic and ID representations at the input of the teacher network, introducing a Topology-Smoothed Semantic Prior: ˜Eprior = 𝛾 𝐾 + 1
+
+> 𝐾
+
+∑︁ 
+
+> 𝑘 =0
+
+˜A𝑘 
+
+
+
+0
+
+¯S
+
+
+
+(20) By freezing this prior during training, the collaborative space is reshaped into a constrained expansion manifold, anchored by semantic information and propelled by topological connec-tivity. To visually trace the evolution of this feature space, we sample items from five distinct categories and project their initial and final representations onto a 2D plane using UMAP. As depicted in Figure 2, the initial representations based exclusively on random IDs or local se-mantics exhibit a highly scattered and entangled distribution. Following the introduction of the semantic prior mechanism, the evolved representations transform from discrete or overlapping states into dense intra-class clusters. Furthermore, they maintain distinct decision boundaries across different semantic categories, effectively bridging the initial cross-modal discrepancy at a geometric level. Empowered by this manifold alignment, the student branch is provided with robust reliability guarantees for the representation reconstruction of cold-start items. Formally, this branch employs a residual architecture, decomposing the cross-space mapping task into a superposition of a fundamental semantic anchor and a non-linear topological deviation: ˜eS 
+
+> 𝑖
+
+= MLP (¯s𝑖 ) + 𝛾 ¯s𝑖 (21) This design fundamentally exploits the semantic anchoring property established by the teacher branch, compelling the reconstructed coordinates of cold-start items to converge within a valid joint semantic-collaborative subspace. This structural constraint ensures that even under conditions of extreme interaction sparsity, the model successfully anchors item representations within a plausible topological neighborhood, thereby preserving a robust partial order relation-ship for global retrieval. 15 4.5 Complexity Analysis 
+
+Despite the introduction of the dual-branch alignment architecture and the dynamic norm reconstruction mechanism, DualGCN preserves rigorous computational efficiency. The time complexity per training epoch is predominantly governed by the message-passing operations, which scale at O( 𝐾 |E| 𝑑 ), where 𝐾 , |E| , and 𝑑 denote the number of graph convolutional layers, the total number of interaction edges, and the embedding dimensionality, respectively. The space complexity is constrained to O(|V | 𝑑 + |E|) to maintain the trainable embedding parameters and the sparse adjacency matrix. Consequently, DualGCN delivers substantial performance improvements in strict cold-start scenarios without compromising the linear scalability inherent to minimalist graph recommenders such as LightGCN. 
+
+# 5 Experimental Evaluation 
+
+In this chapter, we first detail the experimental setup. Subsequently, we conduct a comprehen-sive comparative evaluation against various state-of-the-art baselines under both conventional recommendation and strict cold-start scenarios. Finally, to validate the rationality and efficacy of DualGCN, we provide in-depth ablation studies and empirical analyses. 
+
+## 5.1 Experimental Settings 
+
+This section delineates the experimental setup, encompassing dataset characteristics, data preprocessing and partitioning strategies, evaluation metrics, baseline models, and specific hyperparameter configurations. 
+
+5.1.1 Datasets 
+
+We conduct extensive experiments on the widely recognized Amazon Reviews’23 dataset [41], which serves as a standard benchmark in the recommendation domain by providing both rich multimodal textual attributes and real-world interaction records. Specifically, we select three domain-specific subsets: Amazon-Books, Amazon-Electronics, and Amazon-Sports. To ensure evaluation reliability and maintain consistency with standard protocols in GCF research [12,13], we apply a rigorous 10-core filtering strategy. This process eliminates users and items with fewer than 10 global interactions, thereby guaranteeing a sufficient baseline of collaborative signals 16 within the initial feature space. Detailed statistics for each dataset are summarized in Table 2. Table 2: Statistics of the datasets. Dataset #Users #Items #Interactions Density Amazon-Books 144,032 116,665 2,754,236 0.00016 Amazon-Electronics 358,354 125,761 4,883,752 0.00011 Amazon-Sports 25,640 17,543 313,993 0.00070 
+
+5.1.2 Data Preprocessing and Splitting 
+
+In the feature extraction phase, we leverage the all-mpnet-base-v2 [37] encoder to map the composite textual descriptions of items, specifically their titles and categories, into 768-dimensional dense vectors. A subsequent PCA projects these high-dimensional representations into a compact 64-dimensional latent space. To establish a rigorous data partitioning scheme, we randomly isolate 10% of the items to form the strict cold-start group. The interaction records of this subset are completely masked during the training phase to preclude any potential data leakage. The remaining 90% of items constitute the warm-start group, and their historical interactions are randomly partitioned into training, validation, and test sets according to a 7:1:2 ratio. 
+
+5.1.3 Evaluation Metrics 
+
+To rigorously evaluate the ranking performance in conventional warm-start scenarios, we adopt a full-ranking strategy. For each user in the test set, the model computes preference scores and globally ranks the ground-truth interacted items against all unobserved items. Conversely, when assessing out-of-distribution cold-start performance, it is crucial to eliminate the con-founding effect of popularity bias from trending items. Therefore, the candidate pool for the full ranking evaluation is strictly restricted to the pure cold-start item set. We employ Recall@ 𝐾 and NDCG@ 𝐾 as our primary evaluation metrics. The final reported performance results are the average scores across all users in the test set. To ensure alignment with the baseline models, the truncation length is configured to 𝐾 ∈ { 20 , 50 }.
+
+5.1.4 Baselines 
+
+To validate the superiority and efficacy of our proposed framework, we benchmark DualGCN against two representative categories of baseline methods: pure ID-based collaborative filtering 17 models and feature-augmented cold-start models. For a fair and rigorous comparison, the semantic inputs for all feature-driven baselines are standardized to the identical 64-dimensional vectors extracted from item titles and categories. 
+
+Pure ID-based Collaborative Filtering 
+
+• MF [29]: As the foundational baseline for collaborative filtering, Matrix Factorization projects users and items into low-dimensional latent vectors. It relies exclusively on direct interaction histories and is optimized via the Bayesian Personalized Ranking objective. 
+
+• NGCF [12]: This graph-based model enriches representation learning by executing em-bedding propagation over the bipartite interaction graph. Such a mechanism explicitly captures the high-order connectivity inherent in the topological structure. 
+
+• LightGCN [13]: By innovatively stripping away the redundant non-linear activations and feature transformations prevalent in traditional graph convolutional networks, this architecture drastically enhances both training efficiency and generalization capability. It currently stands as the state-of-the-art benchmark for pure identity-driven graph collabo-rative filtering. 
+
+Feature-based and Cold-start Models 
+
+• DeepMusic [17]: This approach employs deep neural networks to extract heterogeneous modal features, such as textual and acoustic attributes, from side metadata. These extracted features are subsequently mapped into the collaborative latent space to mitigate the cold-start dilemma. 
+
+• DropoutNet [18]: Designed specifically for cold-start scenarios, this framework applies a targeted dropout mechanism to user and item identity embeddings during the training phase. This deliberate perturbation forces the model to rely on content features for preference prediction under conditions of severe interaction sparsity. 
+
+• MetaEmbedding [19]: Operating as a meta-learning paradigm for cold-start recom-mendation, this method optimizes an embedding generator. It leverages the associated side information alongside limited interaction records of novel items to synthesize highly expressive initial identity representations. 18 Table 3: Overall Performance Comparison. The best results in each scenario are highlighted in 
+
+bold .                                                                                                                                                                                                              
+
+> Method Books Electronics Sports
+> R@20 R@50 N@20 N@50 R@20 R@50 N@20 N@50 R@20 R@50 N@20 N@50
+> Warm-Start
+> MetaEmbedding 0.0631 0.1028 0.0402 0.0521 0.0098 0.0180 0.0051 0.0075 0.0187 0.0380 0.0097 0.0151 DropoutNet 0.0459 0.0819 0.0275 0.0382 0.0157 0.0292 0.0090 0.0128 0.0361 0.0707 0.0196 0.0291 DeepMusic 0.0275 0.0484 0.0158 0.0217 0.0108 0.0190 0.0063 0.0087 0.0210 0.0409 0.0111 0.0166 MF 0.0063 0.0132 0.0035 0.0056 0.0103 0.0186 0.0059 0.0084 0.0058 0.0105 0.0029 0.0042 NGCF 0.0736 0.1187 0.0463 0.0598 0.0173 0.0300 0.0101 0.0138 0.0371 0.0699 0.0211 0.0302 LightGCN 0.1244 0.1986 0.0791 0.1012 0.0327 0.0533 0.0204 0.0263 0.0597 0.1024 0.0360 0.0479 DualGCN (Phase 1) 0.1268 0.2032 0.0797 0.1024 0.0457 0.0746 0.0279 0.0361 0.0736 0.1267 0.0439 0.0586
+> DualGCN (Phase 2) 0.1262 0.2016 0.0794 0.1018 0.0456 0.0743 0.0279 0.0360 0.0717 0.1210 0.0429 0.0565
+> Cold-Start
+> MetaEmbedding 0.0382 0.0810 0.0193 0.0302 0.0197 0.0348 0.0106 0.0142 0.0785 0.1585 0.0379 0.0568 DropoutNet 0.0780 0.1369 0.0406 0.0555 0.0225 0.0446 0.0104 0.0157 0.0926 0.1853 0.0428 0.0645 DeepMusic 0.0890 0.1441 0.0489 0.0630 0.0279 0.0506 0.0138 0.0192 0.0827 0.1565 0.0393 0.0567 MF 0.0016 0.0041 0.0008 0.0014 0.0016 0.0039 0.0007 0.0013 0.0112 0.0297 0.0047 0.0091 NGCF 0.0021 0.0052 0.0009 0.0017 0.0016 0.0040 0.0007 0.0012 0.0115 0.0279 0.0051 0.0090 LightGCN 0.0027 0.0053 0.0013 0.0020 0.0022 0.0052 0.0010 0.0017 0.0117 0.0283 0.0049 0.0087 DualGCN (Phase 1) 0.0870 0.1439 0.0478 0.0623 0.0206 0.0415 0.0096 0.0147 0.0701 0.1405 0.0320 0.0485 DualGCN (Phase 2) 0.1007 0.1666 0.0554 0.0723 0.0248 0.0492 0.0116 0.0175 0.1119 0.2180 0.0512 0.0760
+
+5.1.5 Hyperparameter Settings 
+
+Adhering to the standard configurations established by the baseline NGCF and LightGCN models [12,13], we uniformly fix the embedding dimensionality at 𝑑 = 64 for all experiments and initialize identity embeddings via the Xavier method [42]. The depth of the graph convolutional network is set to 𝐾 = 3 layers. For model optimization, we employ the Adam optimizer [43] with a learning rate of 0 .012, a weight decay coefficient of 10 −4, and a batch size of 262 , 144. The training procedure follows a decoupled two-stage schedule. Specifically, the teacher network undergoes pre-training for 600 epochs, followed by a knowledge distillation phase of 200 epochs to guarantee comprehensive convergence of the model parameters at each stage. 
+
+5.1.6 Performance Evaluation 
+
+This section presents a comprehensive performance comparison between the proposed Dual-GCN and various baseline models across both conventional and strict cold-start recommendation scenarios, followed by an in-depth analysis of its intrinsic advantages. The overall empirical results are summarized in Table 3. 
+
+Warm-start Recommendation Performance. We first evaluate the conventional warm-start recommendation performance on the standard test set. As demonstrated in the upper half of Table 3, the first-stage DualGCN matches or surpasses existing state-of-the-art pure ID 19 collaborative filtering baselines, including LightGCN and NGCF, across all evaluation metrics on the three datasets. This result substantiates that integrating feature fusion and distillation mechanisms for cold-start scenarios does not compromise the model’s capacity to capture and model abundant existing interaction signals. Specifically, compared to the best-performing pure ID model, LightGCN, the first-stage DualGCN achieves a remarkable improvement of 39.7% and 23.3% in Recall@20 on the Amazon-Electronics and Amazon-Sports datasets, respectively. Even on the Amazon-Books dataset, which features relatively denser interactions, DualGCN maintains a distinct leading advantage. This superiority is primarily attributed to the teacher network’s ability to fully exploit multimodal side information, effectively bridging potential sparse connections within the pure ID interaction graph and thereby augmenting representation learning in warm-start scenarios. Concurrently, we observe that the second-stage DualGCN exhibits remarkable stability, maintaining performance highly consistent with the first stage. This confirms the efficacy of the knowledge distillation mechanism in preserving warm-start collaborative signals. Notably, while DeepMusic demonstrates competitiveness in cold-start scenarios, its performance in warm-start settings is significantly inferior to both LightGCN and DualGCN. 
+
+Strict Cold-start Recommendation Performance. To rigorously validate the model’s true generalization capability for completely novel items, we conduct further evaluations under a strictly restricted pure cold-start scenario. As illustrated in the lower half of Table 3, given the complete absence of historical interaction records for target items, pure ID-based models reliant on graph propagation, such as LightGCN, NGCF, and MF, suffer catastrophic performance degradation with metrics plummeting to near zero. In stark contrast, DualGCN demonstrates exceptional robustness. Empirical data validates that the second-stage DualGCN effectively circumvents the cold-start failure inherent to ID embeddings, significantly outperforming tradi-tional feature-driven solutions like DropoutNet and MetaEmbedding across multiple datasets. For instance, on the Amazon-Sports dataset, the second-stage DualGCN achieves a Recall@20 of 0.1119, yielding a 20.8% improvement over the runner-up model, DropoutNet, while also consistently maintaining superiority across all metrics on the Amazon-Books dataset. Although DeepMusic exhibits competitive cold-start performance on Amazon-Electronics, it falters sig-nificantly in conventional warm-start evaluations when compared to LightGCN and DualGCN. This phenomenon profoundly substantiates that the decoupled two-stage training paradigm suc-cessfully distills high-order collaborative patterns inherent in complex graph structures and 20 injects them into the side-information generator. Consequently, the model is empowered to synthesize high-quality initial collaborative representations for zero-interaction items, relying entirely on textual modality inputs. Warm-Start Cold-Start 0.00 0.02 0.04 0.06 0.08 0.10 0.12 
+
+> Recall@20
+
+Books  
+
+> DualGCN (Ours) LightGCN-Semantic
+> Warm-Start Cold-Start 0.00 0.01 0.02 0.03 0.04
+
+Electronics  
+
+> DualGCN (Ours) LightGCN-Semantic
+> Warm-Start Cold-Start 0.00 0.02 0.04 0.06 0.08 0.10
+
+Sports     
+
+> DualGCN (Ours) LightGCN-Semantic
+> Warm-Start Cold-Start 0.00 0.02 0.04 0.06 0.08
+> NDCG@20
+> DualGCN (Ours) LightGCN-Semantic
+> Warm-Start Cold-Start 0.000 0.005 0.010 0.015 0.020 0.025
+> DualGCN (Ours) LightGCN-Semantic
+> Warm-Start Cold-Start 0.00 0.01 0.02 0.03 0.04 0.05 DualGCN (Ours) LightGCN-Semantic
+
+Figure 3: Ablation study on the early ID and semantic fusion strategy across different datasets and start scenarios. LightGCN-Semantic represents the variant where the randomly initialized ID embeddings in LightGCN are replaced by trainable semantic vectors. 
+
+## 5.2 Ablation Study 
+
+In this section, we conduct comprehensive ablation studies to evaluate the individual con-tributions of the core components within the DualGCN framework. Specifically, we investigate the efficacy of the feature fusion mechanism, the distillation objective, and the semantic residual design by monitoring the Recall and NDCG metrics at truncation levels of 20 and 50. 
+
+5.2.1 Effectiveness of Early ID and Semantic Fusion Strategy 
+
+As illustrated in Figure 3, isolating the semantic branch and subjecting it to fine-tuning precipitates a pronounced performance degradation across all datasets. This empirical obser-vation compellingly substantiates the necessity of the anchoring effect introduced within our collaborative teacher branch. When the high-dimensional semantic features s𝑖 are updated via backpropagation alongside the collaborative signals, the extreme sparsity inherent in recommen-21 Table 4: Ablation study of DualGCN on Warm-start and Cold-start scenarios. The best results of variants are highlighted in bold. DualGCN represents our default model with Cosine Loss and Semantic Residual.                                                                                                                                       
+
+> Architecture Books Electronics Sports
+> R@20 R@50 N@20 N@50 R@20 R@50 N@20 N@50 R@20 R@50 N@20 N@50
+> Part 1: Variants of Distillation Optimization
+> Warm-Start
+> DualGCN-MSE 0.1264 0.2021 0.0795 0.1020 0.0456 0.0744 0.0279 0.0360 0.0716 0.1219 0.0424 0.0563 DualGCN-InfoNCE 0.1262 0.2051 0.0796 0.1022 0.0380 0.0622 0.0235 0.0304 0.0717 0.1232 0.0430 0.0571
+> DualGCN (Default) 0.1262 0.2016 0.0794 0.1018 0.0456 0.0743 0.0279 0.0360 0.0717 0.1210 0.0429 0.0565
+> Cold-Start
+> DualGCN-MSE 0.0951 0.1576 0.0521 0.0681 0.0236 0.0476 0.0111 0.0169 0.1127 0.2191 0.0515 0.0766
+> DualGCN-InfoNCE 0.0972 0.1603 0.0539 0.0701 0.0143 0.0301 0.0067 0.0105 0.1090 0.2112 0.0503 0.0744 DualGCN (Default) 0.1007 0.1666 0.0554 0.0723 0.0248 0.0492 0.0116 0.0175 0.1119 0.2180 0.0512 0.0760
+> Part 2: Variants of Semantic Student Branch
+> Warm-Start
+> w/o Semantic Residual 0.1262 0.2015 0.0794 0.1018 0.0456 0.0743 0.0279 0.0360 0.0717 0.1210 0.0429 0.0565 DualGCN (Default) 0.1262 0.2016 0.0794 0.1018 0.0456 0.0743 0.0279 0.0360 0.0717 0.1210 0.0429 0.0565
+> Cold-Start
+> w/o Semantic Residual 0.0905 0.1565 0.0447 0.0616 0.0237 0.0482 0.0105 0.0164 0.1010 0.2068 0.0408 0.0658 DualGCN (Default) 0.1007 0.1666 0.0554 0.0723 0.0248 0.0492 0.0116 0.0175 0.1119 0.2180 0.0512 0.0760
+
+dation interactions renders the model highly susceptible to overfitting. Consequently, this joint optimization severely disrupts the robust topological structure originally imbued by the large-scale pre-trained language model. Conversely, by strictly freezing s𝑖 , our complete DualGCN framework successfully establishes these features as a static reference frame. This mechanism effectively constrains the learning trajectory of the collaborative features e𝑖 , thereby yielding substantial improvements in both conventional retrieval and strict cold-start scenarios. 
+
+5.2.2 Effect of Various Loss Functions 
+
+To rigorously isolate the contributions of core components within DualGCN, we conduct extensive ablation studies across the Books, Electronics, and Sports datasets. As detailed in Ta-ble 4, all model variants maintain highly consistent evaluation metrics in warm-start scenarios. For instance, the Recall@20 metric on the Books dataset uniformly stabilizes at approximately 0.126. This consistency perfectly aligns with the design rationale of our dynamic norm re-construction mechanism, which aims to resolve the cold-start bottleneck without degrading established collaborative signals. Consequently, the subsequent analysis predominantly focuses on strict cold-start performance. During the second-stage cross-spatial targeted transfer, we evaluate our default cosine dis-tillation loss against alternative objectives, specifically Mean Squared Error and InfoNCE. Empirical results confirm that the default cosine formulation achieves the optimal comprehen-22 sive performance in cold-start settings. Conversely, the application of either Mean Squared Error or InfoNCE precipitates noticeable performance degradation. Specifically, substituting the objective with Mean Squared Error causes the Recall@20 on the Books and Electronics datasets to drop to 0.0951 and 0.0236, respectively, falling significantly short of the default scores of 0.1007 and 0.0248. The fundamental mechanism driving this phenomenon lies in the rigid constraint imposed by Mean Squared Error on absolute Euclidean distances. In graph collaborative filtering, the absolute magnitude of a node representation implicitly encodes the interaction frequency prior of the corresponding item—a prior inherently absent for cold-start items. Forcing the mapping network to approximate the absolute magnitudes of the teacher model induces magnitude distor-tion, thereby misleading the model into overfitting spurious popularity signals. In stark contrast, the cosine distillation adopted by DualGCN strips away these absolute constraints, executing correlation alignment exclusively on the unit hypersphere, which fundamentally enhances the model’s generalization capabilities. Furthermore, incorporating the InfoNCE objective similarly fails to yield performance div-idends, even precipitating a severe decline in Recall@20 to 0.0143 on the Electronics dataset. From a mechanistic perspective, the primary objective of targeted distillation in this asym-metric framework is to achieve precise coordinate projection. Indiscriminately introducing negative samples generates extraneous repulsive forces. These forces actively disrupt the deli-cate geometric alignment of local features, ultimately culminating in the observed performance deterioration. 
+
+5.2.3 Effectiveness of Semantic Residual Design 
+
+To further validate the architectural soundness of the student branch, we evaluate a model variant devoid of the semantic residual connection, denoted as w/o Semantic Residual . Empirical results indicate that eliminating this component precipitates a consistent and stable decline in cold-start performance across all three datasets. For instance, the Recall@20 metric drops from 0.1007 to 0.0905 on the Books dataset and from 0.1119 to 0.1010 on the Sports dataset. Given the inherent distribution gap between the static semantic space and the dynamic collab-orative manifold, compelling the network to execute a direct, deep non-linear mapping renders it highly susceptible to representation degradation and the subsequent loss of initial semantic priors. The residual mechanism effectively circumvents this vulnerability. By establishing 23 explicit semantic features as foundational structural anchors, this design empirically alleviates the optimization complexity inherent in cross-modal alignment. Consequently, it substantially enhances the fidelity of the approximate collaborative projections generated for cold-start items. 
+
+# 6 Conclusion 
+
+In this work, we systematically investigate the fundamental structural vulnerability of tra-ditional graph collaborative filtering models when confronted with strict cold-start scenarios. Specifically, we identify that the topological isolation of unobserved items severs the message-passing mechanism, precipitating a catastrophic collapse in representation learning. To over-come this inherent limitation, we propose DualGCN, an innovative dual-branch graph knowledge distillation framework. By seamlessly integrating high-dimensional semantic priors extracted from pre-trained language models, we fundamentally reshape the collaborative latent space. The proposed framework operates through a decoupled two-stage training paradigm. Ini-tially, the teacher branch constructs a robust, topology-smoothed collaborative reference frame anchored by semantic features. Subsequently, the student branch leverages a residual mapping network and a cosine distillation objective to achieve highly reliable cross-modal alignment. Furthermore, to unify the global retrieval space, we introduce a dynamic norm reconstruction mechanism that rigorously calibrates physical scales during inference, effectively circumventing magnitude-induced representation bias. Extensive empirical evaluations across three real-world benchmark datasets comprehen-sively validate the superiority of DualGCN. The proposed architecture not only establishes a new state-of-the-art for strict cold-start recommendation but also strictly preserves the represen-tation capacity for conventional warm-start items without incurring substantial computational overhead. Moving forward, we intend to extend this semantic anchoring paradigm to dynamic graph environments and explore the integration of richer multi-modal signals to further enhance out-of-distribution generalization capabilities. 24 Bibliography and References 
+
+[1] T. Trinh, V.-H. Nguyen, N. Nguyen, and D.-N. Nguyen, “Product collaborative filtering based recommendation systems for large-scale e-commerce,” Int. J. Inf. Manag. Data Insights , vol. 5, p. 100322, 2025. [2] Y. Wu and Y. Yusof, “Emerging trends in real-time recommendation systems: A deep dive into multi-behavior streaming processing and recommendation for e-commerce platforms,” 
+
+J. Internet Serv. Inf. Secur. , vol. 14, pp. 45–66, 2024. [3] M. G. Silva, S. C. Madeira, and R. Henriques, “A comprehensive survey on biclustering-based collaborative filtering,” ACM Computing Surveys , vol. 56, pp. 1 – 32, 2024. [4] L. Chen, R. Xiong, and Y. Ji, “Application of svm model based on collaborative filtering hybrid algorithm in e-commerce recommendation,” International Journal of Computers and Applications , vol. 46, pp. 292 – 300, 2024. [5] M. F. Aljunid, D. Manjaiah, M. K. Hooshmand, W. A. Ali, A. M. Shetty, and S. Q. Alzoubah, “A collaborative filtering recommender systems: Survey,” Neurocomputing ,vol. 617, p. 128718, 2025. [6] X. Su and T. M. Khoshgoftaar, “A survey of collaborative filtering techniques,” Advances in artificial intelligence , vol. 2009, no. 1, p. 421425, 2009. [7] Y. Shi, M. Larson, and A. Hanjalic, “Collaborative filtering beyond the user-item matrix: A survey of the state of the art and future challenges,” ACM Computing Surveys (CSUR) ,vol. 47, no. 1, pp. 1–45, 2014. [8] P. B. Thorat, R. M. Goudar, and S. Barve, “Survey on collaborative filtering, content-based filtering and hybrid recommendation system,” International Journal of Computer Applications , vol. 110, no. 4, 2015. [9] T. T. Tran, L. T. Nguyen, and N. N. Phien, “Graph neural networks for collaborative filtering: A survey on ranking prediction,” IEEE Access , 2026. [10] S. Wu, F. Sun, F. Sun, and B. Cui, “Graph neural networks in recommender systems: A survey,” ACM Computing Surveys , vol. 55, pp. 1 – 37, 2020. [11] T. Duricic, D. Kowald, E. Laci´ c, and E. Lex, “Beyond-accuracy: a review on diversity, serendipity, and fairness in recommender systems based on graph neural networks,” Fron-tiers in Big Data , vol. 6, 2023. [12] X. Wang, X. He, M. Wang, F. Feng, and T.-S. Chua, “Neural graph collaborative filter-ing,” in Proceedings of the 42nd international ACM SIGIR conference on Research and development in Information Retrieval , pp. 165–174, 2019. [13] X. He, K. Deng, X. Wang, Y. Li, Y. Zhang, and M. Wang, “Lightgcn: Simplifying and powering graph convolution network for recommendation,” in Proceedings of the 43rd International ACM SIGIR conference on research and development in Information Retrieval , pp. 639–648, 2020. 25 [14] L. Chen, L. Wu, R. Hong, K. Zhang, and M. Wang, “Revisiting graph based col-laborative filtering: A linear residual graph convolutional network approach,” ArXiv ,vol. abs/2001.10167, 2020. [15] H. He, X. He, Y. Peng, Z. Shan, and X. Su, “Firzen: Firing strict cold-start items with frozen heterogeneous and homogeneous graphs for recommendation,” 2024 IEEE 40th International Conference on Data Engineering (ICDE) , pp. 4657–4670, 2024. [16] J. Liu, Z. Zhang, and R. C. Cheung, “Motorec: Sparse-regularized multimodal tokenization for cold-start recommendation,” 2026. [17] A. M. Elbir, “Deepmusic: Multiple signal classification via deep learning,” IEEE Sensors Letters , vol. 4, no. 4, pp. 1–4, 2020. [18] M. Volkovs, G. Yu, and T. Poutanen, “Dropoutnet: Addressing cold start in recommender systems,” Advances in neural information processing systems , vol. 30, 2017. [19] F. Pan, S. Li, X. Ao, P. Tang, and Q. He, “Warm up cold-start advertisements: Improving ctr predictions via learning to learn id embeddings,” in Proceedings of the 42nd International ACM SIGIR Conference on Research and Development in Information Retrieval , pp. 695– 704, 2019. [20] X. Pan, Y. Chen, C. Tian, Z. Lin, H. Hu, and W. X. Zhao, “Multimodal meta-learning for cold-start sequential recommendation,” Proceedings of the 31st ACM International Conference on Information & Knowledge Management , 2022. [21] Y. wei Wei, X. Wang, Q. Li, L. Nie, Y. Li, X. Li, and T. seng Chua, “Contrastive learning for cold-start recommendation,” Proceedings of the 29th ACM International Conference on Multimedia , 2021. [22] H. He, X. He, Y. Peng, Z. Shan, and X. Su, “Firzen: Firing strict cold-start items with frozen heterogeneous and homogeneous graphs for recommendation,” 2024 IEEE 40th International Conference on Data Engineering (ICDE) , pp. 4657–4670, 2024. [23] H. Bai, M. Hou, L. Wu, Y. Yang, K. Zhang, R. Hong, and M. Wang, “Unified representation learning for discrete attribute enhanced completely cold-start recommendation,” IEEE Transactions on Big Data , vol. 11, pp. 1091–1102, 2025. [24] P. Magron and C. F’evotte, “Neural content-aware collaborative filtering for cold-start music recommendation,” Data Mining and Knowledge Discovery , vol. 36, pp. 1971 – 2005, 2021. [25] G. B. Martins, J. Papa, and H. Adeli, “Deep learning techniques for recommender systems based on collaborative filtering,” Expert Systems , vol. 37, 2020. [26] M. Moscati, “A multimodal single-branch embedding network for recommendation in cold-start and missing modality scenarios,” Proceedings of the 18th ACM Conference on Recommender Systems , 2024. [27] X. Zhou and Z. Shen, “A tale of two graphs: Freezing and denoising graph structures for multimodal recommendation,” Proceedings of the 31st ACM International Conference on Multimedia , 2022. 26 [28] J. Xu, Z. Chen, S. Yang, J. Li, and E. C. H. Ngai, “The best is yet to come: Graph convolution in the testing phase for multimodal recommendation,” Proceedings of the 33rd ACM International Conference on Multimedia , 2025. [29] S. Rendle, C. Freudenthaler, Z. Gantner, and L. Schmidt-Thieme, “Bpr: Bayesian person-alized ranking from implicit feedback,” arXiv preprint arXiv:1205.2618 , 2012. [30] P. Melville, R. Mooney, and R. Nagarajan, “Content-boosted collaborative filtering for improved recommendations,” pp. 187–192, 2002. [31] S.-M. Choi, K. Jang, T.-D. Lee, A. Khreishah, and W. Noh, “Alleviating item-side cold-start problems in recommender systems using weak supervision,” IEEE Access , vol. 8, pp. 167747–167756, 2020. [32] Q. Guo, J. Hai, Z. Sun, B. Wu, and Y. Ye, “Dcib: Dual contrastive information bottleneck for knowledge-aware recommendation,” Inf. Process. Manag. , vol. 62, p. 103980, 2025. [33] J. Ma and R. Wang, “Dual-view fusion of heterogeneous information network embedding for recommendation,” IEEE Latin America Transactions , vol. 22, pp. 557–565, 2024. [34] M. Caro-Mart´ ınez, G. Jim´ enez-D´ ıaz, and J. A. Recio-Garc´ ıa, “A graph-based approach for minimising the knowledge requirement of explainable recommender systems,” Knowledge and Information Systems , vol. 65, pp. 4379–4409, 2023. [35] Y. Yang, C. Huang, L. Xia, and C. Li, “Knowledge graph contrastive learning for recom-mendation,” Proceedings of the 45th International ACM SIGIR Conference on Research and Development in Information Retrieval , 2022. [36] H. Wang, F. Zhang, M. Zhao, W. Li, X. Xie, and M. Guo, “Multi-task feature learning for knowledge graph enhanced recommendation,” The World Wide Web Conference , 2019. [37] C. Galli, N. Donos, and E. Calciolari, “Performance of 4 pre-trained sentence transformer models in the semantic query of a systematic review dataset on peri-implantitis,” Inf. ,vol. 15, p. 68, 2024. [38] K. P. F.R.S., “Liii. on lines and planes of closest fit to systems of points in space,” 
+
+Philosophical Magazine Series 1 , vol. 2, pp. 559–572, 1901. [39] T. N. Kipf and M. Welling, “Semi-supervised classification with graph convolutional networks,” arXiv preprint arXiv:1609.02907 , 2016. [40] A. van den Oord, Y. Li, and O. Vinyals, “Representation learning with contrastive predictive coding,” ArXiv , vol. abs/1807.03748, 2018. [41] Y. Hou, J. Li, Z. He, A. Yan, X. Chen, and J. McAuley, “Bridging language and items for retrieval and recommendation,” arXiv preprint arXiv:2403.03952 , 2024. [42] X. Glorot and Y. Bengio, “Understanding the difficulty of training deep feedforward neural networks,” in Proceedings of the thirteenth international conference on artificial intelligence and statistics , pp. 249–256, JMLR Workshop and Conference Proceedings, 2010. [43] D. P. Kingma and J. Ba, “Adam: A method for stochastic optimization,” arXiv preprint arXiv:1412.6980 , 2014. 27

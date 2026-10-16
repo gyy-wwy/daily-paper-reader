@@ -1,0 +1,142 @@
+Title: xLightGCN: Explainable Graph Neural Network Based Recommendation Systems with Most Influential Peers
+
+URL Source: https://arxiv.org/pdf/2610.19446v1
+
+Published Time: Thu, 15 Oct 2026 00:45:43 GMT
+
+Number of Pages: 5
+
+Markdown Content:
+# xLightGCN: Explainable Graph Neural Network Based Recommendation Systems with Most Influential Peers 
+
+# Calder Johnson Robin Cohen 
+
+Computer Science, University of Waterloo, Canada cbjohnson@uwaterloo.ca rcohen@uwaterloo.ca 
+
+Abstract 
+
+Recommendation systems, systems that predict a user’s pref-erence for items in order to curate that user’s feed, are a ubiq-uitous and central feature in online social networks. While they are a central piece of our modern digital infrastructure, many modern approaches are opaque black boxes, making them difficult to audit, understand, and assess the trustwor-thiness of. In this paper we present an exact, graph-based approach for generating explanations for decisions made by recommendation systems. We argue that in the risk-sensitive sociotechnical context of user-facing AI such as recommen-dation systems, explainability is a key pillar for establishing the trustworthiness of models and validating their effective-ness. We propose a technique built on LightGCN-like archi-tectures, an influential and popular class of recommendation models. We describe our approach and argue that it provides an appropriate assurance mechanism for these AI systems leading to specific advantages, including interpretable expla-nations and a theoretically guaranteed measure of explanation fidelity. We conclude by discussing limitations and directions for future research. 
+
+Code — https://github.com/CalderJohnson/xLightGCN 
+
+Dataset — https://snap.stanford.edu/data/loc-gowalla.html 
+
+# Introduction 
+
+Recommendation systems have become a central component of modern digital infrastructure. Online platforms use them to determine which products, social media posts, advertise-ments, etc., are shown to individual users. By predicting user preferences and recommending only a small subset of poten-tially relevant items from the full space of possibilities, rec-ommendation systems can substantially improve the usabil-ity and engagement of online platforms. At the same time, the increasing role of automated recommendation in deter-mining what users encounter creates an important challenge for trustworthy AI: the decisions of these systems must be understandable and auditable by the developers and organi-zations responsible for them. Graph-based recommendation systems are particularly ef-fective at exploiting the relational structure inherent in user behavior. A recommendation dataset can naturally be rep-resented as a bipartite graph in which users and items are vertices and interactions such as purchases, views, or clicks form edges. This representation allows information to prop-agate through chains of interactions, enabling a model to exploit higher-order collaborative relationships that are dif-ficult to represent using conventional recommendation ap-proaches. LightGCN (He et al. 2020) is an influential archi-tecture in this paradigm, employing a simplified GCN (graph convolutional network) with no feature transformations and nonlinear activation functions while achieving strong empir-ical performance. Given a set of users, a set of items, and the graph of past interactions between them, LightGCN predicts the affinity between a given user u and item i by producing initial node embeddings H0 and running them through L convolutional layers. At each layer l, the following operation is performed, where A is the graph’s adjacency matrix, and D is its degree matrix: 
+
+ˆA = D−1/2AD −1/2 (1) 
+
+Hl+1 = ˆAH l (2) such that the embeddings at layer l are a degree-weighted linear combination of the embeddings of nodes l hops away in the graph. Next, embeddings at each layer are combined in a weighted sum ( α0, . . . , α L being hyperparameters), and the affinity score s between a user and an item can be mea-sured by an inner product: 
+
+Hout = αLHL + αL−1HL−1 + . . . + α0H0 (3) 
+
+s(u, i ) = ⟨Huout , H iout ⟩ (4) LightGCN’s simple, entirely linear structure and ground-breaking empirical results made it a highly influential model, inspiring a wider class of linear GCN architectures such as LGKAT (Hassanzadeh, Majidnezhad, and Arasteh 2025) which extends LightGCN using attention layers and Dual-LightGCN (Huang et al. 2023) which splits the architecture into two networks that the methods discussed in this paper could be extensible to in future research. Despite their power, the opacity of these models presents an important assurance problem. A recommendation de-pends on complex chains of interactions involving other users and items that provide a rich collaborative signal to the model but are intractable for humans to inspect at the scale of a real interaction graph. Moreover, interaction histo-ries can encode highly personal, detailed information about arXiv:2610.19446v1 [cs.AI] 14 Oct 2026 user behavior and preferences. A misaligned recommenda-tion model operating on sensitive user data whose decision making process is opaque presents significant risk from a sociotechnical perspective. For example, without an appro-priate assurance framework in place, such a system could promote echo chambers, give identity-biased recommenda-tions, or hurt brand image by targeting ads to the wrong de-mographics. We view explainability as a mechanism for producing ev-idence that can support the assessment of AI-system trust-worthiness. By exposing the evidence underlying a deci-sion, developers and auditors can inspect model behavior and identify potentially problematic dependencies, allowing them to make an informed assessment of trustworthiness. The ability to identify which relationships contributed to a recommendation is therefore key to the transparency, risk as-sessment, and trustworthiness judgement of user-facing AI systems. Existing explanation methods for GNNs often produce approximate or computationally expensive explanations. GNNExplainer (Ying et al. 2019), for example, identifies in-formative subsets of a graph through an optimization pro-cedure that masks nodes and edges while attempting to preserve the model’s prediction. SubgraphX (Yuan et al. 2021) instead uses a search procedure based on Monte Carlo Tree Search and Shapley values to identify influential sub-graphs. Recommendation-specific approaches have also pro-duced interpretable reasoning chains through knowledge graphs (Wang et al. 2019, 2018). These methods demon-strate the feasibility of generating human-interpretable ex-planations, but they generally either rely on additional op-timization or search procedures for individual predictions. This motivates the question of whether the linear structure of LightGCN can be exploited to obtain explanations that are both computationally efficient and directly grounded in the model’s actual computation. In this work, we propose xLightGCN, an explanation framework that identifies the most influential peers underly-ing individual LightGCN recommendations. Using the lin-ear structure of LightGCN, we precisely isolate the compact explanatory subgraph that explains most of the model’s pre-diction in an efficient manner. In addition, the component of the prediction explained by the subgraph can be compared to the complete prediction to quantify the contribution left unexplained by the extracted subgraph, providing a theoret-ically grounded measure of explanation fidelity. 
+
+# Methods 
+
+We formulate explanation of LightGCN recommendations as a node contribution problem. Given a user u, target item 
+
+i, and propagation depth L, xLightGCN identifies the nodes whose initial embeddings make the largest contributions to the resulting recommendation score and constructs a com-pact subgraph around them. The subgraph reveals the most critical relationships in the network that influenced a recom-mendation decision, providing insight into how the model came to a particular prediction, improving its transparency. The insights gained from this improved transparency could be leveraged by developers to assess the validity and trust-worthiness of the system. Let e(0)  
+
+> v
+
+denote the initial embedding of node v. Since LightGCN propagation is linear, the final embedding of an endpoint can be expressed as a linear combination of the initial embeddings of nodes within its L-hop receptive field. Thus, 
+
+eu = X
+
+> v∈Vu
+
+cu,v e(0)  
+
+> v
+
+, (5) 
+
+ei = X
+
+> v∈Vi
+
+ci,v e(0)  
+
+> v
+
+, (6) where Vu and Vi are the L-hop neighborhoods of u and i, re-spectively, and cu,v denotes the coefficient of node v’s initial embedding in the corresponding final embedding. The algorithm first constructs the union of these two re-ceptive fields, including all edges between nodes contained within them. For each node in the user-side receptive field, we compute its alignment with the target item’s final embed-ding, 
+
+pu,v = ( e(0)  
+
+> v
+
+)⊤ei (7) and define its recommendation-level contribution as 
+
+au,v = cu,v pu,v . (8) Analogously, for nodes in the item-side receptive field, 
+
+pi,v = ( e(0)  
+
+> v
+
+)⊤eu, (9) 
+
+ai,v = ci,v pi,v . (10) The magnitude |ai,v | therefore measures the extent to which a node influences the recommendation score, while its sign indicates whether the node contributes positively or negatively. xLightGCN selects the k highest-magnitude con-tributors from each receptive field. For each selected node, a representative path connecting it to the corresponding end-point is retained, and the union of these paths forms the final explanatory subgraph. xLightGCN is derived directly from the LightGCN com-putation and therefore does not require a separate surrogate model or per-instance model optimization. The L-hop re-ceptive fields are constructed by bounded-depth frontier ex-pansion in O(m) time, where m is the number of edges traversed in the resulting local subgraph; equivalently, the receptive field contains at most O(dL) nodes when (d) is the maximum node degree. Because LightGCN propaga-tion is linear, the contribution coefficient cv for every node can be obtained by propagating a scalar coefficient vector through the same L local message-passing steps, requiring 
+
+O(Lm ) time. Given these coefficients, all recommendation-level node contributions can be computed efficiently by a matrix-vector product between the n initial node em-beddings and the opposing endpoint embedding, requir-ing O(nD ) time for embedding dimension D, followed by an element-wise multiplication with the coefficient vector. Selecting the k largest-magnitude contributions can then be performed in O(n log k) time using a heap-based top-
+
+k selection, and constructing representative paths requires Figure 1: Example xLightGCN explanatory subgraph, showing the target user and item taken from the Gowalla dataset (where users are recommended interesting locations). Shown are the user and item in question (blue), selected positive (green) and negative (red) contributing nodes, and representative paths (intermediate nodes would be in grey). In this example, k=15 and fidelity shows that ˜69% of the score is explained by the subgraph. The linkages between the user and item subgraphs demon-strate the collaborative filtering relationships xLightGCN uncovers. 
+
+O(kL ) time. Thus, the overall explanation procedure re-quires 
+
+O(Lm + nD + n log k + kL ) (11) time on the local receptive field. For fixed propagation depth 
+
+L (usually only 2–4 in practice), embedding dimension D,and explanation size k, this scales with the size of the lo-cal receptive field rather than the full interaction graph. In contrast, surrogate-based approaches such as SubgraphX re-quire repeated model evaluations during their per-instance search procedure, including evaluations of candidate sub-graphs for Monte Carlo Tree Search and Shapley-value esti-mation. xLightGCN instead performs a single direct decom-position of the existing LightGCN computation, avoiding the repeated forward evaluations and optimization/search overhead characteristic of such surrogate-based approaches, allowing for highly efficient explanation generation. An important property of xLightGCN is that it provides not only an explanation, but also a measure of how com-pletely that explanation accounts for the model’s prediction. Let s(u, i ) = e⊤ 
+
+> u
+
+ei denote the original recommendation score. Given selected node sets Ku and Ki, we construct truncated embeddings 
+
+˜eu = X
+
+> v∈Ku
+
+cu,v e(0)  
+
+> v
+
+, (12) 
+
+˜ei = X
+
+> v∈Ki
+
+ci,v e(0)  
+
+> v
+
+, (13) and obtain the explanation-only score 
+
+˜s(u, i ) = ˜ e⊤ 
+
+> u
+
+˜ei. (14) The difference 
+
+R(u, i ) = s(u, i ) − ˜s(u, i ) (15) is the unexplained residual: the portion of the original pre-diction not captured by the selected explanatory nodes. We define explanation fidelity as 
+
+F (u, i ) = 1 − |R(u, i )||s(u, i )| + ϵ . (16) where a small constant is added to the denominator for numerical stability. Higher fidelity indicates that the ex-planatory subgraph more completely reproduces the original model prediction. Fidelity score falls into the range (−∞ , 1] .Values approaching 1 indicate that the selected subgraph ac-curately reconstructs the original prediction. Values near 0 indicate substantial reconstruction error, while negative val-ues indicate that the reconstruction error exceeds the magni-tude of the original score. This provides xLightGCN with an assurance-oriented property beyond qualitative interpretability. The explana-tory subgraph provides a compact and inspectable repre-sentation of the model’s computational evidence, support-ing transparency and accountability, while F (u, i ) provides a simple quantitative measure of how much of the prediction that evidence accounts for. Low-fidelity explanations indi-cate that the selected evidence provides limited coverage of Figure 2: Fidelity score as a function of k
+
+Figure 3: Explanatory subgraph size needed to reach a par-ticular fidelity threshold. the model’s prediction and may therefore warrant additional auditing or investigation. In this way, xLightGCN provides measurable evidence for assessing model behaviour and un-derstanding its trustworthiness. 
+
+# Experiments 
+
+We ran xLightGCN on the Gowalla dataset (https://snap.stanford.edu/data/loc-gowalla.html), a large scale benchmark dataset for recommendation systems where users are recommended geographical locations (points of interest). We tested across a range of possible 
+
+k values to assess the relationship between k and fidelity score (Figure 2), each averaged across 100 randomly chosen user/item pairs, choosing the k range to be between 0 and 100, as any larger would be a dense subgraph difficult to interpret. We also assess the size of the explanatory subgraph re-quired to reach a certain fidelity threshold on average, (Fig-ure 3). These results show a tradeoff between explanatory sub-graph size k and fidelity F (u, i ): Larger subgraphs explain more of the model’s prediction but are more difficult to in-terpret due to their complexity. The relationship between fidelity and k shows diminishing improvements as k in-creases, suggesting that a few influential nodes are key to ex-plaining most of the prediction, providing empirical support for the effectiveness of xLightGCN for isolating a small, in-terpretable subgraph that explains most of a recommenda-tion system’s prediction. 
+
+# Conclusion 
+
+In this paper, we presented xLightGCN, a model-specific framework for generating compact explanations of recom-mendations produced by LightGCN family architectures. xLightGCN identifies the nodes that most strongly influence an individual recommendation and represents these contri-butions as an interpretable subgraph, providing evidence grounded in the actual mechanism producing the prediction. Furthermore, the unexplained residual and resulting fidelity score provide a quantitative measure of how completely the explanation accounts for the model’s output. The explana-tions produced by xLightGCN together with a quantitative indication of the coverage of that explanation provide evi-dence that can support transparency and auditing, and can assist developers in evaluating the trustworthiness of their recommendation systems. The efficiency gains generated by our method also provide added-value. Our work illustrates a broader role for explainability in trustworthy AI: explainability can serve as more than a user-facing interpretability feature; it can be an assurance mecha-nism for identifying, auditing, and quantifying the evidence underlying model outputs. Several limitations remain. Most importantly, an expla-nation does not inherently mean that a system is trustwor-thy or accurate, it just provides a tool through which these properties can be investigated. In addition, xLightGCN re-lies on the linear propagation structure of LightGCN and is therefore not applicable directly to arbitrary GCN or rec-ommendation architectures. This specialization is what en-ables its exact and efficient decomposition, suggesting that architecture-specific explainability can be valuable when strong assurances about model behavior are required. Future work should investigate explainability frameworks in other architectures with tractable computational struc-tures. Also, the paradigm of isolating influential nodes in order to understand complex network behavior should be explored further; the work done on Dynamic Opinion Net-works (Muppasani et al. 2024a), (Muppasani et al. 2024b), may provide further valuable insights. In addition, we ar-gue that explainability offers strong insight in assessing the trustworthiness of AI systems, and more research needs to be done exploring its role in developing trustworthy, safe, and assured AI. 
+
+# References 
+
+Hassanzadeh, R.; Majidnezhad, V.; and Arasteh, B. 2025. A novel recommender system using light graph convolutional network and personalized knowledge-aware attention sub-network. Scientific Reports , 15: 15693. He, X.; Deng, K.; Wang, X.; Li, Y.; Zhang, Y.-D.; and Wang, M. 2020. LightGCN: Simplifying and Powering Graph Con-volution Network for Recommendation. In Proceedings of the 43rd International ACM SIGIR Conference on Research and Development in Information Retrieval , SIGIR ’20, 639– 648. New York, NY, USA: Association for Computing Ma-chinery. Huang, W.; Hao, F.; Shang, J.; Yu, W.; Zeng, S.; Bisogni, C.; and Loia, V. 2023. Dual-LightGCN: Dual light graph convolutional network for discriminative recommendation. 
+
+Computer Communications , 204: 89–100. Muppasani, B.; Nag, P.; Narayanan, V.; Srivastava, B.; and Huhns, M. 2024a. Towards Effective Planning Strategies for Dynamic Opinion Networks. In Advances in Neural In-formation Processing Systems , volume 37, 137046–137104. Neural Information Processing Systems Foundation. Muppasani, B.; Narayanan, V.; Srivastava, B.; and Huhns, M. N. 2024b. Expressive and Flexible Simulation of In-formation Spread Strategies in Social Networks Using Plan-ning. In Proceedings of the Thirty-Eighth AAAI Conference on Artificial Intelligence , 23820–23822. Association for the Advancement of Artificial Intelligence. Wang, H.; Zhang, F.; Wang, J.; Zhao, M.; Li, W.; Xie, X.; and Guo, M. 2018. RippleNet: Propagating User Prefer-ences on the Knowledge Graph for Recommender Systems. In Proceedings of the 27th ACM International Conference on Information and Knowledge Management , 417–426. Wang, X.; Wang, D.; Xu, C.; He, X.; Cao, Y.; and Chua, T.-S. 2019. Explainable Reasoning over Knowledge Graphs for Recommendation. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 33, 5329–5336. Ying, R.; Bourgeois, D.; You, J.; Zitnik, M.; and Leskovec, J. 2019. GNNExplainer: Generating Explanations for Graph Neural Networks. Advances in Neural Information Process-ing Systems , 32. Yuan, H.; Yu, H.; Wang, J.; Li, K.; and Ji, S. 2021. On Ex-plainability of Graph Neural Networks via Subgraph Explo-rations. In Proceedings of the 38th International Confer-ence on Machine Learning , volume 139 of Proceedings of Machine Learning Research , 12241–12252.

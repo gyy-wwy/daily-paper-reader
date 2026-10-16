@@ -1,0 +1,2429 @@
+Title: Federated Semantic Residuals for Multimodal Recommendation
+
+URL Source: https://arxiv.org/pdf/2610.15505v1
+
+Published Time: Wed, 14 Oct 2026 01:41:12 GMT
+
+Number of Pages: 23
+
+Markdown Content:
+> ARXIV PREPRINT 1
+
+# Federated Semantic Residuals for Multimodal Recommendation 
+
+Zhiwei Li , Guodong Long , Chengqi Zhang , Fellow, IEEE , and Jing Jiang 
+
+Abstract —Federated Recommendation Systems (FedRSs) learn collaborative scores from interaction histories on device and rank items by them, so a higher score means a higher rank. Item text and images add semantic information that can reorder the list. Existing Federated Multimodal Recommenders (FedMRs) fuse this content into their models, which can obscure how content reorders the list. We therefore propose the SEmantic Residual Adapter (SERA), which keeps content out of an existing FedRS and adds semantic residual scores to its collaborative scores. Content can then lift an item above another only when its semantic residual score exceeds the other’s by more than their collaborative score gap. This score grows with the item’s content similarity to the user’s interaction history and is capped at a residual bound. We prove that for any content, an item can enter the list only if its collaborative score is within twice this bound of the lowest one in the list. A larger bound lets content lift more items, including irrelevant ones, so the bound trades off how far content reaches against accuracy. With a validated bound, SERA improves all three FedRSs on all six datasets without adding personalized parameters. It outperforms FedMRs in most comparisons and lifts some FedRSs above centralized baselines. 
+
+Index Terms —Federated Recommendation System, Multi-modal Recommendation System, On-Device Learning 
+
+I. I NTRODUCTION 
+
+Federated Recommendation Systems (FedRSs) learn collab-orative scores from interaction histories stored on user devices [1] and rank items by these scores, so an item appears above another if it scores higher. Observed interactions provide the main supervision [2], [3], and each user or item embedding is learned from the gradients of its own interactions [4]. As a result, users and items with sparse histories have too few interactions to learn reliable ID-based scores [5], [6]. Item text and images ease this sparsity, because they exist before an item collects many interactions [7]. They add seman-tic information to interaction histories [8] and help multimodal recommenders refine collaborative rankings [9], [10]. Fig. 1 illustrates how Federated Multimodal Recommenders (FedMRs) add this content. (a) Feature-level fusion combines content with the raw inputs through early fusion, as in AMM-FRS [11]. The model can then learn fine-grained cross-modal interactions, and the FedRS has to be rebuilt and retrained. (b) Representation-level fusion merges content into the learned representations through intermediate fusion [12]. FedVLR [13] 
+
+Zhiwei Li, Guodong Long, and Jing Jiang are with the Australian Ar-tificial Intelligence Institute, Faculty of Engineering and Information Tech-nology, University of Technology Sydney, Sydney, NSW, Australia (e-mail: zhw.li@outlook.com; guodong.long@uts.edu.au; jing.jiang@uts.edu.au). Chengqi Zhang is with the Department of Data Science and Artificial Intelligence, The Hong Kong Polytechnic University, Hong Kong Special Administrative Region, China (e-mail: chengqi.zhang@polyu.edu.hk). (c) Objective-Level Fusion    
+
+> Multimodal Item Content User Item
+> Score
+> Ranked List
+> Representation
+> Scoring Function Objective
+> (d) Score-Level Fusion
+> Multimodal Item Content User Item
+> Score
+> Ranked List
+> Representation
+> Scoring Function
+
++ Residual   
+
+> Score
+> (a) Feature-Level Fusion
+> Multimodal
+> Item Content User Item
+> Score
+> Ranked List
+> Representation
+> Scoring Function
+> Fusion
+> (b) Representation-Level Fusion
+> Multimodal
+> Item Content User Item
+> Score
+> Ranked List
+> Representation
+> Scoring Function
+> Fusion
+
+Fig. 1. Fusion levels in FedMRs. (a) Feature-level fusion combines inputs. (b) Representation-level fusion combines representations. (c) Objective-level fusion uses content in training objectives. (d) Score-level fusion combines scores, including SERA’s semantic residual scores. Blue and orange show the collaborative and content paths, and dashed links show training signals. 
+
+uses it to adapt content to each user with fusion parameters on every client. (c) Content also enters training through extra loss terms [14], and we treat this as objective-level fusion. FedMMR [15] and GFMFR [16] add alignment and distillation losses, which alter the training objective of the FedRS and leave inference unchanged. All three levels build content into the model behind the collaborative scores, so the final ranking mixes the effect of content with the collaborative signal. Score-level fusion in Fig. 1(d) instead keeps the collabo-rative scores and adds a content score to each. An item then rises above another only when its content score exceeds the other’s by more than their collaborative score gap. Each rank change thus traces to an item pair, and capping these scores limits how far content can reach into the collaborative ranking. We therefore propose SERA, a federated SE mantic Residual 
+
+Adapter that brings score-level late fusion to existing FedRSs. SERA keeps content out of the inputs, representations, and training objective of a FedRS and adds a semantic residual arXiv:2610.15505v1 [cs.IR] 11 Oct 2026 ARXIV PREPRINT 2
+
+score to each collaborative score. Collaborative scores weight each user’s history items to form a personalized content query, and each candidate’s semantic residual score grows with its content similarity to this query. A residual budget, scaled by the standard deviation of the user’s collaborative scores, caps each semantic residual score at a user-adaptive residual bound. Combining the pairwise condition with this cap, we prove that, for any content, an item outside the collaborative top-K
+
+list can enter the final top-K list only if its collaborative score is within twice the residual bound of the K-th item. The bound can trade off reach against accuracy, since a larger bound lets content lift more items, including some irrelevant ones. Our contributions span method, theory, and experiments:  
+
+> •
+
+We propose SERA, a federated adapter that adds semantic residual scores to the collaborative scores of an existing FedRS. SERA uses these scores both to weight each user’s history items and to scale the residuals per user.  
+
+> •
+
+Every rank change under SERA traces to item pairs, and we prove a reach condition that holds for any content.  
+
+> •
+
+On six datasets, SERA improves all three FedRSs with shared parameters alone, beats existing FedMRs in most comparisons, and shows the predicted trade-off. II. R ELATED WORK 
+
+A. Federated Recommendation Systems 
+
+FedRSs learn from interaction histories stored on user devices by aggregating client updates [17], [18]. Federated Collaborative Filtering keeps user factors local and aggregates item-factor gradients to learn shared item representations [2]. FedNCF extends this design to neural models and aggregates sparse item embeddings separately from dense neural param-eters [19]. Differences in client interaction distributions moti-vate personalized models [20], [21]. PFedRec retains a local user model and adapts shared item representations to local interactions [22]. FedRAP decomposes item representations into globally shared and user-specific components [4], while GPFedRec builds a user-relation graph from client-specific item embeddings for personalized aggregation [23]. To ac-commodate device resources, HeteFedRec transfers knowledge across models with different embedding dimensions through dual-task learning and relation-based distillation [24]. These FedRSs provide the collaborative scores that SERA builds on. 
+
+B. Multimodal Recommendation 
+
+Multimodal recommenders supplement interaction supervi-sion with item text and images [8], [25]. VBPR projects visual features into a user-specific visual preference term added to collaborative scores [26], while ACF uses item and component attention to aggregate multimodal interaction histories [27]. In item-based collaborative filtering, NAIS weights history items by relevance to the candidate [28]. SERA weights history content by collaborative scores to form one query for all candidates. MMCN refines item representations through attention-based residuals and hierarchical contrastive learning [29]. MICRO learns modality-aware item graphs and combines shared and modality-specific signals through contrastive learn-ing [30], while FREEDOM freezes content-derived graphs and denoises interaction graphs [31]. BM3 combines interaction reconstruction with cross-modal alignment [32], and MMSSL contrasts collaborative and multimodal views [33]. Dropout-Net reconstructs cold-item representations from content [34], while CLCRec aligns content and collaborative spaces [35]. PCKD reduces preference inconsistencies across distillation projection through a ranking regularization term [36]. Content reach also relates to studies that limit changes to existing lists. Additive corrections to a frozen ranker and score regularization trade accuracy gains against the share of queries whose rankings change [37]. CertDR uses randomized smooth-ing to certify top-K exclusion under word-substitution attacks [38]. Reachability analyses ask whether a user can make an item recommended by changing their own interactions [39], [40]. SERA instead bounds the collaborative score gaps that semantic residual scores can overcome for any content. 
+
+C. Federated Multimodal Recommendation 
+
+FedMRs integrate item content under federated resource and privacy constraints [41]. Their designs differ in fusion level and in the item representations that clients and servers ex-change. IFedRec learns an attribute network from aggregated item embeddings and aligns its output with local collaborative representations to serve cold-start items [6]. AMMFRS fuses text, image, identity, and behavior features through client-side attention [11]. FedMMR aligns a server-side multimodal model with lightweight collaborative models on clients [15]. FedVLR generates vision-language views on the server and combines them through a client-specific mixture of experts [13]. GFMFR uses server-side group-level multimodal repre-sentations as distillation targets for local training [16]. SERA instead fuses content at the score level and personalizes its semantic residual scores with local interaction histories. III. P RELIMINARIES 
+
+A. Notation 
+
+Let U contain N users and let I contain M items. We use 
+
+u ∈ U for a user and i ∈ I for an item. The candidate set 
+
+Cu ⊆ I contains the items ranked for user u, and Mu =
+
+|C u| is its size. A FedRS maps each user-item pair (u, i ) to a collaborative score a(u, i ) = a(u, i ; θ(u)). The parameter 
+
+θ(u) = [ θs, θ u] contains shared parameters θs and personalized parameters θu. Client u stores its interaction history Hu on the device. The client updates θ(u) locally and sends the update associated with the shared parameters θs to the server. 
+
+B. Federated Recommendation Systems 
+
+For user u, let i+ ∈ H u be an observed item and i− be a sampled negative item. Under the Bayesian Personalized Ranking (BPR) loss [42], a score function s has client risk: 
+
+Lu(s) = Ei+∼H u, i −∼D 
+
+− log σ s(u, i +) − s(u, i −) . (1) Here, D is the negative-item sampling distribution, and σ(·)
+
+is the logistic function. The federated objective aggregates the client risks using a nonnegative weight αu for each user: 
+
+L(s) = X
+
+> u
+
+αuLu(s), where X
+
+> u
+
+αu = 1 . (2) ARXIV PREPRINT 3𝑢                      
+
+> 𝑖
+> 𝑎(𝑢, 𝑖) 𝑎
+> 𝑥 𝑖 𝑡𝑒𝑥𝑡
+> 𝑥 𝑖 𝑣𝑖𝑠
+> ℎ𝒛 𝑖
+> +𝑠(𝑢, 𝑖) 𝐻 𝑢
+> Server
+> Client
+> 𝑟 𝑢, 𝑖 𝒒 𝑢
+> 𝜎 𝑢 SERA
+> \
+> User Content Query 𝒒 𝑢 𝜎 𝑢 User-Adaptive Residual Scale
+> 𝑎(𝑢, 𝑖) Collaborative Score 𝑟(𝑢, 𝑖) Semantic Residual s(𝑢, 𝑖) Final Score
+> 𝑖 Item 𝒛 𝑖 Content Representations 𝑥 𝑖 𝑡𝑒𝑥𝑡 Text Features 𝑥 𝑖 𝑣𝑖𝑠 Visual Features
+> 𝑢 User 𝐻 𝑢 Interaction History ℎContent Projector Gradient Stopper \
+
+(a)  Pairwise Order Preservation 
+
+𝑖 𝑗 
+
+𝑎(𝑢,⋅) 
+
+2𝑅 𝑢 
+
+> Reach Band
+
+𝑎 𝑢 
+
+> 𝐾
+> Collaborative
+> Top-K List
+
+(b)  Top -K Reach  Condition       
+
+> 𝑎 𝑢
+> 𝐾 Boundary Score
+> 𝑎(𝑢,⋅) Collaborative Score
+> 𝑅 𝑢 Residual Bound
+> 𝑢 User
+> 𝑖 ,𝑗 Item
+
+𝑅 𝑢 
+
+𝑖 𝑗 
+
+𝑎(𝑢,⋅) 
+
+𝑅 𝑢 
+
+𝑎  𝑢, 𝑖 − 𝑎  𝑢, 𝑗 
+
+> 2𝑅 𝑢 
+
+> Fig. 2. Personalized content-based scoring in SERA. A shared projector maps item text and images to content representations. Collaborative scores weight history items to form a content query. The standard deviation of these scores across items sets the user-adaptive residual scale. SERA compares candidates with this query and adds bounded semantic residual scores to the collaborative scores. Local histories and collaborative scores personalize these scores.
+
+SERA trains its semantic residual scores on this aggregated risk. Each FedRS retains its own training objective and its own rules for updating and sharing model parameters. IV. M ETHODOLOGY 
+
+SERA in Fig. 2 fuses item content with an existing FedRS at the score level. It learns semantic residual scores from local histories and caps them with a global residual budget. 
+
+A. Residual Scoring 
+
+SERA starts from the collaborative score a(u, i ) that an ID-based FedRS assigns to pair (u, i ). SERA forms the final score 
+
+s(u, i ) by adding to a(u, i ) a semantic residual score r(u, i )
+
+derived from the text and images of the candidate item i:
+
+s(u, i ) = sg a(u, i ) + r(u, i ). (3) The stop-gradient operator sg[ ·] keeps the value of the col-laborative score and blocks its gradient, so SERA’s loss never updates the FedRS. Item content can thus change the final ranking only through the semantic residual score r(u, i ).
+
+B. Item Content Representations 
+
+Each item i provides processed text features xtext  
+
+> i
+
+and visual features xvis  
+
+> i
+
+. The shared projector hϕ with parameters ϕ maps their concatenation to normalized content representation zi:
+
+zi = Π  hϕ([ xtext  
+
+> i
+
+, xvis  
+
+> i
+
+]) . (4) In Eq. (4), Π( v) = v/ max {∥ v∥2, ε } is L2 normalization, and ε > 0 avoids division by zero. During training, the item features remain frozen while hϕ learns content representations. 
+
+C. History-Weighted Content Query 
+
+SERA combines the representations zi of history items into a content query . Collaborative scores set the history weights :
+
+βui = exp   sg[ a(u, i )] /τ q
+
+P 
+
+> j∈H u
+
+exp   sg[ a(u, j )] /τ q
+
+ , where i ∈ H u. (5) The temperature τq > 0 controls how strongly the history weights favor high-scoring history items. These weights com-bine the history items’ content into the content query qu:
+
+qu = Π X
+
+> i∈H u
+
+βui zi
+
+!
+
+. (6) Users share the projector parameters, while their local histories and collaborative scores determine personalized queries. 
+
+D. User-Adaptive Bounded Residual 
+
+SERA compares the content query qu with each content representation zi through their content similarity cui :
+
+cui = ⟨qu, zi⟩. (7) As both vectors are normalized, cui ∈ [−1, 1] . The residual function maps this content similarity to the shape term gui :
+
+gui = tanh 
+
+ cui 
+
+τr
+
+
+
+. (8) The residual temperature τr > 0 controls saturation. A small value drives gui toward ±1, and a large value keeps it close to linear in cui . Let vu be the population standard deviation of user u’s collaborative scores over the full item set I. SERA then multiplies gui by a residual budget κ ≥ 0 and the user-adaptive residual scale σu = max {vu, ε } > 0, which gives: 
+
+r(u, i ) = κ σ u gui . (9) 
+
+Proposition 1 (User-Adaptive Residual Bound) . For κ > 0
+
+and τr > 0, the semantic residual score is bounded as follows: 
+
+|r(u, i )| ≤ κ σ u tanh 
+
+ 1
+
+τr
+
+
+
+< κ σ u, ∀i ∈ I . (10) 
+
+Proof Sketch. The Cauchy–Schwarz inequality applied to Eq. (7) gives |cui | ≤ 1. The oddness and strict monotonicity of tanh in Eqs. (8) and (9) give the bound in Eq. (10). We denote this residual bound by Ru = κ σ u tanh(1 /τ r ).When κ = 0, the semantic residual score vanishes and 
+
+s(u, i ) = a(u, i ). The analysis below assumes κ > 0.
+
+E. Objective Function 
+
+Let Lbase (a) be the FedRS’s training objective for collab-orative scores a(u, i ). SERA’s residual objective applies the client risk in Eq. (1) to the final score s of each user: 
+
+J (ϕ) = λ X
+
+> u∈U
+
+αuLu(s), where X
+
+> u∈U
+
+αu = 1 . (11) Here, λ > 0 scales the residual loss. SERA applies sg[ ·] to every collaborative score that enters s(u, i ), βui , or σu, so each residual update treats the collaborative scores as constants and ARXIV PREPRINT 4
+
+updates only ϕ. Adding J (ϕ) in Eq. (11) to Lbase (a) forms a joint objective for the FedRS and the shared projector: 
+
+min   
+
+> θs,{θu}u∈U ,ϕ
+
+Lbase (a) + J (ϕ). (12) Eq. (12) trains the FedRS on interactions alone and the projec-tor through the final scores. SERA therefore gives any FedRS personalized semantic residual scores bounded in proportion to the standard deviation of each user’s collaborative scores. V. A LGORITHM ANALYSIS 
+
+A. Federated Optimization 
+
+Algorithm 1 splits the optimization of Eq. (12) between clients and the server, which holds the item features and the projector hϕ. At round t, the server computes the content table Zt = [zi]i∈I by Eq. (4), samples clients St, and normalizes their data counts into weights αu,t that sum to one. Each sampled client receives Zt with the shared collaborative parameters, performs E local steps of the FedRS, and keeps its personalized parameters on the device. Over these updates, it accumulates the gradient Gtu of its residual loss with respect to Zt and uploads it with its collaborative model update. The server applies the FedRS’s aggregation rule, averages the uploaded gradients with weights αu,t , and back-propagates the average to update hϕ. Every local step reads the table built from ϕt. For fixed collaborative parameters, the update thus follows an unbiased gradient of Eq. (11) with αu replaced by E[αu,t ]. If this objective is smooth with bounded gradient variance and the step size scales as T −1/2, standard nonconvex analysis [43] shows that its average squared gradient norm is 
+
+O(T −1/2). Algorithm 1 computes σu from all M collaborative scores. At inference, the client builds its query from its history and the stored table and ranks the candidate set Cu by s(u, i ).
+
+B. Content Reach Boundaries 
+
+The residual bound restricts ranking changes after training. For user u and items i, j ∈ I , the collaborative score gap is: 
+
+γu,ij = a(u, i ) − a(u, j ). (13) According to Eq. (13), for items with different collaborative scores, a strict ranking change requires a residual difference with the sign opposite to this gap and a larger magnitude. To link pairwise ranking changes to list membership, the collaborative and final rankings share the candidate set Cu
+
+and a fixed tie-breaking rule. For 1 ≤ K < M u, let iu,K 
+
+be the item at collaborative rank K, with collaborative top-K
+
+boundary score a(K) 
+
+> u
+
+= a(u, i u,K ). For a candidate j outside the collaborative top-K list, its collaborative boundary gap is: 
+
+γ(K) 
+
+> u,j
+
+= γu,i u,K j = a(K) 
+
+> u
+
+− a(u, j ). (14) Eq. (14) measures how far j falls below the collaborative top-K boundary score. To locate ranking changes, we fix the trained model, history, and candidate set and vary κ > 0. The collaborative scores, user-adaptive residual scale, and shape terms remain constant, so each pairwise score difference is affine in the budget. Lemma 1 gives the change points. 
+
+Algorithm 1 Training a FedRS with SERA 
+
+Require: Hyperparameters of SERA (hϕ, κ, τ r , τ q , λ ), item features {xtext  
+
+> i
+
+, xvis  
+
+> i
+
+} on the server, and a FedRS 
+
+Require: Communication rounds T , local steps E, and server learning rate ηs
+
+Ensure: Shared collaborative parameters θT 
+
+> s
+
+, SERA projector 
+
+ϕT , and personalized parameters {θTu }u∈U  
+
+> 1:
+
+Initialize the FedRS and the SERA projector ϕ0 
+
+> 2:
+
+for t = 0 to T − 1 do  
+
+> 3:
+
+Compute Zt = [ zi]i∈I with hϕt by Eq. (4)  
+
+> 4:
+
+Sample clients St ⊆ U and set weights αu,t  
+
+> 5:
+
+Broadcast θt 
+
+> s
+
+and Zt to St 
+
+> 6:
+
+for all clients u ∈ S t in parallel do  
+
+> 7:
+
+Set θ(u)s ← θt 
+
+> s
+
+and Gtu ← 0 
+
+> 8:
+
+for e = 1 to E do  
+
+> 9:
+
+Draw positives B+ 
+
+> u
+
+and sampled negatives B− 
+
+> u
+> 10:
+
+Compute a(u, I) with the FedRS, then σu 
+
+> 11:
+
+Compute qu by Eqs. (5) and (6) from rows of Zt 
+
+> 12:
+
+Compute s(u, i ) for i ∈ B + 
+
+> u
+
+∪ B − 
+
+> u
+
+by Eq. (3)  
+
+> 13:
+
+Update Gtu ← Gtu + ∂ λLu(s)/∂ Zt 
+
+> 14:
+
+Update θ(u)s and θu by one FedRS step on Lbase  
+
+> 15:
+
+end for  
+
+> 16:
+
+Upload θ(u)s and Gtu to the server  
+
+> 17:
+
+end for  
+
+> 18:
+
+θt+1 s ← Aggregate  {θ(u)s }u∈S t , {αu,t }u∈S t
+
+ 
+
+> 19:
+
+ϕt+1 ← ϕt − ηs
+
+P
+
+> i∈I
+
+ ∂zi/∂ϕ ⊤ P  
+
+> u∈S t
+
+αu,t Gtu
+
+ 
+
+> i
+> 20:
+
+end for Lemma 1 (Change Point) . For user u ∈ U and items i, j ∈ I ,let δu,ij = gui − guj ̸ = 0 be their shape-term difference. The 
+
+change point of the pair (i, j ) is then defined as follows: 
+
+κu,ij = − γu,ij 
+
+σu δu,ij 
+
+. (15) 
+
+With this change point, the score difference factors as: 
+
+s(u, i ) − s(u, j ) = σu δu,ij 
+
+ κ − κu,ij 
+
+. (16) 
+
+Since σu > 0, the pair changes ranking at some positive budget exactly when γu,ij and δu,ij have opposite signs. Proof Sketch. Eqs. (3) and (9) give s(u, i ) − s(u, j ) = γu,ij +
+
+κσ uδu,ij , which is affine in κ with slope σuδu,ij ̸ = 0.Factoring out the slope yields Eq. (16), where only the factor 
+
+κ − κu,ij depends on κ, and it changes sign at κu,ij .Each pair thus changes ranking at most once. Its change point depends on the collaborative score gap, user-adaptive residual scale, and learned shape-term difference. Each se-mantic residual score has magnitude at most Ru, so the residual difference of two items has magnitude at most 2Ru.Comparing this bound with the collaborative score gap gives a sufficient condition for keeping the order of two items. 
+
+Corollary 1 (Order-Preservation Certificate) . For user u and items i, j ∈ I , if |γu,ij | > 2Ru, then i and j keep their collaborative order under s. The threshold is tight: if a(u, j )−
+
+a(u, i ) = 2 Ru, cui = 1 , and cuj = −1, then s(u, i ) = s(u, j ).ARXIV PREPRINT 5+ 𝑠(𝑢, 𝑖)                      
+
+> Client
+> y
+> s(𝑢, 𝑖) Final Score
+> ntent Representations
+> ℎContent Projector
+> (a) Pairwise Order Preservation
+> 𝑖 𝑗
+> 𝑎(𝑢,⋅)
+> 2𝑅 𝑢
+> Reach Band
+> 𝑎 𝑢
+> 𝐾
+> Collaborative
+> Top-K List
+> (b) Top -KReach Condition
+> 𝑎 𝑢
+> 𝐾 Boundary Score
+> 𝑎(𝑢,⋅) Collaborative Score
+> 𝑅 𝑢 Residual Bound
+> 𝑢 User
+> 𝑖 ,𝑗 Item
+> 𝑅 𝑢
+> 𝑖 𝑗
+> 𝑎(𝑢,⋅)
+> 𝑅 𝑢
+> 𝑎 𝑢, 𝑖 − 𝑎 𝑢, 𝑗
+> > 2𝑅 𝑢
+> Fig. 3. Limits on ranking changes under SERA’s residual bound. (a) Two items retain their collaborative order when their collaborative score gap exceeds the maximum residual difference 2Ru. (b) An item outside the collaborative top-Klist can enter only if its collaborative boundary gap is at most 2Ru. Within this 2Rurange, semantic residual scores decide entry.
+
+Proof Sketch. By Eq. (10) and the triangle inequality, 
+
+|κσ uδu,ij | = |r(u, i ) − r(u, j )| ≤ 2Ru < |γu,ij |, so adding the semantic residual scores preserves the sign of γu,ij .An outside item enters the top-K list only by outranking an item of the collaborative top-K list, so Corollary 1 bounds the collaborative boundary gap of the entering item. 
+
+Theorem 1 (Reach Condition) . Let j ∈ C u lie outside the collaborative top-K list and enter the final one, both formed from Cu with fixed tie-breaking. Its collaborative boundary gap in Eq. (14) must then satisfy the following reach condition: 
+
+γ(K) 
+
+> u,j
+
+≤ 2Ru. (17) 
+
+Proof Sketch. Let Tu ⊆ C u be the collaborative top-K set. Since j / ∈ T u enters the final top K, at least one item i ∈ T u
+
+is displaced. Thus s(u, j ) ≥ s(u, i ), and in a tie the fixed tie-breaking rule favors j. By Eq. (10) and a(u, i ) ≥ a(K) 
+
+> u
+
+:
+
+s(u, j ) ≤ a(u, j ) + Ru, s (u, i ) ≥ a(u, i ) − Ru ≥ a(K) 
+
+> u
+
+− Ru.
+
+(18) Combining these inequalities gives a(u, j )+ Ru ≥ a(K) 
+
+> u
+
+−Ru,so the collaborative boundary gap satisfies γ(K) 
+
+> u,j
+
+≤ 2Ru.The reach band in Fig. 3 contains the outside candidates with collaborative scores between a(K) 
+
+> u
+
+− 2Ru and a(K) 
+
+> u
+
+. The same argument bounds the final rank of every item. Let ρu(j)
+
+and ˜ρu(j) denote the collaborative and final ranks of j in Cu.
+
+Corollary 2 (Content-Agnostic Rank Range) . For user u
+
+and item j ∈ C u, let n+ 
+
+> u,j
+
+count the candidates with col-laborative scores above a(u, j ) + 2 Ru, and n− 
+
+> u,j
+
+those below 
+
+a(u, j ) − 2Ru. For any content and projector parameters: 
+
+1 + n+ 
+
+> u,j
+
+≤ ˜ρu(j) ≤ Mu − n− 
+
+> u,j
+
+. (19) 
+
+Proof Sketch. Normalization in Eqs. (4) and (6) keeps Propo-sition 1 valid for any content, and Corollary 1 then keeps the order between j and each counted candidate unchanged. Theorem 1 is the top-K case of Eq. (19), because j enters only if n+ 
+
+> u,j
+
+< K , which holds exactly when a(K) 
+
+> u
+
+− a(u, j ) ≤
+
+2Ru. Since content cannot change the collaborative scores, the range also limits how high untrusted content or projector parameters can raise an item. 
+
+C. Ranking Analysis 
+
+We analyze when Theorem 1 limits the ranking and how pairwise ranking changes move each item’s rank as the budget grows. Because σu is at least the standard deviation of the 
+
+M collaborative scores, every collaborative score gap satisfies 
+
+|γu,ij | ≤ σu
+
+√2M . The coverage condition 2κ tanh(1 /τ r ) ≥√2M thus makes Theorem 1 and Corollary 1 vacuous. It depends only on κ, τr , and M , so it can be checked before training. Actual ranking changes depend on the learned resid-ual differences between competing items. For a fixed model and budget κ, a target item i ∈ C u has two rank counts: 
+
+Pi = { j̸ = i : a(u, j ) > a (u, i ), s (u, j ) < s (u, i ) } ,Qi = { j̸ = i : a(u, j ) < a (u, i ), s (u, j ) > s (u, i ) } . (20) Both counts range over j ∈ C u \{ i}. They record strict ranking changes: Pi counts competitors moved below i, and Qi counts competitors moved above it. Moving j below i adds one to 
+
+Pi and one to Qj , so Pi and Qi have equal sums over i ∈ C u.As κ grows, these counts give the exact rank of the target. 
+
+Proposition 2 (Rank Path) . Fix user u, a trained model, and a target i ∈ C u whose collaborative score differs from all others. For every budget κ > 0 other than the change points κu,ij of 
+
+i, Pi counts the competitors with higher collaborative scores whose change points with i lie in (0 , κ ), and Qi counts those with lower ones. The final rank of target i then satisfies: 
+
+˜ρu(i) = ρu(i) − Pi + Qi. (21) 
+
+For κ above all positive change points of i, its final rank is its rank by similarity cui , and collaborative order breaks ties. Proof Sketch. The items above i in the final ranking are those with higher collaborative scores that i has not passed and those with lower ones that have passed it. By Lemma 1, each of these pairs changes ranking only at a positive change point. By Proposition 2, an item j with ρu(j) > K lies in the final top-K list exactly when Pj − Qj ≥ ρu(j) − K, which refines the reach condition of Theorem 1 into an exact test. An item can also rise and later fall. Each positive change point with a higher competitor raises the item by one position, and each one with a lower competitor lowers it by one, so an outside item can enter the top-K list and later leave it. 
+
+D. Complexity Analysis a) Time Complexity: Let Bu = B+ 
+
+> u
+
+∪ B − 
+
+> u
+
+hold the mini-batch items, let dx and d be the projector’s input and output dimensions, and let the projector have |ϕ| parameters, with 
+
+|ϕ| = Θ( dxd) for a linear projection. After computing all 
+
+M collaborative scores, a local step of Algorithm 1 adds 
+
+Θ( M +( |H u|+|B u|)d) client time. The Θ( M ) term computes 
+
+σu, and the Θ(( |H u| + |B u|)d) term reads the history and batch rows of Zt, builds the query, scores the batch items, and accumulates their gradients. If the FedRS update scores only sampled items, scoring all M items for σu is extra ARXIV PREPRINT 6                                  
+
+> TABLE I STATISTICS OF THE SIX DATASETS . #U SERS AND #I TEMS ARE THE COUNTS OF USERS AND ITEMS . #R ATINGS IS THE NUMBER OF OBSERVED INTERACTIONS . S PARSITY IS 1−#RATINGS /(# USERS ×#ITEMS ).Dataset #Users #Items #Ratings Sparsity Beauty 253 356 2,535 97.19% Cards 377 129 2,429 95.01% ML 610 3,650 90,274 95.95% Dance 10,231 1,676 80,086 99.53% Food 5,990 1,125 36,482 99.46% Movie 15,908 2,528 111,091 99.72%
+
+work. Each round, the server evaluates and differentiates hϕ
+
+on the item set in Θ( M |ϕ|) time and averages the uploaded gradients in Θ( |S t|M d ) time. Given the collaborative scores, recommendation over Cu, including the FedRS’s own top-K
+
+selection, takes Θ( M + ( |H u| + Mu)d + Mu log K) time. 
+
+b) Space Complexity: Each client stores the content table in Θ( M d ) space and uses Θ( M + ( |H u| + |B u|)d + M d )
+
+working memory for the collaborative scores, the query and batch rows, and the accumulated gradient. The server stores the features, the projector with its optimizer state, and the full content table in Θ( M d x + |ϕ| + M d ) space in total. 
+
+c) Communication Complexity: Beyond the FedRS’s communication, broadcasting Zt and uploading Gtu add 
+
+Θ( |S t|M d ) values per round in each direction. The item features and the projector stay on the server, so this cost does not grow with history lengths or the projector size |ϕ|.
+
+E. Privacy Discussion 
+
+SERA keeps user interaction histories Hu and personalized parameters θu on the client, where each client builds its content query qu, computes the semantic residual scores r(u, i ), and ranks items by s(u, i ). The server receives the collaborative updates and the uploaded gradients Gtu of Algorithm 1. The nonzero rows of Gtu can reveal indices of history or mini-batch items, as the FedRS’s item updates do. The projector update needs only the weighted sum of Gtu, so these gradients can be combined through secure aggregation [20]. We evaluate the effects of client-side clipping and Gaussian noise in Sec. VI-I. VI. E XPERIMENTS 
+
+Following Secs. IV and V, we evaluate SERA’s performance and test the implications of the reach and rank-path analysis. 
+
+A. Experimental Setup a) Datasets: We use six public recommendation datasets from three domains. Beauty and Cards are the All Beauty and Gift Cards subsets of Amazon Reviews 2023 1 and contain product-review interactions and item metadata [44]. MovieLens-latest-small (ML )2 contains movie ratings and item metadata [45]. Dance , Food , and Movie are short-video subsets of NineRec 3 with visual and textual content for each 
+
+> 1https://amazon-reviews-2023.github.io/
+> 2https://grouplens.org/datasets/movielens/latest/
+> 3https://github.com/westlake-repl/NineRec
+
+item [46]. We reserve one validation and one test interaction per user under a chronological leave-one-out split [47], and rank the test item against the full item set [48]. We also retain users and items with at least five interactions before splitting to avoid cold-start cases. Table I reports the dataset statistics. 
+
+b) Metrics: We measure ranking quality with Recall and Normalized Discounted Cumulative Gain (NDCG). Recall@ K
+
+measures the proportion of users whose test item appears among the top-K recommendations [47]. NDCG@ K gives higher scores when the test item ranks closer to the top [49]. We set K = 50 and report means and standard deviations across five random seeds, with both metrics in percent and their differences in percentage points. The hyperparameters of all methods are selected by NDCG@50 on the validation set. 
+
+B. Baselines 
+
+The baselines serve three roles. Centralized multimodal recommenders show the accuracy when a model learns from interactions and item content in a centralized setting.  
+
+> •
+
+VBPR [26] extends BPR with pretrained visual item fea-tures for visually informed user preference estimation.  
+
+> •
+
+BM3 [32] learns multimodal representations through self-supervised reconstruction without negative sampling.  
+
+> •
+
+MGCN [50] denoises modality features and propagates them on modality-specific graphs for behavior-aware fusion.  
+
+> •
+
+FITMM [51] decomposes multimodal representations into frequency bands and regularizes their information content.  
+
+> •
+
+PGL [52] extracts principal user-item subgraphs to preserve local interaction structure during graph message passing.  
+
+> •
+
+MSCA [53] aligns collaborative and modality-augmented views through semantic contrastive representation learning. 
+
+ID-based FedRSs provide the backbones for measuring the effect of adding multimodal item content.  
+
+> •
+
+FedAvg [17] aggregates shared model parameters through client-weighted averaging across participating clients.  
+
+> •
+
+PFedRec [22] learns lightweight client models with locally personalized user and item representations on the device.  
+
+> •
+
+FedRAP [4] decomposes item representations into shared and personalized components for federated personalization. 
+
+FedMRs provide federated multimodal alternatives that add item content at the feature, representation, or objective level.  
+
+> •
+
+FedMMR [15] aligns client collaborative and server multi-modal item representations through a contrastive objective.  
+
+> •
+
+AMMFRS [11] fuses text, image, identity, and behavior fea-tures through client-side attention before federated training.  
+
+> •
+
+FedVLR [13] constructs server-side multimodal views and selects them through a client-specific mixture of experts.  
+
+> •
+
+GFMFR [16] distills group-level multimodal preferences into each client’s own local recommendation objective. We attach SERA to the same FedAvg, PFedRec, and FedRAP backbones that FedVLR and GFMFR extend. All methods use the same framework, data splits, and evaluation protocols. 
+
+C. Performance Comparison 
+
+Tables II and III compare centralized and federated rec-ommendation methods across six datasets. Comparing each ARXIV PREPRINT 7
+
+TABLE II RECOMMENDATION PERFORMANCE ON BEAUTY , C ARDS , AND ML IN RECALL @50 AND NDCG@50, REPORTED AS MEANS ± STANDARD DEVIATIONS IN PERCENT ACROSS FIVE SEEDS . BOLD AND UNDERLINING MARK THE HIGHEST AND SECOND -HIGHEST FEDERATED MEANS . SERA IMPROVES ALL THREE BACKBONES , NARROWS THEIR GAPS WITH THE BEST CENTRALIZED METHODS , AND LIFTS SOME ABOVE CENTRALIZED BASELINES .
+
+Method Beauty Cards ML Recall@50 NDCG@50 Recall@50 NDCG@50 Recall@50 NDCG@50 
+
+> Centralized
+
+VBPR 23.79 ± 2.08 6.77 ± 0.61 74.96 ± 1.20 29.05 ± 0.63 21.44 ± 1.14 6.43 ± 0.31 BM3 10.12 ± 2.66 2.58 ± 0.72 80.64 ± 1.23 34.38 ± 1.53 16.56 ± 3.01 4.69 ± 0.73 MGCN 19.13 ± 1.82 5.51 ± 0.64 79.42 ± 0.81 33.84 ± 0.56 22.66 ± 0.57 6.54 ± 0.12 FITMM 19.68 ± 1.13 5.92 ± 0.54 81.91 ± 1.53 35.16 ± 0.19 22.23 ± 1.21 6.72 ± 0.18 PGL 22.06 ± 1.35 5.74 ± 0.54 82.02 ± 2.04 34.52 ± 0.75 15.34 ± 6.84 4.81 ± 1.84 MSCA 21.74 ± 1.96 6.47 ± 0.41 74.43 ± 1.37 31.41 ± 0.43 20.33 ± 1.73 5.94 ± 0.51 FedMMR 13.83 ± 2.85 3.40 ± 0.73 74.59 ± 1.97 31.12 ± 0.93 8.56 ± 0.55 2.74 ± 0.16 AMMFRS 16.28 ± 4.12 4.46 ± 1.42 69.18 ± 2.57 30.13 ± 0.49 9.54 ± 1.12 2.90 ± 0.44 FedAvg 13.04 ± 0.56 3.77 ± 0.17 36.47 ± 0.13 10.89 ± 0.03 6.34 ± 5.36 1.99 ± 1.77 + FedVLR 16.60 ± 0.94 3.99 ± 0.39 64.67 ± 1.21 24.54 ± 1.82 9.08 ± 0.17 2.42 ± 0.07 + GFMFR 13.12 ± 1.46 3.28 ± 0.54 69.39 ± 3.61 21.54 ± 5.23 9.97 ± 2.09 2.94 ± 0.55 + SERA 21.26 ± 3.63 5.94 ± 0.93 74.85 ± 1.84 31.86 ± 0.49 11.54 ± 1.98 3.65 ± 0.41 PFedRec 15.97 ± 0.32 3.97 ± 0.07 32.63 ± 0.64 8.67 ± 0.81 1.64 ± 0.14 0.42 ± 0.02 + FedVLR 17.94 ± 1.38 4.82 ± 0.44 71.17 ± 1.35 27.65 ± 0.60 7.15 ± 1.21 2.14 ± 0.25 + GFMFR 14.78 ± 6.13 3.83 ± 1.51 53.26 ± 2.93 20.16 ± 0.74 7.18 ± 1.31 2.01 ± 0.37 + SERA 24.58 ± 2.08 7.05 ± 0.70 70.34 ± 6.25 24.66 ± 6.68 10.49 ± 0.81 3.48 ± 0.70 FedRAP 16.21 ± 1.02 4.12 ± 0.27 42.49 ± 0.11 11.09 ± 0.02 1.71 ± 0.22 0.69 ± 0.11 + FedVLR 34.55 ± 1.74 11.98 ± 0.33 57.56 ± 0.56 22.65 ± 0.27 10.75 ± 0.64 3.60 ± 0.06 + GFMFR 14.94 ± 1.62 4.14 ± 0.51 47.85 ± 7.70 13.47 ± 3.60 9.28 ± 1.47 2.76 ± 0.44 Federated + SERA 20.47 ± 4.95 5.70 ± 1.53 82.02 ± 0.44 33.31 ± 1.15 11.70 ± 0.59 3.72 ± 0.13 
+
+TABLE III RECOMMENDATION PERFORMANCE ON DANCE , F OOD , AND MOVIE IN RECALL @50 AND NDCG@50, REPORTED AS MEANS ± STANDARD DEVIATIONS IN PERCENT ACROSS FIVE SEEDS . F ORMATTING FOLLOWS TABLE II. AMMFRS EXCEEDS THE AVAILABLE MEMORY ON THESE DATASETS . SERA  
+
+> IMPROVES EVERY FEDERATED BACKBONE AND OUTPERFORMS
+
+FED VLR AND GFMFR IN BOTH METRICS ACROSS ALL THREE SHORT -VIDEO DATASETS .
+
+Method Dance Food Movie Recall@50 NDCG@50 Recall@50 NDCG@50 Recall@50 NDCG@50 
+
+> Centralized
+
+VBPR 23.07 ± 0.22 7.56 ± 0.08 21.12 ± 0.21 6.75 ± 0.12 12.64 ± 0.16 4.24 ± 0.07 BM3 24.21 ± 0.40 8.13 ± 0.11 25.03 ± 0.22 8.28 ± 0.12 17.62 ± 0.23 6.00 ± 0.06 MGCN 22.17 ± 2.48 7.60 ± 0.89 24.88 ± 0.29 8.39 ± 0.07 16.77 ± 0.14 5.83 ± 0.06 FITMM 20.74 ± 0.34 7.31 ± 0.07 22.62 ± 0.22 7.58 ± 0.03 15.33 ± 0.11 5.51 ± 0.05 PGL 24.55 ± 0.44 8.45 ± 0.16 24.84 ± 0.27 8.28 ± 0.12 17.18 ± 0.18 6.19 ± 0.03 MSCA 21.00 ± 0.41 7.23 ± 0.08 22.72 ± 3.22 7.76 ± 0.84 12.95 ± 0.07 4.74 ± 0.04 FedMMR 13.45 ± 0.65 4.66 ± 0.31 11.18 ± 0.84 3.53 ± 0.37 7.35 ± 0.33 2.44 ± 0.11 FedAvg 4.49 ± 1.03 1.20 ± 0.53 4.79 ± 1.59 1.34 ± 0.43 4.19 ± 1.86 1.09 ± 0.46 + FedVLR 9.76 ± 0.49 2.57 ± 0.31 9.91 ± 0.05 2.70 ± 0.02 5.64 ± 0.00 1.61 ± 0.00 + GFMFR 8.61 ± 0.56 2.22 ± 0.10 8.81 ± 0.88 2.38 ± 0.21 5.58 ± 0.63 1.79 ± 0.21 + SERA 16.69 ± 2.44 4.48 ± 2.07 14.30 ± 3.61 4.35 ± 1.56 7.23 ± 0.29 2.11 ± 0.11 PFedRec 2.52 ± 0.63 0.68 ± 0.17 3.27 ± 0.78 0.93 ± 0.21 1.70 ± 0.35 0.42 ± 0.11 + FedVLR 7.92 ± 0.99 1.92 ± 0.17 9.96 ± 0.89 2.49 ± 0.29 5.59 ± 0.81 1.56 ± 0.19 + GFMFR 5.94 ± 0.34 1.65 ± 0.09 6.39 ± 0.28 1.74 ± 0.11 3.96 ± 0.15 1.15 ± 0.05 + SERA 22.57 ± 0.49 7.68 ± 0.22 19.07 ± 1.67 6.19 ± 0.60 12.11 ± 0.14 4.30 ± 0.07 
+
+FedRAP 2.37 ± 0.74 0.53 ± 0.23 5.48 ± 1.32 1.63 ± 0.45 1.68 ± 0.65 0.44 ± 0.13 + FedVLR 7.27 ± 1.76 1.91 ± 0.54 8.58 ± 0.15 2.20 ± 0.03 6.02 ± 0.40 1.65 ± 0.09 + GFMFR 5.02 ± 1.16 1.40 ± 0.40 7.45 ± 1.04 2.70 ± 0.36 5.09 ± 1.71 1.45 ± 0.50 Federated + SERA 17.33 ± 2.87 5.23 ± 1.09 13.52 ± 1.63 3.98 ± 0.39 9.88 ± 0.86 3.14 ± 0.27 
+
+backbone row with the indented SERA row below it shows that SERA improves every backbone on each dataset. These gains narrow the gap with the best centralized methods, and SERA lets some backbones outperform centralized baselines. Within the same backbone architecture, SERA exceeds GFMFR across all datasets and FedVLR in most comparisons. SERA trails FedVLR only with FedRAP on Beauty and PFedRec on Cards. The gains also vary across backbones and change which backbone leads on most datasets. This back-bone dependence is built into SERA: collaborative scores set the collaborative ranking, history weights, and user-adaptive residual scale. Each backbone thus sets the semantic residual scores and the collaborative score gaps they must exceed. SERA’s gains extend from the product-review datasets to the larger item sets and sparser interaction matrices of the short-video datasets. Both domains have sparse interaction histories on average, as shown in Table I. The shared projector learns from aggregated user updates, so a short local history can use content representations learned from other users’ interactions. SERA scores candidates with these representations, so its ARXIV PREPRINT 8                                                                                                                                                    
+
+> TABLE IV PARAMETER COMPARISON OF FED MR S WITH LATENT DIMENSION 64 AND FEATURE DIMENSION 512 PER MODALITY . SERA USES A SINGLE LINEAR PROJECTION WITH BIAS . B ACKBONE ROWS REPORT TOTAL PERSONALIZED PARAMETERS PER CLIENT ,AND INDENTED ROWS REPORT ADDITIONS . K
+> DENOTES THOUSANDS . SERA DERIVES PERSONALIZED QUERIES FROM LOCAL HISTORIES AND SHARES ALL ADDED TRAINABLE PARAMETERS . I T ADDS ZERO PERSONALIZED PARAMETERS AND FEWER SHARED PARAMETERS THAN FED VLR AND GFMFR ACROSS ALL THREE BACKBONES .Per-client personalized parameters Global multimodal additions Method Beauty Cards ML Dance Food Movie Client Server Representation per item FedMMR 64 64 64 64 64 64 066K 0AMMFRS 1027K 1020K 1261K 1750K 1443K 2168K 000FedAvg 193 193 193 193 193 193 000+ FedVLR 13K 13K 13K 13K 13K 13K 124K 064 + GFMFR 0000000134K 0+ SERA 000000066K 64 PFedRec 65 65 65 65 65 65 000+ FedVLR 13K 13K 13K 13K 13K 13K 124K 064 + GFMFR 0000000134K 0+ SERA 000000066K 64 FedRAP 23K 8K 234K 107K 72K 162K 000+ FedVLR 13K 13K 13K 13K 13K 13K 124K 064 + GFMFR 0000008K 134K 0+ SERA 000000066K 64
+
+semantic residual scores also cover items with few interactions. 
+
+D. Parameter Analysis 
+
+Table IV shows that SERA adds no personalized or client-side trainable parameters on any backbone or dataset. When validation selects a multilayer projector, SERA’s server-side projector has up to 410K parameters. Linear SERA with PFedRec has personalized and shared parameters comparable to FedMMR, while every SERA variant has fewer personalized parameters than AMMFRS. Each query in Eqs. (5) and (6) comes from local histories and collaborative scores, so shared parameters yield personalized semantic residual scores. 
+
+E. Content and Personalized Ranking 1) Content and Modality Controls: Fig. 4 compares each full model with SERA retrained on altered content. Shuffling permutes features across items, and the random-feature control replaces them with random vectors of the same mean and variance. Both controls usually reduce mean accuracy. Image removal causes more consistent losses than text removal. On Cards, image removal lowers mean accuracy with every backbone, and text removal raises it for FedAvg and PFedRec. The shuffled and random-feature controls detach each item from its own features, so the query in Eq. (6) and the similarity in Eq. (7) stop reflecting the content of the user’s history. The modalities also contribute unequally to zi in Eq. (4). On Cards and Food, the image features vary more across items than the text features, and many Cards items share nearly identical title features. Removing images discards the more variable modality, while removing text retains it and produces smaller gains or losses in ranking accuracy across backbones. 
+
+2) Residual and Content Contributions: Fig. 5 compares SERA with separately trained zero-residual and shuffled-content controls. The zero-residual control uses collaborative scores alone. Shuffling keeps the residual computation un-changed, so this control tests whether each item needs its own features. SERA achieves positive mean gains with FedRAP over both controls on every displayed dataset, while some gains with FedAvg and PFedRec are near zero or negative. 
+
+3) User-Level Ranking Changes: Fig. 6 holds each trained model fixed and compares users’ NDCG@50 with and without its semantic residual scores. More users improve than decline. An item overtakes a competitor when their residual difference exceeds their collaborative score gap in Eqs. (3) and (13). Pairwise ranking changes can improve accuracy by promoting the test item within the top 50 or into it. By Corollary 2, NDCG@50 stays fixed for a user when the test item has only one possible final rank or can only rank below the top 50. 
+
+F. Shared Projector Learning 1) Bias and Weight Learning: Fig. 7 measures the gain of bias learning over a fixed projector and the added gain of weight learning. Bias learning usually improves accuracy. Weight learning often lowers it, except for FedRAP on Cards. The frozen features lie in a narrow cone [54], and a fixed projector in Eq. (4) keeps all items close to their mean direction. Every item’s residual gradient updates the same bias vector, so the shared biases can remove this common direction and spread the representations apart. The weights far outnum-ber the biases and must fit the sparse feedback in Table I, so their updates rarely improve on the bias shift. Bias-only tuning likewise rivals full tuning of pretrained transformers on small data [55]. Eqs. (6) and (7) use these representations, so bias updates change all users’ semantic residual scores at once. 
+
+2) Feature Centering: Fig. 8 tests whether subtracting the mean item feature reduces SERA’s gain from bias learning. Centering removes most of this gain on Food, where SERA uses a linear projector. On Beauty and Cards, most of the gain remains in SERA’s multilayer projectors, whose hidden-layer biases continue to adjust the content representations after input centering, altering both queries and candidate similarities. ARXIV PREPRINT 9Beauty Cards Food 
+
+> −20 −10 010 20
+
+(a) Shuffled content    
+
+> FedAvg PFedRec FedRAP Mean
+
+Beauty Cards Food 
+
+(b) Random features Beauty Cards Food 
+
+(c) Text only Beauty Cards Food 
+
+(d) Image only Change 
+
+Fig. 4. Content and modality ablations of SERA as NDCG@50 changes in percent from the full model in each setting. Each control is trained separately. (a) Shuffled content and (b) random features usually reduce mean accuracy. (c) Removing images causes more consistent losses than (d) removing text. Beauty Cards Food FedAvg PFedRec FedRAP       
+
+> 1.93 2.68 -0.24 3.52 1.09 0.58 1.84 3.68 1.78
+
+(a) Zero residual 
+
+Beauty Cards Food       
+
+> 2.10 1.73 -0.33 3.38 -2.15 0.58 1.76 4.45 1.75
+
+(b) Shuffled content 
+
+> −5 05
+> Change
+
+Fig. 5. Contributions of SERA’s semantic residual scores and correct item features to NDCG@50 in percent. Gains are mean differences across five seeds between full SERA and separately trained controls using (a) collaborative scores alone or (b) shuffled item content. Mean gains are positive for all displayed FedRAP configurations and vary in sign for other backbones. FedAvg PFedRec FedRAP 
+
+Beauty 
+
+> 020 40 60 80 100
+> Test users
+> FedAvg PFedRec FedRAP
+
+Cards 
+
+> FedAvg PFedRec FedRAP
+
+Food   
+
+> Harmed Unchanged Improved
+
+Fig. 6. Percentages of Improved, Unchanged, and Harmed users, whose NDCG@50 rises, stays, or falls when SERA adds its semantic residual scores. More users benefit than decline in every configuration. The largest group is 
+
+Unchanged on Beauty and Food and Improved on Cards. Ranks outside the top 50 have zero NDCG, so users whose test items stay there are Unchanged .
+
+G. Collaborative Training and Content Learning 
+
+SERA’s projector learns from scores whose collaborative part changes in training. Fig. 9 measures the accuracy differ-ence between intact and shuffled content with collaborative parameters fixed at initialization or updated during training. Continued training usually reduces these gains and makes their means negative in some FedAvg and PFedRec configurations, which matches the weaker gains in Fig. 5. SERA’s mean gains stay positive with FedRAP on all displayed datasets. Collaborative training affects content learning through the pairwise loss in Eq. (1), which becomes less sensitive to score changes as the margin between observed items and sampled negatives grows. Collaborative updates therefore change which Beauty Cards Food 
+
+> −20 −10 010 20 30
+> Change
+
+(a) Bias learning 
+
+> FedAvg PFedRec FedRAP Mean
+
+Beauty Cards Food 
+
+(b) Weight learning 
+
+Fig. 7. Contributions of SERA’s shared biases and projection weights to NDCG@50 in percent. Differences are (a) bias learning minus a fixed projector and (b) full training minus bias learning alone. Bias learning usually improves accuracy, while additional weight learning often lowers it. Beauty Cards Food 0.0 0.5 1.0 1.5 2.0    
+
+> NDCG@50
+> Beauty Cards Food 02468
+> Recall@50
+> Original Centered
+
+Fig. 8. Effect of feature centering on SERA’s bias gains in NDCG@50 and Recall@50 in percent. Gains are learned-bias minus fixed-bias scores for FedRAP with fixed projection weights over 15 paired seeds. Centering subtracts the feature mean over the item set. Gains persist on Beauty and Cards with multilayer projectors and shrink on Food with a linear one. 
+
+training pairs still give the projector large gradients. Through Eqs. (5), (9), and (13), they also reweight history items, rescale semantic residual scores, and change the gaps that these scores must overcome. The comparison measures their combined effect on content gains. The stop-gradient in Eq. (3) only blocks residual gradients from flowing into the backbone. 
+
+H. Residual Budget and Residual Function 1) Residual Budget: Figs. 10 and 11 vary the budget with the trained model fixed. Their axes use the ratio κ/κ train ,where κtrain is the training budget. Gains initially rise, then plateau or decline in several configurations as the harmed share increases. By Proposition 2, as the budget grows, the test item passes some competitors and is passed by others, so its rank can rise and then fall. The final ranking approaches the ranking ARXIV PREPRINT 10 Beauty Cards Food 
+
+> −10 010
+> NDCG@50
+> FedAvg PFedRec FedRAP Frozen Continued
+
+Beauty Cards Food 
+
+> 010 20 30
+> Recall@50
+
+Fig. 9. Effect of collaborative training on SERA’s content gains in NDCG@50 and Recall@50 in percent. Gains are intact minus shuffled content, and the content projector learns in both conditions. Fixing collaborative parameters at initialization usually yields larger gains than continued training does. -3 -2 -1 0-0.2 24
+
+> Change
+
+Beauty    
+
+> FedAvg PFedRec FedRAP Budget
+> -3 -2 -1 0-2.5 510
+
+Cards    
+
+> -3 -2 -1 0-0.1 123
+
+Food Budget ratio ( log 10 )
+
+Fig. 10. Effect of SERA’s residual budget on NDCG@50 changes in percent. Only the budget varies after training, and changes are relative to zero residual. The horizontal axis is log 10 (κ/κ train ), so zero retains the trained budget. Shading shows one standard deviation across five seeds. Accuracy initially improves and later plateaus or declines in several displayed configurations. 010 20 
+
+> Improved
+
+Beauty    
+
+> FedAvg PFedRec FedRAP
+> 01280510 15
+> Harmed
+> 025 50
+
+Cards    
+
+> 0128020 40
+> 0510 15
+
+Food    
+
+> 01280510
+
+Budget ratio 
+
+Fig. 11. User proportions in percent for NDCG@50 gains and losses across SERA’s residual budgets. The horizontal axis is the budget ratio κ/κ train , and changes are relative to zero residual. Shading shows one standard deviation across five seeds. The harmed share rises as the improved share often plateaus. 
+
+by similarity. Pairwise ranking changes that push the test item down within the top 50 or out of it lower its NDCG. At large budgets, FedRAP on Cards improves more users than it harms but lowers mean NDCG. NDCG weights higher ranks more, so a few large losses can outweigh many smaller gains. 
+
+2) Residual Function: Within the residual bound, the resid-ual function determines how similarity differences become score differences. Fig. 12 compares separately trained tanh residuals with linear residuals κσ u tanh(1 /τ r ) cui , which share the residual bound in Eq. (10). Mean accuracy is similar on Beauty, while the linear residual is better with all three backbones on Food. Separate training also gives each function its own representations and training trajectory. Both residual Beauty Cards Food 
+
+> -20 -10 010 20
+> NDCG@50
+> FedAvg PFedRec FedRAP Mean
+
+Beauty Cards Food 
+
+> -20 -10 010 20
+> Recall@50
+
+Fig. 12. SERA’s nonlinear versus linear residuals in NDCG@50 and Re-call@50 in percent. Differences are tanh minus linear residuals, each trained separately with the same ratio of residual bound to user-adaptive residual scale. Linear residuals usually have higher mean accuracy, notably on Food. 0.5 5 100 -2 -1 01
+
+Beauty    
+
+> FedAvg PFedRec FedRAP
+> 0.5 5100 -15 -10 -5 0510
+
+Cards   
+
+> 0.5 5100 -3 -2 -1 01
+
+Food Change 
+
+τr
+
+Fig. 13. SERA’s residual temperature and NDCG@50 differences from a linear residual in percent. All conditions are trained separately with the same ratio Ru/σ u. Shading shows one standard deviation across five seeds. Mean accuracy differences generally shrink toward zero at higher temperatures. 
+
+functions preserve the order by similarity for fixed representa-tions. At the same residual bound, the linear residual scales all similarity differences equally, and the slope of Eq. (8) varies with similarity. The two functions thus give different residual differences and change the ranking of different pairs. 
+
+3) Residual Temperature: The temperature τr in Eq. (8) controls the saturation of SERA’s nonlinear residual. Fig. 13 compares models trained at different temperatures against a linear residual at matched residual bounds in Eq. (10). At the lowest temperature, SERA falls below the linear residual in every displayed configuration. Higher temperatures generally reduce these mean deficits. Lower temperatures drive the shape term in Eq. (8) toward ±1, so highly similar items receive nearly equal semantic residual scores. Higher temperatures reduce saturation and bring the tanh residual closer to the linear residual at the matched residual bound in Eq. (10). 
+
+I. Privacy-Utility Trade-Off 
+
+In Fig. 14, each client clips its accumulated gradient Gtu of Algorithm 1 and adds independent Gaussian noise to all M d 
+
+entries before weighted aggregation. The horizontal axis gives the target signal-to-noise ratio (SNR) used to set a fixed noise multiplier before training. Accuracy falls as the target SNR decreases and then levels off over the evaluated noise levels. The accounting value ε reaches 10 at a higher target SNR on Cards than on Beauty and at backbone-specific targets on Food. By then, accuracy has mostly leveled off. Noise in the uploaded gradients disrupts how the shared projector learns semantic residual scores. Through the query construction in Eq. (6) and the candidate comparison in ARXIV PREPRINT 11 −3 −2 −1 0 ∞ 024          
+
+> −3 −2 −1 0 ∞ −3 −2 −1 0 ∞
+> 4710 Beauty
+> FedAvg PFedRec FedRAP
+> 24 29 34 Cards
+> 357Food
+> NDCG@50 log 10 ε
+> SNR (log 10 )
+
+Fig. 14. SERA’s privacy-utility trade-off with clipped, noised uploads. The horizontal axis gives target SNR. Top: test NDCG@50 in percent over the last four rounds with one standard deviation across seeds. Dashed lines omit clipping and noise, and SNR ∞ is clipping alone. Bottom: log 10 ε at δ =10 −5 and a dotted line at ε = 10 . These conditional RDP accounting values do not establish differential privacy for the full training procedure. 
+
+Eq. (7), this disturbance changes which items receive larger residual scores. The stop-gradient in Eq. (3) keeps the noisy residual updates out of collaborative training, while local histories and collaborative scores continue to personalize each query. Eq. (10) caps each semantic residual score even when the projector is poorly learned. Corollary 1 shows that pairs retain their collaborative order when the score gap exceeds twice this cap. The noise level affects how accurately SERA reorders the remaining competitors, while the residual budget limits the collaborative score gaps these scores can overcome. VII. C ONCLUSION 
+
+SERA fuses item content with a FedRS at the score level, adding semantic residual scores that are learned from local histories and capped at a user-adaptive residual bound. Each rank change is then a pairwise ranking change in which a residual difference overcomes a collaborative score gap, and each pair changes ranking at most once as the budget grows. For any content, an item outside the collaborative top-K list can enter the top K only if its collaborative boundary gap is at most twice the residual bound. Larger budgets let content cross wider gaps but can lower accuracy by moving competitors above the test items. SERA improves all three FedRSs on all six datasets without adding personalized parameters. Federated semantic residuals thus bring content-based personalization to existing FedRSs with explicit control of content reach. REFERENCES [1] C. Zhang, G. Long, Z. Zhang, Z. Li, H. Zhang, Q. Yang, and B. Yang, “Personalized recommendation models in federated settings: A survey,” 
+
+IEEE Trans. Knowl. Data Eng. , vol. 37, no. 11, pp. 6562–6581, 2025. [2] M. Ammad-ud-din, E. Ivannikova, S. A. Khan, W. Oyomno, Q. Fu, K. E. Tan, and A. Flanagan, “Federated collaborative filtering for privacy-preserving personalized recommendation system,” arXiv preprint arXiv:1901.09888 , 2019. [3] Y. Koren, R. Bell, and C. Volinsky, “Matrix factorization techniques for recommender systems,” Computer , vol. 42, no. 8, pp. 30–37, 2009. [4] Z. Li, G. Long, and T. Zhou, “Federated recommendation with additive personalization,” in Proc. Int. Conf. Learn. Represent. , 2024. [Online]. Available: https://openreview.net/forum?id=xkXdE81mOK [5] Z. Li, X. Wu, W. Pan, Y. Ding, Z. Wu, S. Tan, Q. Xu, Q. Yang, and Z. Ming, “FedCORE: Federated learning for cross-organization recommendation ecosystem,” IEEE Trans. Knowl. Data Eng. , vol. 36, no. 8, pp. 3817–3831, 2024. [6] C. Zhang, G. Long, T. Zhou, Z. Zhang, P. Yan, and B. Yang, “When federated recommendation meets cold-start problem: Separating item attributes and user interactions,” in Proc. ACM Web Conf. , 2024, pp. 3632–3642. [7] X. Du, H. Yin, L. Chen, Y. Wang, Y. Yang, and X. Zhou, “Personalized video recommendation using rich contents from videos,” IEEE Trans. Knowl. Data Eng. , vol. 32, no. 3, pp. 492–505, 2020. [8] X. Zhang, B. Xu, F. Ma, C. Li, L. Yang, and H. Lin, “Beyond co-occurrence: Multi-modal session-based recommendation,” IEEE Trans. Knowl. Data Eng. , vol. 36, no. 4, pp. 1450–1462, 2024. [9] Y. Xu, L. Zhu, Z. Cheng, J. Li, Z. Zhang, and H. Zhang, “Multi-modal discrete collaborative filtering for efficient cold-start recommendation,” 
+
+IEEE Trans. Knowl. Data Eng. , vol. 35, no. 1, pp. 741–755, 2023. [10] J. Zhang, Y. Zhu, Q. Liu, S. Wu, S. Wang, and L. Wang, “Mining latent structures for multimedia recommendation,” in Proc. ACM Int. Conf. Multimedia , 2021, pp. 3872–3880. [11] C. Feng, D. Feng, G. Huang, Z. Liu, Z. Wang, and X.-G. Xia, “Robust privacy-preserving recommendation systems driven by multimodal fed-erated learning,” IEEE Trans. Neural Netw. Learn. Syst. , vol. 36, no. 5, pp. 8896–8910, 2025. [12] H. Zhou, X. Zhou, Z. Zeng, L. Zhang, and C. Miao, “A comprehensive survey on multimodal recommender systems: Taxonomy, evaluation, and future directions,” IEEE Trans. Pattern Anal. Mach. Intell. , 2026. [13] Z. Li, G. Long, J. Jiang, C. Zhang, and Q. Yang, “Federated vision-language-recommendation with personalized fusion,” in Proc. AAAI Conf. Artif. Intell. , vol. 40, no. 28, 2026, pp. 23 337–23 345. [14] F. Zhao, C. Zhang, and B. Geng, “Deep multimodal data fusion,” ACM Comput. Surv. , vol. 56, no. 9, 2024, Art. no. 216. [15] G. Li, X. Ding, L. Yuan, L. Zhang, and Q. Rong, “Towards resource-efficient and secure federated multimedia recommendation,” in Proc. IEEE Int. Conf. Acoust., Speech Signal Process. , 2024, pp. 5515–5519. [16] C. Zhang, W. Zhang, G. Long, Z. Xue, R. Xia, and B. Yang, “Multimodal-enhanced federated recommendation: A group-wise fusion approach,” in Proc. ACM Web Conf. , 2026, pp. 6597–6608. [17] H. B. McMahan, E. Moore, D. Ramage, S. Hampson, and B. Ag¨ uera y Arcas, “Communication-efficient learning of deep networks from de-centralized data,” in Proc. Int. Conf. Artif. Intell. Statist. , ser. PMLR, vol. 54, 2017, pp. 1273–1282. [18] K. Pillutla, K. Malik, A.-R. Mohamed, M. Rabbat, M. Sanjabi, and L. Xiao, “Federated learning with partial model personalization,” in 
+
+Proc. Int. Conf. Mach. Learn. , ser. PMLR, vol. 162, 2022, pp. 17 716– 17 758. [19] V. Perifanis and P. S. Efraimidis, “Federated neural collaborative filter-ing,” Knowl.-Based Syst. , vol. 242, 2022, Art. no. 108441. [20] P. Kairouz et al. , “Advances and open problems in federated learning,” 
+
+Found. Trends Mach. Learn. , vol. 14, no. 1–2, pp. 1–210, 2021. [21] L. Collins, H. Hassani, A. Mokhtari, and S. Shakkottai, “Exploiting shared representations for personalized federated learning,” in Proc. Int. Conf. Mach. Learn. , ser. PMLR, vol. 139, 2021, pp. 2089–2099. [22] C. Zhang, G. Long, T. Zhou, P. Yan, Z. Zhang, C. Zhang, and B. Yang, “Dual personalization on federated recommendation,” in Proc. Int. Joint Conf. Artif. Intell. , 2023, pp. 4558–4566. [23] C. Zhang, G. Long, T. Zhou, Z. Zhang, P. Yan, and B. Yang, “GPFedRec: Graph-guided personalization for federated recommendation,” in Proc. ACM SIGKDD Int. Conf. Knowl. Discovery Data Mining , 2024, pp. 4131–4142. [24] W. Yuan, L. Qu, L. Cui, Y. Tong, X. Zhou, and H. Yin, “HeteFedRec: Federated recommender systems with model heterogeneity,” in Proc. IEEE Int. Conf. Data Eng. , 2024, pp. 1324–1337. [25] Y. Wei, X. Wang, L. Nie, X. He, R. Hong, and T.-S. Chua, “MMGCN: Multi-modal graph convolution network for personalized recommenda-tion of micro-video,” in Proc. ACM Int. Conf. Multimedia , 2019, pp. 1437–1445. [26] R. He and J. McAuley, “VBPR: Visual Bayesian personalized ranking from implicit feedback,” in Proc. AAAI Conf. Artif. Intell. , vol. 30, no. 1, 2016, pp. 144–150. [27] J. Chen, H. Zhang, X. He, L. Nie, W. Liu, and T.-S. Chua, “Atten-tive collaborative filtering: Multimedia recommendation with item- and component-level attention,” in Proc. Int. ACM SIGIR Conf. Res. Develop. Inf. Retrieval , 2017, pp. 335–344. [28] X. He, Z. He, J. Song, Z. Liu, Y.-G. Jiang, and T.-S. Chua, “NAIS: Neural attentive item similarity model for recommendation,” IEEE Trans. Knowl. Data Eng. , vol. 30, no. 12, pp. 2354–2366, 2018. [29] Z. Wang, Y. Feng, X. Zhang, R. Yang, and B. Du, “Multi-modal correction network for recommendation,” IEEE Trans. Knowl. Data Eng. , vol. 37, no. 2, pp. 810–822, 2025. ARXIV PREPRINT 12 
+
+[30] J. Zhang, Y. Zhu, Q. Liu, M. Zhang, S. Wu, and L. Wang, “Latent structure mining with contrastive modality fusion for multimedia recom-mendation,” IEEE Trans. Knowl. Data Eng. , vol. 35, no. 9, pp. 9154– 9167, 2023. [31] X. Zhou and Z. Shen, “A tale of two graphs: Freezing and denoising graph structures for multimodal recommendation,” in Proc. ACM Int. Conf. Multimedia , 2023, pp. 935–943. [32] X. Zhou, H. Zhou, Y. Liu, Z. Zeng, C. Miao, P. Wang, Y. You, and F. Jiang, “Bootstrap latent representations for multi-modal recommen-dation,” in Proc. ACM Web Conf. , 2023, pp. 845–854. [33] W. Wei, C. Huang, L. Xia, and C. Zhang, “Multi-modal self-supervised learning for recommendation,” in Proc. ACM Web Conf. , 2023, pp. 790– 800. [34] M. Volkovs, G. Yu, and T. Poutanen, “DropoutNet: Addressing cold start in recommender systems,” in Proc. Adv. Neural Inf. Process. Syst. ,vol. 30, 2017, pp. 4957–4966. [35] Y. Wei, X. Wang, Q. Li, L. Nie, Y. Li, X. Li, and T.-S. Chua, “Contrastive learning for cold-start recommendation,” in Proc. ACM Int. Conf. Multimedia , 2021, pp. 5382–5390. [36] Z. Zhu and W. Zhang, “Preference-consistent knowledge distillation for recommender system,” IEEE Trans. Knowl. Data Eng. , vol. 37, no. 4, pp. 2071–2084, 2025. [37] R. Li, Z. Qin, X. Wang, S. J. Chen, and D. Metzler, “Stabilizing neural search ranking models,” in Proc. ACM Web Conf. , 2020, pp. 2725–2732. [38] C. Wu, R. Zhang, J. Guo, W. Chen, Y. Fan, M. de Rijke, and X. Cheng, “Certified robustness to word substitution ranking attack for neural ranking models,” in Proc. ACM Int. Conf. Inf. Knowl. Manage. , 2022, pp. 2128–2137. [39] S. Dean, S. Rich, and B. Recht, “Recommendations and user agency: The reachability of collaboratively-filtered information,” in Proc. Conf. Fairness, Accountability, Transparency , 2020, pp. 436–445. [40] M. Curmei, S. Dean, and B. Recht, “Quantifying availability and discovery in recommender systems via stochastic reachability,” in Proc. Int. Conf. Mach. Learn. , ser. PMLR, vol. 139, 2021, pp. 2265–2275. [41] Z. Li, G. Long, C. Zhang, H. Zhang, J. Jiang, and C. Zhang, “A survey of personalized federated foundation models for privacy-preserving recommendation,” in Proc. Int. Joint Conf. Artif. Intell. , 2026. [Online]. Available: https://arxiv.org/abs/2506.11563 [42] S. Rendle, C. Freudenthaler, Z. Gantner, and L. Schmidt-Thieme, “BPR: Bayesian personalized ranking from implicit feedback,” in Proc. Conf. Uncertainty Artif. Intell. , 2009, pp. 452–461. [43] L. Bottou, F. E. Curtis, and J. Nocedal, “Optimization methods for large-scale machine learning,” SIAM Rev. , vol. 60, no. 2, pp. 223–311, 2018. [44] Y. Hou, J. Li, X. Fu, Z. He, A. Yan, X. Chen, and J. McAuley, “Bridging language and items for retrieval and recommendation: Benchmarking LLMs as semantic encoders,” in Proc. Annu. Meeting Assoc. Comput. Linguistics , 2026, pp. 3251–3265. [45] F. M. Harper and J. A. Konstan, “The MovieLens datasets: History and context,” ACM Trans. Interact. Intell. Syst. , vol. 5, no. 4, pp. 1–19, 2016. [46] J. Zhang, Y. Cheng, Y. Ni, Y. Pan, Z. Yuan, J. Fu, Y. Li, J. Wang, and F. Yuan, “NineRec: A benchmark dataset suite for evaluating transferable recommendation,” IEEE Trans. Pattern Anal. Mach. Intell. , vol. 47, no. 7, pp. 5256–5267, 2025. [47] X. He, L. Liao, H. Zhang, L. Nie, X. Hu, and T.-S. Chua, “Neural collaborative filtering,” in Proc. ACM Web Conf. , 2017, pp. 173–182. [48] W. Krichene and S. Rendle, “On sampled metrics for item recommenda-tion,” in Proc. ACM SIGKDD Int. Conf. Knowl. Discovery Data Mining ,2020, pp. 1748–1757. [49] K. J¨ arvelin and J. Kek¨ al¨ ainen, “Cumulated gain-based evaluation of IR techniques,” ACM Trans. Inf. Syst. , vol. 20, no. 4, pp. 422–446, 2002. [50] P. Yu, Z. Tan, G. Lu, and B.-K. Bao, “Multi-view graph convolutional network for multimedia recommendation,” in Proc. ACM Int. Conf. Multimedia , 2023, pp. 6576–6585. [51] W. Yang, R. Zhong, Y. Chen, S. Li, H. Ping, C. Lu, and P. Jiang, “FITMM: Adaptive frequency-aware multimodal recommendation via information-theoretic representation learning,” in Proc. ACM Int. Conf. Multimedia , 2025, pp. 6193–6202. [52] P. Yu, Z. Tan, G. Lu, and B.-K. Bao, “Mind individual information! Principal graph learning for multimedia recommendation,” in Proc. AAAI Conf. Artif. Intell. , vol. 39, no. 12, 2025, pp. 13 096–13 105. [53] J. Li and H. Wang, “Multi-view semantic contrastive alignment for multimodal recommendation,” in Proc. ACM Web Conf. , 2026, pp. 5941– 5952. [54] W. Liang, Y. Zhang, Y. Kwon, S. Yeung, and J. Zou, “Mind the gap: Understanding the modality gap in multi-modal contrastive representa-tion learning,” in Proc. Adv. Neural Inf. Process. Syst. , vol. 35, 2022, pp. 17 612–17 625. [55] E. Ben Zaken, Y. Goldberg, and S. Ravfogel, “BitFit: Simple parameter-efficient fine-tuning for transformer-based masked language-models,” in 
+
+Proc. Annu. Meeting Assoc. Comput. Linguistics , 2022, pp. 1–9. [56] A. Radford, J. W. Kim, C. Hallacy, A. Ramesh, G. Goh, S. Agarwal, G. Sastry, A. Askell, P. Mishkin, J. Clark, G. Krueger, and I. Sutskever, “Learning transferable visual models from natural language supervi-sion,” in Proc. Int. Conf. Mach. Learn. , ser. PMLR, vol. 139, 2021, pp. 8748–8763. [57] T. Akiba, S. Sano, T. Yanase, T. Ohta, and M. Koyama, “Optuna: A next-generation hyperparameter optimization framework,” in Proc. ACM SIGKDD Int. Conf. Knowl. Discovery Data Mining , 2019, pp. 2623– 2631. [58] I. Mironov, “R´ enyi differential privacy,” in Proc. IEEE Comput. Secur. Found. Symp. , 2017, pp. 263–275. [59] B. Balle, G. Barthe, M. Gaboardi, J. Hsu, and T. Sato, “Hypothesis testing interpretations and R´ enyi differential privacy,” in Proc. Int. Conf. Artif. Intell. Stat. , ser. PMLR, vol. 108, 2020, pp. 2496–2506. [Online]. Available: https://proceedings.mlr.press/v108/balle20a.html ARXIV PREPRINT 13 
+
+APPENDIX ANOTATION 
+
+Table V summarizes the symbols used in SERA’s formu-lation and analysis. For user u and item i, the final score satisfies s(u, i ) = a(u, i ) + r(u, i ) at inference, where the semantic residual score r(u, i ) acts as a content correction to the collaborative score a(u, i ). The full item set I defines the user-adaptive residual scale σu, while the candidate set Cu
+
+contains the items ranked for that user. The residual budget 
+
+κ scales the semantic residual score relative to σu, and the residual bound Ru caps its magnitude for each item. APPENDIX BEXPERIMENTAL SETTINGS 
+
+A. Training and Evaluation 
+
+Item features and the federated training setup follow Fed-VLR [13]. A pretrained CLIP ViT-B/32 model [56] extracts frozen 512-dimensional text and image features, and the con-tent representations have 64 dimensions. All clients participate in every round, and each client runs E = 5 local steps with a batch size of 2,048. Unless specified otherwise below, training stops after 10 consecutive rounds without improvement in validation NDCG@50 or after 100 rounds, and testing uses the best validation round. The runs in Fig. 14 instead use a fixed number of rounds T without early stopping or checkpoint selection and report the mean test NDCG@50 over rounds 
+
+T − 3 to T . Ranking over I masks each user’s training and validation items. 
+
+B. Model Selection 
+
+For the standard comparisons, we tune SERA with the tree-structured Parzen estimator in Optuna [57], using 500 trials for each backbone and dataset. The search space covers 
+
+κ ∈ { 0, 0.25 , 0.5, 1, 2, 3, 4, 6, 8, 16 }, τr ∈ { 0.1, 0.5, 1, 2, 5},
+
+τq ∈ {0.1, 0.5, 1, 2, 5, 10 }, λ drawn log-uniformly from 
+
+[0 .01 , 3] , and projectors that are linear or have 2 or 3 hidden ReLU layers of width 64 , 128 , or 256 . For FedAvg and PFedRec on ML, the 10 best hyperparameter settings are each trained with five seeds, and the one with the highest mean validation NDCG@50 is kept. The search uses seed 2024. All reported results except Fig. 8 use seeds 2025 to 2029, and the reselection on ML uses only their validation scores. Table VI lists the selected hyperparameter values. 
+
+C. Computing Environment 
+
+Experiments run on servers with 16 CPU cores, 125 GB of RAM, and two NVIDIA RTX A5500 GPUs with 24 GB of memory each, under Red Hat Enterprise Linux 8.10 with Python 3.12, PyTorch 2.7.1, and CUDA Toolkit 12.8. 
+
+D. Noisy-Gradient Experiments and Accounting 
+
+The experiments in Fig. 14 use full participation and 
+
+E = 5 local steps. Client u clips its accumulated Gtu to Frobenius norm C and adds independent N (0 , ν 2C2) noise to every entry, including untouched rows. The server weights                                                                                      
+
+> TABLE V NOTATION AND DEFINITIONS USED IN THE MAIN TEXT AND APPENDICES .Group Symbol Meaning Users and items
+> u, i, j user and item indices
+> U, N user set and its size
+> I, M item set and its size
+> Cu, M ucandidate set and its size
+> Huuser interaction history Scores and semantic residuals
+> a(u, i ), r (u, i ), s (u, i )collaborative, semantic residual, and final scores
+> zi,qucontent representation and query
+> βui history weight
+> hϕshared content projector
+> ϕ, |ϕ|projector parameters and count
+> θs, θ ushared and personalized FedRS parameters
+> Π( ·), ε L2 normalization and positive floor
+> cui , g ui cosine similarity and bounded shape term
+> κglobal residual budget
+> σu,ˆσuuser-adaptive residual scale and estimate
+> ¯aumean collaborative score over I
+> vu,ˆvustandard deviation of collaborative scores over Iand estimate
+> Ruresidual bound
+> τr, τ qresidual and attention temperatures Ranking and score analysis
+> Knumber of recommended items
+> a(K)
+> u, a (K+1)
+> ucollaborative scores at ranks Kand
+> K+ 1
+> Tu,˜Tucollaborative and final top-Ksets
+> γu,ij collaborative score gap
+> γ(K)
+> u,j collaborative boundary gap of item jδu,ij pairwise shape-term difference
+> κu,ij pairwise ranking change point
+> Pi, Q icompetitors that ipasses or that pass iρu(i),˜ρu(i)collaborative and final item ranks
+> n+
+> u,j , n −
+> u,j candidates above/below a(u, j )±2Ru
+> κin
+> u,j entry budget of item j
+> ¯aC
+> u,¯gC
+> u,¯sC
+> umeans over Cu
+> sd u(·)standard deviation over Cu
+> χuscale ratio σu/sd u(a)
+> wueffective mixing weight Federated training
+> B+
+> u,B−
+> upositive and negative mini-batches
+> sg[ ·]stop-gradient operator
+> Lu(s),L(s)client risk and federated objective
+> σ(·)logistic function
+> J(ϕ)SERA residual objective
+> J¯α(ϕ)residual objective with expected client weights
+> Lbase (a)collaborative training objective
+> Stclients selected in round t
+> Zt,Gtucontent table and its client gradient
+> αu, α u,t ,¯αupopulation, round, and expected client weights
+> λresidual loss weight
+
+these messages by the training interaction counts nu and divides their sum by P 
+
+> u
+
+nu before updating the projector. The accounting assumes an honest server without client col-lusion, honest clients without dropout, and ideal real-valued secure aggregation revealing only this sum, the total weight, and the participant list. Weights and participation are fixed and public; interaction counts and participation identities are not protected. The simulator processes individual messages ARXIV PREPRINT 14        
+
+> TABLE VI VALIDATION -SELECTED SERA HYPERPARAMETERS ,WITH λROUNDED TO FOUR DECIMAL PLACES . W IDTH AND DEPTH GIVE THE HIDDEN WIDTH AND LAYER COUNT ,AND ZEROS MARK A PURELY LINEAR PROJECTOR .
+
+Backbone Dataset κ τr τq λ Width Depth FedAvg Beauty 16 1 5 0.0925 256 3Cards 8 1 10 0.0201 64 2ML 0.5 0.1 0.1 0.0400 64 2Dance 0.5 0.1 2 0.0182 128 2Food 3 1 0.1 0.0626 0 0Movie 0.5 2 10 0.0114 0 0PFedRec Beauty 16 1 10 0.0143 0 0Cards 16 5 5 0.2621 0 0ML 4 2 2 0.2536 128 2Dance 16 2 10 0.0110 128 3Food 16 5 2 0.1931 0 0Movie 6 5 1 0.0421 256 3FedRAP Beauty 16 0.5 0.5 0.6123 256 3Cards 6 2 10 0.2786 256 3ML 8 1 2 0.0141 0 0Dance 16 2 1 0.0409 0 0Food 16 2 2 0.0137 0 0Movie 16 2 0.5 0.0545 0 0
+
+and retains diagnostics; it does not implement this secure-aggregation idealization. For the conditional aggregation mechanism at a common history, zero-out adjacency replaces one user’s data-dependent gradient contribution by zero while retaining its weight, par-ticipation, and independent noise. With all other contributions fixed, the sum’s sensitivity is at most C max u nu, and each noise coordinate has standard deviation νC ∥n∥2. Writing 
+
+r = ∥n∥2/ max u nu, the accountant conservatively uses 
+
+z = ν√r2 − 1 instead of νr , discarding the largest client’s noise contribution. The resulting per-round R´ enyi differential privacy (RDP) cost is at most α/ (2 z2) [58]; full participation provides no subsampling amplification. We convert the sum of these conditional costs using [59]: 
+
+ε = min 
+
+> α∈A
+
+ T α 
+
+2z2 + ln α − 1
+
+α − ln δ + ln αα − 1
+
+
+
+, (22) where A = {1.01 , 1.02 , . . . , 200 .99 } and δ = 10 −5. The accompanying privacy_accounting.csv provides the full-precision inputs and the 72 accounting values. These experiments reuse earlier hyperparameter configura-tions selected by validation NDCG@10. A noiseless calibra-tion run with seed 2024 on the same data selects T by the highest four-round mean validation NDCG@10 and sets C to the median, over rounds 1 to T , of the median client gradient norm. Calibration sets ν1 to match a median predicted SNR of one, using an estimated clipping effect and an approximation to the aggregate noise norm. Each target s then fixes ν = ν1/s 
+
+throughout training, as listed in Table VII. The target s is not the SNR measured in the noisy run. The accounting holds the selected configuration fixed across neighboring inputs and includes only the conditional gradient mechanisms above. It excludes collaborative releases, same-             
+
+> TABLE VII FIXED CONFIGURATIONS FOR FIG . 14. C,r,AND ν1ARE ROUNDED TO FOUR SIGNIFICANT DIGITS ;ACCOUNTING USES THE STORED FULL -PRECISION VALUES . T ARGET SNR sSETS ν=ν1/s .
+
+Backbone Dataset T C r ν1
+
+FedAvg Beauty 37 0.006852 2.853 0.004479 PFedRec Beauty 64 0.009684 2.853 0.005004 FedRAP Beauty 88 0.8871 2.853 0.007278 FedAvg Cards 77 0.004160 3.314 0.02474 PFedRec Cards 70 0.1069 3.314 0.02125 FedRAP Cards 42 0.08127 3.314 0.02351 FedAvg Food 100 0.04754 8.117 0.003391 PFedRec Food 96 0.01354 8.117 0.005567 FedRAP Food 91 0.0001715 8.117 0.03665 
+
+data calibration, and hyperparameter selection. Unprotected collaborative messages can affect subsequent gradients, so these costs do not establish a privacy bound for the complete gradient-sum sequence or the full training procedure. APPENDIX CDESIGN COMPONENT COMPARISONS 
+
+SERA’s semantic residual score has three design compo-nents: the user-adaptive residual scale in Eq. (9), the stop-gradient in Eq. (3), and the history weights in Eq. (5). To test each one, we swap it for a simpler alternative and keep the rest of SERA fixed. The shared scale gives every user the same scale ¯σ, the mean of σu over the N users of the trained model. Joint training removes the stop-gradient on the collaborative score, so the residual loss also updates the backbone, while 
+
+βui and σu keep their stop-gradient. Uniform weighting is approximated by multiplying τq by 10 6.
+
+a) User-Adaptive Residual Scale: SERA scales each user’s semantic residual scores by σu, the standard deviation of that user’s collaborative scores over the item set. Larger variation in collaborative scores permits larger semantic resid-ual magnitudes. By Proposition 1 and Theorem 1, one budget 
+
+κ then gives every user a reach band of equal width in units of 
+
+σu. Under the shared scale, these widths differ across users. Replacing σu by ¯σ scales user u’s semantic residual scores by the budget ratio ¯σ/σ u, so users with σu below ¯σ get a wider reach band than under SERA and those above it a narrower one. Table VIII shows two consistent differences that keep their sign in every seed. Both appear on Cards and point in opposite directions: compared with SERA, the shared scale raises Recall@50 for FedAvg and lowers it for FedRAP. The budget sweeps on Cards in Figs. 10 and 11 show a similar pattern. Above the trained budget, SERA on FedAvg keeps gaining accuracy, whereas SERA on FedRAP loses accuracy as its harmed share of users grows fastest. The shared scale raises the budget ratio of users with small σu, so for them it acts like a larger budget. On Cards, the shared scale helps SERA on backbones that benefit from larger budgets and hurts SERA on the backbone that suffers from them. SERA on PFedRec follows the same pattern on Cards. It gains accuracy above its trained budget, and the shared scale gives it higher mean ARXIV PREPRINT 15                      
+
+> TABLE VIII PERFORMANCE OF SERA AND THREE SIMPLER ALTERNATIVES ON BEAUTY , C ARDS ,AND FOOD IN RECALL @50 AND NDCG@50, REPORTED AS MEANS ±STANDARD DEVIATIONS IN PERCENT ACROSS FIVE PAIRED SEEDS . T HE SCALE GROUP GIVES ALL USERS A SHARED SCALE ,THE GRADIENT GROUP TRAINS THE BACKBONE WITH THE RESIDUAL LOSS ,AND THE WEIGHTING GROUP WEIGHTS HISTORY ITEMS UNIFORMLY . I N EACH GROUP ,THE BACKBONE ROW REPORTS SERA, RUN WITH THE SAME FIVE SEEDS AS THE ALTERNATIVE BELOW IT .BOLD MARKS THE HIGHER MEAN IN EACH PAIR .
+
+Method Beauty Cards Food Recall@50 NDCG@50 Recall@50 NDCG@50 Recall@50 NDCG@50 
+
+FedAvg 21.03 ± 3.56 5.87 ± 0.94 68.97 ± 2.89 21.39 ± 4.96 12.78 ± 3.29 3.69 ± 1.38 
+
+w/ shared scale 20.08 ± 6.14 5.38 ± 1.70 72.84 ± 3.58 23.81 ± 3.31 11.75 ± 3.96 3.45 ± 1.29 PFedRec 24.58 ± 2.08 7.05 ± 0.70 70.40 ± 6.30 24.64 ± 6.66 18.83 ± 1.45 6.01 ± 0.63 
+
+w/ shared scale 24.90 ± 1.61 7.23 ± 0.57 74.86 ± 0.91 29.45 ± 0.36 16.99 ± 0.54 5.38 ± 0.15 FedRAP 20.87 ± 5.15 5.80 ± 1.56 82.33 ± 0.61 33.45 ± 1.22 13.89 ± 2.73 3.94 ± 0.87 Scale w/ shared scale 20.55 ± 5.21 5.88 ± 1.67 81.27 ± 0.97 33.04 ± 1.36 14.53 ± 1.07 4.40 ± 0.33 
+
+FedAvg 21.03 ± 3.56 5.87 ± 0.94 70.13 ± 3.36 23.14 ± 5.13 11.75 ± 3.45 3.35 ± 1.41 w/ joint training 20.87 ± 3.29 5.77 ± 0.85 70.08 ± 3.42 22.73 ± 5.30 12.84 ± 4.26 3.85 ± 1.70 
+
+PFedRec 24.59 ± 2.08 7.05 ± 0.70 70.82 ± 6.57 24.93 ± 6.92 19.60 ± 1.35 6.28 ± 0.61 
+
+w/ joint training 25.30 ± 1.61 7.12 ± 0.72 74.16 ± 1.74 28.56 ± 0.57 17.64 ± 1.86 5.64 ± 0.65 FedRAP 20.87 ± 5.15 5.80 ± 1.56 81.86 ± 1.55 33.16 ± 1.39 12.84 ± 1.63 3.61 ± 0.40 Gradient w/ joint training 21.82 ± 2.67 5.77 ± 0.66 81.54 ± 1.39 32.52 ± 1.33 14.67 ± 3.07 4.34 ± 0.96 
+
+FedAvg 21.03 ± 3.56 5.87 ± 0.94 68.76 ± 3.30 21.53 ± 5.23 11.75 ± 3.45 3.35 ± 1.41 
+
+w/ uniform weighting 21.19 ± 2.35 5.98 ± 0.63 70.56 ± 2.74 24.53 ± 4.73 11.25 ± 2.08 3.10 ± 0.72 PFedRec 24.51 ± 2.07 7.01 ± 0.74 70.82 ± 6.57 24.93 ± 6.92 18.48 ± 1.77 5.91 ± 0.60 w/ uniform weighting 24.74 ± 1.18 7.01 ± 0.43 72.31 ± 5.90 27.05 ± 6.05 18.66 ± 2.12 5.97 ± 0.74 
+
+FedRAP 20.87 ± 5.15 5.80 ± 1.56 81.75 ± 1.28 33.09 ± 0.93 15.00 ± 3.08 4.39 ± 0.99 
+
+> Weighting
+
+w/ uniform weighting 20.32 ± 4.83 5.80 ± 1.59 81.38 ± 1.69 32.79 ± 1.15 14.70 ± 3.04 4.28 ± 0.91 
+
+accuracy. Every other difference changes sign across seeds. SERA’s user-adaptive residual scale thus gives every user the same reach band in units of σu, and its effect on accuracy depends on which collaborative backbone it corrects. 
+
+b) Stop-Gradient: SERA’s stop-gradient in Eq. (3) passes the collaborative score forward and blocks its gradient, and SERA also applies the stop-gradient to the collaborative scores used for the history weights and σu. Consequently, the residual loss in Eq. (11) trains only the projector, and the backbone keeps learning from Lbase (a) alone. All of SERA’s content correction therefore sits in the semantic residual score r(u, i ),which Proposition 1, Corollary 1, and Theorem 1 bound relative to the trained collaborative scores. Joint training opens a path from the residual loss to the backbone through s(u, i ),and this path changes what the backbone learns. As Sec. VI-G notes, the pairwise loss in Eq. (1) becomes less sensitive to score changes as the margin between the observed item and the sampled negative grows. Under joint training this margin includes r(u, i ), so pairs that r(u, i ) already ranks correctly send weaker gradients to the backbone and pairs that it ranks wrongly send stronger ones. The backbone then learns from errors that already include the semantic residual score, so its collaborative scores carry content information, and the bounds of Sec. V cover only the content effect left in r(u, i ).Table VIII supports this choice. Its two consistent differ-ences, both for PFedRec on Food, favor SERA’s stop-gradient. Every other difference changes sign across seeds, including joint training’s largest mean advantage, for PFedRec on Cards. The stop-gradient thus keeps SERA’s guarantees in Sec. V-B intact and matches joint training within seed variation. 
+
+c) History Weights: SERA builds its content query from the user’s history and weights each history item by its collab-orative score in Eq. (5). The temperature τq sets how sharply these weights favor high-scoring items, and a larger τq spreads them more evenly. Uniform weighting is the large-τq limit. In Table VI, validation picks one of the two largest τq values in five of the nine configurations. How much the weights matter depends on the history itself. The content query in Eq. (6) is a normalized weighted average of the representations zi of the history items, so the weights can only mix the directions of these items into qu. When the items point in similar directions, any weighting gives nearly the same query, and Eqs. (7) to (9) then give nearly the same semantic residual scores. The history weights therefore matter mainly for users whose histories mix dissimilar content. In Table VIII, every difference between SERA’s history weights and uniform weighting changes sign across seeds, including FedAvg on Food, where SERA’s validated τq is the grid’s smallest. On these datasets, SERA’s history weights thus match uniform weights within seed variation. The content ablations in Fig. 4 show that content drives SERA’s gains. APPENDIX DDEPLOYMENT COST 
+
+Tables IX and X report the space and time costs of SERA and the other federated methods in Tables II and III. In these runs, FedVLR uses its default hyperparameters, and every other method uses those of the main comparison. Commu-nication and on-device storage are exact byte counts. Time and memory come from short runs on an idle RTX A5500 GPU, with one warm-up round and three timed rounds of 128 sampled clients each, followed by one warm-up pass and two timed inference passes over all of the validation users. 
+
+a) Space: Algorithm 1 keeps the projector on the server, which sets SERA’s space cost. Beyond its backbone, a SERA client exchanges one M × d table in each direction and stores one copy. Because this table depends only on M and d,ARXIV PREPRINT 16 
+
+TABLE IX SPACE COSTS OF THE FEDERATED METHODS ON THE SIX DATASETS . ( A) C OMMUNICATION PER CLIENT , DIRECTION , AND ROUND IN KIB. ( B)ON-DEVICE STORAGE IN MIB, COVERING SHARED PARAMETERS , ONE CLIENT ’S PERSONAL STATE , AND THE FEATURE OR CONTENT TABLE READ BY THE CLIENT . ( C) M EDIAN PEAK GPU MEMORY DURING ONE TRAINING ROUND MINUS THE MEMORY ALLOCATED AT ITS START , IN MIB. SERA ROWS COUNT THE 64-DIMENSIONAL CONTENT TABLE AND ITS GRADIENT , WITH THE PROJECTOR AND THE ITEM FEATURES ON THE SERVER . “-” MARKS 
+
+AMMFRS RUNS THAT EXCEED THE HOST MEMORY BECAUSE THE SIMULATOR KEEPS THE PERSONAL MODELS OF ALL CLIENTS .
+
+Method (a) Communication (b) On-device storage (c) Peak GPU memory Beauty Cards ML Dance Food Movie Beauty Cards ML Dance Food Movie Beauty Cards ML Dance Food Movie 
+
+FedMMR 105 386 460 4,378 3,276 6,082 0.10 0.38 0.45 4.28 3.20 5.94 2.15 5.63 4.57 104.01 67.06 158.20 AMMFRS 7,162 8,224 4,118 - - - 15.38 16.57 22.30 - - - 71.06 72.09 451.41 - - -FedAvg 44 258 7,300 838 281 1,264 0.04 0.26 7.13 0.82 0.28 1.24 0.12 1.25 34.59 6.64 2.01 10.29 + FedVLR 574 517 1,397 904 766 1,117 2.00 1.06 15.67 7.48 5.19 11.01 4.66 2.58 116.22 5.22 3.78 7.23 + GFMFR 89 32 912 419 281 632 0.09 0.03 0.89 0.41 0.28 0.62 7.12 5.36 49.44 73.78 49.93 34.72 + SERA 178 64 1,825 838 562 1,264 0.17 0.06 1.78 0.82 0.55 1.23 0.54 0.19 16.53 4.08 2.64 5.75 PFedRec 89 258 7,300 3,352 1,125 2,528 0.09 0.25 7.13 3.28 1.10 2.47 0.44 1.50 35.67 30.23 9.43 23.48 + FedVLR 574 517 1,397 904 766 1,117 2.00 1.06 15.67 7.48 5.19 11.01 4.66 2.58 114.04 5.26 3.80 7.29 + GFMFR 89 32 912 419 281 632 0.09 0.03 0.89 0.41 0.27 0.62 7.12 0.13 321.54 23.97 99.16 222.57 + SERA 178 64 1,825 838 562 1,264 0.17 0.06 1.78 0.82 0.55 1.23 0.47 0.19 14.39 4.28 2.66 5.81 FedRAP 178 64 3,650 210 281 316 0.35 0.13 7.13 0.41 0.55 0.62 0.87 0.32 24.10 1.04 1.38 1.56 + FedVLR 574 517 1,397 904 766 1,117 2.09 1.09 16.56 7.89 5.47 11.63 4.70 2.66 117.55 4.65 3.06 4.54 + GFMFR 122 65 945 452 314 665 0.21 0.09 1.81 0.85 0.58 1.27 14.52 13.38 2.72 37.52 49.93 4.57 Federated + SERA 178 64 1,825 838 562 1,264 0.26 0.09 2.67 1.23 0.82 1.85 0.64 0.25 20.23 2.06 1.38 3.11 TABLE X TIME COSTS OF THE FEDERATED METHODS ON THE SIX DATASETS AS MEDIANS IN MILLISECONDS . ( A) L OCAL TRAINING OF ONE CLIENT IN ONE ROUND , WITH THE SHARED -MODEL AND PERSONAL UPDATES SUMMED FOR AMMFRS. ( B) S ERVER -SIDE WORK PER ROUND BEYOND AGGREGATION :FED MMR’ S SERVER -SIDE MULTIMODAL MODEL , GFMFR’ S CLUSTERING , FUSION TRAINING , AND GROUP TEACHERS , AND SERA’ S PROJECTION OF THE FULL ITEM SET WITH ONE BACKWARD PASS AND ONE OPTIMIZER STEP . ( C) S CORING OF ALL ITEMS PER USER , AVERAGED OVER ONE VALIDATION PASS . GFMFR’ S SERVER STAGE RUNS ONLY WITH A NONZERO DISTILLATION WEIGHT , SO ITS ENTRIES ARE 0.00 WHERE VALIDATION SELECTS A ZERO WEIGHT . “-” MARKS AMMFRS RUNS THAT EXCEED THE HOST MEMORY BECAUSE THE SIMULATOR KEEPS THE PERSONAL MODELS OF ALL CLIENTS .
+
+Method (a) Client computation (b) Server stage (c) Inference per user Beauty Cards ML Dance Food Movie Beauty Cards ML Dance Food Movie Beauty Cards ML Dance Food Movie 
+
+FedMMR 3.63 3.62 3.77 3.79 3.69 3.93 1.20 1.25 4.09 2.66 2.54 3.89 0.43 0.41 0.47 0.48 0.47 0.48 AMMFRS 82.45 73.99 49.69 - - - 0.00 0.00 0.00 - - - 4.99 3.79 3.87 - - -FedAvg 5.76 5.65 11.71 6.55 6.47 6.93 0.00 0.00 0.00 0.00 0.00 0.00 0.23 0.27 0.28 0.22 0.21 0.20 + FedVLR 13.85 14.45 19.58 14.94 14.71 15.27 0.00 0.00 0.00 0.00 0.00 0.00 0.67 0.80 0.75 0.68 0.64 0.65 + GFMFR 6.86 5.07 11.41 6.26 6.11 6.40 321.65 194.01 590.80 834.69 562.80 936.52 0.23 0.22 0.23 0.19 0.19 0.19 + SERA 12.13 11.70 22.33 13.22 12.99 13.50 0.61 0.48 0.53 0.52 0.36 0.48 0.45 0.44 0.45 0.47 0.43 0.45 PFedRec 5.63 5.54 11.75 8.09 6.46 7.69 0.00 0.00 0.00 0.00 0.00 0.00 0.20 0.19 0.19 0.22 0.17 0.18 + FedVLR 13.70 14.24 20.77 14.80 14.71 15.08 0.00 0.00 0.00 0.00 0.00 0.00 0.67 0.77 0.75 0.68 0.64 0.63 + GFMFR 6.56 5.02 11.44 6.21 5.90 6.44 330.20 0.00 17,451.20 280.28 1,117.99 2,498.41 0.21 0.19 0.18 0.18 0.17 0.17 + SERA 12.24 11.66 22.19 12.79 12.38 12.66 0.35 0.41 0.36 0.61 0.41 0.69 0.45 0.42 0.49 0.44 0.40 0.38 FedRAP 6.98 6.73 13.34 7.43 6.99 7.63 0.00 0.00 0.00 0.00 0.00 0.00 0.25 0.24 0.51 0.22 0.19 0.19 + FedVLR 15.49 14.52 20.86 16.35 15.49 15.86 0.00 0.00 0.00 0.00 0.00 0.00 0.74 0.71 0.83 0.69 0.61 0.60 + GFMFR 8.17 6.92 12.94 7.99 7.82 8.20 795.66 194.21 0.00 461.31 606.74 0.00 0.25 0.27 0.37 0.23 0.23 0.22 Federated + SERA 13.00 13.72 23.26 14.65 13.56 14.23 1.38 0.63 0.47 0.33 0.32 0.33 0.43 0.49 0.64 0.49 0.41 0.44 
+
+SERA’s added cost stays the same for any history length, projector size |ϕ|, and backbone, and SERA’s three rows in Table IX have the same communication, proportional to the number of items. This content table also explains how SERA compares with the other adapters. Compared with GFMFR, which distills server-side multimodal content into each client’s backbone using group preference targets, SERA also exchanges its content table. In return, SERA keeps content in r(u, i ), which leaves the backbone’s training unchanged. FedVLR uses the same collaborative item table as SERA, so their communication differs by SERA’s M × d content table and FedVLR’s fusion network of about 1.24 ×10 5 parameters. Consequently, SERA exchanges less than FedVLR on the four datasets with fewer than about 1.9×10 3 items and more on ML and Movie. SERA stores d-dimensional rows, a sixteenth of the width of the dx-dimensional features that FedVLR stores, so SERA needs far less on-device storage. The server-side projector also keeps SERA’s GPU memory low. Because the projector’s parameters, optimizer states, and dx-dimensional activations stay on the server, SERA’s peak GPU memory stays close to that of a backbone of the same width. SERA’s added tensors, namely the content table, its gradient, and the collaborative scores over the item set, all grow with M , so its peak GPU memory on Dance, Food, and Movie rises roughly in proportion to the number of items. At each history position, SERA keeps a d-dimensional row, whereas FedVLR keeps dx-dimensional features and fusion outputs. The long histories of ML multiply this gap, so SERA’s peak GPU memory on ML is a small fraction of FedVLR’s. 
+
+b) Time: SERA’s time cost follows from the size of its operations. Its client batches hold one user, and its server projects at most a few thousand items per round. At these sizes, fixed kernel launch overhead sets the duration of each GPU operation. SERA’s added time therefore depends on how many operations it adds and changes little with the embedding ARXIV PREPRINT 17 
+
+width or the number of items. Table X confirms this: outside ML, SERA’s client computation stays nearly constant across item sets differing in size by over an order of magnitude. Operation counts also explain how SERA compares with the other methods at each stage. In local training, SERA adds the parameter-free steps of Eqs. (5) to (9) to its backbone. These steps need fewer operations than FedVLR’s fusion net-work, so SERA’s client computation is lower than FedVLR’s outside ML. On the server, SERA runs one forward pass, one backward pass, and one optimizer step per round for all clients, so its server stage is on the same order of magnitude as FedMMR’s and more than two orders of magnitude below GFMFR’s clustering and fusion rounds. At inference, SERA computes all similarities of a user with one matrix-vector product between the content table and qu. This is more work than GFMFR, whose inference uses the backbone alone, and less than FedVLR, whose inference runs its fusion network, so SERA’s time per user lies between theirs everywhere. 
+
+c) Exception on ML: ML departs from this pattern because two effects raise SERA’s client computation there. First, the data loading and negative sampling that SERA shares with its backbone grow with each user’s interactions, which are more than an order of magnitude more numerous on ML. Second, SERA pads each history with item 0 to the longest one, and in the backward pass of its table lookup, positions that share a row add their gradients one at a time. Since the longest ML history is an order of magnitude longer than elsewhere, most positions of an ML history are padding and write in turn into the row of item 0. Profiling confirms this second effect. The accumulation takes about 4.6 ms per ML client with SERA’s server-side projector and about 0.3 ms with a client-side projector. Reading the table with index_select 
+
+instead cuts SERA’s client computation on ML by 17% and changes it on Beauty by about 3%, so the serialized accumulation matters only when user histories are long. 
+
+d) Equal-Width Comparison: The backbones in Table X use their own tuned hyperparameters, so the extra time of each SERA row mixes SERA’s cost with differences in hy-perparameters. To measure SERA’s own cost, we also time SERA against a backbone of the same 64-dimensional width on Beauty, Cards, and Food. With its server-side projector, SERA needs 1.8 to 2.0 times the client computation of this backbone and 1.1 to 1.9 times its inference time per user, and SERA’s peak GPU memory stays within 0.3 MiB of the backbone’s. Moving SERA’s projector to the client raises its client computation and peak GPU memory, which confirms the cost benefit of placing the projector on the server. APPENDIX EEFFECTIVE MIXING WEIGHT 
+
+Eqs. (8) and (9) scale the semantic residual score through 
+
+κ, σu, and τr . Subtracting the candidate mean from every final score and dividing by the standard deviation of the collaborative scores over Cu leave the ranking unchanged. After this rescaling, each final score equals the standardized collaborative score plus wu times the standardized shape term, so wu measures how much content counts relative to the collaborative score for user u. For the candidate set Cu ⊆ I 
+
+of size Mu, define the following three score averages: 
+
+¯aC 
+
+> u
+
+= 1
+
+Mu
+
+X
+
+> i∈C u
+
+a(u, i ),
+
+¯gC 
+
+> u
+
+= 1
+
+Mu
+
+X
+
+> i∈C u
+
+gui ,
+
+¯sC 
+
+> u
+
+= 1
+
+Mu
+
+X
+
+> i∈C u
+
+s(u, i ).
+
+(23) The superscript C separates these means from ¯au over I. The operator sd u(·) denotes the population standard deviation over 
+
+Cu, whereas σu is still computed over the full item set I.
+
+Proposition 3 (Mixing Weight) . Fix a user u with sd u(a) > 0
+
+and sd u(g) > 0, and write ˇaui =  a(u, i ) − ¯aC
+
+> u
+
+/ sd u(a) and 
+
+ˇgui =  gui − ¯gC
+
+> u
+
+/ sd u(g). Then, for every item i ∈ C u:
+
+s(u, i ) − ¯sC
+
+> u
+
+sd u(a) = ˇ aui + wu ˇgui , w u = κ χ u sd u(g), (24) 
+
+where χu = σu/ sd u(a). The map on the left is strictly increasing in s(u, i ) and preserves both item order and ties. Proof. Fix a user u and take the displayed means and sd u
+
+over Cu. The user-adaptive residual scale σu is still computed over the full item set. By Eqs. (3) and (9), the final score is: 
+
+s(u, i ) = a(u, i ) + κσ ugui . (25) With κ and σu constant in i, averaging Eq. (25) over Cu gives: 
+
+¯sC 
+
+> u
+
+= ¯ aC 
+
+> u
+
++ κσ u ¯gC 
+
+> u
+
+. (26) Subtracting Eq. (26) from Eq. (25) centers both terms: 
+
+s(u, i ) − ¯sC 
+
+> u
+
+=  a(u, i ) − ¯aC
+
+> u
+
+ + κσ u
+
+ gui − ¯gC
+
+> u
+
+. (27) Since sd u(a) > 0 and sd u(g) > 0, dividing Eq. (27) by sd u(a)
+
+and multiplying the second term by sd u(g)/ sd u(g) yields: 
+
+s(u, i ) − ¯sC
+
+> u
+
+sd u(a) = ˇ aui + κ · σu
+
+sd u(a) · sd u(g) · ˇgui , (28) which is Eq. (24) with χu = σu/ sd u(a) and wu =
+
+κχ u sd u(g). The map ξ 7 →  ξ − ¯sC
+
+> u
+
+/ sd u(a) is affine with slope 1/ sd u(a) > 0 and preserves both order and ties. 
+
+Remark on what the weight absorbs. Eq. (28) shows that κ and 
+
+σu enter the standardized score only through wu. The temper-ature τr enters wu through sd u(g) and also changes ˇgui , so its effect extends beyond wu. The bound sd u(g) ≤ tanh(1 /τ r )
+
+follows from Eq. (8) with |cui | ≤ 1 and Popoviciu’s inequality, which bounds the standard deviation of a bounded variable by half the width of the interval that contains its values. The factor χu compares σu over I with the standard deviation of collaborative scores over Cu, so it reflects masking and the floor ε. A change of τr can rescale sd u(g) differently across users, so preserving each user’s mixing weight can require user-specific changes in κ. For fixed similarities, 
+
+c 7 → tanh( c/τ r ) preserves the order by similarity for every 
+
+τr > 0. As τr → ∞ , tanh( cui /τ r ) = cui /τ r + O(τ −3 
+
+> r
+
+). For nonconstant similarities, standardization cancels the leading factor 1/τ r , so ˇgui approaches the standardized similarity. ARXIV PREPRINT 18 
+
+APPENDIX FSAMPLING ESTIMATE OF THE USER -A DAPTIVE RESIDUAL 
+
+SCALE 
+
+The user-adaptive residual scale requires all M collabo-rative scores. Sampling approximates it with the same floor 
+
+ε. Write ¯au = 1
+
+> M
+
+P 
+
+> i′∈I
+
+a(u, i ′) and define vu ≥ 0 by 
+
+v2 
+
+> u
+
+= 1
+
+> M
+
+P 
+
+> i′∈I
+
+(a(u, i ′) − ¯au)2. Thus σu = max {vu, ε }. We study vu and the floor separately for a fixed trained model. 
+
+A. The Estimator and Its Target 
+
+For an integer m ≥ 1, draw indices i1, . . . , i m uniformly from I with replacement, and we write Ak = a(u, i k).
+
+Lemma 2 (Sampling Moments) . The variables A1, . . . , A m
+
+are independent and identically distributed with moments: 
+
+E[Ak] = ¯ au, Var( Ak) = v2
+
+> u
+
+. (29) 
+
+Proof. Uniform sampling on I yields the empirical score dis-tribution over the item set. This distribution has mean ¯au and variance v2
+
+> u
+
+, giving Eq. (29). Sampling with replacement pro-duces independent scores with this common distribution. Define the uncorrected sample variance of the draws by: 
+
+ˆv2 
+
+> u
+
+= 1
+
+m
+
+> m
+
+X
+
+> k=1
+
+ Ak − ¯A2, ¯A = 1
+
+m
+
+> m
+
+X
+
+> k=1
+
+Ak. (30) For its expectation, write Yk = Ak − ¯au, ¯Y = m−1 Pmk=1 Yk,and Bm = m−1 Pmk=1 Y 2 
+
+> k
+
+. Then ˆv2 
+
+> u
+
+= Bm − ¯Y 2. The Yk are independent with mean zero and variance v2
+
+> u
+
+, which gives: 
+
+E[Bm] = v2
+
+> u
+
+, E[ ¯Y 2] = v2
+
+> u
+
+m . (31) Subtracting gives E[ˆ v2
+
+> u
+
+] = ( m−1) v2
+
+> u
+
+/m . The strong law gives 
+
+Bm → v2 
+
+> u
+
+and ¯Y → 0 almost surely, so ˆv2 
+
+> u
+
+→ v2 
+
+> u
+
+almost surely. By continuity, ˆσu = max {ˆvu, ε } converges almost surely to σu. The floor can shift the mean of ˆσ2 
+
+> u
+
+upward. 
+
+B. Size of the Error 
+
+Proposition 4 (Sampling Error) . Let μ4 =
+
+> 1
+> M
+
+P
+
+> i′∈I
+
+ a(u, i ′) − ¯au
+
+4 and assume vu > 0. Then, as the sample size m tends to infinity, ˆvu then satisfies: 
+
+pVar(ˆ vu)
+
+vu
+
+=
+
+s
+
+μ4 − v4
+
+> u
+
+4m v 4
+
+> u
+
++ o m−1/2. (32) 
+
+When μ4 ≈ 3v4 
+
+> u
+
+as for a Gaussian, Eq. (32) gives the Gaussian reference 1/√2m for this relative error of the estimate. Proof. We first compute the variance at finite m. Expanding products of the centered variables Yk removes every term with an index that occurs only once, because independence then supplies a factor E[Yk] = 0 . The remaining terms give: 
+
+E[B2
+
+> m
+
+] = μ4 + ( m − 1) v4
+
+> u
+
+m ,
+
+E[Bm ¯Y 2] = μ4 + ( m − 1) v4
+
+> u
+
+m2 ,
+
+E[ ¯Y 4] = μ4 + 3( m − 1) v4
+
+> u
+
+m3 .
+
+(33) Using ˆv2 
+
+> u
+
+= Bm − ¯Y 2 and subtracting (E[ˆ v2
+
+> u
+
+]) 2 yields: 
+
+Var  ˆv2
+
+> u
+
+ = (m − 1) 2
+
+m3 μ4 − (m − 1)( m − 3) 
+
+m3 v4
+
+> u
+
+= μ4 − v4
+
+> u
+
+m + O(m−2).
+
+(34) We next expand the square root to first order. Let ∆m =ˆv2 
+
+> u
+
+− v2 
+
+> u
+
+and define the remainder Rm by the exact identity: 
+
+ˆvu − vu = ∆m
+
+2vu
+
++ Rm,
+
+Rm = − ∆2
+
+> m
+
+2vu(ˆ vu + vu)2 .
+
+(35) Since vu > 0 and ˆvu ≥ 0, this gives |R m| ≤ ∆2
+
+> m
+
+/(2 v3
+
+> u
+
+) even if ˆvu = 0 . To bound its second moment, set Wk = Y 2 
+
+> k
+
+− v2
+
+> u
+
+.The finite item set makes Yk and Wk bounded, and the Wk
+
+have mean zero. The same product expansion gives: 
+
+E[( Bm − v2
+
+> u
+
+)4] = E[W 41 ]
+
+m3 + 3( m − 1) 
+
+m3 (E[W 21 ]) 2
+
+= O(m−2).
+
+(36) In the expansion of E[ ¯Y 8], each surviving index occurs at least twice, so at most four distinct indices remain. There are O(m4)
+
+such terms before division by m8, giving E[ ¯Y 8] = O(m−4).Since ∆m = ( Bm −v2
+
+> u
+
+)− ¯Y 2, the inequality |∆m|4 ≤ 8( |Bm −
+
+v2
+
+> u
+
+|4 + ¯Y 8) now gives E[∆ 4
+
+> m
+
+] = O(m−2). Thus E[R2
+
+> m
+
+] = 
+
+O(m−2). Eq. (34) gives Var(∆ m) = O(m−1), so the Cauchy– Schwarz inequality bounds | Cov(∆ m, Rm)| by O(m−3/2).Taking the variance of both sides of Eq. (35) therefore gives: 
+
+Var  ˆvu
+
+ = 14v2
+
+> u
+
+Var  ˆv2
+
+> u
+
+ + o
+
+ 1
+
+m
+
+
+
+= μ4 − v4
+
+> u
+
+4m v 2
+
+> u
+
++ o
+
+ 1
+
+m
+
+
+
+.
+
+(37) Dividing by v2 
+
+> u
+
+and taking square roots gives Eq. (32). The Gaussian reference sets μ4 = 3 v4 
+
+> u
+
+in that variance term. The reference is not a bound. The unfloored estimate varies more at larger kurtosis μ4/v 4
+
+> u
+
+. The floored estimate satisfies 
+
+|ˆσu −σu| ≤ | ˆvu −vu|, so flooring cannot increase the error. For 
+
+vu > ε , concentration makes ˆvu < ε exponentially unlikely, so the leading variance term holds for ˆσu. For vu ≤ ε, the expansion need not describe ˆσu. At vu = 0 , both σu and ˆσu
+
+equal ε, so the sampled estimate is exact for such users. 
+
+C. Effect on the Results of Secs. IV and V 
+
+The estimate replaces the item-independent σu, so its error rescales every semantic residual score of the user alike. 
+
+Proposition 5 (Sampled Scale) . Write ˆσu = (1 + ζu)σu with 
+
+ζu > −1. Hold the collaborative scores and shape terms fixed, and let ˆr and ˆRu use ˆσu in place of σu. Then for each i:
+
+ˆr(u, i ) = κ(1 + ζu) σu gui , (38) 
+
+so ˆr(u, i ) equals the semantic residual score with σu at budget 
+
+κ(1 + ζu), and ˆRu = (1 + ζu)Ru. Under the nonzero-variance conditions of Proposition 3, the mixing weight computed with 
+
+ˆσu also satisfies ˆwu = (1 + ζu)wu. If neither budget produces ARXIV PREPRINT 19 
+
+a tie, a pair with δu,ij ̸ = 0 changes ranking under the sampled scale exactly when κu,ij lies strictly between κ and κ(1 + ζu).Proof. Substituting ˆσu = (1+ ζu)σu into Eq. (9) gives Eq. (38) at budget κ(1 + ζu). The bound Ru is proportional to σu.Under the conditions of Proposition 3, wu = κχ u sd u(g) has the same dependence through χu = σu/ sd u(a). By Eq. (16), the sign of κ′ − κu,ij determines the pair’s order at budget κ′.Crossing κu,ij changes the ranking of the two items. Without the floor, ζu = ˆ vu/v u − 1, so Proposition 4 gives the asymptotic standard deviation of ζu. The identity holds for a fixed model, and training with sampled scales can also change the learned shape terms and their change points. APPENDIX GDETAILED PROOFS 
+
+Conditions (A1) to (A5) govern the ranking proofs. This section also states and proves the coverage condition, the pairwise ranking balance, the entry budget, and the projector’s convergence that the main text summarizes. Fix a user u and a candidate set Cu ⊆ I with 1 ≤ K < M u. The collaborative and final top-K lists rank this set, whereas σu uses all M
+
+items in I. The stop-gradient in Eq. (3) preserves the value of 
+
+a(u, i ), so the ranking proofs use s(u, i ) = a(u, i ) + r(u, i ).
+
+a) Ranking Conditions: 
+
+(A1) Normalized content vectors. The normalization 
+
+Π( v) = v/ max {∥ v∥2, ε } used in Eqs. (4) and (6) gives 
+
+∥zi∥2 ≤ 1 and ∥qu∥2 ≤ 1 for all inputs, including zero. (A2) Positive residual bound. Assume κ > 0 and τr > 0.The floor gives σu ≥ ε > 0, so the residual bound satisfies Ru = κσ u tanh(1 /τ r ) > 0 for every user. (A3) Deterministic ranking. The same fixed tie-breaking rule by item index makes each top-K ranking on Cu unique. (A4) Strict ranking changes. The score difference changes sign. Condition (A3) breaks change-point ties. In Eq. (20), Pi and Qi count only strict ranking changes. (A5) Fixed model. As κ varies, the FedRS, projector, histo-ries, and candidate set stay fixed, so γu,ij , σu, and δu,ij 
+
+do too. One trained model serves every budget. When κ = 0 , Eq. (9) gives r(u, i ) = 0 for every item. The final ranking equals the collaborative ranking, so Corollary 1 and the reach condition hold directly. The subsequent ranking proofs therefore assume (A2) with a positive budget κ > 0.
+
+A. Proof of Proposition 1 Proof. Fix an arbitrary item i ∈ I . By (A1), we have: 
+
+∥qu∥2 ≤ 1 and ∥zi∥2 ≤ 1. (39) The Cauchy–Schwarz inequality applied to the two vectors in Eq. (39) bounds the content similarity cui of Eq. (7): 
+
+|cui | ≤ ∥ qu∥2∥zi∥2 ≤ 1. (40) Because τr > 0 by (A2), dividing Eq. (40) by τr preserves the inequality and yields |cui /τ r | ≤ 1/τ r . The hyperbolic tangent is odd and increasing, so | tanh( ξ)| = tanh( |ξ|) for every real number ξ, and Eq. (8) therefore bounds the shape term: 
+
+|gui | = tanh 
+
+ |cui |
+
+τr
+
+
+
+≤ tanh 
+
+ 1
+
+τr
+
+
+
+. (41) Taking the absolute value of Eq. (9) and using Eq. (41) gives: 
+
+|r(u, i )| = κσ u |gui | ≤ κσ u tanh 
+
+ 1
+
+τr
+
+
+
+. (42) By (A2), κ and σu are positive. Since 1/τ r is finite and positive, 0 < tanh(1 /τ r ) < 1. Multiplying by κσ u gives: 
+
+Ru = κσ u tanh 
+
+ 1
+
+τr
+
+
+
+< κσ u. (43) Eqs. (42) and (43) prove Eq. (10) for every item i ∈ I .
+
+B. Proof of Lemma 1 Proof. Fix a user u and items i, j with δu,ij = gui − guj ̸ = 0 .Under (A5), γu,ij , σu, and δu,ij stay fixed as κ varies. 
+
+Step 1. The score difference is affine in the budget. On the forward pass, Eqs. (3) and (9) give s(u, i ) = a(u, i ) + κσ ugui .Writing the same identity for j and subtracting gives: 
+
+s(u, i ) − s(u, j ) = γu,ij + κ σ u δu,ij , (44) where γu,ij is the collaborative score gap of Eq. (13). The right-hand side is affine in κ, with nonzero slope σuδu,ij 
+
+because σu > 0 by (A2) and δu,ij ̸ = 0 by assumption. 
+
+Step 2. Factoring out the slope. Dividing the constant term of Eq. (44) by the nonzero slope and factoring gives: 
+
+γu,ij + κσ uδu,ij = σuδu,ij 
+
+
+
+κ + γu,ij 
+
+σuδu,ij 
+
+
+
+= σuδu,ij 
+
+ κ − κu,ij 
+
+.
+
+(45) The second line substitutes Eq. (15), proving Eq. (16). 
+
+Step 3. Order around κu,ij . By (A2), Eq. (45) gives: 
+
+sign  s(u, i ) − s(u, j ) = sign  δu,ij 
+
+ · sign  κ − κu,ij 
+
+. (46) The first factor does not depend on κ. The second equals −1
+
+for κ < κ u,ij , equals 0 at κ = κu,ij , and equals +1 for 
+
+κ > κ u,ij . The pair therefore keeps one order for all κ < κ u,ij 
+
+and the opposite order for all κ > κ u,ij , and its two final scores are equal only at the change point κ = κu,ij of Eq. (15). 
+
+Step 4. Ranking change at a positive budget. Admissible budgets satisfy κ ≥ 0, so both sides of κu,ij are reachable only when κu,ij > 0. By Eq. (15), κu,ij > 0 holds exactly when γu,ij and σuδu,ij carry opposite signs, and since σu > 0
+
+this is the condition γu,ij δu,ij < 0. Canceling the sign gives 
+
+κu,ij = |γu,ij |/(σu|δu,ij |). When instead γu,ij δu,ij > 0, the change point is negative and no budget reaches it, so the pair keeps its collaborative order for every budget κ ≥ 0.
+
+Remark on degenerate pairs. If δu,ij = 0 , then Eq. (44) is the constant γu,ij and the pair never changes ranking. If γu,ij = 0 
+
+while δu,ij ̸ = 0 , the factorization still holds with κu,ij = 0 .The final scores then differ for every κ > 0 and can change the order that tie-breaking gave the pair, which is not a strict ranking change. Corollary 1 covers δu,ij = 0 under its gap condition, and its premise |γu,ij | > 2Ru > 0 rules out ties. ARXIV PREPRINT 20 
+
+C. Proof of Corollary 1 Proof. Fix a user u and two items i and j satisfying: 
+
+|γu,ij | > 2Ru. (47) Define the residual difference of the two items as follows: 
+
+∆r = r(u, i ) − r(u, j ). (48) The difference between their two final scores then satisfies: 
+
+s(u, i ) − s(u, j ) = γu,ij + ∆ r . (49) By the triangle inequality and Eq. (10), it then satisfies: 
+
+|∆r | = |r(u, i ) − r(u, j )|≤ | r(u, i )| + |r(u, j )|≤ Ru + Ru = 2 Ru.
+
+(50) With the collaborative score gap in Eq. (47), this yields: 
+
+|∆r | ≤ 2Ru < |γu,ij |. (51) Since Ru > 0, Eq. (47) gives γu,ij ̸ = 0 . The sign of γu,ij 
+
+determines which of the two items initially ranks higher. If γu,ij > 0, then ∆r ≥ −| ∆r | > −γu,ij by Eq. (51). Adding γu,ij to both sides gives γu,ij + ∆ r > 0. If γu,ij < 0,then ∆r ≤ | ∆r | < |γu,ij | = −γu,ij . Adding γu,ij to both sides gives γu,ij + ∆ r < 0. In both cases, Eq. (49) has the sign of γu,ij , so i and j keep their collaborative order. 
+
+Remark on the residual bound. The proof uses the bound 
+
+|r(u, i )| ≤ Ru of Eq. (10), which is attained at cui = ±1.Learned representations may never reach cui = ±1, so realized residual differences can be smaller than 2Ru. The corollary holds for every semantic residual score within the bound, and because the bound is attained, 2Ru is the smallest threshold that ensures order preservation for any possible content. 
+
+D. Proof of Theorem 1 Proof. Let Tu ⊆ C u denote the deterministic collaborative top-
+
+K set. Thus |T u| = K, and every item i ∈ T u satisfies: 
+
+a(u, i ) ≥ a(K) 
+
+> u
+
+. (52) Let ˜Tu ⊆ C u be the deterministic final top-K set. Since j ∈
+
+˜Tu \ T u and both sets have K items, some i ∈ T u \ ˜Tu exists. The final ranking places j inside its top-K set and i outside it, so the final score of j is at least the final score of i:
+
+s(u, j ) ≥ s(u, i ). (53) The inequality allows equality because the deterministic tie-breaking rule in (A3) can decide the order of equal scores. Applying Eq. (10) to j gives r(u, j ) ≤ Ru, hence: 
+
+s(u, j ) = a(u, j ) + r(u, j ) ≤ a(u, j ) + Ru. (54) Applying Eq. (10) to the displaced item gives r(u, i ) ≥ − Ru.Combining this inequality with Eq. (52) yields the bound: 
+
+s(u, i ) = a(u, i ) + r(u, i )
+
+≥ a(u, i ) − Ru
+
+≥ a(K) 
+
+> u
+
+− Ru.
+
+(55) Eqs. (54), (53), and (55) form a chain of inequalities: 
+
+a(u, j ) + Ru ≥ s(u, j ) ≥ s(u, i ) ≥ a(K) 
+
+> u
+
+− Ru. (56) The outer terms of the chain in Eq. (56) therefore satisfy: 
+
+a(u, j ) + Ru ≥ a(K) 
+
+> u
+
+− Ru. (57) Rearranging Eq. (57) gives γ(K) 
+
+> u,j
+
+= a(K) 
+
+> u
+
+− a(u, j ) ≤ 2Ru by the definition in Eq. (14), which then proves Theorem 1. By contraposition, no semantic residual score satisfying Eq. (10) lets j enter the top-K list when γ(K) 
+
+> u,j
+
+> 2Ru.
+
+Remark on necessity versus sufficiency. The reach condition is necessary for entry. Entry also requires j to outrank enough competitors by final score, and these scores depend on the content similarities in Eq. (7). Proposition 2 states this re-quirement exactly through the rank counts Pj and Qj .
+
+E. Proof of Corollary 2 Proof. Fix a user u, an item j ∈ C u, and any content. 
+
+Step 1. The residual bound holds for any content. The map 
+
+Π satisfies (A1) for every input, whatever the item features, projector parameters, and history. The proof of Proposition 1 uses only (A1) and (A2), so |r(u, i )| ≤ Ru for every i ∈ C u.
+
+Step 2. Distant candidates keep their side of j. Define the sets of candidates far above and far below j as follows: 
+
+N + 
+
+> u,j
+
+= {i ∈ C u : a(u, i ) > a (u, j ) + 2 Ru},
+
+N − 
+
+> u,j
+
+= {i ∈ C u : a(u, i ) < a (u, j ) − 2Ru}, (58) so that n± 
+
+> u,j
+
+= |N ± 
+
+> u,j
+
+|. Every i ∈ N + 
+
+> u,j
+
+satisfies γu,ij > 2Ru,and the proof of Corollary 1 gives s(u, i ) > s (u, j ). Every 
+
+i ∈ N − 
+
+> u,j
+
+satisfies γu,ji > 2Ru, which gives s(u, i ) < s (u, j ).Both inequalities are strict, so the tie-breaking rule in (A3) leaves the order of these pairs unchanged at every budget. 
+
+Step 3. Counting positions. The final ranking places all of 
+
+N + 
+
+> u,j
+
+above j and all of N − 
+
+> u,j
+
+below it, so at least n+ 
+
+> u,j
+
+and at most Mu −1−n− 
+
+> u,j
+
+items precede j, which gives Eq. (19). 
+
+Remark on Theorem 1. At least K candidates exceed 
+
+a(u, j ) + 2 Ru exactly when the collaborative top-K boundary score a(K) 
+
+> u
+
+does. Hence n+ 
+
+> u,j
+
+< K holds exactly when 
+
+a(K) 
+
+> u
+
+− a(u, j ) ≤ 2Ru, which for an outside item j with 
+
+˜ρu(j) ≤ K is Eq. (17). Theorem 1 is therefore the top-K
+
+case of Eq. (19). 
+
+Remark on accuracy. Each user has one test item, so accuracy changes follow the rank range of that item. Let j be the test item of user u. Candidates above a(u, j ) + 2 Ru also precede 
+
+j in the collaborative ranking and candidates below a(u, j ) −
+
+2Ru follow it, so the collaborative rank ρu(j) lies in the range of Eq. (19) as well. Recall@ K records whether the rank is at most K, so it can change only if the range contains both K and 
+
+K +1 . By the previous remark, the lower end of the range is at most K exactly when a(K) 
+
+> u
+
+−2Ru ≤ a(u, j ). Symmetrically, at least Mu −K candidates fall below a(u, j )−2Ru exactly when the collaborative score a(K+1)  
+
+> u
+
+at rank K + 1 does. The upper end is thus at least K + 1 exactly when a(u, j ) ≤ a(K+1)  
+
+> u
+
++2Ru. NDCG@ K is a function of ˜ρu(j) that vanishes beyond rank K, so it can change only if the range holds several ranks ARXIV PREPRINT 21 
+
+and its lower end is at most K. For any content, the semantic residual scores can therefore change the accuracy of at most the share of users whose test items meet these conditions. 
+
+Remark on untrusted content. The range needs only (A1), (A2), and collaborative scores that content cannot change. A client that receives content representations it cannot verify can reject nonfinite values and apply Π to the rest before scoring, which keeps Eq. (19). For finite representations without this normalization, tanh still gives |gui | < 1, so Eq. (19) holds with the larger bound κσ u replacing the residual bound Ru.
+
+F. Coverage Condition 
+
+Corollary 1 and the reach band of Theorem 1 become uninformative once the residual budget is large enough. 
+
+Proposition 6 (Coverage Condition) . For user u and items 
+
+i, j ∈ I , the collaborative score gap obeys |γu,ij | ≤ σu
+
+√2M .If the hyperparameters satisfy the following condition: 
+
+2κ tanh 
+
+ 1
+
+τr
+
+
+
+≥ √2M , (59) 
+
+then Corollary 1 applies to no pair and the reach band includes every item outside the collaborative top-K list. Proof. We first bound the collaborative score gap. Let ¯au =
+
+> 1
+> M
+
+P 
+
+> i′∈I
+
+a(u, i ′) be the mean over the item set. The scale σu
+
+is at least the population standard deviation by its definition in Sec. IV-D. Fix i̸ = j and write ˜ai = a(u, i ) − ¯au and 
+
+˜aj = a(u, j ) − ¯au. The sum of squared deviations over I
+
+contains the distinct terms ˜a2 
+
+> i
+
+and ˜a2 
+
+> j
+
+, so the scale satisfies: 
+
+M σ 2 
+
+> u
+
+≥ X
+
+> i′∈I
+
+ a(u, i ′) − ¯au
+
+2 ≥ ˜a2 
+
+> i
+
++ ˜ a2 
+
+> j
+
+. (60) Since (˜ ai + ˜ aj )2 ≥ 0, the parallelogram identity gives: 
+
+(˜ ai − ˜aj )2 ≤ (˜ ai − ˜aj )2 + (˜ ai + ˜ aj )2 = 2  ˜a2 
+
+> i
+
++ ˜ a2
+
+> j
+
+ ≤ 2M σ 2
+
+> u
+
+.
+
+(61) Taking square roots in Eq. (61) yields |γu,ij | = |˜ai − ˜aj | ≤ 
+
+σu
+
+√2M . For i = j, the zero gap also satisfies this bound. The constant is tight. For M ≥ 2 and any b > ε , set 
+
+a(u, i ) = ¯ au + bpM/ 2, a(u, j ) = ¯ au − bpM/ 2, and all remaining scores to ¯au. The gap is σu
+
+√2M since σu = b.Now assume Eq. (59). Multiplying it by σu > 0 gives: 
+
+2Ru = 2 κσ u tanh 
+
+ 1
+
+τr
+
+
+
+≥ σu
+
+√2M ≥ | γu,ij | (62) for every pair i, j . The premise |γu,ij | > 2Ru of Corollary 1 therefore fails for every pair, so both Corollary 1 and the reach condition of Theorem 1 become uninformative for user u.
+
+Remark on the scope of the coverage condition. Eq. (60) uses the item-set size M and σu, so it bounds every pair in 
+
+I, including the pairs in Cu that define the reach condition. Replacing M with the candidate-set size Mu generally gives a false inequality. The coverage condition is sufficient but not necessary for this. When Eq. (59) fails, 2Ru lies below the largest possible gap σu
+
+√2M , and the collaborative scores decide how many pairs keep their order. With a sampled scale 
+
+ˆσu, Proposition 5 replaces κ by κ(1 + ζu) in Eq. (59). 
+
+G. Pairwise Ranking Balance 
+
+Proposition 7 (Pairwise Ranking Balance) . For a fixed user 
+
+u, trained model, and budget κ, Pi and Qi have equal totals over the candidate set Cu. Their differences therefore satisfy: 
+
+X
+
+> i∈C u
+
+Pi − Qi
+
+ = 0 . (63) 
+
+Proof. Fix a user u, a trained model, and a budget κ, and con-sider the ordered pairs (i, j ) with i, j ∈ C u and i̸ = j. Define the indicators of ranking changes favoring and opposing i by: 
+
+f (i, j ) = 1{a(u, j ) > a (u, i ), s (u, j ) < s (u, i )},f ′(i, j ) = 1{a(u, j ) < a (u, i ), s (u, j ) > s (u, i )}. (64) By Eq. (20), Pi = P  
+
+> j̸=i
+
+f (i, j ) and Qi = P  
+
+> j̸=i
+
+f ′(i, j ).Summing both counts over all target items i ∈ C u gives: 
+
+X
+
+> i∈C u
+
+Pi = X
+
+> i
+
+X 
+
+> j̸=i
+
+f (i, j ), X
+
+> i∈C u
+
+Qi = X
+
+> i
+
+X 
+
+> j̸=i
+
+f ′(i, j ). (65) Swapping i and j in the definition of f ′ in Eq. (64) shows 
+
+f (i, j ) = f ′(j, i ), because the conditions “ a(u, j ) > a (u, i )
+
+and s(u, j ) < s (u, i )” are “ a(u, i ) < a (u, j ) and s(u, i ) >s(u, j )” with each inequality written from the other side. The swap (i, j ) 7 → (j, i ) is a bijection on the set of ordered pairs with i̸ = j, so summing this identity over that set matches the two totals in Eq. (65) term by term and proves Eq. (63). 
+
+Remark on ties and the scope of the identity. Both indicators in Eq. (64) use strict inequalities, so f and f ′ both exclude a tied pair and the bijection is unaffected. The identity requires neither tie-breaking nor distinct scores. With ties, the rank of 
+
+i can also change through pairs that tie in either score, while 
+
+Pi − Qi counts only strict ranking changes. Corollary 1 uses no relevance labels. It bounds Pi + Qi, and hence |Pi − Qi|,by the number of pairs involving i whose collaborative score gap is at most 2Ru. Proposition 7 adds that the net changes 
+
+Pi − Qi sum to zero over all targets. If a target’s collaborative score is distinct, Proposition 2 equates Pi − Qi with its rank improvement at every budget except its change points. 
+
+H. Proof of Proposition 2 Proof. Fix a user u, a trained model under (A5), a target i ∈Cu whose collaborative score differs from all others, and a budget κ > 0 that avoids every positive change point of i.
+
+Step 1. Every pair with i is strictly ordered. If δu,ij = 0 ,Eq. (44) gives s(u, i ) − s(u, j ) = γu,ij ̸ = 0 . If δu,ij ̸ = 0 ,Eq. (45) gives a nonzero difference because κ̸ = κu,ij . Both rankings therefore order each pair involving i strictly, and Eq. (20) counts every ranking change of these pairs. 
+
+Step 2. The rank identity. The final rank of i is one plus the number of competitors scoring above it. Of the ρu(i) − 1
+
+competitors with higher collaborative scores, Pi fall below 
+
+i and the rest stay above it. By Eq. (20), exactly Qi lower competitors rise above i, which gives the identity in Eq. (21). 
+
+Step 3. Change points determine the counts. Take a com-petitor j with a(u, j ) > a (u, i ), so that γu,ij < 0. By Step 4 of the proof of Lemma 1 and the remark after it, this pair changes ranking at some κ > 0 only if δu,ij > 0, and then κu,ij > 0.ARXIV PREPRINT 22 
+
+Eq. (46) shows that j lies below i exactly when κ > κ u,ij .Therefore, Pi counts the competitors with higher collaborative scores whose change points with i lie in (0 , κ ). Symmetrically, for γu,ij > 0 and δu,ij < 0, Qi counts the competitors with lower collaborative scores whose change points lie in (0 , κ ).
+
+Step 4. The large-budget limit. Let κ exceed every positive change point of i. Then Pi counts the higher competitors with 
+
+guj < g ui , and Qi counts the lower competitors with guj >gui . Since no competitor ties the target i in collaborative score, substituting these counts into Eq. (21) gives its final rank: 
+
+˜ρu(i) − 1 = {j : guj > g ui }
+
++ {j : guj = gui , a (u, j ) > a (u, i )} . (66) Because tanh is strictly increasing and τr > 0, guj > g ui 
+
+holds exactly when cuj > c ui . Eq. (66) is therefore the rank of i by similarity, with ties broken by collaborative order. 
+
+I. Entry Budget 
+
+Corollary 3 (Entry Budget) . Under the conditions of Propo-sition 2, an item j with ρu(j) > K lies in the final top-K list exactly when Pj − Qj ≥ ρu(j) − K. We call this condition the entry rule. If it holds at some budget, let κin  
+
+> u,j
+
+be the infimum of such budgets. This entry budget is the smallest positive change point of j with the rule holding just above it, and the collaborative boundary gap of j bounds it from below: 
+
+κin  
+
+> u,j
+
+≥ γ(K)
+
+> u,j
+
+2σu tanh(1 /τ r ) . (67) 
+
+Proof. Fix an item j with ρu(j) > K as in Proposition 2. 
+
+Step 1. The entry rule. By Eq. (21), the final rank of j
+
+satisfies ˜ρu(j) ≤ K exactly when Pj − Qj ≥ ρu(j) − K.
+
+Step 2. The entry budget is a change point. By Proposition 2, 
+
+Pj and Qj stay constant between consecutive positive change points of j and above the largest one, so the membership of j
+
+in the final top-K list is constant there too. Below the smallest positive change point both counts vanish and ˜ρu(j) = ρu(j) >K. The budgets other than change points that place j in the list therefore form a union of these open intervals. Their infimum is the left end of the first one, which is the smallest positive change point of j with the entry rule holding just above it. 
+
+Step 3. The residual bound. At every budget κ that places 
+
+j in the list, Theorem 1 gives γ(K) 
+
+> u,j
+
+≤ 2κσ u tanh(1 /τ r ).Dividing by 2σu tanh(1 /τ r ) > 0 and taking the infimum over these budgets proves the lower bound stated in Eq. (67). 
+
+Remark on a sharper bound. The entry rule requires 
+
+Pj ≥ ρu(j) − K, so j must pass at least ρu(j) − K com-petitors with higher collaborative scores. Passing such acompetitor i requires δu,ji > 0 by Step 4 of the proof of Lemma 1. Eq. (41) gives δu,ji ≤ 2 tanh(1 /τ r ), so the change point satisfies κu,ij = −γu,ij /(σuδu,ij ) = γu,ij /(σuδu,ji ) ≥
+
+γu,ij /(2 σu tanh(1 /τ r )) . The entry budget is thus at least the 
+
+(ρu(j)−K)th smallest positive change point of j with a higher competitor. The competitors that j can pass form a subset of the higher competitors, so their (ρu(j) − K)th smallest gap is at least γ(K) 
+
+> u,j
+
+, its value over all higher competitors. This sharper bound thus implies Eq. (67) and is at least as tight. 
+
+Remark on leaving the list. Change points with lower competi-tors raise Qj , so j can leave the list after entering it. Take three candidates with collaborative scores 1, 0.8, and 0, and shape terms 0, 0.2 tanh(1 /τ r ), and 0.5 tanh(1 /τ r ). For K = 1 , the second candidate leads between its change points with the first and the third candidates, and the third leads beyond. 
+
+J. Convergence of the Projector Updates 
+
+We analyze the server’s SGD on the projector with fixed collaborative parameters, without momentum or clipping, and condition on the initial projector ϕ0. The client sampling distribution is fixed and independent of the past iterates. For each nonempty participating set, let αu,t ≥ 0 sum to one over its members and depend only on that set and fixed client data counts. Set αu,t = 0 outside St. Then ¯αu = E[αu,t ] is independent of t, P 
+
+> u
+
+¯αu = 1 , and the objective J¯α satisfies: 
+
+J¯α(ϕ) = λ X
+
+> u
+
+¯αuLu(s) = ESt
+
+"
+
+λ X
+
+> u∈S t
+
+αu,t Lu(s)
+
+#
+
+. (68) These weights ¯αu can differ from the weights αu of Eq. (11). For example, suppose each round selects mc clients uniformly without replacement and weights them by their data counts 
+
+|H u|. The aggregation weight of client u in each round is: 
+
+αu,t = 1{u ∈ S t}|H u|
+
+P 
+
+> u′∈S t
+
+|H u′ | . (69) With equal data counts, each selected client receives weight 
+
+1/m c and is selected with probability mc/N . Consequently, 
+
+¯αu = ( mc/N )(1 /m c) = 1 /N . With unequal data counts, the normalization depends on the sampled set. Selecting one client per round still gives ¯αu = 1 /N , whereas full participation gives ¯αu = |H u|/ P 
+
+> u′
+
+|H u′ |. Participation can thus change the optimized objective even with unbiased local gradients. 
+
+Assumption 1 (Conditional Regularity) . The fixed objective 
+
+J¯α is bounded below by J¯α, inf and has an L-Lipschitz gradient. Given the sampled clients, the sampled gradients of λLu(s) are unbiased with finite second moments. 
+
+Smoothness must be assumed, because the derivative of Π
+
+in Eqs. (4) and (6) can jump where its input has norm ε.Let gu,t,e be client u’s sampled gradient of λLu(s) with respect to ϕ at local step e of round t. All local steps read the table Zt, so their gradients are taken at ϕt. By the chain rule, the server update in Algorithm 1 moves ϕ along the direction: 
+
+bgt = X
+
+> u∈S t
+
+αu,t 
+
+1
+
+E
+
+> E
+
+X
+
+> e=1
+
+gu,t,e . (70) Let Et condition on all randomness before round t, and let 
+
+Vt = Et∥bgt − Et[bgt]∥22 be the variance of this direction. 
+
+Theorem 2 (Stationarity Bound) . Under Assumption 1, let 
+
+¯η = ηsE > 0 with L¯η ≤ 1 and ϕt+1 = ϕt − ¯ηbgt. Then: 
+
+1
+
+T 
+
+> T−1
+
+X
+
+> t=0
+
+E∥∇J ¯α(ϕt)∥22
+
+≤ 2[ J¯α(ϕ0) − J ¯α, inf ]¯ηT + L¯ηT 
+
+> T−1
+
+X
+
+> t=0
+
+EVt.
+
+(71) ARXIV PREPRINT 23 
+
+Proof. Every local step of client u reads the same table Zt
+
+computed at ϕt. By the chain rule through hϕ, the gradient 
+
+Gtu that client u uploads in Algorithm 1 then satisfies: 
+
+X
+
+> i∈I
+
+ ∂zi
+
+∂ϕ ϕt
+
+⊤
+
+[Gtu]i =
+
+> E
+
+X
+
+> e=1
+
+gu,t,e , (72) where [Gtu]i is row i of Gtu and gu,t,e is the sampled gradient of λLu(s) at ϕt for the pairs of local step e. Back-propagation is linear, so the server update of Algorithm 1 takes the form: 
+
+ϕt+1 = ϕt − ηs
+
+X
+
+> u∈S t
+
+αu,t EX
+
+> e=1
+
+gu,t,e = ϕt − ¯η bgt, (73) with ¯η = ηsE and the aggregated direction bgt from Eq. (70). Write ¯gt = ∇J ¯α(ϕt). Given the sampled clients St, each 
+
+gu,t,e is unbiased for the gradient of λLu(s) at ϕt by As-sumption 1, and αu,t depends only on St, so bgt is unbiased: 
+
+Et[bgt] = λ X
+
+> u
+
+¯αu∇ϕLu(s) ϕ=ϕt = ¯ gt. (74) With Vt as in Theorem 2, this gives Et[∥bgt∥22] = ∥¯gt∥22 + Vt.By the L-smoothness of J¯α, the descent lemma gives: 
+
+J¯α(ϕt+1 ) ≤ J ¯α(ϕt) − ¯η⟨¯gt, bgt⟩ + L¯η2
+
+2 ∥bgt∥22. (75) The conditional expectation of Eq. (75) with Eq. (74) gives: 
+
+Et[J¯α(ϕt+1 )] ≤ J ¯α(ϕt) −
+
+
+
+¯η − L¯η2
+
+2
+
+
+
+∥¯gt∥22 + L¯η2
+
+2 Vt. (76) Under ¯η > 0 and L¯η ≤ 1, the coefficient of ∥¯gt∥22 is at least 
+
+¯η/ 2, so rearranging and dividing by ¯η/ 2 gives the bound: 
+
+∥¯gt∥22 ≤ 2¯η
+
+ J¯α(ϕt) − Et[J¯α(ϕt+1 )]  + L¯ηV t. (77) Taking total expectation and summing over rounds gives:  
+
+> T−1
+
+X
+
+> t=0
+
+E∥¯gt∥22 ≤ 2¯η
+
+ J¯α(ϕ0) − EJ¯α(ϕT )
+
++ L¯η 
+
+> T−1
+
+X
+
+> t=0
+
+EVt.
+
+(78) The lower bound J¯α ≥ J ¯α, inf of Assumption 1 gives: 
+
+J¯α(ϕ0) − EJ¯α(ϕT ) ≤ J ¯α(ϕ0) − J ¯α, inf . (79) Dividing both sides by T proves the bound in Eq. (71). 
+
+a) Convergence Rate: The bound separates the initial ob-jective gap from the variance of stochastic sampling. To obtain an explicit rate, choose the constant step size ¯η = T −1/2 for a run of T ≥ L2 rounds, which meets L¯η ≤ 1, and assume 
+
+EVt ≤ V for a constant V < ∞. Eq. (71) then gives: 
+
+1
+
+T 
+
+> T−1
+
+X
+
+> t=0
+
+E∥¯gt∥22 ≤ 2[ J¯α(ϕ0) − J ¯α, inf ] + LV 
+
+√T . (80)

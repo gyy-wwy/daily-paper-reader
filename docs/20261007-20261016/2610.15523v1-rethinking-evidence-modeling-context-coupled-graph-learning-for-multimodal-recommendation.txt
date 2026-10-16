@@ -1,0 +1,1117 @@
+Title: Rethinking Evidence Modeling: Context-Coupled Graph Learning for Multimodal Recommendation
+
+URL Source: https://arxiv.org/pdf/2610.15523v1
+
+Published Time: Wed, 14 Oct 2026 01:42:03 GMT
+
+Number of Pages: 13
+
+Markdown Content:
+# Rethinking Evidence Modeling: Context-Coupled Graph Learning for Multimodal Recommendation 
+
+# Mingqiao Zhang 
+
+Nanjing University Nanjing, China mingqiaozhang@smail.nju.edu.cn 
+
+# Qiyao Peng ∗
+
+Tianjin University Tianjin, China qypeng@tju.edu.cn 
+
+# Yumeng Wang 
+
+Tianjin University Tianjin, China ymwang@tju.edu.cn 
+
+# Wenzhe Dong 
+
+Tianjin University Tianjin, China dongwz@tju.edu.cn 
+
+# Hongtao Liu 
+
+Tianjin University Tianjin, China htliu@tju.edu.cn 
+
+# Jian Yang 
+
+Beihang University Beijing, China jiaya@buaa.edu.cn 
+
+## Abstract 
+
+Multimodal graph recommendation integrates observed interac-tions with item images and text to learn user preferences. These in-puts constitute Semantic–Behavioral Evidence (SBE). Many existing graph methods incorporate collaborative and multimodal semantic relations, yet their aggregation and state updates remain context-separated, limiting the continuous composition of preference evi-dence across layers and the joint use of multiple sources. To address this limitation, we propose CC-MGRec, a context-coupled graph learning method that organizes SBE within a common graph learn-ing context for cross-relation modeling and compositional propaga-tion. Its context-coupled multimodal graph integrates user–item col-laborative relations and item–item semantic relations, coordinating their message scales through joint normalization. Recommendation-grounded semantic calibration uses training behavior to adjust se-mantic neighbor weights while preserving normalized collaborative propagation coefficients. Collaborative–semantic compositional propagation updates shared node states layer by layer to contin-uously compose collaborative and multimodal semantic evidence, implicitly forming Preference Evidence Chains (PECs), including collaborative–semantic and visual–textual PECs. Joint execution of relation messages on the same shared node states within each layer preserves propagation outputs while reducing intermediate output processing and fusion overhead. We provide theoretical anal-ysis of the proposed mechanisms. Experiments on three Amazon datasets demonstrate improved recommendation quality and faster inference during graph propagation. 
+
+## CCS Concepts 
+
+• Information systems → Recommender systems .
+
+## Keywords 
+
+Multimodal recommendation, evidence modeling, context-coupled graph learning, preference evidence chains 
+
+## 1 Introduction 
+
+Multimodal graph recommendation expresses SBE as node infor-mation and graph relations, and forms preference representations through propagation and fusion [32]. At the representation level, VBPR incorporates visual content into preference representations, 
+
+> ∗Corresponding author.
+
+MMGCN learns modality-specific representations on the interac-tion graph, and SG-URInit constructs model-agnostic user initializa-tions from historical item features and cluster information [9, 30, 33]. UGT jointly optimizes image–text feature extraction and recom-mendation learning, aggregating multimodal content and ID in-formation on the interaction graph [34]. Evidence modeling also organizes graph relations and state updates. GRCN refines observed interactions using content–preference agreement; LATTICE and FREEDOM construct content-derived item graphs, while DualGNN introduces user associations [26, 29, 39, 41]. In rating-feedback settings, SiMGR represents interactions through positive and neg-ative relation graphs [18]. For state updates, MIG-GT maintains modality-specific node states and receptive fields on the same in-teraction graph, whereas DHMRec passes interaction-graph states into subsequent item-graph learning [11, 37]. These studies enrich evidence content, associations, and fusion strategies. Yet does expressing diverse evidence as node informa-tion and graph relations suffice for evidence carried by different relations to compose continuously across layers and jointly sup-port preference learning? To answer this question, we examine the learning environment formed by node information, weighted relation neighborhoods, normalization, and state updates, which we term the graph learning context [10]. Among representative designs using both collaborative and item–item semantic relations, fusion, alignment, or stage-wise transfer connects modality-specific or relation-specific state streams. The two relation types do not jointly update the same evolving node states at every layer. We refer to this organization as context-separated .Figure 1 contrasts learning from the same SBE under separate and coupled contexts. The illustrated separate context maintains relation-specific node states. In a context-coupled organization, col-laborative and semantic relations jointly determine message scales through joint normalization and update shared node states at ev-ery layer. Evidence aggregated through one relation can therefore continue through other relations in subsequent layers. We use Pref-erence Evidence Chains (PECs) to denote ordered, weighted propaga-tion contributions implicitly formed by multilayer graph learning and incorporated into recommendation representations. Relative to the illustrated separate context, shared node-state updates re-tain within-relation PECs and support two additional compositions. 
+
+Collaborative–semantic PECs (C–S PECs) allow interaction evidence to continue through item semantic relations and semantic evidence                                  
+
+> 1arXiv:2610.15523v1 [cs.IR] 11 Oct 2026 Mingqiao Zhang et al. SBE Graph learning context PEC examples
+> V Visual T Textual
+> i₁Basketball for indoor court play…
+> i₂A weighted ball for strength training…
+> i₃Elastic bands for strength training…
+> i₄Dumbbell for home fitness training…
+> i₅Travel backpack for outdoor trips…
+> …
+> C Interactions
+> u₁…
+> u₂…
+> u₃…
+> Context-separated
+> u₁
+> u₂
+> i₁
+> i₂
+> i₃
+> i₄
+> i₁
+> i₂
+> i₄
+> i₂
+> i₃
+> i₄
+> i₈
+> CVT
+> Context-coupled
+> u₁
+> u₂
+> i₁
+> i₂
+> i₃
+> i₄i₈
+> Shared node states
+> Within-relation PECs
+> +Additional PECs
+> CCi₁u₁i₂
+> C–C
+> VVi₁i₂i₄
+> V–V
+> TT
+> i₂
+> strength
+> i₃
+> strength
+> i₄
+> fitness
+> T–T
+> CTu₁i₂
+> strength
+> i₃
+> strength C–S
+> VTi₁i₂
+> strength
+> i₃
+> strength V–T
+> C interaction V visual T textual V/T form S
+> C+S× H Joint execution
+
+Figure 1: From SBE to PECs under context-separated and context-coupled graph learning. Gold highlights the addi-tional C–S and V–T PECs relative to the illustrated separate context. 
+
+to re-enter collaborative learning. Visual–textual PECs (V–T PECs) allow evidence aggregated through one modality’s relations to con-tinue through the other, composing the item connections revealed by both modalities. Two preliminary diagnostics examine the recommendation value of these compositions. C–S PEC support formed from training in-teractions and the pre-calibration semantic graph covers 10.84% of held-out positives on Baby versus 1.32% of matched unseen controls (Figure 2(a)). In fixed trained models, removing V–T PEC contributions while retaining constituent evidence, relation sup-port, and single-modality paths produces the largest ranking losses in high-exposure groups; some low-exposure groups change lit-tle or improve (Figure 2(b)). These support-coverage differences and within-model ranking effects provide preliminary empirical motivation for supporting useful evidence compositions. Motivated by these observations, we propose Context-Coupled Graph Learning , implemented by CC-MGRec, which organizes SBE into a common graph learning context through graph con-struction, semantic calibration, and compositional propagation. 
+
+Context-Coupled Multimodal Graph Construction (CC-MG) organizes node information and weighted relations from multi-modal content and training behavior, jointly normalizing collabo-rative and semantic relations. Under joint normalization, semantic reweighting can also alter collaborative propagation coefficients. 
+
+Recommendation-Grounded Semantic Calibration (RGSC) reallocates semantic neighbor weights using training behavior while preserving normalized collaborative propagation coefficients, with collaborative relations and other construction settings fixed. 
+
+Collaborative–Semantic Compositional Propagation (CSCP) then updates shared node states layer by layer to implicitly form and aggregate C–S and V–T PECs. Shared states also support joint execution of relation messages. For identical relation operators and current-layer input states, a single assembled sparse operator pro-duces outputs equivalent to relation-wise computation followed by summation, while reducing intermediate output accesses, fusion operations, and operator calls during graph-propagation inference. Matched control Held-out positive 
+
+04812 
+
+> C-S PEC coverage (%)
+
+1.32% 10.84% 8.19× 
+
+(a) 
+
+None Low Medium High 
+
+V-T PEC exposure 
+
+−1 0123
+
+> ΔHit@20 (pp)
+
++1.20 +1.04 +2.63 
+
+(b) Baby Sports Clothing 
+
+Figure 2: Preliminary diagnostics of PEC composition. (a) C–S PEC support coverage of held-out positives and matched unseen controls on Baby, using training interactions and the pre-calibration semantic graph. (b) Hit@20 differences (with minus without V–T PEC contributions) in fixed models, grouped by pre-removal exposure. Error bars indicate user-clustered 95% confidence intervals. 
+
+On Amazon Baby, Sports, and Clothing, CC-MGRec achieves the highest mean Recall and NDCG among the compared models and faster graph-propagation inference than MIG-GT. Our contributions are: 
+
+• We propose CC-MGRec, a context-coupled graph learning framework that uses joint normalization and shared node-state updates to continuously compose SBE across layers, with C–S and V–T PECs characterizing cross-relation and cross-modal propagation contributions. 
+
+• We develop recommendation-grounded semantic calibra-tion that preserves normalized collaborative propagation coefficients, and output-equivalent joint execution that re-duces relation-level intermediate output accesses and fusion overhead. 
+
+• We analyze evidence composition, calibration invariance, and execution equivalence, and evaluate recommendation quality and graph-propagation inference efficiency on three datasets. Preliminary diagnostics, retrained mechanism con-trols, and output-equivalent execution experiments test the corresponding mechanisms. 
+
+## 2 Related Work 2.1 Multimodal Recommendation 
+
+Multimodal recommendation extracts complementary preference evidence from item content and user behavior [20]. Images and text describe item appearance, attributes, and usage, observed in-teractions reflect behavioral preferences [19], and behavioral co-occurrence reveals user or item associations supported by common interactions. VBPR and ACF incorporate content into preference representations [3, 9]. SLMRec, MMSSL, and BM3 enhance multi-modal representations through self-supervised learning [25, 28, 42], while SMORE improves representation quality through spectrum-based denoising and modality fusion [22]. Evidence utilization also 
+
+> 2Rethinking Evidence Modeling: Context-Coupled Graph Learning for Multimodal Recommendation
+
+Table 1: Comparison of evidence modeling and PEC support. NI : modality content in initial node states; CO : explicit behavioral co-occurrence statistics; SR : item semantic relations; BW : seman-tic weights conditioned on behavioral inputs; JN : joint normaliza-tion of observed interactions and semantic relations; SS : shared node updates across both relation types at every layer. C–S/V–T :collaborative–semantic/visual–textual PECs. Architectural support assumes valid paths and sufficient propagation depth.                                                                                                                 
+
+> Evidence expression Graph construction and propagation PEC support Method NI CO SR BW JN SS C–S V–T
+> MMGCN ✓×××××××
+> GRCN ✓×××××××
+> DualGNN ✓✓××××××
+> MIG-GT ✓×××××××
+> UGT ✓×××××××
+> LATTICE ××✓××××✓
+> MICRO ××✓×××××
+> FREEDOM ××✓××××✓
+> MGCN ✓×✓×××✓×
+> DHMRec ✓×✓×××✓✓
+> SCALE ××✓×××××
+> IGDMRec ×✓✓✓×××✓
+> CC-MGRec ✓✓✓✓✓✓✓✓
+
+extends to input augmentation, initialization, and behavioral as-sociation modeling. SG-URInit constructs user initializations from historical item features and group information [33]; MLLMRec enhances preference reasoning with multimodal large language models [5]; GRE-MC completes missing modalities through graph retrieval [16]. DualGNN uses common interactions to establish user associations [26], IGDMRec incorporates item co-occurrence infor-mation to refine semantic relations [6], and BRIDGE uses behavior to calibrate candidate scores [17]. These studies enrich the evidence used for preference learning and the ways in which it is exploited [23]. 
+
+## 2.2 Graph Learning for Recommendation 
+
+Graph learning organizes evidence as nodes and relations, model-ing higher-order associations through neighborhood propagation [27]. Table 1 compares representative methods across evidence expression, graph construction and propagation, and PEC support. EgoGCN organizes multimodal messages through edge-wise modulation, while GRCN refines observed interaction relations [2, 29]. LATTICE, MICRO, FREEDOM, and MGCN introduce item semantic relations [35, 39–41]; LGMRec and DOGE further incor-porate higher-order structures [7, 21]. In rating-feedback settings, SiMGR distinguishes positive and negative interaction relations [18]. Propagation organization determines how evidence carried by different relations participates in state updates. MMGCN and MIG-GT use modality-specific propagation [11, 30], whereas CRANE, MGCN, and DHMRec connect collaborative and semantic learning through staged updates [4, 35, 37]. UGT unifies multimodal feature learning on the interaction graph [34], while SCALE learns col-laborative and semantic representations separately and connects them through alignment and fusion [15]. These studies organize evidence through different graph construction and propagation choices. From the perspective of PECs, existing structures support different forms of evidence composition. MGCN and DHMRec sup-port C–S PECs through cross-relation state transfer [35, 37], while the merged semantic relations in LATTICE and FREEDOM support V–T PECs at sufficient propagation depth [39, 41]. Graph learning research also addresses propagation efficiency [1]. HAGs reduce redundant computation through aggregation reuse [13], while Hec-tor and TLV-HGNN optimize relational graph computation [8, 31]. Our CC-MGRec organizes multimodal content, observed interac-tions, and behavioral co-occurrence information within a common graph learning context to support continuous evidence composition across relations and efficient inference. 
+
+## 3 Problem Formulation 
+
+Let U = {𝑢 } and I = {𝑖 } denote the user and item sets, with 
+
+𝑀 = |U| and 𝑁 = |I| . Training interactions are represented by 
+
+R ∈ { 0, 1}𝑀 ×𝑁 , where 𝑅 𝑢𝑖 = 1 indicates an observed interaction. We write N𝑢 = {𝑖 ∈ I | 𝑅 𝑢𝑖 = 1} for the training history of user 𝑢 ,
+
+U𝑖 = {𝑢 ∈ U | 𝑅 𝑢𝑖 = 1} for the users associated with item 𝑖 , and 
+
+𝑑 𝑖 = |U 𝑖 | for its interaction degree. Each item has a visual feature 
+
+x𝑣 𝑖 ∈ R𝑑 𝑣 and a textual feature x𝑡 𝑖 ∈ R𝑑 𝑡 extracted by pretrained models. We distinguish observed user–item interactions, denoted by E𝑐 ,from content-supported item–item relations, denoted by E𝑠 . Both are defined over V = U ∪ I . For a directed weighted adjacency 
+
+A, we use the destination-by-source convention: 𝐴 𝑝𝑞 is the weight of the message from source 𝑞 to destination 𝑝 , and propagation is written as AH . We use [𝑥 ]+ = max (𝑥, 0), sigmoid 𝜎 , and norm for vector ℓ2 normalization. Given R and the item features, our goal is to rank unobserved items for each user. 
+
+## 4 Methodology 4.1 Framework Overview 
+
+CC-MG is the core of CC-MGRec: it organizes multimodal node information and weighted collaborative and semantic relations in a shared graph learning context (Figure 3). RGSC refines se-mantic neighbor weights using training behavior while preserving their incoming budgets. CC-MG combines these calibrated con-nections with semantic node anchors and weighted interactions, then jointly normalizes the resulting graph. CSCP learns from this graph through one evolving node state, enabling cross-relation composition in a single propagation stream. We first introduce the calibration rule used by CC-MG, followed by graph construction, propagation, and recommendation learning. 
+
+## 4.2 Recommendation-Grounded Semantic Calibration 
+
+RGSC aligns semantic neighbor strengths with training behavior. Given the candidate support E𝑠 and initial weights 𝑤 𝑠 𝑖 →𝑗 from CC-MG, it reallocates neighbor weights while preserving each destina-tion’s incoming semantic budget. The resulting semantic block ¯ S
+
+supplies behaviorally calibrated connections to the shared graph. 
+
+> 3Mingqiao Zhang et al.
+
+SBE  CC -MG  Context -coupled graph 
+
+i
+
+₂ V T
+
+> Weighted ball
+> for strength
+> training
+> Training interactions R
+
+Node initialization 
+
+> ID + scaled anchors
+
++
+
+H
+
+⁽⁰
+
+⁾
+
+> All nodes
+
+V
+
+T
+
+C–S PEC 
+
+V–T PEC 
+
+Shared state 
+
+C edge weights 
+
+> Profile
+> agreement
+> Degree
+> gate
+
+qᵤᵢ  ηᵢ  
+
+> (1−ηᵢ)qᵤᵢ ηᵢ
+
+u
+
+₁
+
+u
+
+₂ i
+
+₁
+
+i
+
+₂
+
+i
+
+₃
+
+i
+
+₄
+
+i
+
+₅
+
+V/T Top -K union  
+
+> R → αᵥ, α
+> ₜ
+
+RGSC   
+
+> Incoming weights to i₂
+> Raw
+> i
+> ₁i
+> ₃i
+> ₄
+> Training behavior
+
+Calibrated   
+
+> i
+> ₁i
+> ₃i
+> ₄
+> Same support and budget
+
+Joint normalization 
+
+C + S̄  D Â
+
+CSCP 
+
+Joint 
+
+execution 
+
+H
+
+⁽ℓ
+
+⁺¹
+
+⁾ = Â H 
+
+⁽ℓ
+
+⁾
+
+> u
+
+₁
+
+> i
+
+₂
+
+> i
+
+₃
+
+> i
+
+₄
+
+…
+
+…
+
+H
+
+⁽⁰
+
+⁾
+
+> u
+
+₁
+
+> i
+
+₂
+
+> i
+
+₃
+
+> i
+
+₄
+
+…
+
+…
+
+H
+
+⁽¹
+
+⁾
+
+> u
+
+₁
+
+> i
+
+₂
+
+> i
+
+₃
+
+> i
+
+₄
+
+…
+
+…
+
+H
+
+⁽²
+
+⁾
+
+> u
+
+₁
+
+> i
+
+₂
+
+> i
+
+₃
+
+> i
+
+₄
+
+…
+
+…
+
+H
+
+⁽ᴸ
+
+⁾
+
+…
+
+> Mean 0…L
+> avg
+
+h̄ ᵤ
+
+h̄ ᵢ ·
+
+> Inner product
+
+Ranking 
+
+1
+
+2
+
+> 1 sparse multiplication / layer
+
+Figure 3: Overview of CC-MGRec. CC-MG (top) organizes SBE into node information and weighted collaborative and semantic relations in a jointly normalized context-coupled graph. RGSC (right) reallocates semantic neighbor weights while preserving support and each item’s incoming budget. CSCP (bottom) jointly updates a shared node state with one sparse operator, then averages all propagation depths for inner-product recommendation. 
+
+Behavioral relevance. Context–target co-occurrences measure whether a semantic neighbor is more relevant than its popular-ity alone would suggest. We divide each eligible user history into 
+
+𝐹 𝑢 = min (𝐹, |N 𝑢 |) folds, using each fold once as target and the others as context. For a supported direction 𝑖 → 𝑗 , let 𝑛 𝑖 →𝑗 count context–target co-occurrences, 𝜈 𝑖 count the corresponding target opportunities, and 𝑝 𝑗 = 𝑑 𝑗 /Í𝑘 𝑑 𝑘 be the popularity prior. Smooth-ing toward this prior with 𝜇 > 0 gives the log lift 
+
+ℓ𝑖 →𝑗 = log 𝑛 𝑖 →𝑗 + 𝜇𝑝 𝑗 
+
+(𝜈 𝑖 + 𝜇 )𝑝 𝑗 
+
+. (1) A bounded relevance score combines both directions and dis-counts limited behavioral evidence. Define the average lift ¯ ℓ𝑖 𝑗 =
+
+(ℓ𝑖 →𝑗 + ℓ𝑗 →𝑖 )/ 2 and endpoint confidence 𝑟 𝑖 = 𝜈 𝑖 /( 𝜈 𝑖 + 𝜇 ). The pair confidence 𝜒 𝑖 𝑗 = √𝑟 𝑖 𝑟 𝑗 then scales the transformed lift: 
+
+𝜙 𝑖 𝑗 = 𝜒 𝑖 𝑗 tanh 
+
+ 𝜎 ( ¯ℓ𝑖 𝑗 ) − 1/2
+
+𝜏 𝑟 
+
+
+
+. (2) Here 𝜏 𝑟 > 0 controls sensitivity to the averaged lift. Positive scores favor a neighbor, while negative scores reduce its weight through the adjustment below. 
+
+Budget-preserving reallocation. Calibration first adjusts individ-ual weights, then restores each destination’s original semantic bud-get. With strength 𝛾 ≥ 0, the intermediate weight is 
+
+e𝑤 𝑠 𝑖 →𝑗 = 𝑤 𝑠 𝑖 →𝑗 exp (𝛾𝜙 𝑖 𝑗 ). (3) Let B𝑠 𝑗 = Í𝑘 :(𝑘,𝑗 ) ∈ E 𝑠 𝑤 𝑠 𝑘 →𝑗 denote the raw incoming budget. Rescal-ing the intermediate weights gives ¯𝑤 𝑠 𝑖 →𝑗 = B𝑠 𝑗 
+
+e𝑤 𝑠 𝑖 →𝑗 
+
+Í𝑘 :(𝑘,𝑗 ) ∈ E 𝑠 e𝑤 𝑠 𝑘 →𝑗 
+
+. (4) This update preserves the nonzero support and satisfies Í𝑖 ¯𝑤 𝑠 𝑖 →𝑗 =
+
+B𝑠 𝑗 . Zero-budget destinations retain zero weights. The calibrated semantic block ¯ 𝑆 𝑗𝑖 = ¯𝑤 𝑠 𝑖 →𝑗 is zero outside E𝑠 .
+
+## 4.3 Context-Coupled Multimodal Graph Construction 
+
+CC-MG organizes node information, relation connectivity, and re-lation strength for learning in one propagation stream. Visual and textual neighborhoods supply semantic connections; behavioral agreement determines their modality contributions, and RGSC cali-brates individual neighbor weights. Semantic anchors provide node information and also guide interaction weighting. The weighted 
+
+> 4Rethinking Evidence Modeling: Context-Coupled Graph Learning for Multimodal Recommendation
+
+relations are assembled and jointly normalized into a common propagation operator. Together, these choices determine what rec-ommendation evidence is available and how it enters the shared node state. 
+
+Semantic neighborhoods. Visual and textual neighborhoods contribute their respective semantic connections to one edge support. For 𝑚 ∈ { 𝑣, 𝑡 }, projections 𝑓 𝑚 map item features into a shared 𝑑 -dimensional space. We obtain normalized codes 
+
+z𝑚 𝑖 = norm (𝑓 𝑚 (x𝑚 𝑖 )) and nonnegative affinities 𝑔 𝑚 𝑖 𝑗 = [( z𝑚 𝑖 )⊤z𝑚 𝑗 ]+.Let N𝑚 𝑖 contain the top-𝐾 other items under modality 𝑚 . We retain a pair if either endpoint retrieves the other: 
+
+𝐵 𝑚 𝑖 𝑗 = I[ 𝑗 ∈ N 𝑚 𝑖 ∨ 𝑖 ∈ N 𝑚 𝑗 ]. (5) The union E𝑠 = {( 𝑖, 𝑗 ) : 𝐵 𝑣 𝑖 𝑗 + 𝐵 𝑡 𝑖 𝑗 > 0} includes both directions of each retained pair, allowing either modality to establish a semantic connection. The retrieval budget 𝐾 applies to each modality before their supports are combined. 
+
+Behavior-informed modality weights. Behavioral agreement sets the relative contributions of visual and textual relations. We form a co-occurrence reference 𝑜 𝑖 𝑗 = |U 𝑖 ∩ U 𝑗 |/ √︁ 𝑑 𝑖 𝑑 𝑗 and denote its top-
+
+𝐾 neighbors by C𝑖 . The average overlap 𝑎 𝑚 = (𝑁 𝐾 )−1 Í𝑖 |N 𝑚 𝑖 ∩C𝑖 | measures this agreement. A temperature 𝜏 𝛼 > 0 controls the concentration of the resulting global modality weights: 
+
+𝛼 𝑚 = exp (𝑎 𝑚 /𝜏 𝛼 )
+
+Í𝑚 ′ ∈ { 𝑣,𝑡 } exp (𝑎 𝑚 ′ /𝜏 𝛼 ) . (6) These weights combine the supported affinities into raw semantic edge weights, with 𝛽 > 0 setting their overall strength: 
+
+𝑤 𝑠 𝑖 →𝑗 = 𝛽 ∑︁  
+
+> 𝑚 ∈ { 𝑣,𝑡 }
+
+𝛼 𝑚 𝐵 𝑚 𝑖 𝑗 𝑔 𝑚 𝑖 𝑗 . (7) The raw semantic block is 𝑆 0 
+
+> 𝑗𝑖
+
+= 𝑤 𝑠 𝑖 →𝑗 . We apply RGSC (Eq. 4) to obtain ¯ S with the same incoming budgets. Thus, 𝛼 𝑚 sets contribu-tions across modalities, while RGSC refines the allocation among individual neighbors. The same 𝛼 𝑚 also combines modalities in the node anchors. 
+
+Multimodal node information. Semantic anchors provide a com-mon profile for initializing nodes and weighting their interactions. An item anchor combines its modality codes using the graph’s modality weights: 
+
+e𝑠 𝑖 = norm ©«∑︁ 𝑚 ∈ { 𝑣,𝑡 }
+
+𝛼 𝑚 z𝑚 𝑖 
+
+ª®¬
+
+. (8) A user anchor summarizes its training history and incorporates a group-level semantic prototype c𝑢 :
+
+e𝑠 𝑢 = norm  ∑︁  
+
+> 𝑖 ∈ N 𝑢
+
+𝜋 𝑢𝑖 e𝑠 𝑖 + 𝜉 c𝑢 
+
+!
+
+. (9) The history weights satisfy 𝜋 𝑢𝑖 ∝ ( 𝑑 𝑖 + 1)−1/2 and sum to one over 
+
+N𝑢 , reducing the relative influence of popular items; 𝜉 controls the group contribution. This local-plus-group initialization is related to SG-URInit [33]. ID embeddings and semantic anchors jointly initialize the node state. Let 𝑠 𝑝 = 𝑠 0 for users and 𝑠 𝑝 = 𝑠 0 + 𝛿 𝑝 for items; then 
+
+h(0) 
+
+> 𝑝
+
+= e𝑖𝑑 𝑝 + 𝑠 𝑝 e𝑠 𝑝 . (10) The learned scale 𝑠 0 controls semantic injection, with item-specific adjustments 𝛿 𝑖 given by a trainable scale predictor. Its outputs are centered and bounded by |𝛿 𝑖 | ≤ 𝜌 .
+
+Degree- and profile-aware interaction weights. Semantic profiles also determine the strength of observed interactions, connecting node information to graph weighting. Let 𝑞 𝑢𝑖 = [cos (e𝑠 𝑢 , e𝑠 𝑖 )] +
+
+measure this profile agreement. An item-degree gate controls its influence: 
+
+𝜂 𝑖 = 𝜎 (𝑎 𝑐 log (𝑑 𝑖 + 1) + 𝑏 𝑐 ). (11) Here 𝑎 𝑐 and 𝑏 𝑐 are scalar hyperparameters controlling degree sensi-tivity and gate offset, respectively. The resulting interaction weight is 
+
+𝐶 𝑢𝑖 = 𝑅 𝑢𝑖 
+
+ 𝜂 𝑖 + ( 1 − 𝜂 𝑖 )𝑞 𝑢𝑖 
+
+. (12) For an observed edge, 𝜂 𝑖 sets a positive baseline weight, and se-mantic agreement raises it toward one. Both directions use the same weight, retaining observed connectivity while modulating the strength of collaborative messages. 
+
+A shared graph learning context. The weighted collaborative and semantic relations jointly define the neighborhoods of one graph over users and items: 
+
+A =
+
+ 0 CC⊤ ¯S
+
+
+
+. (13) Write A = A𝑐 + A𝑠 , where A𝑐 contains the user–item blocks and 
+
+A𝑠 contains the item–item block. Joint normalization makes message strength depend on both relation families in this shared neighborhood. With D = Diag (A1 ),the shared operator is 
+
+bA = D−1/2AD −1/2. (14) For item 𝑗 , 𝐷 𝑗 𝑗 = Í𝑢 𝐶 𝑢 𝑗 + B 𝑠 𝑗 combines its interaction strength and preserved semantic budget. RGSC therefore adjusts semantic neighbor allocations without changing the normalized collaborative coefficients. CC-MG supplies CSCP with this single operator and the initial node states, so both relation families act on the same evolving representations. 
+
+## 4.4 Collaborative–Semantic Compositional Propagation 
+
+We extend LightGCN [10] to CC-MG through multimodal initializa-tion and collaborative–semantic propagation. CSCP jointly updates shared node states with both relation families at each layer. This shared-state update enables cross-relation composition; the assem-bled operator evaluates the updates in a single propagation stream. 
+
+Collaborative–semantic updates. Each layer updates users from their interacted items and items from both users and semantic neighbors. Let H(𝑙 )U and H(𝑙 )I denote the user and item states at layer 
+
+𝑙 , initialized by Eq. 10. The user–item and item–item blocks of bA
+
+are denoted by bC and bS, respectively. The user update is 
+
+H(𝑙 +1)U = bCH (𝑙 )I . (15) 
+
+> 5Mingqiao Zhang et al.
+
+The item update combines collaborative and semantic messages: 
+
+H(𝑙 +1)I = bC⊤H(𝑙 )U + bSH (𝑙 )I . (16) Here the first term aggregates user preferences along weighted interactions, and the second aggregates item information along cal-ibrated semantic relations. Both use CC-MG’s joint normalization and the same preceding node state. Shared-state updates carry recommendation evidence across relation types. User information arriving at an item can reach se-mantic neighbors in the next layer, while semantically enriched item states can flow back to users. Deeper updates extend these collaborative–semantic paths. Within the semantic block, visual and textual relation contribu-tions act on the same item states and can compose across layers to form V–T PECs. 
+
+Joint execution. A single sparse multiplication evaluates the user and item updates together. Stacking their states into H(𝑙 ) , we com-pute 
+
+H(𝑙 +1) = bAH (𝑙 ) . (17) The assembled operator directly produces the next joint state, com-bining collaborative and semantic messages in one sparse operation per layer. It avoids separately materializing and merging relation outputs. 
+
+Depth aggregation. The final representation combines initial node information with evidence propagated over different path lengths. After 𝐿 layers, we average the states: ¯H = 1
+
+𝐿 + 1
+
+> 𝐿
+
+∑︁ 
+
+> 𝑙 =0
+
+H(𝑙 ) . (18) The readout retains initial node information alongside evidence from collaborative, semantic, and mixed paths at different depths. 
+
+## 4.5 Prediction and Optimization 
+
+The learned user and item representations determine preference scores through their inner product: 
+
+b𝑦 𝑢𝑖 = ¯h⊤ 
+
+> 𝑢
+
+¯h𝑖 , (19) where ¯h𝑢 and ¯h𝑖 are the corresponding rows of ¯ H. We optimize the framework with Bayesian Personalized Ranking [24]. Let Dtrain 
+
+contain triplets (𝑢, 𝑖, 𝑗 ) with an observed item 𝑖 and a sampled unobserved item 𝑗 . Defining the score margin Δ𝑢𝑖 𝑗 = b𝑦 𝑢𝑖 − b𝑦 𝑢 𝑗 , the objective is 
+
+L = −∑︁  
+
+> (𝑢,𝑖,𝑗 ) ∈ D train
+
+log 𝜎 (Δ𝑢𝑖 𝑗 ) + 𝜆 ∥Θ∥22. (20) Here 𝜆 controls regularization, and the trainable parameters Θ com-prise ID embeddings, 𝑠 0, and the item-scale predictor. The modality projections, semantic anchors (including group prototypes), and graph support and weights remain fixed during recommendation training. 
+
+## 5 Analysis of the Shared Graph Learning Context 
+
+We fix the constructed graph and write P𝑟 = D−1/2A𝑟 D−1/2 for 
+
+𝑟 ∈ { 𝑐, 𝑠 }, using the same joint degree matrix. Thus, P = P𝑐 +
+
+P𝑠 = bA. The semantic-connectivity and PEC-composition results are provided in Appendix A.1; joint-execution equivalence and work and communication analysis in Appendix A.2; and calibration invariance in Appendix A.3. 
+
+## 6 Experiments 
+
+We address five research questions: RQ1: How does CC-MGRec compare with the baselines in ranking quality? RQ2: How do se-mantic connectivity, graph weighting, normalization, and C–S PEC composition affect recommendation? RQ3: How does RGSC affect edge relevance and recommendation quality? RQ4: Does joint exe-cution reduce inference time at equivalent outputs, and how does CC-MGRec compare with MIG-GT in accuracy and inference time? 
+
+RQ5: How do semantic-topology gains vary with user activity, and how sensitive is performance to graph parameters? 
+
+## 6.1 Experimental Setup 
+
+6.1.1 Datasets and Evaluation. We use Amazon Baby, Sports, and Clothing with MIG-GT’s filtered data and pre-extracted visual/textual features [11] (Table 3). We follow its 8:1:1 split and full-ranking protocol, reporting Recall and NDCG at 10 and 20. Validation Recall@20 guides model selection and early stopping; graph construction, semantic anchors, and calibration use training interactions only. 
+
+6.1.2 Baselines. We compare two categories of baselines in Table 2. The first uses only user–item interactions: MF [14], LightGCN [10], 
+
+ApeGNN [38], and MGDN [12]. The second combines interactions with item modality features: VBPR [9], MMGCN [30], GRCN [29], 
+
+DualGNN [26], SLMRec [25], LATTICE [39], FREEDOM [41], 
+
+MIG-GT [11], and DHMRec [37]. Reproduced and compatible published results follow the same benchmark protocol. 
+
+6.1.3 Implementation Details. We use MIG-GT’s fixed modality projections [11], 128-dimensional embeddings, a batch size of 8,000, and an RTX 3090. Defaults are 𝐾 = 10, 𝛽 = (1.5, 0.9, 1.8) and depths (3, 2, 2) for Baby/Sports/Clothing; RGSC uses 𝐹 = 5, 𝜇 =
+
+10, 𝜏 𝑟 = 0.1, and 𝛾 = 1. Main results average five seeds; other experiments use three unless specified. Ablations use paired seeds, fixed context–target folds, matched initialization schemes, capacity, and training budgets. Full uses the complete-model configuration over the ablation seed set. 
+
+6.1.4 Controlled Comparisons. The graph-weighting and normal-ization controls are specified in Appendix B.1. No S removes seman-tic edges while retaining multimodal initialization. The no-mixed and RGSC controls are detailed in Appendix B.1. 
+
+6.1.5 Diagnostics and Timing. Diagnostic definitions and timing operations are provided in Appendix B.2. Inference time covers all-node graph propagation at fixed weights and parameters, excluding feature preparation, graph construction, calibration, and training. R2 applies P𝑐 and P𝑠 separately to the same state; Joint applies their assembled sum, with equivalent outputs (Proposition A.4). R2/Joint share graph contents; all timing comparisons match hardware and embedding dimension. MIG-GT accuracy comparisons use five-seed main-result means. 
+
+> 6Rethinking Evidence Modeling: Context-Coupled Graph Learning for Multimodal Recommendation
+
+Table 2: Overall performance on three datasets. R and N denote Recall and NDCG; the best baseline is underlined. 
+
+Method Baby Sports Clothing 
+
+R@10 R@20 N@10 N@20 R@10 R@20 N@10 N@20 R@10 R@20 N@10 N@20 MF .0357 .0575 .0192 .0249 .0432 .0653 .0241 .0298 .0206 .0303 .0114 .0138 LightGCN .0479 .0754 .0257 .0328 .0569 .0864 .0311 .0387 .0361 .0544 .0197 .0243 ApeGNN .0501 .0775 .0267 .0338 .0608 .0892 .0333 .0407 .0378 .0538 .0204 .0244 MGDN .0495 .0783 .0272 .0346 .0614 .0932 .0340 .0422 .0362 .0551 .0199 .0247 VBPR .0423 .0663 .0223 .0284 .0558 .0856 .0307 .0384 .0281 .0415 .0158 .0192 MMGCN .0421 .0660 .0220 .0282 .0401 .0636 .0209 .0270 .0227 .0361 .0154 .0154 GRCN .0532 .0824 .0282 .0358 .0599 .0919 .0330 .0413 .0421 .0657 .0224 .0284 DualGNN .0513 .0803 .0278 .0352 .0588 .0899 .0324 .0404 .0452 .0675 .0242 .0298 SLMRec .0521 .0772 .0289 .0354 .0663 .0990 .0365 .0450 .0442 .0659 .0241 .0296 LATTICE .0547 .0850 .0292 .0370 .0620 .0953 .0335 .0421 .0492 .0733 .0268 .0330 FREEDOM .0627 .0992 .0330 .0424 .0717 .1089 .0385 .0481 .0626 .0932 .0338 .0416 MIG-GT .0660 .1015 .0357 .0448 .0738 .1126 .0408 .0508 .0628 .0926 .0349 .0425 DHMRec .0646 .1016 .0343 .0436 .0738 .1132 .0401 .0502 .0629 .0931 .0340 .0417 
+
+CC-MGRec (Ours) .0681 .1045 .0369 .0462 .0778 .1152 .0431 .0528 .0649 .0959 .0360 .0439 
+
+Table 3: Statistics of the evaluation datasets. 
+
+Dataset Users Items Interactions Baby 19,445 7,050 160,792 Sports 35,598 18,357 296,337 Clothing 39,387 23,033 278,677 
+
+## 6.2 Overall Performance (RQ1) 
+
+Table 2 shows that CC-MGRec achieves the highest reported mean scores across all datasets and cutoffs. Improvements in both Recall and NDCG indicate gains in retrieval coverage and rank-sensitive quality. On Sports, relative gains are larger for shorter recommenda-tion lists. The gains over MIG-GT and DHMRec support the frame-work’s ranking quality against the compared modality-specific and staged designs. 
+
+## 6.3 Evidence Organization in CC-MG (RQ2) 
+
+Semantic relations beyond node information. Figure 5 shows that removing semantic topology reduces both recommendation metrics on every dataset, most strongly on Clothing. Semantic relations therefore contribute beyond the content already supplied by node initialization. The contrast evaluates the semantic relation block as a whole, including its effect on node degrees. 
+
+Graph weighting and normalization. In Figure 4, Full obtains the highest mean scores across all datasets. Separate normaliza-tion yields the largest decrease, followed by uniform interaction weights; equal modality weights have a smaller but consistent effect on both metrics. These results support degree- and profile-aware interaction weighting, behavior-informed modality weighting, and joint normalization within CC-MG. The stronger normalization ef-fect highlights the value of letting both relation families determine node degrees and message strengths. Baby Sports Clothing      
+
+> 0.090 0.095 0.100 0.105 0.110 0.115 0.120
+> Recall@20
+> (a)
+> Baby Sports Clothing
+> 0.035 0.040 0.045 0.050 0.055
+> NDCG@20
+> (b)
+> Uniform C Equal V/T Sep. Norm. Full
+
+Figure 4: CC-MG construction ablation. (a) Recall@20; (b) NDCG@20. Axes are truncated. Baby Sports Clothing      
+
+> 0.070 0.080 0.090 0.100 0.110 0.120
+> Recall@20
+> (a)
+> Baby Sports Clothing
+> 0.030 0.035 0.040 0.045 0.050 0.055
+> NDCG@20
+> (b)
+> No S Raw Prov. Full
+
+Figure 5: Semantic topology and RGSC ablation. (a) Re-call@20; (b) NDCG@20. Axes are truncated. 
+
+Cross-relation composition. Figure 6 shows consistent Recall@20 and NDCG@20 gains over no-mixed on all datasets. These gains support the recommendation value of C–S PEC formation beyond semantic connectivity and relation-pure propagation. Together with 
+
+> 7Mingqiao Zhang et al.
+
+the preliminary diagnostics in Figure 2, they provide complemen-tary evidence for useful compositions in the shared graph learning context. 0.0 0.1 0.2 0.3 0.4 0.5 0.6 
+
+> C-S PEC gain (pp)
+> Baby Sports Clothing
+> Dataset
+> Recall@20 NDCG@20
+
+Figure 6: C–S PEC composition. Recall@20 and NDCG@20 gains over no-mixed, in percentage points. 
+
+## 6.4 Behavioral Calibration within CC-MG (RQ3) 
+
+Figure 5 shows that Full outperforms Raw in both recommendation metrics on every dataset. By Eq. 40, these gains support behavioral neighbor reallocation within preserved semantic budgets. Prov. improves Recall@20 over Raw on all datasets and NDCG@20 on Sports and Clothing. On Baby, NDCG@20 decreases slightly despite higher Recall@20, so behavioral tilting alone does not improve both metrics uniformly. Full outperforms Prov. in both metrics on every dataset, supporting budget recovery under the matched configuration. This contrast includes its effect on semantic and collaborative normalization. The edge-relevance diagnostics and their relationship to down-stream recommendation are reported in Appendix C.1. 
+
+## 6.5 Joint Execution Efficiency (RQ4) 
+
+Figure 7 shows that inference time grows with directed-edge count, while Joint remains faster than R2 across the displayed range on all datasets. With equivalent outputs and message work, the gap is consistent with reduced execution overhead, as analyzed in Ap-pendix A.2. Timing alone does not isolate the contribution of each overhead source. 22 341 123   
+
+> Inference time (ms)  Baby
+> 45 726
+> Sports
+> 47 759
+> Clothing Directed edges (×10³) Separate (R2) Joint
+
+Figure 7: CSCP joint execution. Shading marks the inference-time gap between R2 and Joint. Directed-edge ticks are in thousands. 
+
+Figure 8 shows that CC-MGRec combines Recall@20 gains of 0.30, 0.26, and 0.33 percentage points with inference speedups of 3 .25 ×, 5 .65 ×, and 7 .88 × on Baby, Sports, and Clothing. This complete-model comparison demonstrates a combined accuracy and runtime benefit, complementing the R2/Joint control. Since the models differ in other components, it does not attribute the entire speedup to joint execution. 0 10 20 30       
+
+> Inference time (ms)
+> Baby Sports Clothing
+> (a)
+> 2.63 8.53 3.25× 2.97 16.82 5.65× 3.26 25.70 7.88×
+> 0.2 .4
+> ΔRecall@20 (pp)
+> (b)
+> +0.30 +0.26 +0.33
+> CC-MGRec MIG-GT
+
+Figure 8: Complete-model comparison with MIG-GT. (a) In-ference times; green/red bands mark times below/above each MIG-GT reference, and labels above the pairs give speedup 
+
+𝑡 GT /𝑡 CC . (b) Recall@20 gains, 100 (𝑅 CC − 𝑅 GT ) pp. 
+
+Across the controls, semantic connectivity, C–S PEC composi-tion, and calibration support ranking quality, while joint execution reduces inference overhead. These contrasts assess complementary roles under matched comparisons; their gains cannot be added as independent component contributions. 
+
+## 6.6 User Activity and Parameter Sensitivity (RQ5) 
+
+Figure 9 shows positive semantic-topology gains in every activity group. Tail users have the largest gain within each dataset, while Clothing retains a large benefit for Head users. Semantic relations thus help across activity levels, with the strongest benefit for the least active users. Tail Middle Head 
+
+> Training activity
+
+Baby Sports Clothing       
+
+> Dataset  1.36 1.17 0.71 1.46 0.99 0.49 2.65 2.59 2.40
+
+0.49 1.00 2.00 2.65 
+
+> ΔRecall@20 (pp)
+
+Figure 9: Semantic topology gains by training activity. Cells show Recall@20 gains over No S, in percentage points. 
+
+The parameter-sensitivity results and analysis are provided in Appendix C.2. 
+
+## 7 Conclusion 
+
+CC-MGRec organizes SBE within a shared graph learning context for multimodal recommendation, supporting semantic connectivity 
+
+> 8Rethinking Evidence Modeling: Context-Coupled Graph Learning for Multimodal Recommendation
+
+and C–S and V–T PEC composition. CC-MG jointly normalizes collaborative and semantic relations; RGSC calibrates semantic neighbors while preserving normalized collaborative propagation coefficients; and CSCP updates shared node states across layers. Experiments on three Amazon datasets demonstrate improved rank-ing over the compared baselines. Controlled comparisons support semantic connectivity beyond node information, C–S PEC composi-tion beyond relation-pure propagation, and behavioral calibration. The output-equivalent R2/Joint control shows that joint execu-tion reduces inference time while preserving propagation outputs. Timing covers fixed-weight graph propagation, excluding feature preparation, graph construction, calibration, and training. 
+
+> 9
+
+Mingqiao Zhang et al. 
+
+## References 
+
+[1] Maciej Besta and Torsten Hoefler. 2024. Parallel and distributed graph neural networks: An in-depth concurrency analysis. IEEE Transactions on Pattern Analysis and Machine Intelligence 46, 5 (2024), 2584–2606. [2] Feiyu Chen, Junjie Wang, Yinwei Wei, Hai-Tao Zheng, and Jie Shao. 2022. Break-ing isolation: Multimodal graph fusion for multimedia recommendation by edge-wise modulation. In Proceedings of the 30th ACM International Conference on Multimedia . 385–394. [3] Jingyuan Chen, Hanwang Zhang, Xiangnan He, Liqiang Nie, Wei Liu, and Tat-Seng Chua. 2017. Attentive collaborative filtering: Multimedia recommendation with item-and component-level attention. In Proceedings of the 40th International ACM SIGIR conference on Research and Development in Information Retrieval .335–344. [4] Ji Dai, Quan Fang, Jun Hu, Desheng Cai, Yang Yang, and Can Zhao. 2026. Cross-modal attention network with dual graph learning in multimodal recommenda-tion. ACM Transactions on Multimedia Computing, Communications and Applica-tions 22, 3 (2026), 1–23. [5] Yuzhuo Dang, Xin Zhang, Zhiqiang Pan, Yuxiao Duan, Wanyu Chen, Fei Cai, and Honghui Chen. 2026. Mllmrec: A preference reasoning paradigm with graph refinement for multimodal recommendation. In Proceedings of the 49th International ACM SIGIR Conference on Research and Development in Information Retrieval . 257–267. [6] Ziyuan Guo, Jie Guo, Zhenghao Chen, Bin Song, and Fei Richard Yu. 2026. IGDMRec: Behavior Conditioned Item Graph Diffusion for Multimodal Recom-mendation. IEEE Transactions on Multimedia (2026). [7] Zhiqiang Guo, Jianjun Li, Guohui Li, Chaoyang Wang, Si Shi, and Bin Ruan. 2024. Lgmrec: Local and global graph learning for multimodal recommendation. In 
+
+Proceedings of the AAAI conference on artificial intelligence , Vol. 38. 8454–8462. [8] Dengke Han, Duo Wang, Mingyu Yan, Xiaochun Ye, and Dongrui Fan. 2025. TLV-HGNN: Thinking Like a Vertex for Memory-efficient HGNN Inference. In 2025 IEEE 43rd International Conference on Computer Design (ICCD) . IEEE, 730–737. [9] Ruining He and Julian McAuley. 2016. VBPR: visual bayesian personalized ranking from implicit feedback. In Proceedings of the AAAI conference on artificial intelligence , Vol. 30. [10] Xiangnan He, Kuan Deng, Xiang Wang, Yan Li, Yongdong Zhang, and Meng Wang. 2020. Lightgcn: Simplifying and powering graph convolution network for recommendation. In Proceedings of the 43rd International ACM SIGIR conference on research and development in Information Retrieval . 639–648. [11] Jun Hu, Bryan Hooi, Bingsheng He, and Yinwei Wei. 2025. Modality-independent graph neural networks with global transformers for multimodal recommendation. In Proceedings of the AAAI conference on artificial intelligence , Vol. 39. 11790– 11798. [12] Jun Hu, Bryan Hooi, Shengsheng Qian, Quan Fang, and Changsheng Xu. 2024. MGDCF: Distance learning via Markov graph diffusion for neural collaborative filtering. IEEE Transactions on Knowledge and Data Engineering 36, 7 (2024), 3281–3296. [13] Zhihao Jia, Sina Lin, Rex Ying, Jiaxuan You, Jure Leskovec, and Alex Aiken. 2020. Redundancy-free computation for graph neural networks. In Proceedings of the 26th ACM SIGKDD International Conference on Knowledge Discovery & Data Mining . 997–1005. [14] Yehuda Koren, Robert Bell, and Chris Volinsky. 2009. Matrix factorization tech-niques for recommender systems. Computer 42, 8 (2009), 30–37. [15] Haodong Li, Lianyong Qi, Weiming Liu, Fan Wang, Chong Li, Shengye Pang, Wen-wen Gong, Yanwei Xu, Xiaoxiao Chi, Yang Zhang, et al. 2026. Subspace-aware graph construction and contrastive alignment for multimodal recommendation with large language models. In Proceedings of the AAAI Conference on Artificial Intelligence , Vol. 40. 15099–15107. [16] Yuan Li, Jun Hu, Jiaxin Jiang, Bryan Hooi, and Bingsheng He. 2026. Robust Mul-timodal Recommendation via Graph Retrieval-Enhanced Modality Completion. 
+
+arXiv preprint arXiv:2605.00670 (2026). [17] Zesheng Li, Chengchang Pan, and Honggang Qi. 2026. Behavior-Guided Candidate Calibration for Multimodal Recommendation. arXiv preprint arXiv:2605.22073 (2026). [18] Yahong Lian, Haotian Tian, Chunyao Song, and Tingjian Ge. 2026. Sign-aware multimodal graph recommendation. In Proceedings of the AAAI Conference on Artificial Intelligence , Vol. 40. 15225–15233. [19] Hongtao Liu, Wenjun Wang, Qiyao Peng, Nannan Wu, Fangzhao Wu, and Pengfei Jiao. 2021. Toward comprehensive user and item representations via three-tier attention network. ACM Transactions on Information Systems (TOIS) 39, 3 (2021), 1–22. [20] Qidong Liu, Jiaxi Hu, Yutian Xiao, Xiangyu Zhao, Jingtong Gao, Wanyu Wang, Qing Li, and Jiliang Tang. 2024. Multimodal recommender systems: A survey. 
+
+Comput. Surveys 57, 2 (2024), 1–17. [21] Fanshen Meng, Zhenhua Meng, Ru Jin, Rongheng Lin, and Budan Wu. 2025. Doge: Llms-enhanced hyper-knowledge graph recommender for multimodal recommendation. In Proceedings of the AAAI conference on artificial intelligence ,Vol. 39. 12399–12407. [22] Rongqing Kenneth Ong and Andy WH Khong. 2025. Spectrum-based modality representation fusion graph convolutional network for multimodal recommenda-tion. In Proceedings of the eighteenth ACM international conference on web search and data mining . 773–781. [23] Qiyao Peng, Hongtao Liu, Hua Huang, Jian Yang, Qing Yang, and Minglai Shao. 2025. A Survey on LLM-powered Agents for Recommender Systems.. In EMNLP (Findings) . 11574–11583. [24] Steffen Rendle, Christoph Freudenthaler, Zeno Gantner, and Lars Schmidt-Thieme. 2012. BPR: Bayesian personalized ranking from implicit feedback. arXiv preprint arXiv:1205.2618 (2012). [25] Zhulin Tao, Xiaohao Liu, Yewei Xia, Xiang Wang, Lifang Yang, Xianglin Huang, and Tat-Seng Chua. 2022. Self-supervised learning for multimedia recommenda-tion. IEEE Transactions on Multimedia 25 (2022), 5107–5116. [26] Qifan Wang, Yinwei Wei, Jianhua Yin, Jianlong Wu, Xuemeng Song, and Liqiang Nie. 2021. Dualgnn: Dual graph neural network for multimedia recommendation. 
+
+IEEE Transactions on Multimedia 25 (2021), 1074–1084. [27] Xiang Wang, Xiangnan He, Meng Wang, Fuli Feng, and Tat-Seng Chua. 2019. Neural graph collaborative filtering. In Proceedings of the 42nd international ACM SIGIR conference on Research and development in Information Retrieval . 165–174. [28] Wei Wei, Chao Huang, Lianghao Xia, and Chuxu Zhang. 2023. Multi-modal self-supervised learning for recommendation. In Proceedings of the ACM web conference 2023 . 790–800. [29] Yinwei Wei, Xiang Wang, Liqiang Nie, Xiangnan He, and Tat-Seng Chua. 2020. Graph-refined convolutional network for multimedia recommendation with implicit feedback. In Proceedings of the 28th ACM international conference on multimedia . 3541–3549. [30] Yinwei Wei, Xiang Wang, Liqiang Nie, Xiangnan He, Richang Hong, and Tat-Seng Chua. 2019. MMGCN: Multi-modal graph convolution network for personalized recommendation of micro-video. In Proceedings of the 27th ACM international conference on multimedia . 1437–1445. [31] Kun Wu, Mert Hidayetoğlu, Xiang Song, Sitao Huang, Da Zheng, Israt Nisa, and Wen-mei Hwu. 2024. Hector: An efficient programming and compilation frame-work for implementing relational graph neural networks in GPU architectures. In Proceedings of the 29th ACM International Conference on Architectural Support for Programming Languages and Operating Systems, Volume 3 . 528–544. [32] Jinfeng Xu, Zheyu Chen, Wei Wang, Xiping Hu, Sang-Wook Kim, and Edith CH Ngai. 2025. Cohesion: Composite graph convolutional network with dual-stage fusion for multimodal recommendation. In Proceedings of the 48th international ACM SIGIR conference on research and development in information retrieval . 1830– 1839. [33] Jinfeng Xu, Zheyu Chen, Shuo Yang, Jinze Li, Hewei Wang, Jianheng Tang, Wei Wang, Xiping Hu, and Edith CH Ngai. 2026. Well Begun is Half Done: Training-Free and Model-Agnostic Semantically Guaranteed User Representation Initialization for Multimodal Recommendation. arXiv preprint arXiv:2604.14839 
+
+(2026). [34] Zixuan Yi and Iadh Ounis. 2024. A unified graph transformer for overcom-ing isolations in multi-modal recommendation. In Proceedings of the 18th ACM Conference on Recommender Systems . 518–527. [35] Penghang Yu, Zhiyi Tan, Guanming Lu, and Bing-Kun Bao. 2023. Multi-view graph convolutional network for multimedia recommendation. In Proceedings of the 31st ACM international conference on multimedia . 6576–6585. [36] Seongjun Yun, Minbyul Jeong, Raehyun Kim, Jaewoo Kang, and Hyunwoo J Kim. 2019. Graph transformer networks. Advances in neural information processing systems 32 (2019). [37] Xiaohan Zhan, Yuliang Shi, Jihu Wang, Shijun Liu, Fanyu Kong, and Zhiyong Chen. 2026. DHMRec: Collaboration-Guided Multimodal Disentanglement and Hierarchical Fusion for Recommendation. In Proceedings of the AAAI Conference on Artificial Intelligence , Vol. 40. 16244–16252. [38] Dan Zhang, Yifan Zhu, Yuxiao Dong, Yuandong Wang, Wenzheng Feng, Evgeny Kharlamov, and Jie Tang. 2023. ApeGNN: Node-wise adaptive aggregation in GNNs for recommendation. In Proceedings of the ACM web conference 2023 .759–769. [39] Jinghao Zhang, Yanqiao Zhu, Qiang Liu, Shu Wu, Shuhui Wang, and Liang Wang. 2021. Mining latent structures for multimedia recommendation. In Proceedings of the 29th ACM international conference on multimedia . 3872–3880. [40] Jinghao Zhang, Yanqiao Zhu, Qiang Liu, Mengqi Zhang, Shu Wu, and Liang Wang. 2022. Latent structure mining with contrastive modality fusion for multimedia recommendation. IEEE Transactions on Knowledge and Data Engineering 35, 9 (2022), 9154–9167. [41] Xin Zhou and Zhiqi Shen. 2023. A tale of two graphs: Freezing and denoising graph structures for multimodal recommendation. In Proceedings of the 31st ACM international conference on multimedia . 935–943. [42] Xin Zhou, Hongyu Zhou, Yong Liu, Zhiwei Zeng, Chunyan Miao, Pengwei Wang, Yuan You, and Feijun Jiang. 2023. Bootstrap latent representations for multi-modal recommendation. In Proceedings of the ACM web conference 2023 .845–854. 10 Rethinking Evidence Modeling: Context-Coupled Graph Learning for Multimodal Recommendation 
+
+## A Theoretical Analysis and Proofs 
+
+The analysis addresses the two objectives of our motivation: ag-gregating recommendation evidence through semantic connectiv-ity and cross-relation composition, and executing their propaga-tion with low overhead. We fix the constructed graph and write 
+
+P𝑟 = D−1/2A𝑟 D−1/2 for 𝑟 ∈ { 𝑐, 𝑠 }, using the same joint degree ma-trix. Thus, P = P𝑐 + P𝑠 = bA. The operators are nonnegative and may be asymmetric; symmetry and commutativity are not required. In-verse degree factors are zero at zero-degree nodes. Let 𝑛 = |U| + |I| ,let 𝑑 be the state width, and let 𝐿 ≥ 1 be the propagation depth; empty sums below are zero. 
+
+## A.1 Semantic Connectivity and Cross-Relation Composition 
+
+The final readout retains the propagation routes available at every depth. By Eqs. 17 and 18, ¯ H = K𝐿 H(0) , where 
+
+K𝐿 = 1
+
+𝐿 + 1
+
+> 𝐿
+
+∑︁ 
+
+> ℓ=0
+
+Pℓ . (21) The following comparisons hold the initial node states and joint normalization fixed to isolate these routes. Ordered adjacency prod-ucts represent composite relations [36, Section 3.1]. For a relation sequence 𝜔 = (𝑟 1, . . . , 𝑟 ℓ ), define P𝜔 = P𝑟 ℓ · · · P𝑟 1 , in propagation order. Let Ωℓ contain sequences that use both 𝑐 and 𝑠 .Proposition A.1 (Decomposition of propagated evidence). 
+
+The shared-state readout decomposes as 
+
+K𝐿 = K𝑐 + K𝑠 + Kmix , (22) 
+
+where 
+
+K𝑐 = 1
+
+𝐿 + 1 I𝑛 +
+
+> 𝐿
+
+∑︁ 
+
+> ℓ=1
+
+Pℓ𝑐 
+
+!
+
+, (23) 
+
+K𝑠 = 1
+
+𝐿 + 1
+
+> 𝐿
+
+∑︁ 
+
+> ℓ=1
+
+Pℓ𝑠 , (24) 
+
+and 
+
+Kmix = 1
+
+𝐿 + 1
+
+> 𝐿
+
+∑︁ 
+
+> ℓ=2
+
+∑︁ 𝜔 ∈Ωℓ
+
+P𝜔 . (25) 
+
+These terms respectively retain collaborative-only propagation, semantic-only propagation, and cross-relation composition. All three operators are entrywise nonnegative. 
+
+Proof. Repeated left multiplication by P𝑐 + P𝑠 gives 
+
+Pℓ =∑︁   
+
+> 𝜔 ∈ { 𝑐,𝑠 }ℓ
+
+P𝜔 . (26) For ℓ = 1, this is the definition of P. If it holds at depth ℓ, left multi-plication appends either 𝑐 or 𝑠 to each sequence, producing every ordered sequence of length ℓ + 1 exactly once. This establishes the expansion by induction without exchanging matrix factors. Partitioning the sequences into all-𝑐 , all-𝑠 , and mixed sequences, then averaging depths zero through 𝐿 , yields Eq. 22. The identity is counted once at depth zero. Nonnegativity follows from nonnega-tive matrix products and sums. □
+
+Corollary A.2 (Semantic connectivity beyond node infor-mation). For the same initial states, a collaborative-only operator 
+
+K𝑐 omits the contributions K𝑠 + Kmix . For any positive normalized semantic edge 𝑖 → 𝑗 with 𝑖 ≠ 𝑗 ,
+
+(K𝐿 − K𝑐 )𝑗𝑖 ≥ (P𝑠 )𝑗𝑖 
+
+𝐿 + 1 > 0. (27) 
+
+If no collaborative-only walk of length at most 𝐿 connects 𝑖 to 𝑗 , then 
+
+(K𝑐 )𝑗𝑖 = 0 but (K𝐿 )𝑗𝑖 > 0.
+
+Proof. The decomposition gives K𝐿 − K𝑐 = K𝑠 + Kmix . Its terms are nonnegative, and the depth-one semantic term contains 
+
+P𝑠 /( 𝐿 + 1), proving the bound. Each entry of Pℓ𝑐 sums the weights of collaborative-only walks of length ℓ. With no such walk and distinct endpoints, every contribution to (K𝑐 )𝑗𝑖 is zero. □
+
+Semantic connectivity therefore supplies explicit neighbor ag-gregation in addition to the information carried by the initial node states. In CC-MG, its first-layer item contribution is bSH (0)I . The result characterizes propagation of given node inputs; their initial-ization may already contain semantic information. Corollary A.3 (Strict contribution of C–S PECs). The relation-pure readout used by no-mixed is Kpure  
+
+> 𝐿
+
+= K𝑐 + K𝑠 . Suppose a mixed walk 𝜋 = (𝑣 0 = 𝑞, . . . , 𝑣 𝑡 = 𝑝 ) has 𝑡 ≤ 𝐿 and positive normalized weights b𝑤 𝑎 = (P𝑟 𝑎 )𝑣 𝑎 𝑣 𝑎 −1 , where its relation sequence uses both 𝑐 and 𝑠 . Then 
+
+(K𝐿 − Kpure  
+
+> 𝐿
+
+)𝑝𝑞 ≥ 1
+
+𝐿 + 1
+
+> 𝑡
+
+Ö
+
+> 𝑎 =1
+
+b𝑤 𝑎 > 0. (28) 
+
+For distinct 𝑝, 𝑞 , if neither a collaborative-only nor a semantic-only walk of length at most 𝐿 connects them, (Kpure  
+
+> 𝐿
+
+)𝑝𝑞 = 0 and (K𝐿 )𝑝𝑞 >
+
+0.
+
+Proof. By Proposition A.1, the difference is Kmix . For the se-quence of 𝜋 , the (𝑝, 𝑞 ) entry of P𝑟 𝑡 · · · P𝑟 1 sums products of weights over matching walks. One summand is Î𝑡 𝑎 =1 b𝑤 𝑎 > 0. This product appears in the depth-𝑡 contribution to Kmix , and all remaining terms are nonnegative, establishing the bound. Absence of pure walks makes both pure-operator entries zero. □
+
+A positive readout coefficient establishes a propagation depen-dence between the two nodes. Holding the graph fixed, the sensi-tivity to an initial node state is 
+
+𝜕 ¯h𝑝 
+
+𝜕 h(0)
+
+> 𝑞
+
+= (K𝐿 )𝑝𝑞 I𝑑 . (29) For example, P𝑐 P𝑠 lets an item’s state reach a user through a seman-tic neighbor and an observed interaction; P𝑠 P𝑐 lets user information continue through semantic neighbors. The bounds explain when shared-state propagation adds such dependencies to the final read-out. These dependencies concern propagated representations; the final inner product can also combine information from both pure branches. For modality composition, RGSC applies the same edge-wise tilt and destination-wise recovery factor to both terms of the raw semantic weight. Thus ¯ S = ¯S𝑣 + ¯S𝑡 and, under the shared degree matrix, P𝑠 = P𝑣 + P𝑡 . Expanding semantic products in the same propagation order yields V–T PECs when both modality operators contribute positive edges. 
+
+> 11 Mingqiao Zhang et al.
+
+## A.2 Efficiency through Joint Execution 
+
+We distinguish edge–feature message work from relation-output communication, following work-based GNN analysis and aggrega-tion reorganization [1, 13]. 
+
+Equivalent shared-neighborhood aggregation. Let N𝑟 (𝑝 ) = {𝑞 :
+
+(P𝑟 )𝑝𝑞 > 0} for 𝑟 ∈ { 𝑐, 𝑠 }, N ( 𝑝 ) = N𝑐 (𝑝 ) ∪ N 𝑠 (𝑝 ), and 𝑃 𝑝𝑞 =
+
+(P𝑐 )𝑝𝑞 + ( P𝑠 )𝑝𝑞 . Joint computes 
+
+h(ℓ+1) 
+
+> 𝑝
+
+=∑︁  
+
+> 𝑞 ∈ N ( 𝑝 )
+
+𝑃 𝑝𝑞 h(ℓ ) 
+
+> 𝑞
+
+. (30) Proposition A.4 (Eqivalent shared-neighborhood aggre-gation). For the same fixed graph and initialization, Joint and R2 produce identical layer states and readouts in exact arithmetic. With the same objective and parameterization, their parameter gradients coincide wherever the derivatives exist. 
+
+Proof. Grouping relation contributions by neighbor gives Eq. 30, equivalently 
+
+P𝑐 H(ℓ ) + P𝑠 H(ℓ ) = PH (ℓ ) . (31) Induction gives identical layer states and the common readout 
+
+K𝐿 H(0) . For an output gradient Z,
+
+P⊤ 
+
+> 𝑐
+
+Z + P⊤ 
+
+> 𝑠
+
+Z = P⊤Z. (32) The chain rule through the common readout and initialization establishes gradient equivalence. □
+
+Propagation work. Let 𝑚 𝑐 = nnz (P𝑐 ) and 𝑚 𝑠 = nnz (P𝑠 ) count directed nonzero edges. Count one message evaluation per edge and feature coordinate, excluding graph preparation, initialization, and readout. Proposition A.5 (Propagation work and consolidation con-dition). CC-MG’s 𝐿 -layer, 𝑑 -dimensional message work is 
+
+WJoint = 𝐿𝑑 (𝑚 𝑐 + 𝑚 𝑠 ). (33) 
+
+For 𝐵 streams of width 𝑑 , with depths 𝐿 𝑏 and edge counts 𝑚 𝑏 ,
+
+Wstreams = 𝑑 
+
+> 𝐵
+
+∑︁ 
+
+> 𝑏 =1
+
+𝐿 𝑏 𝑚 𝑏 . (34) 
+
+When Wstreams > 0, the fractional reduction is 
+
+𝜌 msg = 1 − 𝐿 (𝑚 𝑐 + 𝑚 𝑠 )
+
+Í𝐵 𝑏 =1 𝐿 𝑏 𝑚 𝑏 
+
+. (35) 
+
+Reduction occurs exactly when 𝐿 (𝑚 𝑐 + 𝑚 𝑠 ) < Í𝑏 𝐿 𝑏 𝑚 𝑏 .
+
+Proof. Disjoint user–item and item–item supports give 
+
+Í𝑝 |N ( 𝑝 )| = 𝑚 𝑐 + 𝑚 𝑠 . Each layer evaluates 𝑑 coordinates per nonzero edge. Multiplying by depth and summing over streams gives the two work counts; their relative difference gives 𝜌 msg . □
+
+Two modalities retrieve at most 2 𝐾 |I| directed neighbors in total. Symmetrization at most doubles this count, and calibration preserves support; hence 
+
+𝑚 𝑠 ≤ 4𝐾 |I| . (36) For 𝐵 equal-depth streams over the interaction support 𝑚 𝑐 > 0, let 
+
+𝜏 = 𝑚 𝑠 /𝑚 𝑐 . Then 
+
+𝜌 msg = 1 − 1 + 𝜏 𝐵 . (37) It is positive exactly when 𝜏 < 𝐵 − 1. Separate streams may use distinct states and depths [11]; the work comparison does not assert equivalent outputs or redundant messages. 
+
+Relation-output communication. R2 and Joint have the same mes-sage work. For output accesses, count only relation-output stores and loads and final next-state stores at operator boundaries. Corollary A.6 (Eliminated relation-output communica-tion). If R2 stores two dense 𝑛 × 𝑑 relation outputs and reads them for separate fusion, then over 𝐿 layers 
+
+𝑄 out R2 = 5𝐿𝑛𝑑, 𝑄 out Joint = 𝐿𝑛𝑑. (38) 
+
+Joint eliminates 
+
+Δ𝑄 out = 4𝐿𝑛𝑑. (39) Proof. Per layer, R2 incurs 2 𝑛𝑑 intermediate stores, 2 𝑛𝑑 fusion reads, and 𝑛𝑑 next-state stores; Joint incurs only the last 𝑛𝑑 stores. Multiplication by 𝐿 gives the counts. □
+
+Joint removes 80% of these output accesses and reduces sparse-operator calls from 2 𝐿 to 𝐿 . This count excludes sparse inputs, aggregation-internal accesses, and readout. Materialization and relation-wise execution overhead are also identified in GNN systems [8, 31]; physical latency additionally depends on kernels, caching, and scheduling. 
+
+## A.3 Calibration Invariance 
+
+Budget preservation makes RGSC compatible with this shared nor-malization while refining semantic neighbor allocations. Lemma A.7 (Calibration invariance). For fixed C, preserving every incoming semantic budget leaves the joint degree matrix and normalized collaborative operator unchanged: 
+
+D = D0, P𝑐 = P0 
+
+> 𝑐
+
+. (40) 
+
+Here the superscript 0 denotes the raw semantic graph. 
+
+Proof. RGSC ensures ¯ S1 = S01. User degrees depend only on 
+
+C, and item degrees are Í𝑢 𝐶 𝑢 𝑗 + B 𝑠 𝑗 , with both terms unchanged. Hence D = D0. The collaborative adjacency is also unchanged, so using this degree matrix on both sides gives P𝑐 = P0 
+
+> 𝑐
+
+. □
+
+This property fixes collaborative propagation coefficients; the reallocated semantic messages can still change learned states and recommendation scores. 
+
+## B Supplementary Experimental Settings B.1 Graph-Construction Controls 
+
+Uniform C makes interaction weights constant at matched total weight; Equal V/T uses equal modality coefficients while preserving incoming semantic budgets before RGSC and node-information inputs; Sep. Norm. independently normalizes relation blocks, with validation-selected relative strength and matched total operator weight. These controls retain support, RGSC, depth, and shared-state updates. The retrained no-mixed control uses the relation-pure readout (Corollary A.3) with the same P𝑐 and P𝑠 . It prevents C–S PEC formation while retaining V–T PECs in the semantic branch. 
+
+Raw disables calibration ( 𝛾 = 0); Prov. omits budget recovery; Full 
+
+includes both RGSC stages. Candidate support, global modality 
+
+> 12 Rethinking Evidence Modeling: Context-Coupled Graph Learning for Multimodal Recommendation
+
+weights, and initialization schemes are retained. Raw and Full share 
+
+D and P𝑐 (Lemma A.7). 
+
+## B.2 Diagnostics and Timing Operations 
+
+Figure 2(a) matches interaction degree, semantic support, and in-coming semantic mass; (b) intervenes in fixed models, retaining graph support, initialization, first-order information, and single-modality paths. Edge relevance evaluates fixed candidate edges pooled across destinations using AUC, average precision (AP), and positive lift; held-out labels are used only for evaluation. Activity groups use training activity, and sensitivity grids use Baby. Tim-ings use CUDA synchronization and repeated measurements after warm-up. 
+
+## C Supplementary Experimental Results C.1 Edge Relevance and Downstream Recommendation 
+
+In Figure 10, Full improves AP and positive lift over Raw on all datasets. Its AUC increases on Baby and Sports but decreases on Clothing; Prov. exceeds Full on all displayed edge metrics. Bud-get recovery preserves local pre-normalization neighbor order but changes score scales across destinations, which can alter pooled rankings. Despite lower pooled edge-ranking metrics, Full yields better recommendation performance than Prov. on every dataset. Edge ranking and message allocation assess different uses of the weights: better pooled edge discrimination does not necessarily yield better downstream recommendation. The downstream results favor reallocation within preserved budgets. B S C
+
+> 0.60 0.65 0.70 0.75
+
+AUC (a)   
+
+> BSC
+> 0.00 0.05 0.10 0.15
+
+AP (b)   
+
+> BSC
+> 024
+
+Lift (c) 
+
+Dataset 
+
+Raw Prov. Full 
+
+Figure 10: RGSC edge relevance. (a) AUC; (b) AP; (c) positive lift. B/S/C denote Baby/Sports/Clothing. AUC is truncated at 0.60. 
+
+## C.2 Parameter Sensitivity 
+
+Figure 11(a,b) shows that semantic strength depends on neigh-borhood size: stronger weighting remains competitive for smaller neighborhoods but reduces performance in the densest setting. Neighborhood density and message strength should therefore be tuned jointly. In Figure 11(c,d), Raw yields Recall@20/NDCG@20 of .1018/.0442 at every temperature because calibration is disabled. Among positive magnitudes, Recall and NDCG favor different strengths; stronger calibration does not improve both uniformly. 0.5 1 1.5 2 2.5                                                                                       
+
+> β
+> 510 15 20 30
+> .0986 .1014 .1028 .1040 .1045 .1015 .1044 .1064 .1070 .1071 .1023 .1060 .1058 .1063 .1063 .1033 .1060 .1063 .1064 .1047 .1040 .1058 .1050 .1041 .1037
+> K(a) Recall@20
+> .0986 .1071 0.5 11.5 22.5
+> β
+> .0435 .0449 .0456 .0461 .0462 .0447 .0460 .0467 .0468 .0470 .0451 .0464 .0464 .0467 .0466 .0454 .0464 .0466 .0466 .0460 .0453 .0461 .0461 .0457 .0456
+> (b) NDCG@20
+> .0435 .0470 0.05 0.1 0.2 0.3
+> τr
+> 00.5 11.5 2
+> .1018 .1018 .1018 .1018 .1054 .1053 .1054 .1051 .1063 .1064 .1062 .1060 .1057 .1057 .1055 .1055 .1055 .1056 .1058 .1057
+> γ(c) Recall@20
+> .1018 .1064 0.05 0.1 0.2 0.3
+> τr
+> .0442 .0442 .0442 .0442 .0462 .0462 .0462 .0461 .0466 .0467 .0466 .0465 .0469 .0469 .0468 .0467 .0469 .0469 .0470 .0469
+> (d) NDCG@20
+> .0442 .0470
+
+Figure 11: Parameter sensitivity on Baby. (a,b) CC-MG Recall@20/NDCG@20 across 𝐾 and 𝛽 ; (c,d) RGSC Re-call@20/NDCG@20 across 𝛾 and 𝜏 𝑟 . Outlines mark validation-selected defaults.

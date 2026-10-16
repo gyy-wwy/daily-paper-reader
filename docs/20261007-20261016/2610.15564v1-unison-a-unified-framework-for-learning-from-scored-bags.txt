@@ -1,0 +1,997 @@
+Title: UNISON: A Unified Framework for Learning from Scored Bags
+
+URL Source: https://arxiv.org/pdf/2610.15564v1
+
+Published Time: Wed, 14 Oct 2026 02:12:04 GMT
+
+Number of Pages: 22
+
+Markdown Content:
+# UNISON: A Unified Framework for Learning from Scored Bags 
+
+Ofek Kirshenboim Or Shkuri Shani Finkelshtein Yoram Louzoun 
+
+Department of Mathematics, Bar-Ilan University, Israel 
+
+yoram.louzoun@biu.ac.il 
+
+# Abstract 
+
+We introduce UNISON, a unified framework that bridges multiple instance learn-ing and recommendation systems by treating both as instances of learning from scored bag collections of (item, score) pairs. Unlike traditional approaches that address bag-level classification and personalized recommendation as separate problems, UNISON decomposes learning into three interconnected stages: (1) learning universal item representations, (2) modeling bag-specific preference pat-terns through lightweight personalized parameters, and (3) inferring bag-level characteristics from learned preferences. We justify the architectural choice of linear bag-specific scoring through a first-order analysis: when item embeddings are sufficiently smooth in the score, a linear function approximates the score up to a Taylor remainder controlled by the curvature of the underlying preference function. For cold-start scenarios, we show that the cold-bag fitting problem reduces to ridge-less linear regression with a closed-form solution, and provide convergence guarantees for the iterative variant. Empirically, UNISON matches or outperforms state-of-the-art approaches across diverse domains: entertainment (books, movies), immunology (T cell receptor (TCR) based classification), and microbiome, offering superior computational efficiency and interpretability. A controlled synthetic experiment further confirms that the bag-specific parameters (wj , b j ) recover the latent factors that drive item scores even when the projection 
+
+ϕ has no access to the original scoring mechanism (AUC > 0.998). UNISON is available at https://github.com/louzounlab/UNISON. 
+
+# 1 Introduction 
+
+Consider seemingly disparate problems: (1) predicting the condition of a host based on its RNA expression level, (2) recommending books or movies to a reader based on their history of (book, rating) pairs, (3) predicting the frequency of a microbe in the gut of a host, and propose a new movie for a viewer to see. Despite arising in different domains, all these problems and many more share a fundamental structure: learning from scored bags , collections of items where each item is associated with a quantitative value. In Biology, the bag is the host and the items are genes or microbes scored by their presence/absence or their frequency. In books or movies, the score is their rating by the reader/viewer. Traditional multiple instance learning (MIL) [Dietterich et al., 1997] addresses the problem of learning from bags when only bag-level labels are available, treating all instances as equally weighted. Conversely, recommendation systems [Koren et al., 2009] focus on predicting scores for new items given a user’s interaction history (in the current context, the users’ scores for some known items), typically relying on auxiliary features or meta-learning for cold-start scenarios [Lee et al., 2019] (cold start is the prediction for previously unknown users or items). We argue that both problems are instances of the same fundamental task and can be addressed within a unified framework. Specifically, we argue that the relation between items and their scores are determined by bag-specific latent arXiv:2610.15564v1 [cs.LG] 11 Oct 2026 variables, and that these variables can be used to classify the entire bag. Moreover, we propose that by having the shared training produce an embedding that can be linearly associated with the score (or with a function of the score) of each item. 
+
+1.1 Related Work and Novelty 
+
+UNISON bridges three fields: MIL, recommendation systems, and "learn to rank". 
+
+Multiple Instance Learning: Early MIL work [Dietterich et al., 1997, Maron and Lozano-Pérez, 1997] focused on witness identification. Modern approaches use attention mechanisms [Ilse et al., 2018] or transformers [Shao et al., 2021], but treat instance weights as implicit latent variables. UNISON extends MIL by incorporating explicit instance scores. 
+
+Recommendation Systems: Classical methods include collaborative filtering [Sarwar et al., 2001] and content-based approaches [Mooney and Roy, 2000]. Neural collaborative filtering (NCF) [He et al., 2017] extends matrix factorization with neural networks to model complex user-item interac-tions, while graph-based methods like LightGCN [He et al., 2020] leverage user-item bipartite graphs through simplified graph convolutions. EASE [Steck, 2019] demonstrates that linear models with closed-form solutions can achieve competitive performance through proper regularization. Hybrid methods [Burke, 2002] combine both paradigms. Recent meta-learning approaches like MeLU [Lee et al., 2019] and MAMO [Dong et al., 2020] address cold-start through expensive gradient-based adaptation, while ColdNAS [Wu et al., 2023] uses neural architecture search for user-specific models. UNISON moves most of the training to an item embedding, ensuring that the scores in each bag can be learnt through a linear classifier, leading to superior cold start performance with lightweight linear optimization, requiring only interaction data without user features. 
+
+Learn-to-Rank: L2R methods [Liu, 2009] learn ranking functions from preference data. UNISON extends this by framing item level ranking and bag-level classification as combined optimization objectives, and separate the training into a multi-bag complex embedding, and a per-bag linear classifier that can be trained using a small number of entity-score pairs per bag. Within this context, we make the following theoretical and practical novel contributions: 1. Unified Framework: We formalize the scored bag learning problem and show that bag classification and item scoring are dual objectives that can be trained within the same framework. More specifically, we propose simultaneously training a bag-specific weight vector and a combined item embedding whose product is the score assigned in this bag to the item, and the weights are the latent representation of the bag. We empirically show that this representation is highly informative and leads to high-accuracy bag classification. Weights were used in meta-learning to predict network accuracy Finn et al. [2017]. We show here that the same concept can be adapted to bag classification. 2. Theoretical Analysis: We provide a first-order Taylor analysis showing that linear bag-specific scoring is consistent with any sufficiently smooth preference function up to a curvature-dependent error (Theorem 1), and we characterize the convergence behavior of the cold-start optimization (Proposition 1). The latter reduces to ridgeless linear regression and admits a closed-form solution. 3. Efficient Cold-Start: We use a low dimension for the embedding and the appropriate weights, leading to minimal inference-time optimization. Because the cold-start objective is a convex quadratic in ( wj , b j ), it can be solved rapidly in closed form. This low-dimensional product outperforms gradient-based meta-learning approaches both theoretically and empiri-cally. 4. Domain Generality: We validate UNISON across six diverse datasets spanning entertain-ment, immunology, and ecology, showing consistent performance with minimal domain-specific engineering. 5. Identifiability of Functional Embeddings: We provide a controlled experiment in which item scores are generated by a known group-specific weight, and a different embedder is used for training. UNISON nevertheless recovers the group label with AUC >0.998, demonstrating that 
+
+(wj , b j )
+
+captures latent bag structure rather than artifacts of the projection. 22 Problem Formulation 
+
+2.1 Definitions and Learning objectives Definition 1 (Scored Bag) . Let X denote an item space and S ⊆ R a score domain. A scored bag is a finite multiset: Bj = {(xk, s k,j )}mk=1 , xk ∈ X , sk,j ∈ S 
+
+UNISON addresses three interconnected objectives: 
+
+Objective 1 (Item Representation): Learn an encoding function f : X → Rd that maps items to fixed-dimensional embeddings z = f (x) preserving semantic structure. The dimension of z can be high, and the embedding is not trained using the item’s score. 
+
+Objective 2 (Item Scoring): Given a scored bag Bj (either known or unknown during training, further denoted as hot or cold) and candidate item x∗, predict the score: h : B × X → S , ˆs∗ 
+
+> j
+
+=
+
+h(Bj , x ∗). Objective 3 (Bag Classification): Predict a global label yj ∈ Y characterizing the entire bag: g : B → Y , ˆyj = g(Bj ).These objectives can be compared with the three domains above. 1) Multiple Instance Learning: 
+
+Standard MIL [Dietterich et al., 1997, Ilse et al., 2018] considers bags B ⊆ X with only bag-level labels. Scored bags extend this by providing instance-level values (xk, s k,j ), enabling richer supervision. 2) Recommendation Systems: In recommendation, each user’s interaction history forms a scored bag, and Objective 2 reduces to rating prediction. The cold-start problem [Schein et al., 2002] corresponds to inference with unseen bags. 3) Learn-to-Rank: L2R [Liu, 2009] focuses on ordering items by relevance. Our framework generalizes this by jointly learning to score items and classify bags. We have tested the training of these objectives in parallel or sequentially. In general, the sequential learning led to more accurate results on the second objective, and are reported here. 
+
+# 3 Methods - The UNISON Framework 
+
+3.1 Architecture 
+
+UNISON’s training consists of three stages that map directly to three objectives above. The stages can be trained jointly or sequentially: 
+
+Stage 1 (Item Embedding): Map each item to a latent representation using domain-specific encoders: zk = f (xk) ∈ Rd. Stage 2 (Preference Modeling): Project item embeddings into a lower-dimensional space using a shared MLP ϕ : Rd → Rd′
+
+, then apply bag-specific linear scoring: ˜zk = ϕ(zk), ˆsk,j = w⊤ 
+
+> j
+
+˜zk + bj , where (wj , b j ) ∈ Rd′
+
+× R are personalized parameters for bag j. ˜zk is typically of low dimension. 
+
+Stage 3 (Bag Classification): Use the learned parameters as functional embeddings: ˆyj =
+
+ψ([ wj ; bj ]) ,where ψ is an MLP classifier and [·; ·] denotes concatenation. 
+
+3.2 Datasets 
+
+We evaluate UNISON across six datasets spanning three domains: A) Entertainment: Book-Crossing (278K users, 271K books) Ziegler et al. [2005] and MovieLens-1M (6K users, 3.7K movies) Harper and Konstan [2015] with user ratings. B) Immunology: TCR repertoires (600 repertoires, ∼10 5
+
+unique sequences) Emerson et al. [2017] with binding intensities and frequencies. C) Microbiome: 
+
+Three cohorts (445, 344, 256 samples) Li et al. [2023], Fu et al. [2022], Guo et al. [2022] with species abundances for disease classification. The details of all datasets are available in the appendix. 
+
+3.3 Evaluation Protocol Data Partitioning. We randomly split users into 80% warm and 10% validation and 10% cold, and independently split items into 80% warm 10% validation and 10% cold. When temporal information is available, we use the appropriate chronological split for the users, while items remain randomly split. For each user across all scenarios, we partition their interactions into a support set of k warm items and a query set containing all remaining interactions. 3Figure 1: UNISON operates in three stages (Left plot): (Stage 1) Raw items from a bag (e.g., books) are processed by domain-specific encoders to produce latent representations zi. (Stage 2) Items are partitioned into a support set (known scores) and a query set (unobserved scores). An MLP, shared across bags, projects items into a low-dimensional space. For each bag, linear parameters (wj , b j ) are optimized at inference time to predict the known support set scores. These parameters are then used to predict scores for the query set. (Stage 3) (wj , b j ) are treated as functional embeddings, serving as input to a final MLP that predicts bag-level characteristics (e.g., user demographics). Comprehensive performance analysis and ablation studies (Right plot). (A) Conceptual Workflow Example: Raw items are transformed into latent embeddings, which are then used to optimize user-specific weights (wj , b j ) based on the support set. These functional embeddings enable dual-task inference: predicting ratings for unobserved items (query set) and classifying bag-level traits (e.g., gender) without auxiliary metadata. (B) Predicted vs. ground-truth scores for 10 representative cold-start users, demonstrating the model’s ability to recover individual preference patterns. (C) Comparison of performance with (brown) and without (blue) the shared MLP projection. The left bars represent the Spearman correlation (Stage 2), and the right bars represent the AUC for bag-level classification (Stage 3). (D) Impact of support set size on performance. The green curve (left y-axis) tracks Stage 2 Spearman correlation. The orange curve (right y-axis) tracks Stage 3 AUC. (E) Histogram of items per user across the dataset. (F) Distribution of individual Spearman correlation coefficients across all users. (G) Stage 2 Spearman correlation (left triplet) and Stage 3 AUC (right triplet) comparison of three optimization regimes: sequential (Stage 2 then Stage 3), joint (Stage 2 and 3 simultaneously), and joint training followed by Stage 3 fine-tuning. For a new bag Bnew at test time, we: 1) Partition observed items into a support set Snew and a query set Qnew . 2) Freeze ϕ and optimize only (w∗
+
+> new
+
+, b ∗
+
+> new
+
+) on Snew (for the sake of clarity we omit the 
+
+j subscript): (w∗
+
+> new
+
+, b ∗
+
+> new
+
+) = argmin w,b 
+
+P 
+
+> (x,s )∈S new
+
+(w⊤ϕ(f (x)) + b − s)2. 3) Use (w∗
+
+> new
+
+, b ∗
+
+> new
+
+) to predict scores on Qnew and classify the bag. We evaluate our framework across four cold-start scenarios that progressively increase in difficulty. Each scenario is defined by whether users and items appeared in the training set. We follow Melu in the definitions of warm and cold groups, and further enlarge the definitions: A) WU-WI (Warm User-Warm Item): Both user and item were seen during training. This serves as a training set. B) WU-CI (Warm User-Cold Item): The user was seen during training, but the item is new. For example, recommending a newly released movie to an existing Netflix user. C) CU-WI (Cold User-Warm Item): The item was seen during training, but the user is new. For example, recommending existing movies to a user who just signed up. D) CU-CI (Cold User-Cold Item): Neither user nor item appeared in training, the most challenging scenario. For example, recommending a newly released movie to a brand-new user. Hyperparameter tuning is performed exclusively on the validation set users and validation set items (trained using warm items in the support set). For stage 1, the evaluation is task-specific, and is discussed in the appendix for the appropriate tasks. For stage 2, we compute the Mean Absolute Error (MAE) and Spearman correlation ( ρ) for sj,k and 4ˆs∗ 
+
+> j
+
+(xk), and classification AUC for stage 3. The scores in stage 2 may be binary. In such a case, we use a logistic regression and AUC as the accuracy measure for stage 2 too. 
+
+3.4 Training Procedure and protocol 
+
+We typically assume that objective 1 is solved using a domain-specific pre-training. To optimize objective 2, we minimize for each bag Bj the mean squared error (MSE) of the observed and predicted scores in the support set for regression or the cross-entropy for classification: L(j) 
+
+> score
+
+=P   
+
+> (xk,s k,j )∈B j
+
+ℓ(ˆ sk,j , s k,j ). The shared MLP ϕ is optimized across all bags via gradient descent, while bag-specific parameters (wj , b j ) are optimized individually. For objective 3, UNISON minimizes across all bags: L(j) 
+
+> bag
+
+= ℓclass (ˆ yj , y j ). The total objective combines both tasks is : 
+
+Ltotal = P
+
+> j
+
+h
+
+L(j) 
+
+> score
+
++ λL(j)
+
+> bag
+
+i
+
+, where λ balances the two objectives. In the absence of an initial embedding, a pre-training task loss can be added. In such a case, we add the Stage 1 embedding loss 
+
+Lembed to enable end-to-end training: Ltotal = αLembed + P
+
+> j
+
+h
+
+L(j) 
+
+> score
+
++ λL(j)
+
+> bag
+
+i
+
+, where α weights the embedding loss. The training order is as follows: Stage 1: All pretrained encoders are kept frozen. Qwen3-8B Yang et al. [2025] is used to embed items in the Book-Crossing and MovieLens datasets, and custom autoencoder architectures are used for TCR Dvorkin et al. [2021] and Microbiome datasets (See appendix). The embeddings zi are computed once and cached. No information on the scores of the bag label is used for the embedding. 
+
+Stage 2: Preference Modeling. We optimize a shared MLP ϕ and user-specific parameters (wj , b j )
+
+by minimizing Mean Squared Error (MSE) for Book-Crossing, MovieLens, and TCR, or Binary Cross-Entropy (BCE) for Microbiome datasets, using the Adam optimizer. For each user, (wj , b j )
+
+are estimated via gradient descent on the support set, and the model is evaluated on the query set. The support size k is dataset-specific: k ∈ { 10 − 80 } for Book-Crossing and MovieLens; 
+
+k ∈ { 2000 − 4000 } for TCR; k ∈ { 200 − 350 } for the Microbiome studies; k ∈ { 60 − 140 } for the Vaccine TCR cohort.. Large k values would improve the accuracy of the per-bag inference of 
+
+(w, b ), but limit the training size, and as such, reduce the accuracy of ϕ(z) that is trained on all bags. Architecture and learning rate hyperparameters are tuned via Optuna with 5-fold cross-validation on the CU-CI validation set. 
+
+Inference. At inference time, for cold users, we freeze the shared MLP ϕ and adapt only (wj , b j ) per bag using its support set. For warm users, we use the (wj , b j ) parameters learned during training. A complete specification of hyperparameters is provided in Table 3 in Appendix B.2. 
+
+Stage 3: We train an MLP classifier on the concatenated user representation [wj ; bj ] to predict demographic or biological attributes, depending on the domain. This stage utilizes the compact preference-based representations learned in Stage 2 to infer underlying user characteristics. The specific classifier architectures, dropout rates, and joint-training weights ( λattr ) for each dataset are detailed in Table 3 in the Appendix B.2. All MLP weights were initialized using Xavier uniform initialization [Glorot and Bengio, 2010], while biases were set to zero. User embeddings (wj , b j ) were initialized with N (0 , 0.02 2) and zero respectively, following standard practice for embedding layers [Devlin et al., 2019]. 
+
+3.5 Baseline State Of The Art (SOTA) comparisons 
+
+Beyond the comparison to naive approach (e.g. the standard cosine distance of the item and bag embeddings), we compared UNISON to the SOTA recommendation systems for stage 2, and standard MIL for stage 3 that do not require additional information beyond the scored items: A) MeLU [Lee et al., 2019]: Gradient-based meta-learning for recommendation systems. We evaluate using MAE and Spearman correlation on rating prediction tasks. B) ColdNAS [Wu et al., 2023]: Neural architecture search for cold-start recommendations. We evaluate using MAE and Spearman correlation on rating prediction tasks. C) Standard MIL : In the TCR and Microbiome, we compare to the appropriate works. In Book-crossing, we are the first to predict user attributes from the book-score pairs. 54 Theoretical Analysis 
+
+4.1 Linear Sufficiency for Preference Modeling 
+
+To justify the architectural choices of UNISON, we show that linear bag-specific scoring is the natural first-order approximation when preferences are smooth in the embedding space (Theorem 1), and characterize the well-conditioning of the cold-start fit (Proposition 1). 
+
+Definition 2 (Lipschitz Item Embedding) . An embedding function f : X → Rd is L-Lipschitz with respect to a distance dX if: ∥f (x) − f (x′)∥2 ≤ L · dX (x, x ′) ∀x, x ′ ∈ X 
+
+Definition 3 (α-Smoothly Scorable Bag) . A bag Bj is α-smoothly scorable if there exists a continu-ously differentiable function σj : Rd′
+
+→ R such that for all (xk, s k,j ) ∈ Bj and for a predefined 
+
+ϵ > 0:|sk,j − σj (f (xk)) | ≤ ϵ and σj is α-smooth: ||∇ σj (z) − ∇ σj (z′)|| 2 ≤ α ∥z − z′∥2 ∀z, z ′ ∈
+
+Rd′
+
+.
+
+Remark 1. The α-smooth scorability assumption is key: it states that user preferences can be approximated by a smooth function in the embedding space. The smoothness constant α controls how quickly the preference function changes. 
+
+Theorem 1 (Linear Sufficiency) . Let f : X → Rd be an L-Lipschitz embedding, and ϕ : Rd → Rd′
+
+be a representation learning function. Suppose bag Bj is α-smoothly scorable in the embedded space and the projected embeddings {˜zk = ϕ(f (xk)) } satisfy ∥˜zk∥2 ≤ D. Then, there exists (wj , b j )
+
+such that: 
+
+sup   
+
+> (xk,s k,j )∈B j
+
+|w⊤ 
+
+> j
+
+˜zk + bj − sk,j | ≤ ϵ + 4 α ∗ D2, (1) where ϵ′ > 0 is a function of α and a bound on ˜zk. The proof is given in detail in the appendix, but in short it is the direct result of the Taylor expansion of a smooth function around the embedding z.
+
+Remark 2. This theorem justifies UNISON’s use of linear scoring: when ϕ learns sufficiently discriminative representations, complex non-linear scoring functions are unnecessary. Also, note that most of these requirements are typically obeyed (See example in the appendix for the L-Lipschitz embedding. The first requirement that limits the methods is the spread of the embeddings, which can be directly translated to the request that for each bag, we have enough samples. Additionally, the bound 4αD 2 depends on the curvature α of the underlying preference function. Our computational results show that in practice, the error is small. 
+
+Within this context, the inference-time optimization procedure can be bound ( proposition 1 ). Let Snew = {(xk, s k)}|S| 
+
+> k=1
+
+be a support set with projected embeddings {˜zk = ϕ(f (xk)) }|S|
+
+> k=1
+
+. Define the design matrix: 
+
+Z =
+
+
+
+˜z⊤ 
+
+> 1
+
+1
+
+... ...
+
+˜z⊤|S| 1
+
+ ∈ R|S|× (d′+1) (2) 
+
+Assumption 1. The following conditions hold: 1. Full rank : rank( Z) = d′ + 1 (equivalently, |S| ≥ d′ + 1 and at least d embeddings are linearly independent) 2. Bounded singular values : σmin (Z) ≥ σ0 > 0 and σmax (Z) ≤ σmax 
+
+Consider gradient descent with learning rate η ≤ 2
+
+> σ2max
+
+starting from initialization θ(0) = [ w(0) ; b(0) ]:
+
+θ(t+1) = θ(t) − η∇L(θ(t)) (3) where L(θ) = 12 ∥Zθ − s∥22 and s = [ s1, . . . , s |S|]⊤.Then the loss converges geometrically: 
+
+L(θ(t)) − L(θ∗) ≤ (1 − ησ 20 )t(L(θ(0) ) − L(θ∗)) (4) 6where θ∗ = ( Z⊤Z)−1Z⊤s is the optimal solution, and the convergence rate satisfies: 
+
+1 − ησ 20 ≤ 1 − 2σ20
+
+σ2max + σ20
+
+< 1 (5) Again, the proof is given in the appendix We have an additional assumption that the bag class is associated with the parameters of σj . Specifi-cally, we propose that for some bag classes (not all), the class is associated with latent variables that also determine the relation between xj and sj in the same bags. In such cases, we argue that for a high enough dimension of w, it can be used to classify the bag. In the following sections we describe UNISON and show experimentally that it succeeds in objective 2 in all tested setups, and in objective 3 in multiple scenario. We then further discuss the condition for the success of objective 3, and the optimal learning approach for UNISON. 
+
+# 5 Results 
+
+5.1 Toy Model validation of concept 
+
+Stage 3 uses the learned preference parameters (wj , b j ) as functional embeddings for bag classifica-tion. This succeeds when the bag level label yj is governed by the same latent factors that determine the item-score relationship within the bag. To verify that the informativeness of (wj , b j ) for bag classification stems from its structural role as a preference encoding rather than from dimensionality reduction by ϕ, we conducted a controlled sanity check. We partitioned Book Crossing users into two groups (A and B) and generated synthetic item scores using embedder A, multiplying each item embedding by a group-specific weight vector ( Wa for group A, Wb for group B). We then trained UNISON using a completely different embedder B, ensuring that ϕ has no direct access to the original scoring mechanism. UNISON achieved AUC = 0 .9989 on group classification, confirming that (wj , b j ) recovers the latent structure that drives item scores, independent of any artifact of the projection. 
+
+5.2 UNISON application to book scoring 
+
+To evaluate UNISON, we analyzed a standard item ranking task from the Book-Crossing dataset Ziegler et al. [2005]. In this task, one is expected to compute the score a new user would give to a previously unseen book. In the UNISON language, the book is the item, the score is the score, and the user is the bag. Books are embedded using frozen Qwen3-8B encoders to obtain zk (stage 1). They are then projected through ϕ to yield ˜zk. Then user-specific parameters (wj , b j ) from a support set of k rated books are learned. These personalized parameters are used to predict ratings on query books (stage 2). Finally, the same personalized parameters are used to predict user age group (above or below 32 years - stage 3) (Fig. 1A). We first evaluated the accuracy of stage 2 on the entire test set of new users simultaneously - i.e., compare ˆsk,j and sk,j for all j and k (Fig. 1B). The Spearman correlation coefficient (SCC) obtained is SCC = 0 .462 , p < 1.e − 3. One could argue that this correlation represents the difference between bags (users), rather than the difference between the scores the same user gave different books. To test for that, we computed the Spearman correlation between ˆsk,j and sk,j for each user separately (Fig. 1C). One can see that for over 90 % of the users, there is a positive correlation ( p < 1.e − 3 t-test on the SCC of each user). As mentioned, we assume that even in the test set, we have a subset of books with known scores. To ensure that such a subset can be defined, we analyzed the distribution of ratings per user (Fig. 1D). While the dataset is inherently sparse, a significant subset of users provided enough interactions to support inference. We thus focused our analysis on users with at least 10 ratings and tested the accuracy of stages 2 and 3 as a function of the support set size (Fig. 1E). Increasing the support set size improves the regression, but limits the number of users, and as such, can reduce the accuracy of stage 3. Indeed, both stages reach a maximal prediction accuracy (SCC, AUC) at a support size of 40. To compare to a naive cosine distance on the original embedding and test whether the transition from zk to ˜zk is necessary, we computed the accuracy of stages 2 and 3, with and without this 7stage (Fig. 1F), and indeed the accuracy in both stages is much higher when ˜zk is learned within UNISON. Finally, given the different stages, we tested whether each stage can be trained separately, or whether all stages should be trained simultaneously (Fig. 1G), and no significant difference was found. Note that, as mentioned above, to keep UNISON generic, we assume that stage I was trained on a domain-specific task. 
+
+5.3 Simple Inference-Time Learning Is Sufficient 
+
+To evaluate UNISON’s generalization, we partitioned the dataset into four scenarios based on UNISON’s familiarity with users and items during training, as described above (WU-WI, WU-CI, CU-WI, and CU-CI). For each user, we define a Support Set consisting of Nsup items labeled as Warm, to avoid any possible leakage by assuming known scores for cold items. The Query Set contains the remaining items: any additional Warm items beyond Nsup , as well as all items labeled as Cold that the user has rated (Fig. 2A). When faced with the challenge of "Cold-Start" - where we must infer preferences for a completely new bag from only a few scored items - one might assume that heavy, gradient-based meta-learning frameworks are necessary (e.g. MeLU Lee et al. [2019]). We argue instead that if the shared item representations ( ˜zk) are sufficiently informative, a simple linear mapping (wj , b j ) is not only sufficient. To test this, we compared UNISON against gradient-based meta-learning across several benchmark scenarios. In the MovieLens dataset, specifically the most difficult Cold-User Cold-Item (CU-CI) setting, UNISON achieves a Spearman correlation of 
+
+0.323 , outperforming the far more computationally expensive MeLU ( 0.291 , p < 0.01 , two-sided permutation test with 10,000 permutations; Fig. 2B). The advantage of this minimalist approach becomes even more striking in the Book-Crossing dataset; here, UNISON reaches a correlation of 0.4736 , while MeLU fails to effectively generalize, yielding only 0.1114 (p < 0.001 , Fig. 2B). These results suggest a fundamental trade-off: while complex models have more "capacity" to learn, they are also more prone to overfitting when the support set is sparse. To evaluate this overfitting in MeLU’s adaptation mechanism, we compared query set loss to support set loss across 723 cold users. A paired-samples t-test revealed that query loss ( M = 1 .29 , SD = 0 .80 ) was significantly higher than support loss ( M = 0 .78 , SD = 0 .46 ), t-test, p < . 001 , Cohen’s d = 0 .62 , demonstrating substantial overfitting during few-shot adaptation. In contrast, UNISON’s performance remains stable and does not show any over-fitting (Fig. 2B,C). This design choice reflects a deliberate trade-off: by optimizing UNISON for the most challenging double cold-start scenario (CU-CI), we reduce the dimension of ˜z, and sacrifice some performance in partially warm settings. In MovieLens, while UNISON excels at CU-CI ( 0.323 vs. 0.291 ), MeLU performs better when either users or items are warm: WU-CI ( 0.476 vs. 0.377 ) and CU-WI ( 0.301 
+
+vs. 0.260 ) (Fig. 2B, C). However, Book-Crossing shows UNISON outperforming across all scenarios (Fig. 2B, C). The distribution of user items in MovieLens follows a similar long-tail pattern to Book-Crossing. For k = 40 , we achieved SCC = 0 .323 and AU C = 0 .675 (Fig. 3 left panel). While the performance gap when transitioning from zk to ˜zk was narrower than in Book-Crossing, the ablation study demonstrates its importance: without this stage, performance drops to SCC = 0 .299 
+
+and AU C = 0 .663 (p < 0.01 , paired t-test). 
+
+5.4 Framework Generalizes Cross Domain 
+
+To demonstrate that UNISON extends beyond entertainment, we applied it to two biological domains: TCR-peptide binding (immunology) and microbiome-disease associations (ecology). The architecture of Stage II (preference learning) and Stage III (bag classification) remains unchanged across domains; only the initial item encoder (Stage I) is domain-specific. We examine two complementary challenges. In the Microbiome cohorts , we used three microbiome samples, where the samples were divided to control and disease cases (see Appendix). We then tested the AUC for predicting microbe frequencies (Fig. 3 right panel), and the AUC for host condition classification. The prediction of microbe frequencies from their embedding is a new task that has never been applied to the microbiome. The AUC obtained here is higher than in the original publication for the same tasks (AUC 0.68 vs. 0.63 Shtossel et al. [2023]). In the TCR-peptide interactions , we analyze the bulk sequencing of TCRs and predict the presence/absence of TCR clones within each repertoire (Stage 2 - with binary classification) and classify the CMV serostatus of the host (Stage 3). In the CU-CI scenario, performance remains stable across support sizes, reaching Spearman 0.37 (Stage 2) and AUC 0.64 (Stage 3) at k = 3500 , where the large bag sizes ( 10 5 clonotypes per repertoire) make the model less sensitive to support set variations (Fig. 3 central panel). The task of predicting the absence/presence 8Figure 2: Left -plot - Training/Test definitions and recommendation benchmarks on Book-Crossing and MovieLen-1M. (A) Training/Test definitions: Users and books are partitioned into warm (red) and cold (blue) sets. Training is conducted exclusively on the WU-WI quadrant, while inference is evaluated on WU-CI, CU-WI, and CU-CI scenarios. Each user is associated with a support set (observed ratings, always consisting of warm items) and a query set for evaluation. (B) Mean Absolute Error (MAE ↓) across cold-start scenarios for MovieLen and Book-Crossing datasets. Each group shows three methods: MeLU (orange), ColdNAS (green), and UNISON (blue). (C) Spearman Correlation (SCC ↑) across cold-start scenarios for MovieLen and Book-Crossing datasets. The right hand plot is similar to Figure 1, but for MovieLens (A) Predicted vs. ground-truth scores for 10 representative cold-start users, (B) Stage 2 Ablation, (C) Support Set Sensitivity (D) Bag Statistics. of TCR clones in a sample has never been tested. The accuracy of stage 3 is lower than previous publications Akerman et al. [2023]. However, the task is predicted here using UNISON with no specific task adaptation. 
+
+5.5 Computational cost 
+
+We presume a domain-specific pre-defined embedding ( z). During training, we separately trained 
+
+ϕ,(w, b ) and ψ. During inference, only (w, b ) are trained. The training of ϕ requires typically 18-100 epochs and 50-180 seconds on a single L40S card. All other stages are much shorter. Computing 
+
+(w, b ) during inference takes milliseconds on a standard CPU. 
+
+5.6 Ablation Studies Necessity of MLP projection ϕ: Removing Stage 2 MLP consistently degrades performance (BookCrossing: ρ drops from 0.462 to 0.150 ), validating Theorem 1’s requirement for discriminative embeddings. 
+
+Support set size: Performance stabilizes at k = 40 for entertainment datasets and k = 3500 for TCR. The much larger k for TCR is driven by the size of the bags themselves ( > 10 5 clonotypes per repertoire, most uninformative) rather than by d’, which differs by less than 2-folds across the two domains. 
+
+Joint vs. sequential training: No significant difference observed ( p > 0.05 ), suggesting objectives in the loss function are well-aligned. 
+
+# 6 Discussion 
+
+Our results validate several theoretical predictions: 
+
+Linear scoring is consistent with smooth preferences: The strong empirical performance with linear scoring confirms the first-order analysis of Theorem 1. When ϕ learns discriminative representations, non-linear scoring adds minimal value while increasing overfitting risk on small support sets. 
+
+Generalization: Bag classification performance of 0.62 − 0.70 AUC using only functional embed-dings (wj , b j ) across biological cohorts, and AUC > 0.998 in the controlled synthetic identifiability experiment, supports our proposition about the association between (wj , b j ) and the bag class. 9Figure 3: Effect of support set size on UNISON performance across three domains: TCR (left), and Microbiome (right). For MovieLens and TCR, we report both SCC (green) and AUC (orange). For Microbiome, we compare Stage 2 (solid, light) vs Stage 3 (dashed, dark) AUC across three datasets (M1-M3). Error bars show standard error across 5 random seeds. Meta-learning methods like MeLU optimize over the entire parameter space Θ, which can overfit on small support sets. UNISON restricts adaptation to a low-dimensional subspace (wj , b j ) ∈ Rd′+1 ,providing implicit regularization. This trade-off is formalized by the bias-variance decomposition (E[Error ] = Bias 2 + Variance + Noise). UNISON increases bias (by restricting to linear functions) but dramatically reduces variance, yielding lower overall error in low-data regimes. We introduced UNISON, a unified framework for learning from scored bags that bridges multi-ple instance learning and recommendation systems. Our main contributions are: A) Theoretical justification for linear scoring functions (Theorem 1) and convergence rate estimate for cold-start optimization (Proposition 1). B) The introduction of functional embeddings using model parameters as bag representations in the context of MIL, and C) State-of-the-art empirical performance across diverse domains with 100 × computational speedup over meta-learning baselines. By restricting our bag-specific adaptation to a linear scoring rule, UNISON achieves a robust generalization that deep meta-learners struggle to match. Effectively, we trade expensive inference-time iterations for a stable, closed-form preference profile that captures the essence of the bag without the noise of over-parameterization. Simply stated, we move the heavy lifting of the score prediction and the bag classification to the embedding trained on all bags, and leave the simple regression task within each bag in either training or inference for the bag-specific score computation and bag classification. This leads to a trade-off on the dimension of ˜z. A high dimension could lead to higher bag classifica-tion accuracy, but would require a large support set for the estimation of w. We plan to study this trade-off theoretically and computationally. Future work will also include extending our analysis to non-Euclidean item spaces (e.g., graphs, sequences) and developing a theoretical understanding of when joint training outperforms sequential optimization. 10 References 
+
+Ofek Akerman, Haim Isakov, Reut Levi, Vladimir Psevkin, and Yoram Louzoun. Counting is almost all you need. Frontiers in Immunology , 13:1031011, 2023. Robin Burke. Hybrid recommender systems: Survey and experiments. User modeling and user-adapted interaction , 12(4):331–370, 2002. Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova. BERT: Pre-training of deep bidirectional transformers for language understanding. In Proceedings of the 2019 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies (NAACL-HLT) , pages 4171–4186, 2019. Thomas G Dietterich, Richard H Lathrop, and Tomás Lozano-Pérez. Solving the multiple instance problem with axis-parallel rectangles. Artificial intelligence , 89(1–2):31–71, 1997. Manqing Dong, Feng Yuan, Lina Yao, Xiwei Xu, and Liming Zhu. MAMO: Memory-augmented meta-optimization for cold-start recommendation. In Proceedings of the 26th ACM SIGKDD International Conference on Knowledge Discovery & Data Mining (KDD) , pages 688–697, 2020. Shirit Dvorkin, Reut Levi, and Yoram Louzoun. Autoencoder based local t cell repertoire density can be used to classify samples and t cell receptors. PLoS Computational Biology , 17(7):e1009225, 2021. Ryan O Emerson, William S DeWitt, Marissa Vignali, Jenna Gravley, Joyce K Hu, Edward J Osborne, Cindy Desmarais, Mark Klinger, Christopher S Carlson, John A Hansen, et al. Immunosequencing identifies signatures of cytomegalovirus exposure history and hla-mediated effects on the t cell repertoire. Nature Genetics , 49(5):659–665, 2017. Chelsea Finn, Pieter Abbeel, and Sergey Levine. Model-agnostic meta-learning for fast adaptation of deep networks. In Proceedings of the International Conference on Machine Learning (ICML) ,pages 1126–1135. PMLR, 2017. Shih-Chen Fu, Chung-Han Lee, Yi-Chen Hsieh, Pei-Hua Wu, Sheng-Hsuan Lin, and Hsiuying Wang. A pilot study exploring the association of entacapone, gut microbiota, and the subsequent side effects in patients with parkinson’s disease. Frontiers in Cellular and Infection Microbiology , 12: 837019, 2022. Xavier Glorot and Yoshua Bengio. Understanding the difficulty of training deep feedforward neural networks. In Proceedings of the Thirteenth International Conference on Artificial Intelligence and Statistics (AISTATS) , pages 249–256, 2010. Xingzhi Guo, Peng Tang, Chen Hou, Li Chong, Xin Zhang, Peng Liu, Li Chen, Yue Liu, Lina Zhang, and Rui Li. Integrated microbiome and host transcriptome profiles link parkinson’s disease to blautia genus: evidence from feces, blood, and brain. Frontiers in Microbiology , 13:875101, 2022. F Maxwell Harper and Joseph A Konstan. The movielens datasets: History and context. ACM transactions on interactive intelligent systems (tiis) , 5(4):1–19, 2015. Xiangnan He, Lizi Liao, Hanwang Zhang, Liqiang Nie, Xia Hu, and Tat-Seng Chua. Neural collaborative filtering. In Proceedings of the 26th international conference on world wide web ,pages 173–182, 2017. Xiangnan He, Kuan Deng, Xiang Wang, Yan Li, Yongdong Zhang, and Meng Wang. LightGCN: Simplifying and powering graph convolution network for recommendation. In Proceedings of the 43rd International ACM SIGIR Conference on Research and Development in Information Retrieval ,pages 639–648, 2020. Maximilian Ilse, Jakub Tomczak, and Max Welling. Attention-based deep multiple instance learning. In Proceedings of the 35th International Conference on Machine Learning (ICML) , pages 2127– 2136. PMLR, 2018. Yehuda Koren, Robert Bell, and Chris Volinsky. Matrix factorization techniques for recommender systems. Computer , 42(8):30–37, 2009. 11 Hoyeop Lee, Jinbae Im, Seongwon Jang, Hyunsouk Cho, and Sehee Chung. MeLU: Meta-learned user preference estimator for cold-start recommendation. In Proceedings of the 25th ACM SIGKDD International Conference on Knowledge Discovery & Data Mining (KDD) , pages 1073–1082, 2019. Yan Li, Yichen Hu, Xiang Zhan, Ying Song, Meng Xu, Shijie Wang, Xiaochang Huang, and Zhenjiang Zech Xu. Meta-analysis reveals helicobacter pylori mutual exclusivity and reproducible gastric microbiome alterations during gastric carcinoma progression. Gut microbes , 15(1):2197835, 2023. Tie-Yan Liu. Learning to rank for information retrieval. Foundations and Trends in Information Retrieval , 3(3):225–331, 2009. Oded Maron and Tomás Lozano-Pérez. A framework for multiple-instance learning. In Advances in Neural Information Processing Systems (NIPS) , volume 10, 1997. Raymond J Mooney and Loriene Roy. Content-based book recommending using learning for text categorization. In Proceedings of the fifth ACM conference on Digital libraries , pages 195–204, 2000. Badrul Sarwar, George Karypis, Joseph Konstan, and John Riedl. Item-based collaborative filtering recommendation algorithms. In Proceedings of the 10th International Conference on World Wide Web (WWW) , pages 285–295, 2001. Andrew I Schein, Alexandrin Popescul, Lyle H Ungar, and David M Pennock. Methods and metrics for cold-start recommendations. In Proceedings of the 25th annual international ACM SIGIR conference on Research and development in information retrieval , pages 253–260, 2002. Zhuchen Shao, Hao Bian, Yang Chen, Yifeng Wang, Jian Zhang, Xiangyang Ji, and Yongbing Zhang. TransMIL: Transformer based Correlated Multiple Instance Learning for whole slide image classification. In Advances in Neural Information Processing Systems (NeurIPS) , volume 34, pages 2136–2147, 2021. Oshrit Shtossel, Haim Isakov, Sondra Turjeman, Omry Koren, and Yoram Louzoun. Ordering taxa in image convolution networks improves microbiome-based machine learning accuracy. Gut Microbes , 15(1):2224474, 2023. Harald Steck. Embarrassingly shallow autoencoders for sparse data. In Proceedings of The World Wide Web Conference (WWW) , pages 3251–3257, 2019. Shiguang Wu, Yaqing Wang, Qinghe Jing, Daxiang Dong, Dejing Dou, and Quanming Yao. ColdNAS: Search to modulate for user cold-start recommendation. In Proceedings of the ACM Web Conference (WWW) , pages 1021–1031, 2023. An Yang, Anfeng Li, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chang Gao, Chengen Huang, Chenxu Lv, et al. Qwen3 Technical Report. arXiv preprint arXiv:2505.09388 ,2025. Cai-Nicolas Ziegler, Sean M McNee, Joseph A Konstan, and Georg Lausen. Improving recommenda-tion lists through topic diversification. In Proceedings of the 14th International Conference on World Wide Web (WWW) , pages 22–32, 2005. 12 A Proofs of Main Theorems 
+
+A.1 Proof of Theorem 1 Theorem 2 (Linear Sufficiency) . Let f : X → Rd be an L-Lipschitz embedding function, and 
+
+ϕ : Rd → Rd′
+
+be a representation learning function. Suppose bag Bj = {(xk, s k,j )}mk=1 is 
+
+α-smoothly scorable in the embedded space with scoring function σj : Rd′
+
+→ R.Let {˜zk = ϕ(f (xk)) }mk=1 be the projected embeddings. Assume: 1. Separation condition : The covariance matrix Σj = 1
+
+> m
+
+Pmk=1 (˜ zk − μj )(˜ zk − μj )⊤ where 
+
+μj = 1
+
+> m
+
+Pmk=1 ˜zk satisfies: 
+
+λmin (Σ j ) ≥ λ0 > 0
+
+2. Boundedness : ∥˜zk∥2 ≤ D for all k ∈ [m]
+
+Then for any ϵ′ > 0, there exists (wj , b j ) ∈ Rd′
+
+× R such that: 
+
+sup   
+
+> (xk,s k,j )∈Bj
+
+|w⊤ 
+
+> j
+
+˜zk + bj − sk,j | ≤ ϵ + ϵ′
+
+where ϵ′ = 4 αD 2 and ϵ is the approximation error from 3. Proof. We proceed in several steps. 
+
+Step 1: Existence of smooth scorer. By 3, there exists a continuously differentiable function 
+
+σj : Rd′
+
+→ R such that for all (xk, s k,j ) ∈ Bj :
+
+|sk,j − σj (˜ zk)| ≤ ϵ (6) and σj is α-smooth: 
+
+∥∇ σj (z) − ∇ σj (z′)∥2 ≤ α ∥z − z′∥2 ∀z, z ′ ∈ Rd′
+
+(7) 
+
+Step 2: Taylor approximation around centroid. Let μj = 1
+
+> m
+
+Pmk=1 ˜zk be the centroid of the projected embeddings. By the mean value theorem, for any ˜zk there exists ξk on the line segment 
+
+[μj , ˜zk] such that: 
+
+σj (˜ zk) = σj (μj ) + ∇σj (ξk)⊤(˜ zk − μj ) (8) 
+
+Step 3: Bounding the Taylor remainder. We define our linear approximation using the gradient at 
+
+μj :
+
+w∗ 
+
+> j
+
+= ∇σj (μj ) (9) 
+
+b∗ 
+
+> j
+
+= σj (μj ) − (w∗ 
+
+> j
+
+)⊤μj (10) The error between using ∇σj (μj ) versus the actual gradient ∇σj (ξk) is: 
+
+|∇ σj (ξk)⊤(˜ zk − μj ) − ∇ σj (μj )⊤(˜ zk − μj )|
+
+= |(∇σj (ξk) − ∇ σj (μj )) ⊤(˜ zk − μj )|≤ ∥∇ σj (ξk) − ∇ σj (μj )∥2 · ∥ ˜zk − μj ∥2 (Cauchy-Schwarz) 
+
+≤ α ∥ξk − μj ∥2 · ∥ ˜zk − μj ∥2 (by (7)) 
+
+≤ α ∥˜zk − μj ∥22 (since ξk ∈ [μj , ˜zk]) (11) 
+
+Step 4: Bounding the embedding deviation. We now bound ∥˜zk − μj ∥2. Since ∥˜zk∥2 ≤ D for all k, we have: 
+
+∥μj ∥2 = 1
+
+m
+
+> m
+
+X
+
+> i=1
+
+˜zi
+
+> 2
+
+≤ 1
+
+m
+
+> m
+
+X
+
+> i=1
+
+∥˜zi∥2 ≤ D (12) Therefore: 
+
+∥˜zk − μj ∥2 ≤ ∥ ˜zk∥2 + ∥μj ∥2 ≤ 2D (13) 13 Step 5: Constructing the linear approximation. With (w∗ 
+
+> j
+
+, b ∗ 
+
+> j
+
+) defined in (9) and (10), we have: 
+
+(w∗ 
+
+> j
+
+)⊤ ˜zk + b∗ 
+
+> j
+
+= ( w∗ 
+
+> j
+
+)⊤ ˜zk + σj (μj ) − (w∗ 
+
+> j
+
+)⊤μj
+
+= σj (μj ) + ( w∗ 
+
+> j
+
+)⊤(˜ zk − μj )= σj (μj ) + ∇σj (μj )⊤(˜ zk − μj ) (14) 
+
+Step 6: Bounding the total error. We now bound the error between the linear prediction and the true score: 
+
+|(w∗ 
+
+> j
+
+)⊤ ˜zk + b∗ 
+
+> j
+
+− sk,j |
+
+= |(w∗ 
+
+> j
+
+)⊤ ˜zk + b∗ 
+
+> j
+
+− σj (˜ zk) + σj (˜ zk) − sk,j |≤ | (w∗ 
+
+> j
+
+)⊤ ˜zk + b∗ 
+
+> j
+
+− σj (˜ zk)| + |σj (˜ zk) − sk,j | (triangle inequality) 
+
+≤ |∇ σj (μj )⊤(˜ zk − μj ) − (σj (˜ zk) − σj (μj )) | + ϵ (by (6), (14)) 
+
+= |∇ σj (μj )⊤(˜ zk − μj ) − ∇ σj (ξk)⊤(˜ zk − μj )| + ϵ (by (8)) 
+
+≤ α ∥˜zk − μj ∥22 + ϵ (by (11)) 
+
+≤ 4αD 2 + ϵ (by (13)) (15) 
+
+Step 7: Least-squares achieves a bound. The analysis above shows that the specific choice 
+
+(w∗ 
+
+> j
+
+, b ∗ 
+
+> j
+
+) achieves the error bound 4αD 2 + ϵ.Now consider the least-squares solution: 
+
+(wLS  
+
+> j
+
+, b LS  
+
+> j
+
+) = arg min 
+
+> w,b m
+
+X
+
+> k=1
+
+(w⊤ ˜zk + b − sk,j )2 (16) By the optimality of the least-squares solution: 
+
+> m
+
+X
+
+> k=1
+
+(( wLS  
+
+> j
+
+)⊤ ˜zk + bLS  
+
+> j
+
+− sk,j )2 ≤
+
+> m
+
+X
+
+> k=1
+
+(( w∗ 
+
+> j
+
+)⊤ ˜zk + b∗ 
+
+> j
+
+− sk,j )2 (17) This implies: 
+
+max  
+
+> k
+
+|(wLS  
+
+> j
+
+)⊤ ˜zk + bLS  
+
+> j
+
+− sk,j | ≤ max  
+
+> k
+
+|(w∗ 
+
+> j
+
+)⊤ ˜zk + b∗ 
+
+> j
+
+− sk,j | ≤ 4αD 2 + ϵ (18) 
+
+Step 8: Role of the separation condition. The separation condition λmin (Σ j ) ≥ λ0 > 0 ensures that the least-squares problem is well-conditioned. Specifically, the design matrix after centering: 
+
+Z = [˜ z1 − μj , . . . , ˜zm − μj ]⊤ ∈ Rm×d′
+
+(19) has singular values bounded below by √mλ 0. This guarantees that: 
+
+(wLS  
+
+> j
+
+, b LS  
+
+> j
+
+) 2 ≤ C · max  
+
+> k
+
+|sk,j | (20) for some constant C depending on λ0, preventing overfitting and ensuring good generalization. Setting ϵ′ = 4 αD 2 completes the proof. 
+
+A.2 Proof of Proposition 1 
+
+Proof. We proceed step by step. 
+
+Step 1: Problem setup and convexity. The cold-start optimization problem is: 
+
+min  
+
+> θ=[ w;b]
+
+L(θ) = 12 ∥Zθ − s∥22 = 12
+
+> |S|
+
+X
+
+> k=1
+
+(w⊤ ˜zk + b − sk)2 (21) 14 The gradient is: 
+
+∇L(θ) = Z⊤(Zθ − s) (22) The Hessian is constant: 
+
+∇2L(θ) = Z⊤Z (23) By Assumption 1, Z has full column rank, so Z⊤Z is positive definite with: 
+
+σ20 I ⪯ Z⊤Z ⪯ σ2max I (24) This shows that L is σ20 -strongly convex and σ2max -smooth. 
+
+Step 2: Optimal solution. The unique optimal solution satisfies ∇L(θ∗) = 0 :
+
+Z⊤(Zθ ∗ − s) = 0 ⇒ θ∗ = ( Z⊤Z)−1Z⊤s (25) 
+
+Step 3: Gradient descent update. The gradient descent update is: 
+
+θ(t+1) = θ(t) − η∇L(θ(t)) = θ(t) − ηZ ⊤(Zθ (t) − s) (26) Subtracting θ∗ from both sides: 
+
+θ(t+1) − θ∗ = θ(t) − θ∗ − ηZ ⊤Z(θ(t) − θ∗)= ( I − ηZ ⊤Z)( θ(t) − θ∗) (27) 
+
+Step 4: Recursive error bound. Let e(t) = θ(t) − θ∗. Then by (27): 
+
+e(t+1) = ( I − ηZ ⊤Z)e(t) (28) By induction: 
+
+e(t) = ( I − ηZ ⊤Z)te(0) (29) 
+
+Step 5: Spectral analysis. Let λmin = σ20 and λmax = σ2max be the extreme eigenvalues of Z⊤Z.The spectral norm of I − ηZ ⊤Z is: 
+
+I − ηZ ⊤Z 2 = max {| 1 − ηλ min |, |1 − ηλ max |} (30) For η ≤ 2 
+
+> λmax
+
+:• 1 − ηλ max ≥ 1 − 2 = −1, so |1 − ηλ max | ≤ 1
+
+• 1 − ηλ min = 1 − ησ 20 (always positive for small η)The optimal choice of η that minimizes the spectral radius is: 
+
+η∗ = 2
+
+λmin + λmax 
+
+= 2
+
+σ20 + σ2max 
+
+(31) which gives: 
+
+I − η∗Z⊤Z 2 = λmax − λmin 
+
+λmax + λmin 
+
+= σ2max − σ20
+
+σ2max + σ20
+
+(32) 15 Step 6: Loss convergence. The loss at iteration t is: 
+
+L(θ(t)) = 12 Z(θ(t) − θ∗) 22
+
+= 12 Ze (t) 22
+
+(33) Therefore: 
+
+L(θ(t)) − L(θ∗) = L(θ(t)) = 12 Ze (t) 22
+
+= 12 Z(I − ηZ ⊤Z)te(0) 22
+
+(by (29)) 
+
+≤ 12 ∥Z∥22 · I − ηZ ⊤Z 2t 
+
+> 2
+
+· e(0) 22
+
+(34) Since ∥Z∥22 = σ2max :
+
+L(θ(t)) − L(θ∗) ≤ σ2max 
+
+2 I − ηZ ⊤Z 2t 
+
+> 2
+
+· e(0) 22
+
+(35) 
+
+Step 7: Relating to initial loss. We have: 
+
+L(θ(0) ) − L(θ∗) = 12 Ze (0) 22
+
+≥ σ20
+
+2 e(0) 22
+
+(36) Therefore: 
+
+e(0) 22
+
+≤ 2
+
+σ20
+
+(L(θ(0) ) − L(θ∗)) (37) Substituting back: 
+
+L(θ(t)) − L(θ∗) ≤ σ2max 
+
+σ20
+
+· I − ηZ ⊤Z 2t 
+
+> 2
+
+· (L(θ(0) ) − L(θ∗)) (38) 
+
+Step 8: Simplified bound using strong convexity. For our choice of η ≤ 2
+
+> σ2max
+
+, we have: 
+
+I − ηZ ⊤Z 2 ≤ max {1 − ησ 20 , |1 − ησ 2max |} (39) For η ≤ 1
+
+> σ2max
+
+: 1 − ησ 2max ≥ 0 and 1 − ησ 2max ≤ 1 − ησ 20 . Thus: 
+
+I − ηZ ⊤Z 2 ≤ 1 − ησ 20 (40) Therefore: 
+
+I − ηZ ⊤Z 2t 
+
+> 2
+
+≤ (1 − ησ 20 )2t (41) However, using the standard result for gradient descent on strongly convex functions, we obtain the tighter bound: 
+
+L(θ(t)) − L(θ∗) ≤ (1 − ησ 20 )t · (L(θ(0) ) − L(θ∗)) (42) This follows from the fact that for σ20 -strongly convex and σ2max -smooth functions: 
+
+θ(t+1) − θ∗ 22
+
+≤ (1 − ησ 20 )2 θ(t) − θ∗ 22
+
+(43) combined with: 
+
+L(θ) − L(θ∗) ≥ σ20
+
+2 ∥θ − θ∗∥22 (strong convexity) (44) 
+
+L(θ) − L(θ∗) ≤ σ2max 
+
+2 ∥θ − θ∗∥22 (smoothness) (45) This completes the proof. 
+
+A.3 Empirical Verification of Lipschitz Property 
+
+We verified the assumptions in Theorem 1 by measuring distances before and after projection ϕ for 10,000 random item pairs from Book-Crossing (Fig. 4), confirming boundedness ( ∥˜zk∥2 ≤ 2.84 ) and contractive behavior ( L ≈ 0.014 ). 16 Figure 4: Empirical verification of Lipschitz property. Each blue point represents distances before (x-axis) and after ( y-axis) projection ϕ for an item pair. The orange dashed line ( y = 0 .014 x) bounds nearly all pairs, confirming L ≈ 0.014 . The red line ( y = 0 .003 x) shows average scaling. All points remain well below the diagonal ( y = x, black), validating the boundedness and contractive assumptions in Theorem 1. 
+
+# B Additional Experimental Details 
+
+B.1 Dataset Statistics 
+
+Tables 1 and 2 summarize the datasets used in our experiments. Table 1: Dataset statistics.                                 
+
+> Dataset Bags Items Ratings Sparsity
+> MovieLens 6,040 3,706 1,000,209 95.53% BookCrossing 278,858 271,379 1,149,780 99.99% Vaccine TCR 125 24,386 125,000 58.98% Emerson TCR 600 82,565,945 600,000 99.98% Microbiome 1 445 448 27,037 86.44% Microbiome 2 344 175 11,627 80.69% Microbiome 3 256 154 8,431 78.61%
+
+Table 2: Detailed content attributes and rating ranges for each dataset.                                       
+
+> Dataset Bag Item Range
+> MovieLens Age, Zip Genre, Dir. 1∼5
+> Book-Crossing Age Auth., Pub. 1∼10
+> Vaccine TCR Response Vgene, cdr3 1.1e−5∼0.17
+> Emerson TCR CMV Vgene, cdr3 1e−5∼0.001
+> Microbiome 1 Gastric Sequence −1∼4.95
+> Microbiome 2 Parkinson Sequence −1∼3.97
+> Microbiome 3 Parkinson Sequence −1∼4.49
+
+B.2 Hyperparameters B.3 Domain-Specific Item Encoders Entertainment: We use Qwen3-8B [Yang et al., 2025] to encode book/movie metadata (title, author, genre, etc.) as natural language, producing d = 3584 dimensional embeddings. 17 Table 3: Hyperparameters across all stages.                                                                 
+
+> Hyperparam MovieLens Book-Crossing TCR Microbiome
+> Stage 2
+> Enc Dim ( d)3584 3584 75 8Latent Dim ( d′)48 48 64 8MLP Arch. 1536-768-384-192-96 1536-768-384-192-96 64-48 32-16-8 MLP Dropout 0.15 0.15 0.03 0.07
+> Stage 3
+> Classifier Arch. 32-32 32-32-32 64-64 30-30 Classifier Dropout 0.2-0.2 0.4-0.4-0.04 0.3-0.5 0.2-0.2 Joint Weight 2.5 2.5 2.5 2.5
+> Cold-Start Adaptation
+> Adapt. Steps 151 151 248 160 Adapt. LR 7.8e-4 7.8e-4 2.6e-3 2.3e-3 Adapt. WD 8.6e-7 8.6e-7 1.8e-11 3.3e-12 Early Stopping 11 11 15 15
+> Global Training
+> Batch Size 16 16 16 16 LR 5.6e-4 3.4e-4 2.1e-3 2.8e-3 WD 4.3e-7 4.3e-7 4.1e-8 5.3e-9 Epochs 14 87 87 100
+
+TCR: We train a custom autoencoder on CDR3 sequences with V-gene information, producing 
+
+d = 75 dimensional embeddings (see Appendix C for architecture). 
+
+Microbiome: We use a Transformer encoder with taxonomic distance regularization to learn species embeddings from presence/absence patterns (see Section 5.6.5 for details). 
+
+# C Biological Applications Details 
+
+C.1 TCR Autoencoder Architecture 
+
+We model T cell receptor (TCR) sequences using a two-stage autoencoder-based representation learning framework. The architecture is inspired by prior work on sequence embeddings for immune receptor repertoires and is designed to capture both biochemical properties of individual clonotypes and repertoire-level structure. 
+
+Input representation. Each CDR3 amino acid sequence is encoded as a fixed-length one-hot vector over the 20 standard amino acids with an additional stop symbol. When V-gene information is available, its categorical encoding is concatenated to the sequence representation. This produces an input vector xi for each clonotype i.
+
+Encoder and decoder architecture. The encoder consists of two fully connected layers of width 256 with batch normalization and dropout (rate 0.232 ), followed by a three-layer latent projection head that outputs a d = 75 dimensional embedding zi ∈ R75 . The decoder mirrors the encoder with a symmetric fully connected architecture and reconstructs the original input representation ˆxi from the latent embedding. 
+
+Stage 1: Reconstruction pretraining. In the first training stage, the autoencoder is trained solely with a reconstruction objective on the Emerson TCR dataset. Given an input sequence xi, the encoder produces a latent embedding zi, which is decoded to reconstruct the input. The reconstruction loss is defined as 
+
+Lrec = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+ℓrec (xi, ˆxi), (46) where ℓrec denotes the squared reconstruction error between the input and its reconstruction. This stage optimizes only the encoder and decoder parameters and does not use any repertoire-level or 18 frequency supervision. Early stopping is applied based on reconstruction loss computed on held-out repertoires. 
+
+Stage 2: Frequency prediction. In the second stage, the pretrained encoder and decoder are frozen and a shared linear predictor is trained on top of the latent embeddings using the Vaccine TCR dataset. The predictor maps each embedding zi to a standardized frequency estimate ˆfi = w⊤zi + b. The corresponding loss is 
+
+Lfreq = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+( ˆfi − fi)2. (47) This stage encourages the latent representation to capture repertoire-level variation in clonotype abundance while preserving the structural information learned during reconstruction pretraining. 
+
+Training details and hyperparameters. Autoencoder is trained using the Adam optimizer with learning rate 1.19 × 10 −4 and mini-batches of size 1000 clonotypes. To control memory usage, each repertoire is capped at 10 4 clonotypes; when more are available, a random subset is drawn prior to stratified sampling. The autoencoder is trained for at most 100 epochs with early stopping (patience 20, minimum improvement threshold 10 −4). Dropout is applied within the encoder with rate 0.232 .
+
+C.2 Microbiome Transformer 
+
+We model static microbiome profiles using a Transformer-based representation learning framework. The architecture treats each sample as a bag of microbial taxa with associated presence states and is designed to capture both taxon-specific features and community-level structure while respecting phylogenetic relationships. 
+
+Input representation. Each sample is encoded as an existence vector of length N , where N is the total number of microbial taxa in the dataset. Every entry is assigned a discrete code: 0 (absent), 1 (present), or 2 (masked). Two embedding tables are learned jointly: a microbe-identity embed-ding Emicrobe ∈ RN ×d providing a unique vector for each taxon, and a presence-state embedding 
+
+Epresence ∈ R3×d capturing observed state. For microbe i in sample s, the input representation is 
+
+xs,i = e(microbe ) 
+
+> i
+
++ e(presence ) 
+
+> cs,i
+
+, (48) where cs,i denotes the presence code. 
+
+Community-level aggregation. To capture global community structure, a learnable attention pooling mechanism is applied before Transformer processing. Attention scores are computed via a learned weight vector wattn ∈ Rd:
+
+αs,i = exp( x⊤
+
+> s,i
+
+wattn )
+
+PNj=1 exp( x⊤ 
+
+> s,j
+
+wattn ) . (49) The weighted community embedding hs = ReLU (Wc
+
+PNi=1 αs,i xs,i ) is broadcast and added to each microbe’s representation, yielding enriched embeddings ˜xs,i = xs,i + hs that encode both local and global context. 
+
+Transformer encoder. The enriched embeddings {˜xs,i }Ni=1 are arranged as a sequence matrix and processed by a multi-layer Transformer encoder with L layers, each comprising multi-head self-attention (with H heads) and a feedforward network with hidden dimension dff .
+
+Prediction head and loss. The Transformer output is passed through a linear layer with sigmoid activation to produce per-microbe predicted probabilities ˆys,i ∈ [0 , 1] . To address class imbalance, per-batch class weights are computed as w0 = n1/(n0 + n1) and w1 = n0/(n0 + n1), where n0 and 
+
+n1 denote the counts of negative and positive labels among valid positions. The classification loss is 
+
+Lbce = 1
+
+|V| 
+
+X
+
+> (s,i )∈V
+
+wys,i · BCE (ˆ ys,i , y s,i ), (50) where V denotes the set of masked positions used for prediction. 19 Table 4: Stage 2 performance comparison of recommendation methods across cold scenarios (MAE).                            
+
+> Dataset Method WU-CI CU-WI CU-CI
+> MAE ↓MAE ↓MAE ↓
+> Movie Lens MeLU 0.9275 0.7854 0.9235 ColdNAS 0.8996 0.7896 0.8836
+> UNISON 0.8937 0.7579 0.8551
+> Book Crossing MeLU 1.4468 1.3924 1.4302 ColdNAS 3.5052 3.3487 3.4908
+> UNISON 1.2052 1.1797 1.1672
+
+Taxonomic regularization. To encourage phylogenetically coherent embeddings, a regularization term penalizes embedding dissimilarity proportionally to taxonomic similarity. The taxonomic distance Dtaxonomy [i, j ] between two taxa is defined as the number of levels at which their hierarchical lineages diverge. The regularization loss is 
+
+Lreg = 1
+
+N 2
+
+X
+
+> i,j
+
+exp( −Dtaxonomy [i, j ]) · ∥ ei − ej ∥22, (51) where the exponential weighting assigns higher penalty to closely related taxa with dissimilar embeddings. 
+
+Training details and hyperparameters. The model is optimized using AdamW with learning rate 
+
+η and weight decay λwd . The full training objective combines predictive accuracy with phylogenetic structure preservation: 
+
+Ltotal = Lbce + Lreg . (52) Training employs early stopping with patience based on validation loss (minimum delta 0.001 ). All train–validation divisions are performed at the sample level with an 80/20 split. 
+
+Embedding extraction. Upon training completion, the learned microbe embedding table Emicrobe 
+
+is extracted for downstream use. These embeddings encode both taxonomic relationships and phenotype-relevant patterns. 
+
+# D Full Experimental Results 
+
+D.1 Performance Across All Scenarios 
+
+Table 4 shows performance on all three test scenarios. To ensure a fair comparison when using LLM-based item encoders, we additionally evaluate MeLU under two alternative embedding configurations: (1) frozen Qwen3-8B embeddings ( d=3584 ), and (2) Qwen3-8B embeddings reduced via PCA to d′=48 , matching UNISON’s latent dimensionality. Table 6 reports Spearman correlation across all cold start scenarios. MeLU’s performance degrades substantially when given raw Qwen3-8B embeddings, indicating that its gradient-based adaptation overfits in the high dimensional space. PCA partially recovers performance by reducing dimensional-ity, but does not close the gap on Book Crossing and does not surpass MeLU’s original baseline on MovieLens. This confirms that UNISON’s advantage is not merely a consequence of using stronger embeddings, but stems from its task-aware shared MLP projection ϕ, which is jointly trained to support per bag linear scoring and bag level classification. 
+
+D.2 Scenario Specific Optimization on MovieLens 
+
+In the main text, UNISON is optimized end to end for the fully cold CU-CI scenario (Stage 3 objective). However, by tuning hyperparameters toward a specific cold start setting, UNISON can match or surpass existing baselines in any individual scenario. Table 7 reports results under three optimization targets. The observed trade-off is therefore a function of hyperparameter selection rather than a fundamental architectural limitation. 20 Table 5: Stage 2 performance comparison of recommendation methods across cold scenarios (MAE). 
+
+Dataset Method WU-CI CU-WI CU-CI 
+
+MAE ↓ MAE ↓ MAE ↓
+
+Movie Lens BPR 0.8639 0.8746 0.8563 NGCF 0.8406 0.8522 0.8357 LightGCN 0.8242 0.8410 0.8294 MetaHIN 0.7967 0.8066 0.7993 MeLU 0.9196 0.8104 0.9091 TaNP 0.8369 0.7516 0.8460 PAML 0.8245 0.7425 0.7945 PNMTA 0.7946 0.7168 0.7805 TDAS 0.7836 0.7064 0.7916 GreatMeta 0.7584 0.6975 0.7725 
+
+UNISON 0.7488 0.6931 0.7621 
+
+Book Crossing BPR 1.7217 1.7316 1.7043 NGCF 1.6843 1.6901 1.6881 LightGCN 1.6434 1.6614 1.6399 MetaHIN 1.6389 1.6401 1.6243 MeLU 1.6518 1.6353 1.6517 TaNP 1.2564 1.2437 1.3473 PAML 1.1745 1.2135 0.9974 PNMTA 1.1213 0.9663 0.9227 TDAS 1.0623 1.1480 0.9888 GreatMeta 0.9943 0.9427 0.9013 
+
+UNISON 0.9854 0.9399 0.8902 
+
+Table 6: Stage 2 performance comparison under different embedding configurations (Spearman correlation). 
+
+Dataset Method WU-CI CU-WI CU-CI 
+
+SCC ↑ SCC ↑ SCC ↑
+
+Movie Lens MeLU (original enc.) 0.300 0.476 0.291 MeLU (Qwen3) −0.103 0.080 −0.036 MeLU (Qwen3 + PCA) 0.299 0.299 0.286 
+
+UNISON (Qwen3) 0.261 0.377 0.323 
+
+Book Crossing MeLU (original enc.) 0.224 0.185 0.111 MeLU (Qwen3) −0.136 −0.020 0.025 MeLU (Qwen3 + PCA) 0.378 0.355 0.241 
+
+UNISON (Qwen3) 0.429 0.435 0.473 
+
+D.3 Ablation Study Results 
+
+Table 9 shows ablation results for architectural choices. 21 Table 7: Spearman correlation (SCC ↑) on MovieLens under different UNISON optimization targets. Scenario MeLU UNISON (Opt. CU-CI) UNISON (Opt. WU-CI) UNISON (Opt. CU-WI) WU-CI 0.301 0.260 0.311 0.248 CU-WI 0.476 0.377 0.366 0.441 CU-CI 0.291 0.323 0.318 0.320 Table 8: Spearman correlation (SCC ↑) on MovieLens under different UNISON optimization targets. Scenario MeLU UNISON (Opt. CU-CI) UNISON (Opt. WU-CI) UNISON (Opt. CU-WI) WU-CI 0.301 0.260 0.311 0.248 CU-WI 0.476 0.377 0.366 0.441 
+
+CU-CI 0.291 0.323 0.318 0.320 Table 9: Ablation study results for Microbiome datasets. The results demonstrate the impact of the MLP projection ϕ on performance across Stage 2 (S2) and Stage 3 (S3).                 
+
+> Configuration AUC S2 ↑AUC S3 ↑
+> Microbiome #1
+> Full UNISON (with MLP) 0.905 0.722 w/o MLP ( ϕ)0.610 0.582
+> Microbiome #2
+> Full UNISON (with MLP) 0.885 0.627 w/o MLP ( ϕ)0.642 0.545
+> Microbiome #3
+> Full UNISON (with MLP) 0.879 0.689 w/o MLP ( ϕ)0.625 0.575
+
+22

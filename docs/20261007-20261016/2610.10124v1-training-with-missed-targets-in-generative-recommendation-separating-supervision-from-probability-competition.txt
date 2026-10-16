@@ -1,0 +1,604 @@
+Title: Training with Missed Targets in Generative Recommendation: Separating Supervision from Probability Competition
+
+URL Source: https://arxiv.org/pdf/2610.10124v1
+
+Published Time: Thu, 08 Oct 2026 01:27:50 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+# Training with Missed Targets in Generative Recommendation: Separating Supervision from Probability Competition 
+
+# Xuesi Wang ∗† 
+
+wxsthu@icloud.com Independent Researcher Shanghai, China 
+
+# Yangbin Shi ∗
+
+11921182@zju.edu.cn Zhejiang University Hangzhou, China 
+
+# Xiaolin Zheng 
+
+xlzheng@zju.edu.cn Zhejiang University Hangzhou, China 
+
+## Abstract 
+
+Generative recommenders return a limited candidate set and may omit observed targets before reranking. A training strategy appends these missed targets to reranker training lists, although inference still ranks only original candidates. This operation simultaneously changes retrieved-target weight, adds supervision over appended targets, and makes the two groups compete for probability. An append/no-append comparison therefore cannot explain changes in returned-item rankings. We construct three matched losses that hold retrieved-target weight fixed while introducing appended-target supervision and group competition separately. The interme-diate loss trains within both groups but normalizes them separately, preventing training-only targets from competing with inference candidates. Experiments with a released OneRec model and lo-cally trained Amazon generators show that this competition can harm returned-item ranking. In four prespecified Amazon Video Games comparisons, removing it improved full-target normalized discounted cumulative gain (FT-NDCG) by 7.8–22.2%; 95% intervals over users and three of four intervals over training runs excluded zero. A conservative development-set rule selected appended-target training for two of three generators in one held-out category and rejected it for all three in another, avoiding a 1.7% loss. Candidate completion should therefore be evaluated for each generator rather than applied automatically. 
+
+## CCS Concepts 
+
+• Information systems → Recommender systems .
+
+## Keywords 
+
+generative recommendation, training-only candidate completion, fixed-pool reranking, listwise learning 
+
+## 1 Introduction 
+
+Large Web recommenders separate candidate generation from rank-ing because a changing catalog cannot be scored exhaustively within a serving-time budget [5]. Generative recommenders re-trieve items by producing semantic identifiers (semantic IDs), short token sequences assigned to catalog items [10, 19]. They may re-place a conventional cascade [31] or provide a quota-limited chan-nel blended with other retrieval routes [33]; a reranker or verifier can refine that channel’s slate [34, 38]. Once the generator and its candidate route are held fixed, an omitted item cannot reach its reranker. This creates a Web recommendation mismatch: feedback 
+
+> ∗Xuesi Wang and Yangbin Shi contributed equally to this work.
+> †Corresponding author.
+
+spans a changing catalog, whereas each serving route exposes only a bounded slate. One way to use labels missed by the generator is candidate com-pletion : keep every retrieved item, append the missed observed targets to the reranker’s training list, and train on the enlarged list. The appended targets may come from another retrieval route or from an offline answer set. They are absent again at inference, when the reranker receives only the generator’s original candidates. The practical question is whether learning against these training-only items improves or harms the ranking of items that can actually be served. Figure 1(a) shows the mismatch in one example from the public RecIF-Bench Ads recommendation dataset (RecIF-Ads) [40]. Its answer set contains three future-click targets. The generator returns 126 items containing the first target and misses the other two, which are appended only for training. Although the appended pair initially holds 0.011% of the model probability, the uniform completed-list loss asks it to receive 66.7%. This creates strong competition with returned items that does not exist at inference. Figure 1(b) compares three losses. Weighted-native (WN) ranks retrieved targets against the other returned items, then weights this ranking loss by the fraction of all observed targets that the generator retrieved. Conditional training (Cond) adds a separately normalized loss over appended targets, without competition be-tween the groups. Full append training (Full) puts both groups in one softmax, adding competition to the same two within-group tasks. We derive Cond by allowing all appended scores to move together and choosing the shared shift that minimizes Full. This removes only the requirement that the two groups compete for total probability. Comparing Cond with WN tests the appended-target loss; comparing Cond with Full tests removal of group competition. All three use the same training users and inference pool. With one appended target, its within-group probability is 1 and its loss is zero, so Cond reduces to WN; 63.5–100% of our training groups contain at least two appended targets. Earlier work shows that candidate distributions affect ranking cascades [18] and that adding gold references can harm machine-translation rerankers [2]. Neither result explains what happens when observed targets are appended only to a recommender’s training lists. This operation lowers the target weight assigned to retrieved items, adds supervision over the appended targets, and makes the two groups compete for probability. We match the retrieved-target weight across all three losses, then use the WN →Cond →Full path to introduce appended-target supervision and group competition separately. Table 1 distinguishes this con-trolled comparison from nearby methods. 
+
+> 1arXiv:2610.10124v1 [cs.IR] 7 Oct 2026 Wang, Shi, and Zheng
+
+(a) One RecIF-Ads training example   
+
+> 126 returned items; 3 future-click targets: 1 retrieved, 2 missed
+> Initial: p(T2) + p(T3) = 0.011% (softmax over all 128 items) Target: 2 appended / 3 total targets = 66.7%
+
+(b) Three losses, one added requirement at a time 
+
+WN  
+
+> Nonly
+
+Cond   
+
+> N,Aseparate
+
+Full               
+
+> N∪Ajoint
+> Returned group N
+> target
+> Appended A: unused weighted native loss
+> Returned group N
+> target
+> Appended group A
+> equal scores
+> two separate softmaxes
+> Returned group N
+> target
+> Appended group A
+> equal scores
+> one shared softmax
+> compete for probability
+> + appended-target loss + group competition
+> Same scorer; inference always ranks the original pool N.
+> −15 −12 −9 −6 Frozen-generator log likelihood (higher = more likely) T2, T3: missed T1: retrieved Other returned items
+
+Figure 1: Candidate completion and three training losses. (a) One RecIF-Ads answer set contains three future-click targets. T1 appears among 126 returned items, while T2 and T3 are appended only for training. Together, T2 and T3 initially receive 0.011% of the softmax probability over all 128 training items; uniform supervision assigns them 2/( 1 + 2) = 66 .7% of target weight. (b) WN retains only weighted ranking within the returned group; Cond adds a separately normalized appended-target task; Full uses one normalization over both groups and thereby adds cross-group competition. Thus WN →Cond and Cond →Full each add one training requirement. 
+
+We train WN, Cond, and Full with the same candidates, represen-tations, scorer architecture, optimizer, and inference pool. Compar-ing their returned rankings attributes a change to appended-target supervision or to group competition. Evaluation includes all eli-gible users, including those for whom the generator retrieved no target. We then address the practical choice directly: development users determine whether to keep returned-only training or adopt appended-target training, and different users from held-out cate-gories evaluate that choice. Our contributions are threefold. First, we show that candidate completion changes retrieved-target weight, adds supervision over missed targets, and creates probability competition with returned items. Second, three otherwise identical losses measure the effects of supervision and competition separately. Third, we give a practical rule for each generator: adopt appended-target training only when its adjusted development lower bound is positive. Experiments with released OneRec and local Amazon generators show that probability competition can be harmful. In the primary Amazon Video Games study, removing it improved all four point estimates by 7.8–22.2%; held-out categories show that appended-target training helps some generators but should be rejected for others. 
+
+## 2 Related Work 
+
+Generative recommendation and downstream reranking. Genera-tive recommenders retrieve items by generating semantic IDs from a user’s history [19]; a recent survey reviews this design space [6]. Most work improves retrieval through semantic ID design, joint generation and ranking, sequence reranking, or reward-guided de-coding [7, 10, 12, 21, 24, 25, 27, 35]. Other systems use a generator within a larger pipeline: it may replace an earlier cascade [31], supply some candidates to downstream ranking [33], or verify a frozen retriever’s top-𝐾 items [38]. Related studies explain retrieval failures through item age, semantic ID quality, decoding difficulty, or early beam-search pruning [17, 26, 29, 37]. We study what happens after retrieval. Joint-prefix alignment changes generator supervision and inference-time completion [26]. We leave the generator and its returned candidates unchanged, then train the reranker with observed targets that the generator missed. Our question is whether those training-only targets improve or harm the ranking of candidates that can still be served. 
+
+Learning with a fixed candidate pool. Several areas study candi-date distributions at other points in the pipeline. Cascade meth-ods coordinate multiple ranking stages [8, 18]. Selection-bias and off-policy methods use logged exposure to estimate relevance or retrieval-policy value [1, 15, 16, 30]. Sampled-softmax methods correct the negative samples used to approximate catalog-level training [32]. Automated and calibration-aware rerankers choose strategies or balance relevance with preference calibration [9, 11]. We keep the generator, serving candidates, and scorer architecture the same; only the use of missed observed targets during reranker training changes. Machine-translation reranking provides a closely related finding: adding gold references to training candidates can create harmful comparisons [2]. We study the same train/test candidate mismatch in recommendation and separate the changes mixed by a simple append-versus-no-append comparison. 
+
+Separating the effects of training-only targets. ListNet provides the listwise probability model used by our losses [3]. We adapt pro-file minimization [14] to remove competition between returned and training-only items while preserving ranking within each group. Decoupled knowledge distillation (DKD) also separates learning within groups from competition between them, but its groups are target and non-target classes [39]. Our two groups differ in when 
+
+> 2Training with Missed Targets in Generative Recommendation: Separating Supervision from Probability Competition
+
+Table 1: How the proposed comparison differs from nearby approaches. We keep the generator, inference pool, and scorer architecture fixed while changing one part of reranker supervision at a time.       
+
+> Approach Difference from our study Profile likelihood [14] minimizes over a shared offset; does not compare these reranker losses DKD [39] splits target/non-target knowledge; we split returned and training-only items Cascade optimization and calibrated reranking [8, 18, 20] coordinates stages or calibrates sublists; our generator remains fixed LUPI [23, 28] uses training-only features, not training-only comparison items Candidate-free verifier [38] learns token likelihood without completed-list supervision Ours compares three losses with the same generator, inference pool, and scorer architecture
+
+they exist: returned items are ranked at inference, whereas ap-pended items appear only during training. Multitask gradient meth-ods [4, 36] balance task updates, while learning using privileged information (LUPI) [23, 28] uses training-only features. Neither compares otherwise identical losses with and without probability competition from training-only items. Table 1 summarizes these differences. For loss selection, we also include pairwise-ranking baselines within the returned pool or between appended targets and returned nontargets [22]. Appendix A.2 extends the derivation to targets with different weights. 
+
+## 3 Method 
+
+Our goal is to determine which change introduced by appended targets alters the ranking of the returned candidates. We first define the returned and appended item sets. We then split the completed-list loss into three terms and construct three training losses that add those terms one at a time. 
+
+## 3.1 Returned and Missed Targets 
+
+Let 𝑥 denote a user’s interaction history and 𝑌 𝑥 the set of observed target items associated with it. The targets may be collected within a session or a fixed future window. For the ranking loss, membership in 𝑌 𝑥 is a binary target indicator; it records the observed event and does not necessarily indicate favorable sentiment. A generative recommender retrieves an item by generating its semantic ID rather than scoring every catalog item. If item 𝑖 has semantic ID 𝑡 (𝑖 ) = (𝑡 1, . . . , 𝑡 𝐿 𝑖 ), the fixed generator assigns it log likelihood 
+
+ℓ (𝑖 | 𝑥 ) =
+
+> 𝐿 𝑖
+
+∑︁ 
+
+> 𝑗 =1
+
+log 𝑝 𝜃 (𝑡 𝑗 | 𝑥, 𝑡 1, . . . , 𝑡 𝑗 −1).
+
+The decoding temperature is fixed within each dataset. Let I be the items representable by the generator. Decoding returns the returned candidate set 𝑁 (𝑥 ). Some observed targets may be representable but absent from this set; we denote them by 
+
+𝐴 (𝑥 ) = (𝑌 𝑥 ∩ I) \ 𝑁 (𝑥 ).
+
+Candidate completion appends these missed targets during training, forming 𝐶 (𝑥 ) = 𝑁 (𝑥 ) ∪ 𝐴 (𝑥 ) without removing any returned item. At inference, the reranker still receives only 𝑁 (𝑥 ); evaluation labels never alter this pool. The reranker adds a learned residual to the fixed generator score: 
+
+𝑠 𝜙 (𝑖 | 𝑥 ) = ℓ (𝑖 | 𝑥 ) + ℎ𝜙 (𝑥, 𝑖 ).
+
+Here ℎ𝜙 is a scalar correction computed from fixed user and item representations and candidate features. The attention variant also uses 𝑁 (𝑥 ) as context. Its zero-initialized output layer recovers the generator ranking before training. We train only 𝜙 and resolve ties by complete item IDs. For any candidate set 𝐶 containing at least one target, training uses uniform multi-target listwise cross-entropy: 
+
+L( 𝑠, 𝐶, 𝑌 ) = − 1
+
+|𝑌 ∩ 𝐶 |∑︁ 𝑖 ∈𝑌 ∩𝐶 
+
+log 𝑒 𝑠 𝑖 
+
+Í𝑗 ∈𝐶 𝑒 𝑠 𝑗 , (1) where 𝑠 𝑖 = 𝑠 𝜙 (𝑖 | 𝑥 ) and 𝑌 = 𝑌 𝑥 ; we omit 𝑥 below. The target distribution has total mass one and divides it equally among the observed targets. Appendix A.2 gives the corresponding result for supplied nonnegative target weights. 
+
+## 3.2 What Candidate Completion Changes 
+
+Consider a training list with 𝑟 = |𝑁 ∩ 𝑌 | > 0 retrieved targets and 
+
+𝑘 = |𝐴 | > 0 appended targets. Their shares of the target distribution are 𝛼 = 𝑟 /( 𝑟 + 𝑘 ) and 𝛾 = 𝑘 /( 𝑟 + 𝑘 ). Define the score normalizers 
+
+𝑍 𝑁 = Í𝑖 ∈𝑁 𝑒 𝑠 𝑖 and 𝑍 𝐴 = Í𝑖 ∈𝐴 𝑒 𝑠 𝑖 , and normalize scores separately within each group: 𝑝 𝑁 (𝑖 ) = 𝑒 𝑠 𝑖 /𝑍 𝑁 and 𝑝 𝐴 (𝑖 ) = 𝑒 𝑠 𝑖 /𝑍 𝐴 . This gives two within-group losses, 
+
+L𝑁 = − 1
+
+𝑟 ∑︁ 𝑖 ∈𝑁 ∩𝑌 
+
+log 𝑝 𝑁 (𝑖 ), L𝐴 = − 1
+
+𝑘 ∑︁ 𝑖 ∈𝐴 
+
+log 𝑝 𝐴 (𝑖 ).
+
+The first ranks retrieved targets against the other returned items. The second encourages equal scores among the appended targets. 
+
+Proposition 1 (Three-part decomposition). The loss on the com-pleted list separates into three terms: 
+
+Lappend = T𝑁 + T 𝐴 + T mass ,
+
+T𝑁 = 𝛼 L𝑁 , T𝐴 = 𝛾 L𝐴 ,
+
+Tmass = −𝛼 log 𝑍 𝑁 
+
+𝑍 𝑁 + 𝑍 𝐴 
+
+− 𝛾 log 𝑍 𝐴 
+
+𝑍 𝑁 + 𝑍 𝐴 
+
+.
+
+(2) 
+
+Derivation. For a retrieved item, 𝑒 𝑠 𝑖 /( 𝑍 𝑁 + 𝑍 𝐴 ) = [𝑍 𝑁 /( 𝑍 𝑁 +
+
+𝑍 𝐴 )] 𝑝 𝑁 (𝑖 ); the same identity holds for an appended item. Splitting the target sum in Equation 1 gives the two conditional losses with weights 𝛼 and 𝛾 , followed by the two group-probability terms in Equation 2. 
+
+Interpretation. The completed-list loss Lappend is Full. Relative to unweighted training on 𝑁 , Full makes three changes. First, T𝑁 
+
+multiplies the returned-item loss by 𝛼 . Second, T𝐴 trains the scorer to rank within the appended group. Third, Tmass makes the returned and appended groups compete for total probability in the target ratio (𝛼, 𝛾 ). We refer to this third term as the group-competition term. When 𝑘 = 1, T𝐴 is zero because the appended group contains only one item. In Figure 1(a), 𝑟 = 1 and 𝑘 = 2, so Tmass asks the appended group to receive 2 /3 of the target probability although 
+
+> 3Wang, Shi, and Zheng
+
+it initially receives only 0 .011%. We next remove this competition while retaining both within-group losses. 
+
+## 3.3 Conditional Training 
+
+We obtain Cond from Full by removing only the competition be-tween the two groups. For each training list, temporarily add the same scalar 𝛿 to every appended score. This changes the total prob-ability assigned to 𝐴 without changing any ranking within 𝑁 or 
+
+𝐴 . The offset replaces 𝑍 𝐴 by 𝑒 𝛿 𝑍 𝐴 while leaving 𝑝 𝐴 , L𝐴 , and all returned-item quantities unchanged. Differentiating Full with re-spect to 𝛿 gives 
+
+𝑒 𝛿 𝑍 𝐴 
+
+𝑍 𝑁 + 𝑒 𝛿 𝑍 𝐴 
+
+− 𝛾, 
+
+which is zero at 
+
+𝛿 ∗ = log (𝑘 /𝑟 ) + log 𝑍 𝑁 − log 𝑍 𝐴 .
+
+For the example in Figure 1(a), 𝛿 ∗ ≈ 9.8 moves the appended-group mass to its 2 /3 target while preserving both within-group rankings. Figure 2 illustrates this construction. 
+
+Proposition 2 (Removing group competition). For finite scores and 
+
+𝑟, 𝑘 > 0, the second derivative with respect to 𝛿 is the positive Bernoulli variance of the predicted appended-group mass. Hence 
+
+𝛿 ∗ is the minimum and min  
+
+> 𝛿
+
+Lappend (𝑠 + 𝛿 1𝐴 ) = T𝑁 + T 𝐴 + 𝐻 (𝛼, 𝛾 ),
+
+where 1𝐴 indicates the appended group and 𝐻 (𝛼, 𝛾 ) = −𝛼 log 𝛼 −
+
+𝛾 log 𝛾 . The entropy term depends only on target counts, so it has no gradient with respect to the scorer. We can therefore train Cond directly as T𝑁 + T 𝐴 ; the temporary offset is neither computed nor stored in the implementation. Inference still applies 𝑠 𝜙 = ℓ + ℎ𝜙 
+
+only to 𝑁 .Cond is unchanged if the same constant is added to all scores in either group. Its gradient is ∇𝜙 (T 𝑁 + T 𝐴 ) wherever the scores are differentiable: training updates the scorer through the two within-group losses, without a group-competition gradient. A fixed offset in Full cannot remove that gradient throughout training, because the optimal offset changes with the scores. Two special cases determine which lists enter training. If 𝑘 = 0, the generator missed no target and the loss is L𝑁 . If 𝑟 = 0, the returned list contains no target whose ranking can be compared across the three losses; minimizing over 𝛿 approaches L𝐴 as 𝛿 →+∞ . We therefore train the three losses on lists with 𝑟, 𝑘 > 0. Evaluation still includes every eligible user, including those with 
+
+𝑟 = 0. If 𝑘 = 1, T𝐴 = 0 and Cond reduces to T𝑁 . Appendix A.2 extends the construction to several candidate sources by using one temporary offset per source. 
+
+## 3.4 Three Training Losses 
+
+We train a separate reranker with each of three losses. Moving from one loss to the next adds exactly one requirement: 
+
+LWN = T𝑁 = 𝛼 L𝑁 , LCond = T𝑁 + T 𝐴 ,
+
+LFull = T𝑁 + T 𝐴 + T mass .
+
+WN uses only the returned-item loss, weighted exactly as it is in Full. Cond also learns to rank the appended targets, but keeps their prob-ability separate from the returned group. Full then makes the two groups compete for probability. Candidates, training lists, scorer in-puts, initialization, and optimization are unchanged. Table 2 shows the comparison for each question. 
+
+Table 2: How the three trained rerankers answer separate questions. 𝑉 𝑊 , 𝑉 𝐶 , and 𝑉 𝐹 are their ranking scores on the returned candidates; the first score is minus the second.                 
+
+> Score difference Only change Question answered
+> 𝑉 𝐶 −𝑉 𝑊 add T𝐴 Does appended-target training help?
+> 𝑉 𝐶 −𝑉 𝐹 remove Tmass Does competition hurt?
+> 𝑉 𝐹 −𝑉 𝑊 add both terms What is their combined effect?
+
+Why all three losses are needed. Let 𝑉 𝑊 , 𝑉 𝐶 , 𝑉 𝐹 denote the returned-candidate ranking scores after training with WN, Cond, and Full. Comparing Full directly with WN gives 
+
+𝑉 𝐹 − 𝑉 𝑊 = (𝑉 𝐶 − 𝑉 𝑊 ) − ( 𝑉 𝐶 − 𝑉 𝐹 ).
+
+Full versus WN combines two changes, so a better Full score does not identify which change helped; one may help while the other hurts. Cond separates them. 𝑉 𝐶 −𝑉 𝑊 adds only the appended-target loss, while 𝑉 𝐶 − 𝑉 𝐹 removes only group competition. 
+
+## 3.5 Why the Effect Reaches Inference 
+
+Although appended targets disappear at inference, group competi-tion can still change the returned ranking. The same scorer produces both groups’ scores during training, so Tmass updates parameters that later rank returned candidates. Let 𝜋 𝐴 = 𝑍 𝐴 /( 𝑍 𝑁 + 𝑍 𝐴 ) and 
+
+𝜇 𝐵 = Í𝑖 ∈𝐵 𝑝 𝐵 (𝑖 )∇ 𝜙 𝑠 𝑖 for 𝐵 ∈ { 𝑁 , 𝐴 }. Since ∇𝜙 log 𝑍 𝐵 = 𝜇 𝐵 ,
+
+∇𝜙 Tmass = (𝜋 𝐴 − 𝛾 )( 𝜇 𝐴 − 𝜇 𝑁 ). (3) In Equation 3, the first factor is the gap between the appended group’s predicted probability and its target share. The second is the difference between the two groups’ average score gradients. Their product updates the same scorer parameters later used to rank returned candidates. Group competition can therefore change inference rankings even though no appended item is served. 
+
+## 4 Experiments 4.1 Research Questions 
+
+We ask three research questions (RQs). RQ1: How does probabil-ity competition between returned and appended items affect the ranking of returned candidates? RQ2: When that competition is removed, does supervision from appended targets improve the returned ranking? RQ3: Can development data choose between returned-only and appended-target training for a new category? Figure 3 connects each question to a test. RecIF-Ads, using a re-leased OneRec checkpoint, separates the effect of appended-target supervision from that of group competition. A comparison fixed be-fore the Amazon Video Games (A-Games) final labels were opened provides a second test of competition. We also shift every appended score by the same amount. This preserves rankings inside each group but changes how probability is divided between them; a re-sponse from Full but not Cond directly identifies competition as the cause. Amazon Digital Music (A-Music) and Toys and Games 
+
+> 4Training with Missed Targets in Generative Recommendation: Separating Supervision from Probability Competition
+
+(a) Full: one shared softmax (b) Introduce a shared o ff set (c) Minimize over the o ff set   
+
+> Returned group N
+> target
+> Appended targets A
+
+N + A + mass     
+
+> groups compete for total probability
+> N: scores unchanged
+> A: add the same δto every score
+> +δ
+> within-Nand within-Ascore differences stay fixed
+
+min  
+
+> δ
+
+append (s + δ1A)
+
+= N + A + H(α, γ)
+
+N + A                   
+
+> Cond trains N+A
+> H(α,γ) depends only on target counts
+> add δ
+> COLORS returned/native Nappended A(training only) INFERENCE rank Nonly with sϕ=ℓ+hϕ.
+
+Figure 2: Removing competition between the two groups. Blue denotes the returned group 𝑁 and orange the appended group 
+
+𝐴 . (a) Full normalizes both groups together. (b) A temporary offset 𝛿 changes the appended group’s total probability without changing rankings within either group. (c) Minimizing Full over 𝛿 leaves T𝑁 + T 𝐴 plus a count-dependent constant 𝐻 (𝛼, 𝛾 ). This gives Cond. Inference ranks only 𝑁 ; the offset is not stored. 
+
+(A-Toys) test whether the conclusions depend on one generator or reranker. The remaining experiments address the training decision rather than another isolated loss term. Amazon Home and Kitchen (A-Home) and the RecIF-Bench Product split (RecIF-Product) estab-lish a conservative rule: for each generator, switch from the best returned-only loss to the best appended-target loss only when the adjusted lower end of the development gain is positive. We fix this rule before training on Amazon Cell Phones and Accessories (A-Cell) and Amazon Health and Personal Care (A-Health). New generators and previously unseen users in those categories then show whether the rule chooses well. Table 3 states the role of every dataset. 
+
+## 4.2 Data and Candidate Generators 
+
+Across all datasets, observed targets missed by the fixed generator are appended only during training; evaluation ranks the genera-tor’s original candidates. Comparing WN, Cond, and Full requires a training list with at least one retrieved and one missed target (𝑟, 𝑘 > 0), and the appended-target loss is nonzero only when at least two targets were missed ( 𝑘 ≥ 2). All losses in a comparison use the same eligible lists. Evaluation retains every user, including those for whom the generator retrieved no target ( 𝑟 = 0). Table 3 re-ports how often a target is reachable. Throughout the experiments, 
+
+returned-only means any loss trained without appended targets; the capitalized Native denotes the specific unweighted L𝑁 baseline. The two local generator architectures are Transformers and gated recurrent units (GRUs). A generator label includes its ar-chitecture and training seed; for example, “Transformer (seed 42)” denotes one trained generator and its resulting candidate pools. The six Amazon studies use public review histories [13]. After retaining a user’s first review of each item, the last three distinct items form the future target set and at least two earlier items form the history. This construction yields many users with both retrieved and missed targets. A robustness check keeps only targets rated at least four, distinguishing favorable feedback from interaction alone. RecIF-Bench temporally separates each user’s history from a released set of future clicks [40]. We use its Ads and Product splits. Each row defines one training group, and its deduplicated future clicks form 𝑌 𝑥 . RecIF-Ads contains 3,740 reranker-training groups with a reachable target; the 3,189 groups with 𝑟, 𝑘 > 0 enter the three-loss fits. Its groups contain 1–10 targets (median 3, mean 3.75), with 𝑟 = 1–7 and 𝑘 = 0–9. RecIF-Product requires 𝑟 > 0, 𝑘 ≥ 2for fitting; its 2,224 groups contain 3–10 targets (median 8), with 
+
+𝑟 = 1–5 and 𝑘 = 2–9. Figure 1(a) illustrates candidate completion for one RecIF-Ads training group. Hash-based user splits prevent the same user from entering gen-erator training, reranker training, development, and final evaluation. For A-Music and A-Games, we fixed data construction and training before obtaining the data. A-Games also removes 485 A-Music users, and its predictions and checkpoint choices were complete before final targets were opened. A-Home excludes users from the earlier Amazon categories, while RecIF-Product keeps final users out of training and development. Appendix A.3 gives the exact split rules. 
+
+Generator models. The two RecIF splits use released OneRec checkpoints: OneRec-1.7B-Pro for RecIF-Ads and OneRec-1.7B for RecIF-Product. For RecIF-Ads, we project the fixed states to 128 dimensions and decode at temperature 1.2. The local Transformers and GRUs use training-only collaborative embeddings, residual quantization, beam width 64, and temperature 1. Validation neg-ative log-likelihood (NLL) selects a checkpoint. Each generator seed rebuilds candidate pools, representations, and eligible train-ing groups, so each dataset–generator pair is analyzed separately. Appendix A.3 gives architectures and training settings. 
+
+## 4.3 Isolating Supervision and Competition 
+
+To answer RQ1–RQ2, we train separate WN, Cond, and Full rerankers and evaluate them on the same returned candidates. They share the candidates, training lists, features, initialization, 
+
+> 5Wang, Shi, and Zheng
+
+Why does ranking change? 
+
+Fix candidates 
+
+RecIF-Ads and A-Games same route and pool N
+
+Train separately 
+
+same scorer and seeds WN → Cond → Full 
+
+Compare returned rankings 
+
+Cond−WN: add target loss Cond−Full: remove competition 
+
+Check uncertainty 
+
+eff ect + interval seed/checkpoint checks 
+
+Which loss should we use? 
+
+Develop rule 
+
+A-Home and RecIF-Product 
+
+Choose two losses 
+
+best returned-only loss best appended-target loss 
+
+Decide per generator 
+
+adjusted lower bound > τ?append if yes; returned-only if no 
+
+Held-out test 
+
+A-Cell and A-Health all eligible users 
+
+Figure 3: Experiments for the three research questions. Top: RQ1 compares Cond with Full, and RQ2 compares Cond with WN, after separately training all three losses with identical settings. Bottom: RQ3 selects the best returned-only and appended-target losses on development users, switches only when the adjusted lower bound of the gain is above zero, and evaluates the chosen loss on held-out A-Cell and A-Health users. Table 3: Datasets, candidate generators, and the question each addresses. The second column counts training lists containing both a returned and a missed target. The third shows how often at least two targets are appended, so their within-group loss is nonzero. The fourth shows how often the final returned candidates contain any target; ranges span generators.                                      
+
+> Dataset / candidate generator Training lists with both returned and missed targets At least two appended targets Final users with a returned target Question addressed
+> Tests of the main claims
+> RecIF-Ads / OneRec-1.7B-Pro 3,189 81.6% 44.9% separate supervision from competition A-Games / Transformer (seed 42) 914 75.5% 36.3% test competition on held-out labels A-Home / GRUs (seeds 91–93) 461–543 91.9–93.6% 9.6–10.3% determine when to switch losses RecIF-Product / OneRec-1.7B 2,224 100.0% 30.3% check whether training improves the initial ranking A-Cell / GRUs (seeds 111–113) 394–400 94.7–95.9% 30.1–30.7% evaluate the fixed switching rule A-Health / GRUs (seeds 121–123) 666–702 96.7–97.0% 19.9–20.8% evaluate the fixed switching rule
+> Tests across other models and data
+> A-Music / Transformer (seed 42) 524 63.5% 58.1% test a second data source A-Games / Transformer (seed 42), GRUs (seeds 51–52) 914–956 74.0–75.9% 36.3–38.6% vary the generator and reranker A-Toys / GRUs (seeds 61–62) 163–170 86.7–92.2% 13.6% test another category
+
+minibatch order, and optimizer. Cond minus WN therefore mea-sures what changes when the appended-target loss is added. Cond minus Full measures what changes when group competition is removed but both within-group losses remain. We also compare WN with WN +Mass, which adds competition to WN without adding the appended-target loss. If both comparisons favor re-moving competition, the result does not depend on whether the appended-target loss is present. We test both a multilayer perceptron (MLP) with hidden widths 256 and 128 and a two-block attention reranker with width 128 and four attention heads. A training run means one independently initialized and trained reranker; it is not an attention head. Both rerankers use the same unchanged query and item representations and scalar features. The attention model attends only to returned candidates, so adding training-only targets cannot change its input context. Appendix A.1 specifies the inputs and architectures. All rerankers use AdamW, batch size 64, weight decay 10 −4, and gradient clipping at norm 1. The primary A-Games test uses three independent runs, 60 epochs, learning rate 10 −4, and checkpoints chosen on development users. RecIF-Ads first uses three runs and then seven new runs for WN, Cond, Full, and a Full variant ini-tialized with the correct appended-group probability. Training for 240 epochs and selecting checkpoints in five folds test whether the conclusion depends on stopping at epoch 60. Appendix A.4 gives the schedules and defines the average effect over training. 
+
+Other generators and rerankers. Six further comparisons combine MLP and attention rerankers, Transformer and GRU generators, and the A-Games and A-Toys datasets. Within each comparison, every loss receives the same hyperparameter search; the mean development score over three training runs chooses the schedule for continued training. Appendix A.4 lists the seeds, search ranges, and stopping rules. 
+
+Testing probability competition. RecIF-Ads and two Amazon com-parisons test whether Full responds to the probability divided be-tween returned and appended items. For each training list, we add the same constant to every appended score so that the appended group starts with its target probability 𝛾 ; the Amazon comparisons also test half this shift. This operation does not change rankings in-side either group and leaves Cond unchanged. Candidates, features, attention context, training budget, and inference are identical, so a change in Full comes from probability competition during training. 
+
+## 4.4 Choosing Whether to Append Targets 
+
+RQ3 asks whether development results can determine whether appended-target training should be used for a new category. For 
+
+> 6Training with Missed Targets in Generative Recommendation: Separating Supervision from Probability Competition
+
+each generator, we first select the best returned-only loss: Native and WN, or an expanded set that also includes the native pairwise loss (NP). We separately select among Cond, Full, and a discrim-inative appended-target loss (Disc). Disc trains appended targets to outrank returned nontargets without putting the two groups in one softmax. Appendix A.5 defines Disc and NP formally. For each generator, we train every loss for the same budget. Mean development full-target normalized discounted cumulative gain at 20 (FT-NDCG@20) chooses one returned-only loss and one appended-target loss. A-Home and RecIF-Product are the only datasets used to set the rule. Before training on A-Cell and A-Health, we specify the data construction, available losses, and switching threshold. Eight training runs choose the two losses on develop-ment users. We adopt the appended-target loss only if the lower confidence bound of its gain remains above zero after correcting for three generator comparisons; otherwise we keep the returned-only loss. Five new runs evaluate that choice on 5,398 A-Cell and 13,622 A-Health final users. Each category uses three newly trained GRU generators. Adjusting all 18 possible loss-pair comparisons leaves every choice unchanged (Appendix A.3). 
+
+## 4.5 Metrics and Uncertainty 
+
+FT-NDCG@20 is our primary end-to-end metric. The reranker or-ders only returned candidates, but the ideal-ranking denominator contains the user’s complete eligible target set. A missed target therefore remains in the denominator, and a user with no reachable target receives zero. Candidate-conditional NDCG instead removes unreachable targets from its denominator, so its values are not nu-merically comparable with FT-NDCG@20. Recall@20 and mean reciprocal rank at 20 (MRR@20) provide secondary checks. Ap-pendix A.1 also reports results restricted to users with a reachable target. We set the FT-NDCG improvement threshold to 𝜏 = 0 before held-out evaluation. The lower bound uses variation across reranker training runs on the same development users; separate final users evaluate the chosen loss. An application may instead require a positive minimum useful gain. Appendix A.3 reports results for several thresholds. If the untrained initialization scores best on development users, as on RecIF-Product, we retain it. For A-Games, one interval resamples the 9,121 final users while holding the three trained rerankers fixed; a second interval mea-sures variation across those training runs. RecIF-Ads intervals resample its evaluation users. For A-Cell and A-Health, we first average each user’s predictions over three gener-ators and five new training runs. The main intervals resample users; an additional analysis also resamples generators and training runs. Every loss comparison includes all final users. Appendix A.3 gives the exact splits, seeds, search ranges, jointly tested comparisons, and resampling algorithms. 
+
+## 5 Results 
+
+The results answer the questions in causal order. We first isolate the harm from group competition, then measure the benefit of appended-target supervision, and finally test whether development results avoid harmful switches on new categories. 
+
+## 5.1 Group Competition Can Hurt 
+
+With the same 60-epoch budget, Cond ranked returned RecIF-Ads candidates better than Full in all seven new training runs. WN, Cond, and Full averaged 0 .031527, 0 .033405, and 0 .025982 FT-NDCG. Cond exceeded Full by 0 .007423 [0.004978 , 0.009744 ]
+
+at epoch 60, and its average advantage throughout training was 
+
++0.01241 [+ 0.01031 , +0.01451 ]. These intervals capture variation across training runs for the same evaluation users. The difference depends on when training stops. When develop-ment folds chose the checkpoint, the interval crossed zero (Table 4). After 240 epochs, Cond −Full was −0.00064 and +0.00270 at learn-ing rates 3 × 10 −4 and 10 −4; choosing the best among 25 recorded checkpoints gave +0.00120 and +0.00108. The advantage is consis-tent at epoch 60 but is not guaranteed under a different training duration or checkpoint rule. Giving Full the correct appended-group probability at initializa-tion raised its FT-NDCG by 0 .009233 [0.006838 , 0.011643 ], with the same direction in all seven runs. Cond and WN were unchanged. This direct response to group probability supports probability com-petition as the source of Full’s change. 
+
+Confirmation on Amazon Video Games. We chose the A-Games generator, comparisons, learning rate, and training runs before opening the final labels. Removing competition improved FT-NDCG for both rerankers, with or without the appended-target loss, over 9,121 separate users (Table 6). Relative gains were 22 .23% and 12 .84% for the MLP and 7 .83% and 13 .16% for attention. All four user in-tervals and three of four training-run intervals excluded zero, and every run favored removing competition. 
+
+Direct test of probability competition. The derivation predicts that shifting every appended score by the same amount leaves Cond unchanged. Across 12 runs, Cond’s training path and learned parameters were identical to numerical precision. Full changed: for the A-Games attention reranker, the shift moved Cond −Full from 
+
+−0.000358 to +0.004049, a change of +0.004407 [0.001591 , 0.007177 ].Full therefore responds to the probability divided between the two groups, whereas Cond does not. 
+
+## 5.2 Appended-Target Supervision Can Help 
+
+Cond differs from WN only by the separately normalized loss over appended targets. After 60 epochs, Cond −WN was +0.001877 
+
+[0.000343 , 0.003455 ] across the seven new RecIF-Ads runs, and ev-ery run had the same sign. When development folds chose the checkpoint, the estimate was −0.000887 [− 0.002209 , +0.001211 ]
+
+(Table 4). Appended-target supervision helped at epoch 60, but its benefit was uncertain after checkpoint selection. 
+
+## 5.3 Development Results Prevent a Harmful Switch 
+
+Table 5 summarizes the choices. On A-Cell, development users chose Disc for two generators and WN for the third. The result-ing FT-NDCG change was +.000319 [− .000077 , +.000720 ]; an interval that also resamples generators and training runs was 
+
+[− .000431 , +.001309 ]. On A-Health, development users kept a returned-only loss for every generator. Always forcing the best appended-target loss would have reduced FT-NDCG by 0 .000644 
+
+> 7Wang, Shi, and Zheng
+
+Table 4: RecIF-Ads FT-NDCG changes ( 10 −3). Each row is the first loss minus the second; positive values favor the first. Columns report the fixed epoch-60 result, the average effect across epochs 0–60, and the result after development folds select the checkpoint. Brackets are 95% intervals over runs and users. 
+
+Training-loss change Initial 3 runs epoch 60 New 7 runs epoch 60 New 7 runs average, epochs 0–60 New 7 runs development-selected checkpoint All completion changes (Full − WN) −6.97 [− 10 .22 , −3.67 ] −5.55 [− 8.07 , −2.99 ] −11 .80 [− 13 .73 , −9.92 ] −1.92 [− 4.02 , +0.97 ]
+
+Remove group competition (Cond − Full) +8.63 [+ 6.20 , +11 .27 ] +7.42 [+ 4.98 , +9.74 ] +12 .41 [+ 10 .31 , +14 .51 ] +1.03 [− 1.24 , +3.36 ]
+
+Add appended-target loss (Cond − WN) +1.66 [− 0.50 , +4.07 ] +1.88 [+ 0.34 , +3.45 ] +0.60 [− 0.20 , +1.44 ] −0.89 [− 2.21 , +1.21 ]
+
+Table 5: Choosing whether to use appended-target training ( 10 −3 FT-NDCG). Each question states the subtraction; a positive change favors its first option. We switch from returned-only training only when the adjusted lower bound of the development gain is positive.                                            
+
+> Dataset Question and comparison Change [95% interval] Conclusion
+> Choosing the switching rule
+> RecIF-Ads After checkpoint selection, does Cond beat WN? −0.89 [−2.21 ,+1.21 ]No; keep WN A-Games On new users and runs, does Full beat WN? +1.75 [+0.48 ,+3.02 ]Yes; retain appended-target training as an option A-Home Does chosen appended training beat returned-only training? +0.21 [+0.12 ,+0.29 ]Yes; switch only when the adjusted lower bound is positive RecIF-Product Does the chosen trained loss beat the untrained scorer? 0.00 [0,0]No; keep the untrained scorer
+> Applying the rule to new categories
+> A-Cell Does the rule’s choice beat returned-only training? +0.32 [−0.08 ,+0.72 ]It switched 2 of 3 generators; the overall gain is uncertain A-Health Does the rule’s choice beat returned-only training? 0.00 [0,0]It kept returned-only training for all 3 generators A-Health Does always appending beat returned-only training? −0.64 [−0.88 ,−0.41 ]No; the rule avoided a 1.7% loss A-Health Does the lower-bound rule beat choosing the highest mean? +0.04 [−0.08 ,+0.17 ]No clear difference
+
+Table 6: A-Games FT-NDCG gain from removing competition (10 −3). Cond minus Full retains the appended-target loss; WN minus WN +Mass omits it. The 95% intervals resample users and runs separately.                 
+
+> Reranker Loss comparison Gain Users only Runs only MLP Cond minus Full 9.177 [6.709,11.651] [8.202,10.152] MLP WN minus WN +Mass 5.834 [4.284,7.386] [3.462,8.206] Attention Cond minus Full 3.234 [1.848,4.651] [1.275,5.192] Attention WN minus WN +Mass 5.470 [3.886,7.111] [ −0.824 ,11.764]
+
+[0.000412 , 0.000881 ], or 1.7%. The rule therefore allowed appended-target training on A-Cell and avoided a clear loss on A-Health, although the A-Cell gain remained uncertain. 
+
+## 6 Discussion 
+
+Appended targets affect inference through the scorer parameters shared with returned candidates. Full also trains the scorer to divide probability between returned and appended items, although only returned items appear at inference. We tested this competition by adding the same constant to every appended score in each training list. This changed Full’s returned-item rankings but left Cond un-changed, showing that probability competition during training can alter the rankings used at inference. Separating the two effects changes how candidate completion should be interpreted. Removing competition consistently helped in the primary A-Games study and after the same 60-epoch RecIF-Ads budget. The appended-target ranking task also helped after 60 epochs, but its estimated benefit weakened when development data chose the checkpoint. Thus, a poor result from appending targets does not imply that the extra labels are useless: their supervision may help while probability competition harms the same scorer. Comparisons must also use the same training budget. A-Home further shows that the conclusion depends on which interactions are treated as targets. This distinction also leads to a practical recommendation. For each generator, train every candidate loss on the same candidate pool. On development users, select the best reranker trained with-out appended targets and the best reranker trained with them, then compare the two. A favorable isolated effect is insufficient because the deployed loss combines several effects. A-Cell and A-Health re-quired different choices, showing why candidate completion should be decided for each generator rather than treated as a universal default. 
+
+## 7 Conclusion 
+
+Appending a missed target is not a neutral way to add supervision. It changes the weight on retrieved targets, adds a new ranking task, and makes training-only targets compete with candidates that will actually be ranked at inference. Our three-loss comparison separates these changes under the same scorer. It shows that group competition, rather than the extra supervision itself, can be the main source of degradation: removing competition improved all four prespecified A-Games comparisons by 7.8–22.2%. Appended-target supervision helped RecIF-Ads after 60 epochs, although the estimated benefit became uncertain when development data se-lected the checkpoint. For each generator, train returned-only and appended-target rerankers for the same inference pool and compare them on devel-opment users. Use appended-target training only when the adjusted lower confidence bound exceeds a chosen threshold. On held-out categories, this rule avoided a 1.7% A-Health loss while allowing 
+
+> 8
+
+Training with Missed Targets in Generative Recommendation: Separating Supervision from Probability Competition 
+
+appended-target training for two A-Cell generators. Candidate com-pletion should therefore be tested for each generator rather than applied automatically. 
+
+## Acknowledgments 
+
+This work was supported by the National Natural Science Founda-tion of China (Grant No. 62672438). 
+
+## References 
+
+[1] Artem Betlei. 2026. Off-Policy Evaluation for Semantic ID Recommenders: Does the Model’s Own Code Hierarchy Help? arXiv:2608.28905 https://arxiv.org/abs/ 2608.28905 [2] Sumanta Bhattacharyya, Amirmohammad Rooshenas, Subhajit Naskar, Simeng Sun, Mohit Iyyer, and Andrew McCallum. 2021. Energy-Based Reranking: Im-proving Neural Machine Translation Using Energy-Based Models. In Proceedings of the 59th Annual Meeting of the Association for Computational Linguistics and the 11th International Joint Conference on Natural Language Processing (Volume 1: Long Papers) . Association for Computational Linguistics, Online, 4528–4537. doi:10.18653/v1/2021.acl-long.349 [3] Zhe Cao, Tao Qin, Tie-Yan Liu, Ming-Feng Tsai, and Hang Li. 2007. Learning to Rank: From Pairwise Approach to Listwise Approach. In Proceedings of the 24th International Conference on Machine Learning . Association for Computing Machinery, New York, NY, USA, 129–136. doi:10.1145/1273496.1273513 [4] Zhao Chen, Vijay Badrinarayanan, Chen-Yu Lee, and Andrew Rabinovich. 2018. GradNorm: Gradient Normalization for Adaptive Loss Balancing in Deep Multi-task Networks. In Proceedings of the 35th International Conference on Machine Learning (Proceedings of Machine Learning Research, Vol. 80) . PMLR, Stockholm, Sweden, 794–803. https://proceedings.mlr.press/v80/chen18a.html [5] Paul Covington, Jay Adams, and Emre Sargin. 2016. Deep Neural Networks for YouTube Recommendations. In Proceedings of the 10th ACM Conference on Recommender Systems . Association for Computing Machinery, New York, NY, USA, 191–198. doi:10.1145/2959100.2959190 [6] Yashar Deldjoo, Zhankui He, Julian McAuley, Anton Korikov, Scott Sanner, Arnau Ramisa, René Vidal, Maheswaran Sathiamoorthy, Atoosa Kasrizadeh, Silvia Milano, and Francesco Ricci. 2026. Recommendation with Generative Models. Foundations and Trends in Information Retrieval 20, 1–2 (2026), 1–176. doi:10.1108/FTINR-06-2025-0109 [7] Chao Feng, Li Ma, Xiancheng Gao, Chenghao Zhang, Yuanhao Pu, and Xi-ang Li. 2026. PSG: Pair-Space Generation for Efficient Generative Reranking. arXiv:2607.26427 https://arxiv.org/abs/2607.26427 [8] Luke Gallagher, Ruey-Cheng Chen, Roi Blanco, and J. Shane Culpepper. 2019. Joint Optimization of Cascade Ranking Models. In Proceedings of the Twelfth ACM International Conference on Web Search and Data Mining . Association for Computing Machinery, 15–23. doi:10.1145/3289600.3290986 [9] Jingtong Gao, Bo Chen, Xiangyu Zhao, Weiwen Liu, Xiangyang Li, Yichao Wang, Wanyu Wang, Huifeng Guo, and Ruiming Tang. 2025. LLM4Rerank: LLM-based Auto-Reranking Framework for Recommendations. In Proceedings of the ACM on Web Conference 2025 . Association for Computing Machinery, New York, NY, USA, 228–239. doi:10.1145/3696410.3714922 [10] Wenyue Hua, Shuyuan Xu, Yingqiang Ge, and Yongfeng Zhang. 2023. How to Index Item IDs for Recommendation Foundation Models. In Proceedings of the Annual International ACM SIGIR Conference on Research and Development in Information Retrieval in the Asia Pacific Region . Association for Computing Machinery, New York, NY, USA, 195–204. doi:10.1145/3624918.3625339 [11] Hyunsik Jeon, Se-eun Yoon, and Julian McAuley. 2024. Calibration-Disentangled Learning and Relevance-Prioritized Reranking for Calibrated Sequential Recom-mendation. In Proceedings of the 33rd ACM International Conference on Information and Knowledge Management . Association for Computing Machinery, New York, NY, USA, 973–982. doi:10.1145/3627673.3679728 [12] Zhijie Lin, Zhuofeng Li, Chenglei Dai, Wentian Bao, Shuai Lin, Enyun Yu, Haox-iang Zhang, and Liang Zhao. 2025. GReF: A Unified Generative Framework for Efficient Reranking via Ordered Multi-token Prediction. In Proceedings of the 34th ACM International Conference on Information and Knowledge Manage-ment . Association for Computing Machinery, New York, NY, USA, 5879–5887. doi:10.1145/3746252.3761540 [13] Julian McAuley, Christopher Targett, Qinfeng Shi, and Anton van den Hengel. 2015. Image-Based Recommendations on Styles and Substitutes. In Proceedings of the 38th International ACM SIGIR Conference on Research and Development in Information Retrieval . Association for Computing Machinery, New York, NY, USA, 43–52. doi:10.1145/2766462.2767755 [14] Susan A. Murphy and Aad W. van der Vaart. 2000. On Profile Likelihood. J. Amer. Statist. Assoc. 95, 450 (2000), 449–465. doi:10.1080/01621459.2000.10474219 [15] Zohreh Ovaisi, Ragib Ahsan, Yifan Zhang, Kathryn Vasilaky, and Elena Zheleva. 2020. Correcting for Selection Bias in Learning-to-rank Systems. In Proceedings of The Web Conference 2020 . Association for Computing Machinery, New York, NY, USA, 1863–1873. doi:10.1145/3366423.3380255 [16] Zohreh Ovaisi, Kathryn Vasilaky, and Elena Zheleva. 2021. Propensity-Independent Bias Recovery in Offline Learning-to-Rank Systems. In Proceed-ings of the 44th International ACM SIGIR Conference on Research and Develop-ment in Information Retrieval . Association for Computing Machinery, 1763–1767. doi:10.1145/3404835.3463097 [17] Jie Peng, Yanping Zheng, Zhewei Zhe, Bin Tong, Guan Wang, and Bo Zheng. 2026. Can Generative Recommendation Reach Cold Items? A Temporal Perspective on Semantic-ID Generation. arXiv:2607.21101. https://arxiv.org/abs/2607.21101 [18] Jiarui Qin, Jiachen Zhu, Bo Chen, Zhirong Liu, Weiwen Liu, Ruiming Tang, Rui Zhang, Yong Yu, and Weinan Zhang. 2022. RankFlow: Joint Optimization of Multi-Stage Cascade Ranking Systems as Flows. In Proceedings of the 45th International ACM SIGIR Conference on Research and Development in Information Retrieval . Association for Computing Machinery, New York, NY, USA, 814–824. doi:10.1145/3477495.3532050 [19] Shashank Rajput, Nikhil Mehta, Anima Singh, Raghunandan Hulikal Keshavan, Trung Vu, Lukasz Heldt, Lichan Hong, Yi Tay, Vinh Q. Tran, Jonah Samost, Maciej Kula, Ed H. Chi, and Maheswaran Sathiamoorthy. 2023. Recommender Systems with Generative Retrieval. In Advances in Neural Information Processing Systems , Vol. 36. Curran Associates, Inc., Red Hook, NY, USA, 10299–10315. doi:10.52202/075280-0452 [20] Ruiyang Ren, Yuhao Wang, Kun Zhou, Wayne Xin Zhao, Wenjie Wang, Jing Liu, Ji-Rong Wen, and Tat-Seng Chua. 2025. Self-Calibrated Listwise Reranking with Large Language Models. In Proceedings of the ACM on Web Conference 2025 . Association for Computing Machinery, New York, NY, USA, 3692–3701. doi:10.1145/3696410.3714658 [21] Yuxin Ren, Qiya Yang, Yichun Wu, Wei Xu, Yalong Wang, and Zhiqiang Zhang. 2024. Non-autoregressive Generative Models for Reranking Recommendation. In Proceedings of the 30th ACM SIGKDD Conference on Knowledge Discovery and Data Mining . Association for Computing Machinery, New York, NY, USA, 5625–5634. doi:10.1145/3637528.3671645 [22] Steffen Rendle, Christoph Freudenthaler, Zeno Gantner, and Lars Schmidt-Thieme. 2009. BPR: Bayesian Personalized Ranking from Implicit Feedback. In Proceedings of the Twenty-Fifth Conference on Uncertainty in Artificial Intelli-gence . AUAI Press, Corvallis, OR, USA, 452–461. https://arxiv.org/abs/1205.2618 [23] Viktoriia Sharmanska, Novi Quadrianto, and Christoph H. Lampert. 2013. Learn-ing to Rank Using Privileged Information. In 2013 IEEE International Conference on Computer Vision . 825–832. doi:10.1109/ICCV.2013.107 [24] Anima Singh, Trung Vu, Nikhil Mehta, Raghunandan Keshavan, Maheswaran Sathiamoorthy, Yilin Zheng, Lichan Hong, Lukasz Heldt, Li Wei, Devansh Tandon, Ed Chi, and Xinyang Yi. 2024. Better Generalization with Semantic IDs: A Case Study in Ranking for Recommendations. In Proceedings of the 18th ACM Conference on Recommender Systems . Association for Computing Machinery, New York, NY, USA, 1039–1044. doi:10.1145/3640457.3688190 [25] Chaotian Song, Jingyao Zhang, Chenghao Chen, Zisen Sang, Dehai Zhao, Guodong Cao, Boxi Wu, Deng Cai, and Jia Jia. 2026. DeGRe: Dense-supervised Generative Reranking for Recommendation. In Proceedings of the 32nd ACM SIGKDD Conference on Knowledge Discovery and Data Mining V.2 . Association for Computing Machinery, New York, NY, USA, 7957–7966. doi:10.1145/3770855. 3818363 [26] Hongliang Sun, Lianjie Li, Bolin Zhang, Dianbo Sui, Dianhui Chu, and Zhiying Tu. 2026. History-Conditioned Joint-Prefix Alignment for Generative Recom-mendation. arXiv:2608.29179 [cs.IR] https://arxiv.org/abs/2608.29179 [27] Jiawei Sun, Jun Yang, Ziyue Guo, Dongyue Xu, Jianan Yan, Lifang Deng, and Xiaoyi Zeng. 2026. UniSGR: Unified Framework for Semantic ID Generation and Ranking. arXiv:2607.04068 https://arxiv.org/abs/2607.04068 [28] Vladimir Vapnik and Akshay Vashist. 2009. A New Learning Paradigm: Learning Using Privileged Information. Neural Networks 22, 5–6 (2009), 544–557. doi:10. 1016/j.neunet.2009.06.042 [29] Junting Wang, Xinrui He, Yunzhe Li, and Hari Sundaram. 2026. Understanding Semantic IDs: From Item Representation to Item Selection in Generative Recom-mendation. arXiv preprint arXiv:2607.24995. https://arxiv.org/abs/2607.24995 [30] Peiyao Wang, Zhan Shi, Amina Shabbeer, and Ben London. 2025. Off-Policy Evaluation of Candidate Generators in Two-Stage Recommender Systems. In Pro-ceedings of the Nineteenth ACM Conference on Recommender Systems . Association for Computing Machinery, 350–359. doi:10.1145/3705328.3748057 [31] Ziliang Wang, Gaoyun Lin, Xuesi Wang, Shaoqiang Liang, Yili Huang, Wei-jie Bian, Li Zhang, Mingchen Cai, Jian Dong, and Guanxing Zhang. 2026. UniRec: Bridging the Expressive Gap between Generative and Discrimina-tive Recommendation via Chain-of-Attribute. arXiv:2604.12234v4. https: //arxiv.org/abs/2604.12234v4 [32] Jiancan Wu, Xiang Wang, Xingyu Gao, Jiawei Chen, Hongcheng Fu, and Tianyu Qiu. 2024. On the Effectiveness of Sampled Softmax Loss for Item Recom-mendation. ACM Transactions on Information Systems 42, 4 (2024), 1–26. doi:10.1145/3637061 [33] Hui Yang, Daiwei He, Kevin Jiang, Taejin Park, Kungang Li, Jiajun Luo, Yuying Chen, Xinyi Zhang, Sihan Wang, Haoyu He, Yu Liu, Lakshmi Manoharan, David 9Wang, Shi, and Zheng                 
+
+> Xue, Shubham Barhate, Runze Su, Duna Zhan, Ling Leng, Siping Ji, Jinfeng Zhuang, Alice Wu, Leo Lu, Han Sun, and Zhifang Liu. 2026. Fine-Tuned LLM as a Complementary Predictor Improving Ads System. arXiv:2605.27856. https: //arxiv.org/abs/2605.27856 [34] Liu Yang, Fabian Paischer, Kaveh Hassani, Jiacheng Li, Shuai Shao, Zhang Gabriel Li, Yun He, Xue Feng, Nima Noorshams, Sem Park, Bo Long, Robert D. Nowak, Xiaoli Gao, and Hamid Eghbalzadeh. 2025. Unifying Generative and Dense Retrieval for Sequential Recommendation. Transactions on Machine Learning Research. https://openreview.net/forum?id=jxdnFIsjCb [35] Ruochen Yang, Yusheng Huang, Youfeng Zheng, Shuang Wen, Liangliang Chen, Pengbo Xu, Xiaoyu Zhang, Shijun Wang, Shuang Yang, Zhaojie Liu, Lantao Hu, Wenwu Ou, Jiawei Sheng, and Tingwen Liu. 2026. Reward Guided Decoding for Generative Recommendation. arXiv:2607.25344 https://arxiv.org/abs/2607.25344 [36] Tianhe Yu, Saurabh Kumar, Abhishek Gupta, Sergey Levine, Karol Hausman, and Chelsea Finn. 2020. Gradient Surgery for Multi-Task Learning. In Advances in Neural Information Processing Systems , H. Larochelle, M. Ranzato, R. Hadsell, M.F. Balcan, and H. Lin (Eds.), Vol. 33. Curran Associates, Inc., Red Hook, NY, USA, 5824–5836. https://proceedings.neurips.cc/paper_files/paper/2020/file/ 3fe78a8acf5fda99de95303940a2420c-Paper.pdf [37] Xin Yu, Stephen Li, Sina Aghaei, Zifan Zhu, Jiamu Bai, Guanjie Huang, Bo Peng, Yiyao Liu, and Lingzhou Xue. 2026. Difficulty-Aware Semantic-ID Optimization for Generative Recommendation. arXiv:2608.20611. https://arxiv.org/abs/2608. 20611 [38] Benyu Zhang, Qiang Zhang, Rui Li, Qunshu Zhang, Devansh Tandon, and Neeraj Bhatia. 2026. Recommendation Retrievers Need Verifiers: Universal Generative Reranking for Sequential Recommendations. arXiv:2609.12270 [cs.IR] https: //arxiv.org/abs/2609.12270 [39] Borui Zhao, Quan Cui, Renjie Song, Yiyu Qiu, and Jiajun Liang. 2022. Decoupled Knowledge Distillation. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition . IEEE Computer Society, Los Alamitos, CA, USA, 11953–11962. doi:10.1109/CVPR52688.2022.01165 [40] Guorui Zhou, Honghui Bao, Jiaming Huang, Jiaxin Deng, Jinghao Zhang, Junda She, Kuo Cai, Lejian Ren, Lu Ren, Qiang Luo, Qianqian Wang, Qigen Hu, Rongzhou Zhang, Ruiming Tang, Shiyao Wang, Wuchao Li, Xiangyu Wu, Xinchen Luo, Xingmei Wang, Yifei Hu, Yunfan Wu, Zhanyu Liu, Zhiyang Zhang, Zixing Zhang, Bo Chen, Bin Wen, Chaoyi Ma, Chengru Song, Chen-glong Chu, Defu Lian, Fan Yang, Feng Jiang, Hongtao Cheng, Huanjie Wang, Kun Gai, Pengfei Zheng, Qiang Wang, Rui Huang, Siyang Mao, Tingting Gao, Wei Yuan, Yan Wang, Yang Zhou, Yi Su, Zexuan Cheng, Zhixin Ling, and Ziming Li. 2026. OpenOneRec Technical Report. arXiv:2512.24762v2. https://arxiv.org/abs/2512.24762v2
+
+## A Reproducibility and Additional Results 
+
+This appendix provides the details needed to reproduce the data splits, losses, model choices, and final evaluation. Table 8 checks whether the conclusions change when targets are restricted to favorably rated items or when uncertainty includes both users and training runs. 
+
+Code, data, and ethics. The arXiv ancillary archive contains the code, environments, split manifests, and commands needed to re-produce our results, with links to the public datasets and OneRec checkpoints. We use only public secondary data, exclude review text and demographic attributes, and release no raw user data. 
+
+## A.1 Metrics and Scorer Implementation 
+
+Let 𝜋 𝑥 ( 𝑗 ) be the item at rank 𝑗 . We compute FT-NDCG@20 (𝑥 ) =
+
+Í20  
+
+> 𝑗 =1
+
+1{𝜋 𝑥 ( 𝑗 ) ∈ 𝑌 𝑥 }/ log 2 ( 𝑗 + 1)
+
+Ímin (20 ,|𝑌 𝑥 | )  
+
+> 𝑗 =1
+
+1/log 2 ( 𝑗 + 1) . (4) Equation 4 uses the complete eligible target set in its denominator. The candidate oracle ranks available targets first. Users with no reachable target remain in every all-user mean, and Table 3 reports the percentage with a reachable target. Recall@20 is the fraction of 𝑌 𝑥 in the top 20; MRR@20 is the reciprocal rank of its first item, or zero if absent. Both re-tain targets outside the returned pool. After 60 epochs on the seven new RecIF-Ads seeds, Cond −WN changed Recall/MRR by +0.00166 /+ 0.00425, Cond −Full by +0.00880 /+ 0.01348, and Full −WN by −0.00713 /− 0.00923, matching FT-NDCG. The scorer root-mean-square normalizes query and item states with a 10 −6 floor, then concatenates them with their product, ab-solute difference, and seven scalars into 519 dimensions. Slots 1/3 hold standardized log likelihood/training frequency; slots 2/4–6 are reserved zeros and slot 7 marks validity. Source membership is not a feature. Attention uses returned-candidate keys and values; output layers start at zero. 
+
+## A.2 Multiple Candidate Sources 
+
+Let disjoint groups 𝑆 1, . . . , 𝑆 𝐺 contain positive target counts 𝑚 𝑔 , let 
+
+𝛾 𝑔 = 𝑚 𝑔 /Íℎ 𝑚 ℎ , and define 𝑍 𝑔 = Í𝑖 ∈𝑆 𝑔 𝑒 𝑠 𝑖 , 𝑃 𝑔 = 𝑍 𝑔 /Íℎ 𝑍 ℎ , and the within-source loss L𝑔 . The same substitution used in Proposition 1 gives 
+
+L =
+
+> 𝐺
+
+∑︁ 
+
+> 𝑔 =1
+
+𝛾 𝑔 L𝑔 −
+
+> 𝐺
+
+∑︁ 
+
+> 𝑔 =1
+
+𝛾 𝑔 log 𝑃 𝑔 .
+
+Add an offset 𝛿 𝑔 to every score in 𝑆 𝑔 , fixing one because a common shift is redundant. The second term is cross-entropy from 𝛾 to the source softmax, with gradient 𝑃 𝑔 − 𝛾 𝑔 . Hence every finite minimum has 𝑃 𝑔 = 𝛾 𝑔 and value 𝐻 (𝛾 ); minimizing over all offsets leaves 
+
+Í𝑔 𝛾 𝑔 L𝑔 + 𝐻 (𝛾 ). Cond is the 𝐺 = 2 case. 
+
+Soft targets. For normalized nonnegative target weights 𝑞 𝑖 , let 
+
+𝜌 𝐵 = Í𝑖 ∈𝐵 𝑞 𝑖 and L𝑞 𝐵 = − Í𝑖 ∈𝐵 (𝑞 𝑖 /𝜌 𝐵 ) log (𝑒 𝑠 𝑖 /𝑍 𝐵 ). With positive source masses, 
+
+𝛿 ∗ 
+
+> 𝑞
+
+= log (𝜌 𝐴 /𝜌 𝑁 ) + log 𝑍 𝑁 − log 𝑍 𝐴 ,
+
+min  
+
+> 𝛿
+
+L𝑞 (𝑠 + 𝛿 1𝐴 ) = 𝜌 𝑁 L𝑞 𝑁 + 𝜌 𝐴 L𝑞 𝐴 + 𝐻 (𝜌 𝑁 , 𝜌 𝐴 ).
+
+Zero source mass uses the corresponding infinite-offset limit and omits the empty conditional term. Thus the same decomposition applies to any supplied nonnegative target distribution. 
+
+## A.3 Generators and Data Construction 
+
+Local Transformers use 128-dimensional states, four encoder and decoder layers, four heads, feedforward width 1,024, and dropout .1; AdamW uses rate 10 −4, decay .01, batch 512, and gradient norm 1. GRUs use two 128-dimensional encoder and decoder layers, dropout .1, and initial rate .001. Validation NLL selects epochs 12–80 (also 10–11 for A-Home); after eight epochs without .001 relative im-provement, every two stale epochs halve the rate to a 1 .25 × 10 −5
+
+floor. Training-prefix term-frequency–inverse-document-frequency (TF–IDF) embeddings reduced by singular value decomposition are 128-dimensional. Three 64-center residual-quantization levels plus a collision suffix define identifiers. Histories contain at most 20 items; beam-64 decoding forms 𝑁 , and teacher forcing scores identifiers. Amazon tasks use the 2014 5-core archives [13]; first reviews define targets, text is omitted, out-of-catalog events are removed before grouping, and final inputs omit targets. The A-Games split excludes 485 A-Music users. For user 𝑢 ,SHA-256 (source-mass-v2-games: +𝑢 ) mod 100 assigns 0–19/20– 34/35–44/45–99 to generator/fitting/development/final roles. The plan and predictions were fixed before final-target access. User 
+
+> 10 Training with Missed Targets in Generative Recommendation: Separating Supervision from Probability Competition
+
+−4 0 4
+
+Δ FT-NDCG@20 (×10 −3 )
+
+A-Toys GRU 62 / Attn. A-Toys GRU 61 / Attn. A-Games GRU 52 / Attn. A-Games GRU 51 / Attn. A-Games T42 / Attn. A-Games T42 / MLP 
+
+Both changes Full − WN 
+
+−4 0 4
+
+Δ FT-NDCG@20 (×10 −3 )
+
+Remove group competition Cond − Full 
+
+−4 0 4
+
+Δ FT-NDCG@20 (×10 −3 )
+
+Add appended-target loss Cond − WN 
+
+Mean and 95% adjusted interval Training-run means Zero 
+
+Figure 4: Effect directions vary across six Amazon generator–reranker combinations, and most 95% familywise-adjusted intervals include zero. T42 denotes the Transformer trained with seed 42; numeric labels denote GRU seeds. The legend identifies overall means and intervals, individual training-run means, and zero. All panels share their axes. Table 7: FT-NDCG scores ( 10 −3). Each comparison is first loss minus second. “Dev-selected” means that development users choose the model; Reachable gives the number and percentage of final users with a returned target. The two score columns show first/second.                                       
+
+> Dataset Comparison Model Reachable All: scores All: ΔReachable: scores Reachable: Δ[95% CI] RecIF-Ads Cond vs Full Epoch 60 2504/5579 (44.9%) 33.40/25.98 +7.42 74.43/57.89 +16.54 [+11.38,+21.56] A-Home Cond vs Full Dev-selected 1943–2086/20323 (9.6–10.3%) 11.57/11.44 +0.13 118.01/116.77 +1.24 [-3.36,+6.85] A-Cell Selected vs returned-only Dev-selected 2327/5398 (43.1% union) 48.75/48.44 +0.32 113.10/112.36 +0.74 [-0.18,+1.66] A-Health Selected vs returned-only Dev-selected 3824/13622 (28.1% union) 38.04/38.04 0.00 135.49/135.49 0.00 [0,0]
+
+Table 8: A-Home results when targets are all interactions or only ratings of at least four ( 10 −3 FT-NDCG). Cond minus Full measures the effect of removing group competition; Cond minus WN measures appended-target supervision. “Chosen appended minus returned-only” compares the two losses selected on development users. The 95% intervals resample users alone, then users, three generators, and five runs.                                 
+
+> Target definition Loss comparison Effect Users only Users + runs All interactions Cond −Full +0.128 [− 0.02 ,+0.28 ] [− 0.34 ,+0.72 ]
+> Chosen appended −returned-only +0.072 [− 0.09 ,+0.23 ] [− 0.58 ,+0.70 ]
+> Only ratings ≥4Cond −Full −0.119 [− 0.27 ,+0.03 ] [− 0.85 ,+0.77 ]
+> Cond −WN −0.232 [− 0.40 ,−0.07 ] [− 0.83 ,+0.23 ]
+
+intervals resample users while holding the three trained rerankers fixed; training-run intervals use 𝑡 2 = 8.8602. A further check resamples both. All Amazon assignments use SHA256 (𝑠 + 𝑢 ) mod 100. A-Music uses salt source-mass-v1: and ranges 0–49/50–69/70–79/80–99. A-Games, A-Toys, and A-Home use salts source-mass-v2-games: ,
+
+source-mass-v3-toys: , and source-mass-v4-confirmation: 
+
+with the A-Games ranges. Reranker selection uses seeds 42–44 and A-Home final evaluation 101–105. Figure 4 summarizes the six settings. Table 7 reports scores for all users and separately for users with a reachable target. The 1,770,644,480-parameter OneRec-1.7B-Pro checkpoint repre-sents a query by its last prompt state and an item by the mean of its three semantic ID token states. A fixed Gaussian matrix (seed 271828, 1 /√128 scaling) projects 2,048 dimensions to 128; full-prefix forward passes verify both state extraction and the temperature-1.2 path scores. Let ℎ(𝑢 ) map the first eight big-endian SHA-256 bytes to [0, 1).Salt sidecar-openonerec-pro-ads-prospective-v1 and ranges 
+
+[0, . 3)/[ .3, . 5)/[ .5, 1) assign reranker-training/evaluation/unused-test users (8,304/5,579 in the first two groups, with no overlap). Evaluation users form five hash-sorted round-robin folds. All 3,740 reachable training users (3,189 with 𝑟, 𝑘 > 0) and item-frequency features come only from the reranker-training group. Retrieved tar-gets keep the maximum-likelihood path; additions use the smallest released product identifier. Re-inversion covers all 5,477 native and 11,453 added user–target pairs. The first three runs established the comparison; seven new runs then used the same losses, epoch-60 endpoint, and evaluation users. Each of 5,000 draws from NumPy’s PCG64 random-number gen-erator (seed 20260916) resamples users within folds and the seven new runs. For every loss and run, the other four folds select the checkpoint and the held fold evaluates it before differences are averaged. The separate 240-epoch study uses all ten runs at rates 3 × 10 −4 and 10 −4.RecIF-Product uses the released OneRec-1.7B checkpoint and data revision cc4d0b5b7294ecf75e40be1c77fa6b7d284bb84b .Hash ranges [0, . 3)/[ .3, . 5)/[ .5, 1) under salt sidecar-openonerec-native-v1 assign 8,243 reranker-training, 5,668 development, and 13,999 final users. Seeds 42–44 screen rates 10 −4, 3 × 10 −4, 10 −3
+
+for at most 60 epochs (patience 8); mean development FT-NDCG 
+
+> 11 Wang, Shi, and Zheng
+
+fixes loss-specific rates/checkpoints before final seeds 101–105, preferring lower rates and earlier epochs on ties. The 2,224 training groups satisfy 𝑟 > 0, 𝑘 ≥ 2; all 9,758 final users with no reachable target remain. The three jointly tested loss comparisons use 20,000 PCG64-seed-20260926 draws and 98.3333% percentiles. The A-Home analysis holds out each of runs 101–105 and 301– 303. The other seven choose among Cond, Full, and Disc, but replace the generator-specific returned-only loss only when a one-sided Student-𝑡 lower bound, adjusted over three generators, is above zero. The paired-user interval averages the 24 decisions over 20,000 draws (PCG64 seed 20260918). A-Cell uses salt source-mass-v5-cell-confirmation , gener-ators 111–113, development runs 501–508, final runs 601–605, and 5,398 final users; users in earlier Amazon categories are excluded. A-Health uses salt source-mass-v6-health-confirmation , genera-tors 121–123, development/final runs 701–708/801–805, and 13,622 final users. Unlike A-Cell, it does not filter user identifiers against earlier category experiments. Its four data roles remain disjoint, and no history, feature, or parameter transfers across categories. Both studies assign disjoint 20/15/10/55% data roles, use a two-layer width-128 GRU with beam 64, and train attention rerankers for 480 epochs. The fixed loss settings are WN cosine/.03, NP constant/.001, Cond/Full constant/.03, and Disc cosine/.1. A-Home selected NP for two generators and WN for one; it never selected the unweighted Native loss. The confirmation candidates therefore retain WN and NP rather than reopening the returned-only search. Mean devel-opment FT-NDCG over eight runs selects one returned-only loss and one appended-target loss. We switch to the latter only when the corrected lower confidence bound for their paired difference is positive; five new runs evaluate both losses. Rankings are fixed before final-target access. The development bound covers variation across runs for fixed development users. Primary final intervals use 20,000 paired-user draws; intervals that also resample generators and runs are reported as additional uncertainty checks. For each category, we correct the three lower confidence bounds that compare the selected returned-only and appended-target losses, one comparison per generator. As a stricter check, we adjust all 3 × 3 × 2 = 18 possible loss-pair com-parisons ( 𝑡 7 = 3.9467). The adjusted lower bounds for the selected pairs are +.000411 , −.001813 , +.001278 on A-Cell and 
+
+−.000713 , −.000438 , −.001317 on A-Health, so the switch-or-retain decisions remain unchanged. Choosing solely by the highest mean development score gives the same decisions on A-Cell. On A-Health, that simpler approach selects Full only for generator 122 and yields −0.000042 [− 0.000167 , +0.000082 ] versus the selected returned-only loss; retaining a loss unless its corrected lower bound is positive changes this result by +0.000042 [− 0.000082 , +0.000167 ].A post hoc check used margins 0, .00025, .0005, and .001; these selected 4, 2, 1, and 1 switches to appended-target training. Their mean effects across settings are +.000389, +.000273, +.000345, and 
+
++.000345; their worst-setting effects are −.000361, −.000361, 0, and 0. Because this check was designed after outcomes were available, it shows how results vary with the threshold rather than confirming a new rule. No evaluation interaction contributes to feature statistics. 
+
+Primary training configurations. RecIF-Ads uses a residual MLP, seeds 3101–3110, 60 epochs at 3 × 10 −4, and cross-validation over initialization and epochs 5,10, . . . ,60. A-Games uses MLP and at-tention rerankers, seeds 42–44, and 60 epochs at 10 −4 including initialization. RecIF-Product uses a residual MLP, development/final seeds 42–44/101–105, three rates from 10 −4 to 10 −3, and patience eight. 
+
+## A.4 Optimization and Inference 
+
+The constant-rate grid is {3×10 −5, 10 −4, 3×10 −4, 10 −3, 3×10 −3, 10 −2 };if the largest rate wins, the grid extends to .03 , . 1, . 3. Cosine uses 24 warmup epochs, 480 total epochs, a 1% floor, and the winning rate plus its neighbors. Ties prefer earlier checkpoints, then lower rates. Means over three development runs select among Native/WN, Native/WN/NP, or Cond/Full/Disc. For the user-and-run-averaged difference 𝑑 𝑗 at 0 = 𝑡 0 < · · · < 𝑡 𝑚 = 𝑇 , AULC is 𝑇 −1 Í𝑚 −1 
+
+> 𝑗 =0
+
+(𝑡 𝑗 +1 −
+
+𝑡 𝑗 )( 𝑑 𝑗 + 𝑑 𝑗 +1)/ 2. Full −WN and Cond −Full have different signs in two of six addi-tional settings, showing that the combined comparison can hide the effect of group competition. Among ten intervals that resample both runs and users from five new runs, only A-Games Transformer (seed 42) Cond −WN excludes zero: +0.001572 [+ 0.000137 , +0.003305 ].Paired-user intervals also exclude zero for its Full −WN comparison and A-Toys GRU (seed 61) Cond −Full, when the trained rerankers are held fixed. Training losses were not reselected; Full’s selected rate is interior in all six settings. All model choices precede final evaluation. We adjust intervals jointly within three prespecified sets: 30 primary comparisons, 8 score-shift comparisons, and 10 comparisons from new training runs. Each uses 20,000 draws; intervals that include both users and training variation resample both users and the observed runs. OneRec repeats checkpoint choice inside 5,000 user-and-run draws; other local intervals use the saved predictions without choosing models again. 
+
+## A.5 Discriminative Control 
+
+Let 𝑁 − = 𝑁 \𝑌 , with the pairwise term below defined as zero when 
+
+𝑘 |𝑁 − | = 0. The discriminative control is 
+
+LDisc = T𝑁 + 𝛾 𝑘 |𝑁 − |∑︁ 𝑖 ∈𝐴,𝑗 ∈𝑁 −
+
+log (1 + 𝑒 𝑠 𝑗 −𝑠 𝑖 ). (5) Equation 5 ranks appended targets above returned nontargets with total weight 𝛾 , giving each target 𝛾 /𝑘 = 1/( 𝑟 + 𝑘 ). At 𝑟 = 0 we set 
+
+T𝑁 = 0, so 𝑘 = 1 remains trainable when |𝑁 − | > 0. Inference still ranks 𝑁 . The returned-item pairwise baseline applies the same loss to 𝑖 ∈ 𝑁 ∩ 𝑌, 𝑗 ∈ 𝑁 − and requires 𝑟 > 0, |𝑁 − | > 0.
